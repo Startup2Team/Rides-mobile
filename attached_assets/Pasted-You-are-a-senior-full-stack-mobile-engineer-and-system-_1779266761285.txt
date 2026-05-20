@@ -1,0 +1,367 @@
+You are a senior full-stack mobile engineer and system architect.
+
+Build a production-grade MVP ride hailing and delivery mobile application called “KandaRide” with:
+
+* Customer mode
+* Driver mode
+* Admin backend foundation
+* Real-time ride tracking
+* Fare negotiation system
+
+The system must be optimized for Rwanda and East Africa transport operations.
+
+TECH STACK REQUIREMENTS
+
+Frontend:
+
+* React Native with Expo
+* TypeScript
+* Expo Router
+* React Query
+* Zustand for state management
+* React Native Maps
+* Socket.IO client
+* Tailwind NativeWind styling
+
+Backend:
+
+* Node.js
+* Express or NestJS
+* PostgreSQL
+* Prisma ORM
+* Socket.IO
+* JWT authentication
+* Redis for realtime queue handling
+
+Infrastructure:
+
+* Clean scalable architecture
+* REST APIs
+* Realtime websocket communication
+* Environment variable support
+* Modular folder structure
+
+AUTHENTICATION SYSTEM
+
+Customer Registration:
+
+* Full name
+* Phone number
+* OTP verification simulation
+* Optional email
+
+Driver Registration:
+Drivers first register as normal customers.
+
+Inside customer dashboard include:
+“Join as Driver” button.
+
+Driver onboarding form must include:
+
+* Full name
+* Phone number
+* Date of birth
+* Vehicle type
+* Vehicle plate number
+* Driver license number
+* City
+* Current location
+* MoMo pay code
+
+Vehicle categories:
+
+* Moto Bike
+* Cab Taxi
+* Heavy Fuso
+* Light Hilux
+
+DRIVER POLICY ACCEPTANCE
+
+Before activation, drivers must accept:
+
+* Driver terms
+* Safety policy
+* Platform commission policy
+* Ride conduct policy
+* Privacy policy
+
+Store acceptance timestamp.
+
+CUSTOMER FLOW
+
+HOME DASHBOARD
+Customer dashboard must include:
+
+* Live interactive map
+* Current GPS location
+* Nearby driver icons
+* Book Ride button
+* Vehicle category selector
+
+BOOKING FLOW
+
+Customer can:
+
+1. Select pickup location
+2. Select destination
+3. Select vehicle category
+
+System calculates:
+
+* Distance
+* Estimated route
+
+DRIVER MATCHING SYSTEM
+
+System finds nearest available drivers based on:
+
+* Distance
+* Availability
+* Vehicle type
+
+Driver receives:
+
+* Loud notification
+* Ride popup
+* 15 second countdown timer
+
+Driver options:
+
+* Accept
+* Decline
+
+If declined or timeout:
+
+* Automatically assign next nearest driver
+
+FARE NEGOTIATION SYSTEM
+
+After driver accepts:
+Customer enters proposed fare.
+
+Negotiation rules:
+
+* Customer initial offer
+* Driver counter offer
+* Customer revised offer
+* Driver revised offer
+* Optional masked call simulation
+* One final fare proposal
+
+Final receiving party can:
+
+* Accept
+* Decline
+
+No further negotiation allowed after final proposal.
+
+If negotiation fails:
+
+* Ride cancelled
+* Driver returned to queue
+* Next nearest driver searched
+
+Realtime negotiation chat must use websockets.
+
+RIDE CONFIRMATION FLOW
+
+Once fare accepted:
+
+* Ride becomes confirmed
+* Live tracking begins
+* Driver permanently assigned
+
+Customer sees:
+
+* Driver name
+* Vehicle info
+* ETA
+* Live location
+
+Driver sees:
+
+* Pickup route
+* Customer location
+* Navigation screen
+
+LIVE TRACKING
+
+Implement realtime GPS synchronization using Socket.IO.
+
+Both driver and customer must see:
+
+* Moving map
+* Live vehicle updates
+* Route path
+* Ride status
+
+RIDE STATES
+
+Implement ride lifecycle states:
+
+* searching
+* driver_assigned
+* negotiating
+* confirmed
+* arriving
+* in_progress
+* completed
+* cancelled
+
+DRIVER DASHBOARD
+
+Driver dashboard must include:
+
+* Online/offline toggle
+* Ride requests
+* Daily rides count
+* Acceptance statistics
+* Earnings summary placeholder
+* Heat map placeholder
+
+DRIVER PRIORITY SYSTEM
+
+Track:
+
+* Acceptance rate
+* Decline count
+* Completion rate
+* Response speed
+
+Rule:
+If driver declines 10 rides in one day:
+
+* Move driver to lower priority queue
+
+ADMIN BACKEND FOUNDATION
+
+Create admin-ready backend structure for:
+
+* Users
+* Drivers
+* Rides
+* Negotiations
+* GPS tracking
+* Analytics
+* Ride history
+
+DATABASE TABLES
+
+Create Prisma models for:
+
+* User
+* DriverProfile
+* Vehicle
+* Ride
+* RideNegotiation
+* RideLocation
+* RideStatusHistory
+* DriverMetrics
+* Notification
+
+UI/UX REQUIREMENTS
+
+Design style:
+
+* Modern
+* Clean
+* Minimal
+* Professional
+* Dark/light mode support
+
+Must include:
+
+* Smooth animations
+* Loading states
+* Empty states
+* Toast notifications
+* Error handling
+* Skeleton loaders
+
+MAP FEATURES
+
+Use:
+
+* Google Maps or Mapbox
+
+Include:
+
+* Route lines
+* Driver movement
+* Pickup markers
+* Destination markers
+
+REALTIME FEATURES
+
+Use Socket.IO for:
+
+* Ride requests
+* Live GPS updates
+* Negotiation chat
+* Ride status updates
+* Driver availability
+
+IMPORTANT MVP LIMITATIONS
+
+DO NOT implement yet:
+
+* Real payments
+* Wallets
+* AI pricing
+* Loyalty systems
+* Ratings
+* SOS
+* Ride scheduling
+* Delivery photos
+* Favorite drivers
+* Surge pricing
+
+Instead:
+Create scalable placeholders and architecture for future integration.
+
+SECURITY REQUIREMENTS
+
+* JWT auth
+* Protected APIs
+* Input validation
+* Phone masking simulation
+* Secure websocket rooms
+* Rate limiting
+
+PROJECT STRUCTURE
+
+Generate:
+
+* Frontend mobile app
+* Backend API server
+* Database schema
+* Socket server
+* README setup guide
+* Environment variable examples
+
+FINAL REQUIREMENTS
+
+The app must:
+
+* Run locally
+* Be modular and scalable
+* Be optimized for mobile performance
+* Include realistic mock data
+* Include reusable components
+* Use clean architecture principles
+
+Generate complete codebase step-by-step starting with:
+
+1. Backend architecture
+2. Database schema
+3. Authentication
+4. Realtime socket setup
+5. Customer app screens
+6. Driver app screens
+7. Ride flow
+8. Negotiation system
+9. Live tracking
+10. Final polish
+
+Do not skip implementation details.
+Generate production-quality code.
