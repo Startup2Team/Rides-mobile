@@ -39,9 +39,9 @@ export default function WelcomeScreen() {
         <View style={styles.logoArea}>
           <View style={styles.logoRing}>
             <View style={styles.logoDot} />
-            <Text style={styles.logoK}>K</Text>
+            <Text style={styles.logoT}>T</Text>
           </View>
-          <Text style={styles.appName}>KandaRide</Text>
+          <Text style={styles.appName}>Taravelis</Text>
           <Text style={styles.tagline}>Rwanda's fastest ride</Text>
         </View>
 
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     top: 12,
     right: 14,
   },
-  logoK: {
+  logoT: {
     fontSize: 52,
     fontFamily: 'Inter_700Bold',
     color: '#000',

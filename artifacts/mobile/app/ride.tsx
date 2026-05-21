@@ -10,12 +10,16 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useRoute } from '@/hooks/useRoute';
+import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useRide } from '@/context/RideContext';
 import { KandaButton } from '@/components/KandaButton';
+import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
-import { VEHICLE_LABELS } from '@/types';
+import { formatDistance, formatDuration } from '@/utils/mapUtils';
+import { VEHICLE_LABELS, VEHICLE_LABELS_FULL, VEHICLE_MCI } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
@@ -30,19 +34,32 @@ export default function RideScreen() {
   const { currentRide, driverLocation, completeRide } = useRide();
   const mapRef = useRef<MapView>(null);
 
+  const { route: rideRoute } = useRoute(
+    currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
+    currentRide ? { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude } : null,
+  );
+
+  // Animate driver along the real route
+  const liveDriverCoords = useDriverTracking({
+    enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
+    routeCoordinates: rideRoute?.coordinates ?? [],
+  });
+
+  const activeDriverLocation = liveDriverCoords ?? driverLocation;
+
   useEffect(() => {
     if (!currentRide) router.replace('/(tabs)/');
     if (currentRide?.status === 'negotiating') router.replace('/negotiation');
   }, [currentRide?.status]);
 
   useEffect(() => {
-    if (driverLocation && mapRef.current && currentRide?.pickup) {
+    if (activeDriverLocation && mapRef.current && currentRide?.pickup) {
       mapRef.current.fitToCoordinates(
-        [driverLocation, currentRide.pickup],
+        [activeDriverLocation, currentRide.pickup],
         { edgePadding: { top: 120, right: 40, bottom: 280, left: 40 }, animated: true }
       );
     }
-  }, [driverLocation]);
+  }, [activeDriverLocation]);
 
   const handleComplete = () => {
     Alert.alert('End Ride', 'Complete this ride?', [
@@ -76,11 +93,13 @@ export default function RideScreen() {
         }
         customMapStyle={darkMapStyle}
       >
-        {driverLocation && (
-          <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.driverMarker}>
-              <Text style={{ fontSize: 20 }}>🏍</Text>
-            </View>
+        {activeDriverLocation && (
+          <Marker coordinate={activeDriverLocation} anchor={{ x: 0.5, y: 0.5 }}>
+            <MaterialCommunityIcons
+              name={VEHICLE_MCI[currentRide.vehicleType] as any}
+              size={32}
+              color="#00C853"
+            />
           </Marker>
         )}
         <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }}>
@@ -93,19 +112,16 @@ export default function RideScreen() {
             <Feather name="map-pin" size={10} color="#fff" />
           </View>
         </Marker>
-        {driverLocation && (
+        {/* Real road route */}
+        {rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color="#FF3B30" width={4} />}
+
+        {/* Driver-to-pickup dashed line while arriving (before route loads) */}
+        {!rideRoute && activeDriverLocation && currentRide.status === 'arriving' && (
           <Polyline
-            coordinates={[driverLocation, currentRide.pickup]}
+            coordinates={[activeDriverLocation, currentRide.pickup]}
             strokeColor={colors.primary}
             strokeWidth={3}
             lineDashPattern={[8, 4]}
-          />
-        )}
-        {isInProgress && (
-          <Polyline
-            coordinates={[currentRide.pickup, currentRide.destination]}
-            strokeColor={colors.primary}
-            strokeWidth={3}
           />
         )}
       </MapView>
@@ -126,7 +142,7 @@ export default function RideScreen() {
         </View>
         {currentRide.driver && (
           <Text style={[styles.eta, { color: colors.primary }]}>
-            ETA: {currentRide.driver.eta} min
+            {rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`}
           </Text>
         )}
       </View>
@@ -153,7 +169,7 @@ export default function RideScreen() {
               {currentRide.driver?.name ?? 'Driver'}
             </Text>
             <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>
-              {VEHICLE_LABELS[currentRide.vehicleType]} · {currentRide.driver?.plateNumber}
+              {VEHICLE_LABELS_FULL[currentRide.vehicleType]} · {currentRide.driver?.plateNumber}
             </Text>
           </View>
           <View style={styles.ratingBadge}>
@@ -170,14 +186,18 @@ export default function RideScreen() {
             </Text>
           </View>
           <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.fareItem}>
+          <View style={[styles.fareItem]}>
             <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Distance</Text>
-            <Text style={[styles.fareValue, { color: colors.foreground }]}>{currentRide.distance} km</Text>
+            <Text style={[styles.fareValue, { color: colors.foreground }]}>
+              {rideRoute ? formatDistance(rideRoute.distanceMeters) : `${currentRide.distance} km`}
+            </Text>
           </View>
           <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
           <View style={styles.fareItem}>
             <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>ETA</Text>
-            <Text style={[styles.fareValue, { color: colors.foreground }]}>{currentRide.duration} min</Text>
+            <Text style={[styles.fareValue, { color: colors.foreground }]}>
+              {rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`}
+            </Text>
           </View>
         </View>
 

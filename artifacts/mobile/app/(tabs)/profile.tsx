@@ -114,7 +114,7 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.primary }]}>Join as Driver</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
-              Earn money driving on KandaRide
+              Earn money driving on Taravelis
             </Text>
           </View>
           <Feather name="arrow-right" size={18} color={colors.primary} />
@@ -138,7 +138,7 @@ export default function ProfileScreen() {
         <MenuItem icon="phone" label="Phone" onPress={() => {}} value={user?.phone} />
         <MenuItem icon="shield" label="Privacy & Security" onPress={() => {}} />
         <MenuItem icon="help-circle" label="Help & Support" onPress={() => {}} />
-        <MenuItem icon="info" label="About KandaRide" onPress={() => {}} />
+        <MenuItem icon="info" label="About Taravelis" onPress={() => {}} />
       </View>
 
       <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -150,7 +150,7 @@ export default function ProfileScreen() {
         />
       </View>
 
-      <Text style={[styles.version, { color: colors.mutedForeground }]}>KandaRide v1.0.0</Text>
+      <Text style={[styles.version, { color: colors.mutedForeground }]}>Taravelis v1.0.0</Text>
     </ScrollView>
   );
 }

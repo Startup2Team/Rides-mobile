@@ -17,7 +17,7 @@ import { useColors } from '@/hooks/useColors';
 export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [form, setForm] = useState({ name: '', phone: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const update = (field: string, val: string) => {
@@ -42,7 +42,6 @@ export default function RegisterScreen() {
       params: {
         phone: `+250${form.phone.replace(/\D/g, '')}`,
         name: form.name.trim(),
-        email: form.email.trim(),
         mode: 'register',
       },
     });
@@ -58,7 +57,6 @@ export default function RegisterScreen() {
           styles.container,
           {
             paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 20) + 20,
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 24),
           },
         ]}
         keyboardShouldPersistTaps="handled"
@@ -70,7 +68,7 @@ export default function RegisterScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.foreground }]}>Create account</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Join KandaRide — Rwanda's fastest ride
+            Join Taravelis — Rwanda's fastest ride
           </Text>
         </View>
 
@@ -84,60 +82,72 @@ export default function RegisterScreen() {
             leftIcon="user"
             autoCapitalize="words"
           />
-          <View style={styles.phoneRow}>
-            <View style={[styles.prefix, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Text style={[styles.prefixText, { color: colors.foreground }]}>🇷🇼 +250</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <KandaInput
-                label="Phone Number"
-                placeholder="7XX XXX XXX"
-                value={form.phone}
-                onChangeText={t => update('phone', t)}
-                keyboardType="phone-pad"
-                maxLength={12}
-                error={errors.phone}
-              />
+
+          {/* Phone Number field with label above the whole row */}
+          <View style={styles.phoneField}>
+            <Text style={[styles.phoneLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
+            <View style={styles.phoneRow}>
+              <View style={[
+                styles.prefix,
+                {
+                  backgroundColor: colors.input,
+                  borderColor: errors.phone ? colors.destructive : colors.border,
+                },
+              ]}>
+                <Text style={[styles.prefixText, { color: colors.foreground }]}>🇷🇼 +250</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <KandaInput
+                  placeholder="7XX XXX XXX"
+                  value={form.phone}
+                  onChangeText={t => update('phone', t)}
+                  keyboardType="phone-pad"
+                  maxLength={12}
+                  error={errors.phone}
+                />
+              </View>
             </View>
           </View>
-          <KandaInput
-            label="Email (optional)"
-            placeholder="you@example.com"
-            value={form.email}
-            onChangeText={t => update('email', t)}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            leftIcon="mail"
-          />
         </View>
+      </ScrollView>
 
+      {/* Sticky bottom */}
+      <View style={[
+        styles.bottom,
+        {
+          backgroundColor: colors.background,
+          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 24),
+          borderTopColor: colors.border,
+        },
+      ]}>
         <KandaButton
           title="Continue"
           onPress={handleContinue}
           fullWidth
           size="lg"
         />
-
         <View style={styles.row}>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
           <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
             <Text style={[styles.hint, { color: colors.primary }]}>Log in</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 24, gap: 20 },
-  backBtn: { alignSelf: 'flex-start' },
+  container: { paddingHorizontal: 24, gap: 24 },
+  backBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
   backText: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  header: { gap: 8 },
+  header: { gap: 6 },
   title: { fontSize: 28, fontFamily: 'Inter_700Bold' },
-  subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular' },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 14 },
-  phoneRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
+  subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular', lineHeight: 22 },
+  card: { borderRadius: 20, borderWidth: 1, padding: 20, gap: 18 },
+  phoneField: { gap: 6 },
+  phoneLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', marginLeft: 2 },
+  phoneRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   prefix: {
     height: 52,
     paddingHorizontal: 14,
@@ -145,9 +155,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
   },
   prefixText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  bottom: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    gap: 14,
+    borderTopWidth: 1,
+  },
   row: { flexDirection: 'row', justifyContent: 'center' },
   hint: { fontSize: 14, fontFamily: 'Inter_400Regular' },
 });

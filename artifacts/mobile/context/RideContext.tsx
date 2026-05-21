@@ -211,9 +211,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       // Save to history
       setRideHistory(hist => [completed, ...hist]);
-      AsyncStorage.getItem('@kanda_history').then(str => {
+      AsyncStorage.getItem('@taravelis_history').then(str => {
         const hist: Ride[] = str ? JSON.parse(str) : [];
-        AsyncStorage.setItem('@kanda_history', JSON.stringify([completed, ...hist].slice(0, 50)));
+        AsyncStorage.setItem('@taravelis_history', JSON.stringify([completed, ...hist].slice(0, 50)));
       });
       return null;
     });
@@ -232,7 +232,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const str = await AsyncStorage.getItem('@kanda_history');
+      const str = await AsyncStorage.getItem('@taravelis_history');
       if (str) setRideHistory(JSON.parse(str));
     } catch {
       // ignore

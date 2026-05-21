@@ -85,7 +85,7 @@ export function KandaInput({
 }
 
 const styles = StyleSheet.create({
-  wrapper: { gap: 6 },
+  wrapper: { gap: 6, flex: 1 },
   label: {
     fontSize: 13,
     fontFamily: 'Inter_500Medium',

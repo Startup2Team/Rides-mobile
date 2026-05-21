@@ -19,7 +19,7 @@ const POLICIES = [
   {
     id: 'terms',
     title: 'Driver Terms & Conditions',
-    summary: 'You agree to provide safe, professional ride services on the KandaRide platform. You understand that KandaRide connects drivers with customers and maintains a 15% platform commission on all completed rides.',
+    summary: 'You agree to provide safe, professional ride services on the Taravelis platform. You understand that Taravelis connects drivers with customers and maintains a 15% platform commission on all completed rides.',
   },
   {
     id: 'safety',
@@ -29,7 +29,7 @@ const POLICIES = [
   {
     id: 'commission',
     title: 'Platform Commission Policy',
-    summary: 'KandaRide charges a 15% commission on all agreed fares. Payments are processed via Mobile Money (MoMo) within 24 hours of ride completion. Commission rates may be revised with 30 days notice.',
+    summary: 'Taravelis charges a 15% commission on all agreed fares. Payments are processed via Mobile Money (MoMo) within 24 hours of ride completion. Commission rates may be revised with 30 days notice.',
   },
   {
     id: 'conduct',
@@ -39,7 +39,7 @@ const POLICIES = [
   {
     id: 'privacy',
     title: 'Privacy Policy',
-    summary: 'KandaRide collects location data to match drivers with customers and improve service. Your personal data is stored securely and not shared with third parties without consent, except as required by law.',
+    summary: 'Taravelis collects location data to match drivers with customers and improve service. Your personal data is stored securely and not shared with third parties without consent, except as required by law.',
   },
 ];
 

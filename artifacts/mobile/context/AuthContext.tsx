@@ -16,8 +16,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  USER: '@kanda_user',
-  DRIVER_PROFILE: '@kanda_driver_profile',
+  USER: '@taravelis_user',
+  DRIVER_PROFILE: '@taravelis_driver_profile',
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
