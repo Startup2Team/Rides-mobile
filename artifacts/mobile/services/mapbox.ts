@@ -1,9 +1,10 @@
 import polyline from '@mapbox/polyline';
 import { Coords } from '@/types';
 
-// Expo exposes EXPO_PUBLIC_* vars on process.env at bundle time
-const TOKEN: string = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) ?? '';
-
+// pk.* tokens are public client tokens — safe to embed in the bundle.
+// process.env.EXPO_PUBLIC_* is inlined by Metro at build time from .env
+const TOKEN: string =
+  process.env.EXPO_PUBLIC_MAPBOX_TOKEN
 export interface RouteResult {
   coordinates: Coords[];
   distanceMeters: number;

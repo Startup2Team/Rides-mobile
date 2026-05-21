@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -17,11 +18,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { KandaButton } from '@/components/KandaButton';
 import { KandaInput } from '@/components/KandaInput';
-import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
+import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_MCI, VEHICLE_LABELS } from '@/types';
 
@@ -71,6 +72,8 @@ export default function CustomerHome() {
   const [destination, setDestination] = useState<RideLocation | null>(null);
   const [bookLoading, setBookLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<'pickup' | 'dropoff' | null>(null);
+  const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(PANEL_HEIGHT)).current;
 
   // Redirect if active ride
@@ -113,21 +116,24 @@ export default function CustomerHome() {
   }, []);
 
   // Real road route via Mapbox Directions API
-  // Always pass pickup coords; pass destination only when set — hook handles null
   const { route, loading: routeLoading } = useRoute(
     showBooking ? { latitude: pickup.latitude, longitude: pickup.longitude } : null,
     showBooking && destination ? { latitude: destination.latitude, longitude: destination.longitude } : null,
   );
 
-  // Fit map to actual route bounds once route loads
+  // Mirror route coordinates into local state so MapView children re-render immediately
+  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   useEffect(() => {
     if (route && route.coordinates.length > 1) {
+      setRouteCoords(route.coordinates);
       mapRef.current?.fitToCoordinates(route.coordinates, {
         edgePadding: { top: 80, right: 60, bottom: PANEL_HEIGHT + 160, left: 60 },
         animated: true,
       });
+    } else {
+      setRouteCoords([]);
     }
-  }, [route?.coordinates.length]);
+  }, [route]);
 
   // Fit map immediately when destination is set (before route loads)
   useEffect(() => {
@@ -140,6 +146,7 @@ export default function CustomerHome() {
         { edgePadding: { top: 80, right: 60, bottom: PANEL_HEIGHT + 160, left: 60 }, animated: true },
       );
     }
+    if (!destination) setRouteCoords([]);
   }, [destination?.latitude, destination?.longitude]);
 
   const openBooking = () => {
@@ -152,6 +159,7 @@ export default function CustomerHome() {
       setShowBooking(false);
       setDestText('');
       setDestination(null);
+      setSuggestions([]);
     });
   };
 
@@ -191,19 +199,25 @@ export default function CustomerHome() {
         showsMyLocationButton={false}
         customMapStyle={darkMapStyle}
       >
-        {/* Real road route polyline from Mapbox Directions API */}
-        {showBooking && route && (
-          <RoutePolyline coordinates={route.coordinates} color="#FF3B30" width={4} />
+        {/* Real road route polyline */}
+        {showBooking && routeCoords.length > 1 && (
+          <Polyline
+            coordinates={routeCoords}
+            strokeColor="#FF3B30"
+            strokeWidth={4}
+            lineCap="round"
+            lineJoin="round"
+          />
         )}
 
-        {/* Fallback straight line while route is loading */}
-        {showBooking && destination && !route && (
+        {/* Fallback dashed line while route is loading */}
+        {showBooking && destination && routeCoords.length < 2 && (
           <Polyline
             coordinates={[
               { latitude: pickup.latitude, longitude: pickup.longitude },
               { latitude: destination.latitude, longitude: destination.longitude },
             ]}
-            strokeColor="#FF3B3066"
+            strokeColor="#FF3B3088"
             strokeWidth={3}
             lineDashPattern={[8, 6]}
           />
@@ -364,10 +378,40 @@ export default function CustomerHome() {
                   placeholder="Enter pickup location"
                   value={pickup.address}
                   onFocus={() => setFocusedField('pickup')}
-                  onChangeText={t => setPickup(prev => ({ ...prev, address: t }))}
+                  onChangeText={t => {
+                    setPickup(prev => ({ ...prev, address: t }));
+                    if (t.length === 0) { setSuggestions([]); return; }
+                    if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+                    geocodeTimer.current = setTimeout(async () => {
+                      const results = await geocodeAddress(t, userLocation);
+                      setSuggestions(results);
+                    }, 400);
+                  }}
                   style={{ paddingHorizontal: 0 }}
                 />
               </View>
+
+              {/* Pickup autocomplete suggestions */}
+              {suggestions.length > 0 && focusedField === 'pickup' && (
+                <View style={[styles.suggestionsBox, { backgroundColor: colors.card }]}>
+                  {suggestions.map(s => (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={[styles.suggestionRow, { borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        setPickup({ ...s.coords, address: s.place_name });
+                        setSuggestions([]);
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.suggestionText, { color: colors.foreground }]} numberOfLines={1}>
+                        {s.place_name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
               <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
               <View style={styles.locRow}>
                 <View style={[styles.locDot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
@@ -378,15 +422,44 @@ export default function CustomerHome() {
                   onFocus={() => setFocusedField('dropoff')}
                   onChangeText={t => {
                     setDestText(t);
-                    if (t.length > 2) {
-                      setDestination({ latitude: pickup.latitude + 0.01, longitude: pickup.longitude + 0.01, address: t });
-                    } else {
+                    if (t.length === 0) {
                       setDestination(null);
+                      setSuggestions([]);
+                      return;
                     }
+                    // Debounce geocoding by 400ms
+                    if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+                    geocodeTimer.current = setTimeout(async () => {
+                      const results = await geocodeAddress(t, userLocation);
+                      setSuggestions(results);
+                    }, 400);
                   }}
                   style={{ paddingHorizontal: 0 }}
                 />
               </View>
+
+              {/* Autocomplete suggestions */}
+              {suggestions.length > 0 && focusedField === 'dropoff' && (
+                <View style={[styles.suggestionsBox, { backgroundColor: colors.card }]}>
+                  {suggestions.map(s => (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={[styles.suggestionRow, { borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        setDestText(s.place_name);
+                        setDestination({ ...s.coords, address: s.place_name });
+                        setSuggestions([]);
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.suggestionText, { color: colors.foreground }]} numberOfLines={1}>
+                        {s.place_name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Contextual action row — changes based on focused field */}
@@ -412,7 +485,7 @@ export default function CustomerHome() {
                   style={styles.currentLocBtn}
                   onPress={() => {
                     setDestText('Current Location');
-                    setDestination({ ...userLocation, address: 'Current Location' });
+                    setDestination({ latitude: userLocation.latitude, longitude: userLocation.longitude, address: 'Current Location' });
                   }}
                   activeOpacity={0.7}
                 >
@@ -422,7 +495,7 @@ export default function CustomerHome() {
               ) : (
                 <TouchableOpacity
                   style={styles.currentLocBtn}
-                  onPress={() => setPickup({ ...userLocation, address: 'Current Location' })}
+                  onPress={() => setPickup({ latitude: userLocation.latitude, longitude: userLocation.longitude, address: 'Current Location' })}
                   activeOpacity={0.7}
                 >
                   <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
@@ -573,6 +646,9 @@ const styles = StyleSheet.create({
   rideInfoCard: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, gap: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   rideInfoLabel: { fontSize: 10, fontFamily: 'Inter_400Regular' },
+  suggestionsBox: { borderRadius: 10, marginTop: 4, overflow: 'hidden' },
+  suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  suggestionText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
   routeMarker: { alignItems: 'center' },
   routeMarkerDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
   // Map picker
