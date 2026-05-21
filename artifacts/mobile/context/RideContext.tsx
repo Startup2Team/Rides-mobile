@@ -19,13 +19,15 @@ interface RideContextType {
   pendingRequest: Ride | null;
   createRide: (pickup: RideLocation, destination: RideLocation, vehicleType: VehicleType) => Promise<void>;
   cancelRide: () => void;
-  proposeFare: (amount: number, isFinal?: boolean) => void;
-  respondToNegotiation: (accept: boolean) => void;
+  counterOffer: (amount: number) => void;
   acceptDriverOffer: () => void;
   declineDriverOffer: () => void;
   completeRide: () => void;
+  markArrived: () => void;
+  startJourney: () => void;
   acceptRideRequest: () => void;
   declineRideRequest: () => void;
+  riderAcceptWithFare: (amount: number) => void;
   loadHistory: () => Promise<void>;
 }
 
@@ -69,6 +71,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     destination: RideLocation,
     vehicleType: VehicleType,
   ) => {
+    if (currentRide && ['negotiating', 'confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
+      return;
+    }
+
     const dist = calcDistance(pickup, destination);
     const fare = calcFare(vehicleType, dist);
 
@@ -88,24 +94,53 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
     setCurrentRide(ride);
 
-    // Simulate driver search (4-6 seconds)
     const delay = 4000 + Math.random() * 2000;
     setTimeout(() => {
-      // Find nearest driver with matching vehicle type (or any driver)
       const matching = MOCK_DRIVERS.filter(d => d.vehicleType === vehicleType);
       const driver: MockDriver = matching.length > 0
         ? matching[Math.floor(Math.random() * matching.length)]
         : MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
 
       setDriverLocation(driver.location);
+
+      const isGeneric = pickup.locationType === 'generic' || destination.locationType === 'generic';
+
+      const initialMessages: NegotiationMessage[] = [];
+      if (isGeneric) {
+        const destLabel = destination.address || destination.locationType === 'generic' ? (destination.address ?? 'Unknown location') : (pickup.address ?? 'Unknown location');
+        initialMessages.push({
+          id: generateId(),
+          sender: 'system',
+          type: 'text',
+          text: `My destination is ${destLabel}. Please let me know your price.`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       setCurrentRide(prev => prev ? {
         ...prev,
         status: 'negotiating',
         driver,
         driverId: driver.id,
+        negotiation: initialMessages,
       } : null);
+
+      setTimeout(() => {
+        setCurrentRide(prev => {
+          if (!prev || prev.status !== 'negotiating') return prev;
+          const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
+          const driverMsg: NegotiationMessage = {
+            id: generateId(),
+            sender: 'driver',
+            type: 'offer',
+            amount: driverOffer,
+            timestamp: new Date().toISOString(),
+          };
+          return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
+        });
+      }, 2500);
     }, delay);
-  }, []);
+  }, [currentRide]);
 
   const cancelRide = useCallback(() => {
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
@@ -113,74 +148,66 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setCurrentRide(null), 2000);
   }, []);
 
-  const proposeFare = useCallback((amount: number, isFinal = false) => {
-    const msg: NegotiationMessage = {
-      id: generateId(),
-      sender: 'customer',
-      amount,
-      timestamp: new Date().toISOString(),
-      isFinal,
-    };
+  const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => {
       if (!prev) return null;
-      const updated = { ...prev, negotiation: [...prev.negotiation, msg] };
-      return updated;
+      const customerMessages = prev.negotiation.filter(m => m.sender === 'customer');
+      if (customerMessages.length >= 3) return prev;
+
+      const msg: NegotiationMessage = {
+        id: generateId(),
+        sender: 'customer',
+        type: 'offer',
+        amount,
+        timestamp: new Date().toISOString(),
+      };
+      return { ...prev, negotiation: [...prev.negotiation, msg] };
     });
 
-    // Driver responds after 2 seconds
     setTimeout(() => {
       setCurrentRide(prev => {
-        if (!prev) return null;
-        const rounds = prev.negotiation.filter(m => m.sender === 'driver').length;
-        const driverIsFinal = rounds >= 2 || isFinal;
+        if (!prev || prev.status !== 'negotiating') return prev;
+        const driverMessages = prev.negotiation.filter(m => m.sender === 'driver');
+        if (driverMessages.length >= 3) return prev;
 
-        // Driver counters with ~15% higher than customer offer or accepts
-        const shouldAccept = amount >= prev.suggestedFare * 0.9 || (isFinal && Math.random() > 0.3);
+        const shouldAccept = amount >= prev.suggestedFare * 0.85 || Math.random() > 0.6;
 
         if (shouldAccept) {
+          const agreedMsg: NegotiationMessage = {
+            id: generateId(),
+            sender: 'driver',
+            type: 'offer',
+            amount,
+            timestamp: new Date().toISOString(),
+            isFinal: true,
+          };
           return {
             ...prev,
             status: 'confirmed',
             agreedFare: amount,
-            negotiation: [...prev.negotiation, {
-              id: generateId(),
-              sender: 'driver',
-              amount,
-              timestamp: new Date().toISOString(),
-              isFinal: true,
-            }],
+            negotiation: [...prev.negotiation, agreedMsg],
           };
         }
 
-        const counter = Math.round((amount * 1.15) / 100) * 100;
+        const counter = Math.round((amount * 1.12) / 100) * 100;
         const driverMsg: NegotiationMessage = {
           id: generateId(),
           sender: 'driver',
-          amount: Math.min(counter, prev.suggestedFare),
+          type: 'offer',
+          amount: Math.min(counter, Math.round(prev.suggestedFare * 1.1 / 100) * 100),
           timestamp: new Date().toISOString(),
-          isFinal: driverIsFinal,
         };
         return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
       });
     }, 2000);
   }, []);
 
-  const respondToNegotiation = useCallback((accept: boolean) => {
-    setCurrentRide(prev => {
-      if (!prev) return null;
-      if (accept) {
-        const lastDriverMsg = [...prev.negotiation].reverse().find(m => m.sender === 'driver');
-        return { ...prev, status: 'confirmed', agreedFare: lastDriverMsg?.amount };
-      }
-      return { ...prev, status: 'cancelled', completedAt: new Date().toISOString() };
-    });
-  }, []);
-
   const acceptDriverOffer = useCallback(() => {
     setCurrentRide(prev => {
       if (!prev) return null;
-      const lastMsg = [...prev.negotiation].reverse().find(m => m.sender === 'driver');
-      return { ...prev, status: 'confirmed', agreedFare: lastMsg?.amount };
+      const lastDriverMsg = [...prev.negotiation].reverse().find(m => m.sender === 'driver' && m.type === 'offer');
+      if (!lastDriverMsg?.amount) return prev;
+      return { ...prev, status: 'confirmed', agreedFare: lastDriverMsg.amount };
     });
   }, []);
 
@@ -189,7 +216,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [cancelRide]);
 
   const startLiveTracking = useCallback(() => {
-    // Simulate driver moving toward pickup then destination
     let step = 0;
     driverIntervalRef.current = setInterval(() => {
       step++;
@@ -198,10 +224,30 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         const noise = () => (Math.random() - 0.5) * 0.002;
         return { latitude: prev.latitude + noise(), longitude: prev.longitude + noise() };
       });
-      if (step === 8) {
-        updateStatus('in_progress');
+      if (step === 10) {
+        setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: new Date().toISOString() } : null);
+        if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
       }
     }, 2000);
+  }, []);
+
+  const markArrived = useCallback(() => {
+    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: new Date().toISOString() } : null);
+  }, []);
+
+  const startJourney = useCallback(() => {
+    setCurrentRide(prev => {
+      if (!prev || prev.status !== 'arrived') return prev;
+      return { ...prev, status: 'in_progress' };
+    });
+    driverIntervalRef.current = setInterval(() => {
+      setDriverLocation(prev => {
+        if (!prev) return null;
+        const noise = () => (Math.random() - 0.5) * 0.001;
+        return { latitude: prev.latitude + noise(), longitude: prev.longitude + noise() };
+      });
+    }, 3000);
   }, []);
 
   const completeRide = useCallback(() => {
@@ -209,7 +255,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setCurrentRide(prev => {
       if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
-      // Save to history
       setRideHistory(hist => [completed, ...hist]);
       AsyncStorage.getItem('@taravelis_history').then(str => {
         const hist: Ride[] = str ? JSON.parse(str) : [];
@@ -230,16 +275,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setPendingRequest(null);
   }, []);
 
-  const loadHistory = useCallback(async () => {
-    try {
-      const str = await AsyncStorage.getItem('@taravelis_history');
-      if (str) setRideHistory(JSON.parse(str));
-    } catch {
-      // ignore
-    }
+  const riderAcceptWithFare = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    setCurrentRide(prev => {
+      if (!prev) return null;
+      return { ...prev, status: 'confirmed', agreedFare: amount };
+    });
   }, []);
 
-  // Start live tracking once confirmed
   React.useEffect(() => {
     if (currentRide?.status === 'confirmed') {
       const timer = setTimeout(() => {
@@ -250,6 +293,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentRide?.status === 'confirmed']);
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const str = await AsyncStorage.getItem('@taravelis_history');
+      if (str) setRideHistory(JSON.parse(str));
+    } catch {
+    }
+  }, []);
+
   return (
     <RideContext.Provider value={{
       currentRide,
@@ -258,13 +309,15 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       pendingRequest,
       createRide,
       cancelRide,
-      proposeFare,
-      respondToNegotiation,
+      counterOffer,
       acceptDriverOffer,
       declineDriverOffer,
       completeRide,
+      markArrived,
+      startJourney,
       acceptRideRequest,
       declineRideRequest,
+      riderAcceptWithFare,
       loadHistory,
     }}>
       {children}

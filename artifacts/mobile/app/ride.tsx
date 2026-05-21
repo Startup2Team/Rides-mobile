@@ -24,6 +24,7 @@ import { VEHICLE_LABELS, VEHICLE_LABELS_FULL, VEHICLE_MCI } from '@/types';
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
   arriving: 'Driver is on the way',
+  arrived: 'Your driver has arrived!',
   in_progress: 'Heading to destination',
   completed: 'Ride completed!',
 };
@@ -31,7 +32,7 @@ const STATUS_MESSAGES: Record<string, string> = {
 export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, completeRide } = useRide();
+  const { currentRide, driverLocation, completeRide, startJourney, cancelRide } = useRide();
   const mapRef = useRef<MapView>(null);
 
   const { route: rideRoute } = useRoute(
@@ -39,31 +40,33 @@ export default function RideScreen() {
     currentRide ? { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude } : null,
   );
 
-  // Animate driver along the real route
   const liveDriverCoords = useDriverTracking({
     enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
     routeCoordinates: rideRoute?.coordinates ?? [],
   });
 
   const activeDriverLocation = liveDriverCoords ?? driverLocation;
+  const isArrived = currentRide?.status === 'arrived';
+  const isInProgress = currentRide?.status === 'in_progress';
 
   useEffect(() => {
     if (!currentRide) router.replace('/(tabs)/');
     if (currentRide?.status === 'negotiating') router.replace('/negotiation');
+    if (currentRide?.status === 'completed') router.replace('/(tabs)/');
   }, [currentRide?.status]);
 
   useEffect(() => {
     if (activeDriverLocation && mapRef.current && currentRide?.pickup) {
       mapRef.current.fitToCoordinates(
         [activeDriverLocation, currentRide.pickup],
-        { edgePadding: { top: 120, right: 40, bottom: 280, left: 40 }, animated: true }
+        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
       );
     }
   }, [activeDriverLocation]);
 
   const handleComplete = () => {
-    Alert.alert('End Ride', 'Complete this ride?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('Complete Ride', 'Confirm that you have arrived at your destination?', [
+      { text: 'Not yet', style: 'cancel' },
       {
         text: 'Complete',
         onPress: () => {
@@ -74,9 +77,40 @@ export default function RideScreen() {
     ]);
   };
 
+  const handleEmergencyEnd = () => {
+    Alert.alert('End Journey', 'End this journey early?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'End Journey',
+        style: 'destructive',
+        onPress: () => {
+          completeRide();
+          router.replace('/(tabs)/');
+        },
+      },
+    ]);
+  };
+
+  const handleCancelArrived = () => {
+    Alert.alert(
+      'Cancel Ride',
+      'The driver has arrived. Are you sure you want to cancel?',
+      [
+        { text: 'No, keep ride', style: 'cancel' },
+        {
+          text: 'Cancel Ride',
+          style: 'destructive',
+          onPress: () => {
+            cancelRide();
+            router.replace('/(tabs)/');
+          },
+        },
+      ]
+    );
+  };
+
   if (!currentRide) return null;
 
-  const isInProgress = currentRide.status === 'in_progress';
   const statusMsg = STATUS_MESSAGES[currentRide.status] ?? 'Ride confirmed';
 
   return (
@@ -147,22 +181,26 @@ export default function RideScreen() {
         )}
       </View>
 
-      {/* Bottom driver card */}
-      <View
-        style={[
-          styles.driverCard,
-          {
-            backgroundColor: colors.background,
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20),
-          },
-        ]}
-      >
+      {isArrived && (
+        <View style={[styles.arrivedBanner, { backgroundColor: colors.primary }]}>
+          <Feather name="check-circle" size={18} color={colors.primaryForeground} />
+          <Text style={[styles.arrivedBannerText, { color: colors.primaryForeground }]}>
+            Your rider has arrived. Please come to the pickup point.
+          </Text>
+        </View>
+      )}
+      <View style={[styles.driverCard, {
+        backgroundColor: colors.background,
+        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20),
+      }]}>
         <View style={styles.handle} />
 
         {/* Driver info */}
         <View style={styles.driverRow}>
           <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.driverInitial}>{currentRide.driver?.name?.[0] ?? 'D'}</Text>
+            <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
+              {currentRide.driver?.name?.[0] ?? 'D'}
+            </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.driverName, { color: colors.foreground }]}>
@@ -209,12 +247,29 @@ export default function RideScreen() {
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.muted }]}>
             <Feather name="message-circle" size={20} color={colors.foreground} />
           </TouchableOpacity>
+          {isArrived && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive, flex: 1 }]}
+              onPress={handleCancelArrived}
+            >
+              <Feather name="x" size={18} color={colors.destructive} />
+              <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>Cancel Ride</Text>
+            </TouchableOpacity>
+          )}
           {isInProgress && (
-            <KandaButton
-              title="Complete Ride"
-              onPress={handleComplete}
-              style={{ flex: 1 }}
-            />
+            <>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive }]}
+                onPress={handleEmergencyEnd}
+              >
+                <Feather name="alert-octagon" size={20} color={colors.destructive} />
+              </TouchableOpacity>
+              <KandaButton
+                title="Complete Ride"
+                onPress={handleComplete}
+                style={{ flex: 1 }}
+              />
+            </>
           )}
         </View>
       </View>
@@ -244,16 +299,18 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusMsg: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   eta: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  driverMarker: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,200,83,0.2)',
+  arrivedBanner: {
+    position: 'absolute',
+    top: 110,
+    left: 20,
+    right: 20,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#00C853',
+    gap: 10,
+    padding: 14,
   },
+  arrivedBannerText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
   pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   driverCard: {
     position: 'absolute',
@@ -272,7 +329,7 @@ const styles = StyleSheet.create({
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center' },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   driverAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  driverInitial: { fontSize: 22, fontFamily: 'Inter_700Bold', color: '#000' },
+  driverInitial: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   driverName: { fontSize: 17, fontFamily: 'Inter_600SemiBold' },
   driverVehicle: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   ratingBadge: {
@@ -294,4 +351,5 @@ const styles = StyleSheet.create({
   fareValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   actions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   actionBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  cancelBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 });

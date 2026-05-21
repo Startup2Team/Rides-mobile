@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -8,34 +8,57 @@ import { useColors } from '@/hooks/useColors';
 import { KandaButton } from '@/components/KandaButton';
 import { KIGALI_CENTER } from '@/types';
 
-type Phase = 'pickup' | 'inprogress' | 'done';
+type Phase = 'pickup' | 'waiting' | 'inprogress';
 
 const PICKUP = { latitude: -1.9365, longitude: 30.1011, address: 'Kimironko Market' };
 const DESTINATION = { latitude: -1.9438, longitude: 30.0616, address: 'Kigali City Tower' };
 const CUSTOMER_NAME = 'Amina K.';
+const CUSTOMER_PHONE = '+250788000000';
+const WAIT_LIMIT = 10;
 
 export default function DriverNavigateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>('pickup');
   const [driverPos, setDriverPos] = useState(KIGALI_CENTER);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT);
+  const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mapRef = useRef<MapView>(null);
 
+  // Move driver toward target
   useEffect(() => {
-    // Simulate driver moving toward pickup
-    intervalRef.current = setInterval(() => {
-      setDriverPos(prev => {
-        const target = phase === 'pickup' ? PICKUP : DESTINATION;
-        const dlat = (target.latitude - prev.latitude) * 0.15;
-        const dlng = (target.longitude - prev.longitude) * 0.15;
-        return { latitude: prev.latitude + dlat, longitude: prev.longitude + dlng };
-      });
+    if (moveRef.current) clearInterval(moveRef.current);
+    if (phase === 'waiting') return;
+    moveRef.current = setInterval(() => {
+      const target = phase === 'inprogress' ? DESTINATION : PICKUP;
+      setDriverPos(prev => ({
+        latitude: prev.latitude + (target.latitude - prev.latitude) * 0.15,
+        longitude: prev.longitude + (target.longitude - prev.longitude) * 0.15,
+      }));
     }, 1500);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    return () => { if (moveRef.current) clearInterval(moveRef.current); };
   }, [phase]);
 
-  const handleArrivedAtPickup = () => {
+  // Wait countdown timer
+  useEffect(() => {
+    if (phase === 'waiting') {
+      setWaitSeconds(WAIT_LIMIT);
+      waitRef.current = setInterval(() => {
+        setWaitSeconds(s => {
+          if (s <= 1) { if (waitRef.current) clearInterval(waitRef.current); return 0; }
+          return s - 1;
+        });
+      }, 1000);
+    } else {
+      if (waitRef.current) clearInterval(waitRef.current);
+    }
+    return () => { if (waitRef.current) clearInterval(waitRef.current); };
+  }, [phase]);
+
+  const handleArrivedAtPickup = () => { setPhase('waiting'); };
+
+  const handleStartJourney = () => {
     setPhase('inprogress');
   };
 
@@ -45,20 +68,40 @@ export default function DriverNavigateScreen() {
       {
         text: 'Complete',
         onPress: () => {
-          if (intervalRef.current) clearInterval(intervalRef.current);
+          if (moveRef.current) clearInterval(moveRef.current);
+          if (waitRef.current) clearInterval(waitRef.current);
           router.replace('/(driver)/');
         },
       },
     ]);
   };
 
-  const target = phase === 'pickup' ? PICKUP : DESTINATION;
+  const handleCall = () => {
+    Linking.openURL(`tel:${CUSTOMER_PHONE}`).catch(() =>
+      Alert.alert('Cannot call', 'Unable to open the phone dialler.')
+    );
+  };
+
+  const formatWait = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const isTimerRed = waitSeconds <= 60;
+
+  const etaTarget = phase === 'inprogress' ? DESTINATION : PICKUP;
   const etaMin = Math.round(
     Math.sqrt(
-      Math.pow((target.latitude - driverPos.latitude) * 111, 2) +
-      Math.pow((target.longitude - driverPos.longitude) * 111, 2)
+      Math.pow((etaTarget.latitude - driverPos.latitude) * 111, 2) +
+      Math.pow((etaTarget.longitude - driverPos.longitude) * 111, 2)
     ) * 3 + 1
   );
+
+  const phaseLabel =
+    phase === 'pickup' ? 'Heading to pickup' :
+    phase === 'waiting' ? 'Waiting for customer' :
+    'Heading to destination';
 
   return (
     <View style={styles.container}>
@@ -84,12 +127,14 @@ export default function DriverNavigateScreen() {
             <Feather name="map-pin" size={14} color="#fff" />
           </View>
         </Marker>
-        <Polyline
-          coordinates={[driverPos, PICKUP]}
-          strokeColor={colors.primary}
-          strokeWidth={3}
-          lineDashPattern={[8, 4]}
-        />
+        {phase !== 'inprogress' && (
+          <Polyline
+            coordinates={[driverPos, PICKUP]}
+            strokeColor={colors.primary}
+            strokeWidth={3}
+            lineDashPattern={[8, 4]}
+          />
+        )}
         {phase === 'inprogress' && (
           <Polyline
             coordinates={[PICKUP, DESTINATION]}
@@ -99,42 +144,32 @@ export default function DriverNavigateScreen() {
         )}
       </MapView>
 
-      {/* Top info */}
-      <View
-        style={[
-          styles.topBar,
-          {
-            backgroundColor: colors.background,
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
+      {/* Top bar */}
+      <View style={[styles.topBar, {
+        backgroundColor: colors.background,
+        paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
+        borderBottomColor: colors.border,
+      }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.topInfo}>
-          <Text style={[styles.topPhase, { color: colors.primary }]}>
-            {phase === 'pickup' ? 'Heading to pickup' : 'En route to destination'}
-          </Text>
-          <Text style={[styles.topEta, { color: colors.foreground }]}>ETA: {etaMin} min</Text>
+          <Text style={[styles.topPhase, { color: colors.primary }]}>{phaseLabel}</Text>
+          {phase !== 'waiting' && (
+            <Text style={[styles.topEta, { color: colors.foreground }]}>ETA: {etaMin} min</Text>
+          )}
         </View>
-        <TouchableOpacity style={[styles.callBtn, { backgroundColor: colors.muted }]}>
+        <TouchableOpacity style={[styles.callBtn, { backgroundColor: colors.muted }]} onPress={handleCall}>
           <Feather name="phone" size={20} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
-      {/* Bottom action card */}
-      <View
-        style={[
-          styles.bottomCard,
-          {
-            backgroundColor: colors.background,
-            borderTopColor: colors.border,
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20),
-          },
-        ]}
-      >
+      {/* Bottom card */}
+      <View style={[styles.bottomCard, {
+        backgroundColor: colors.background,
+        borderTopColor: colors.border,
+        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20),
+      }]}>
         <View style={styles.routePreview}>
           <View style={styles.routeRow}>
             <View style={[styles.dot, { backgroundColor: colors.primary }]} />
@@ -157,14 +192,63 @@ export default function DriverNavigateScreen() {
           </View>
         </View>
 
-        {phase === 'pickup' ? (
+        {phase === 'pickup' && (
           <KandaButton
             title="Arrived at Pickup"
             onPress={handleArrivedAtPickup}
             fullWidth
             size="lg"
           />
-        ) : (
+        )}
+
+        {phase === 'waiting' && (
+          <View style={styles.waitingBlock}>
+            <View style={[styles.timerBox, {
+              backgroundColor: isTimerRed ? colors.destructive + '15' : colors.primary + '15',
+              borderColor: isTimerRed ? colors.destructive + '40' : colors.primary + '30',
+            }]}>
+              <Feather name="clock" size={18} color={isTimerRed ? colors.destructive : colors.primary} />
+              <Text style={[styles.timerLabel, { color: colors.mutedForeground }]}>Time remaining</Text>
+              <Text style={[styles.timerValue, { color: isTimerRed ? colors.destructive : colors.primary }]}>{formatWait(waitSeconds)}</Text>
+            </View>
+            <View style={styles.waitingActions}>
+              <KandaButton
+                title="Start Journey"
+                onPress={handleStartJourney}
+                style={{ flex: 1 }}
+                size="lg"
+              />
+              {waitSeconds === 0 && (
+                <TouchableOpacity
+                  style={[styles.cancelRideBtn, { backgroundColor: colors.destructive + '15', borderColor: colors.destructive }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Cancel Ride',
+                      'Cancel this ride and return to the queue?',
+                      [
+                        { text: 'Back', style: 'cancel' },
+                        {
+                          text: 'Cancel Ride',
+                          style: 'destructive',
+                          onPress: () => {
+                            if (waitRef.current) clearInterval(waitRef.current);
+                            if (moveRef.current) clearInterval(moveRef.current);
+                            router.replace('/(driver)/');
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Feather name="x" size={16} color={colors.destructive} />
+                  <Text style={[styles.cancelRideBtnText, { color: colors.destructive }]}>Cancel Ride</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
+        {phase === 'inprogress' && (
           <KandaButton
             title="Complete Ride"
             onPress={handleCompleteRide}
@@ -225,4 +309,28 @@ const styles = StyleSheet.create({
   customerAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   customerName: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   fareText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  waitingBlock: { gap: 12 },
+  waitingActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  cancelRideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 50,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  cancelRideBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  timerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  timerLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
+  timerValue: { fontSize: 22, fontFamily: 'Inter_700Bold' },
+  callIconBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,7 +1,8 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import { VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS, VEHICLE_MCI } from '@/types';
 import { useColors } from '@/hooks/useColors';
 
 interface VehicleCardProps {
@@ -9,6 +10,7 @@ interface VehicleCardProps {
   selected: boolean;
   onSelect: () => void;
   estimatedFare?: number;
+  compact?: boolean;
 }
 
 const VEHICLE_DATA: Record<VehicleType, { icon: keyof typeof Feather.glyphMap; seats: string; desc: string }> = {
@@ -18,9 +20,32 @@ const VEHICLE_DATA: Record<VehicleType, { icon: keyof typeof Feather.glyphMap; s
   hilux: { icon: 'truck', seats: '5 seats', desc: 'Light cargo & family' },
 };
 
-export function VehicleCard({ type, selected, onSelect, estimatedFare }: VehicleCardProps) {
+export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }: VehicleCardProps) {
   const colors = useColors();
   const data = VEHICLE_DATA[type];
+
+  if (compact) {
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onSelect}
+        style={[
+          styles.compactCard,
+          {
+            backgroundColor: selected ? colors.primary + '15' : colors.card,
+            borderColor: selected ? colors.primary : colors.border,
+          },
+        ]}
+      >
+        <View style={[styles.compactIconBox, { backgroundColor: selected ? colors.primary : colors.muted }]}>
+          <MaterialCommunityIcons name={VEHICLE_MCI[type] as any} size={28} color={selected ? colors.primaryForeground : colors.foreground} />
+        </View>
+        <Text style={[styles.compactName, { color: selected ? colors.primary : colors.foreground }]}>
+          {VEHICLE_LABELS[type]}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -60,6 +85,23 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
   },
+  compactCard: {
+    width: '47%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 10,
+  },
+  compactIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   iconBox: {
     width: 44,
     height: 44,

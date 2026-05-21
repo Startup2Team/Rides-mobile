@@ -80,7 +80,7 @@ export default function DriverDashboard() {
 
   const handleAccept = () => {
     if (countdownRef.current) clearInterval(countdownRef.current);
-    router.push('/driver-navigate');
+    router.push('/driver-negotiation');
   };
 
   const toggleOnline = (val: boolean) => {
@@ -212,7 +212,7 @@ export default function DriverDashboard() {
               backgroundColor: colors.background,
               borderColor: colors.border,
               transform: [{ translateY: slideAnim }],
-              paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 16),
+              paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 50) + 16,
             },
           ]}
         >

@@ -81,7 +81,7 @@ export default function CustomerHome() {
     if (currentRide) {
       if (currentRide.status === 'searching') router.push('/searching');
       else if (currentRide.status === 'negotiating') router.push('/negotiation');
-      else if (['confirmed', 'arriving', 'in_progress'].includes(currentRide.status)) router.push('/ride');
+      else if (['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) router.push('/ride');
     }
   }, [currentRide?.status]);
 
@@ -164,9 +164,16 @@ export default function CustomerHome() {
   };
 
   const handleBook = async () => {
-    if (!destination) return;
+    if (!destination && !destText.trim()) return;
     setBookLoading(true);
-    await createRide(pickup, destination, selectedVehicle);
+    // If user typed a name without selecting from autocomplete, use it as a generic location
+    const finalDestination: RideLocation = destination ?? {
+      latitude: userLocation.latitude + 0.02,
+      longitude: userLocation.longitude + 0.02,
+      address: destText.trim(),
+      locationType: 'generic',
+    };
+    await createRide(pickup, finalDestination, selectedVehicle);
     setBookLoading(false);
     closeBooking();
     router.push('/searching');
@@ -197,6 +204,8 @@ export default function CustomerHome() {
         initialRegion={{ ...userLocation, latitudeDelta: 0.04, longitudeDelta: 0.04 }}
         showsUserLocation={false}
         showsMyLocationButton={false}
+        followsUserLocation={false}
+        userLocationAnnotationTitle=""
         customMapStyle={darkMapStyle}
       >
         {/* Real road route polyline */}
@@ -241,14 +250,16 @@ export default function CustomerHome() {
           </Marker>
         )}
 
-        <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 1 }}>
-          <View style={styles.youAreHereContainer}>
-            <View style={styles.youAreHereBubble}>
-              <Text style={styles.youAreHereText}>You're Here</Text>
+        {!locLoading && (
+          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 1 }}>
+            <View style={styles.youAreHereContainer}>
+              <View style={styles.youAreHereBubble}>
+                <Text style={styles.youAreHereText}>You're Here</Text>
+              </View>
+              <View style={styles.youAreHereTail} />
             </View>
-            <View style={styles.youAreHereTail} />
-          </View>
-        </Marker>
+          </Marker>
+        )}
 
         {visibleDrivers.map(driver => (
           <Marker
@@ -504,8 +515,8 @@ export default function CustomerHome() {
               )}
             </View>
 
-            {/* Find Driver */}
-            {destination && (
+            {/* Find Driver — shows when destination selected OR when a name has been typed */}
+            {(destination || destText.trim().length > 0) && (
               <KandaButton
                 title="Find Driver"
                 onPress={handleBook}
@@ -642,7 +653,7 @@ const styles = StyleSheet.create({
   currentLocBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
   currentLocText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rideInfoRow: { position: 'absolute', bottom: PANEL_HEIGHT, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', zIndex: 40, marginBottom: 127 },
+  rideInfoRow: { position: 'absolute', bottom: PANEL_HEIGHT + 12, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', zIndex: 40 },
   rideInfoCard: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, gap: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   rideInfoLabel: { fontSize: 10, fontFamily: 'Inter_400Regular' },

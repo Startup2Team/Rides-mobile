@@ -42,15 +42,15 @@ export default function OTPScreen() {
     setError('');
     if (cleaned && idx < 5) inputRefs.current[idx + 1]?.focus();
     if (!cleaned && idx > 0) inputRefs.current[idx - 1]?.focus();
+    if (cleaned && idx === 5) {
+      const full = [...next].join('');
+      if (full.length === 6) handleVerifyCode(full);
+    }
   };
 
-  const handleVerify = async () => {
-    const entered = code.join('');
-    if (entered.length < 6) { setError('Enter the 6-digit code'); return; }
-    // Simulation: accept any 6-digit code
+  const handleVerifyCode = async (entered: string) => {
     setVerifying(true);
     await new Promise(r => setTimeout(r, 1500));
-
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
     await login({
       id,
@@ -61,8 +61,13 @@ export default function OTPScreen() {
       isDriver: false,
       createdAt: new Date().toISOString(),
     });
-
     router.replace('/(tabs)/');
+  };
+
+  const handleVerify = async () => {
+    const entered = code.join('');
+    if (entered.length < 6) { setError('Enter the 6-digit code'); return; }
+    handleVerifyCode(entered);
   };
 
   return (

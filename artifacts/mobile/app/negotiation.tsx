@@ -2,8 +2,10 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -17,15 +19,31 @@ import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
+const MAX_MESSAGES = 3;
+
 function MessageBubble({ msg }: { msg: NegotiationMessage }) {
   const colors = useColors();
   const isCustomer = msg.sender === 'customer';
+  const isSystem = msg.sender === 'system';
+
+  if (isSystem) {
+    return (
+      <View style={styles.systemMsgRow}>
+        <View style={[styles.systemBubble, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+          <Feather name="info" size={12} color={colors.mutedForeground} />
+          <Text style={[styles.systemMsgText, { color: colors.mutedForeground }]}>{msg.text}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.bubbleRow, isCustomer ? styles.bubbleRight : styles.bubbleLeft]}>
       {!isCustomer && (
         <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <Text style={styles.avatarText}>D</Text>
+          <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>
+            {msg.sender === 'driver' ? 'D' : 'S'}
+          </Text>
         </View>
       )}
       <View
@@ -37,13 +55,25 @@ function MessageBubble({ msg }: { msg: NegotiationMessage }) {
           },
         ]}
       >
-        <Text style={[styles.bubbleSender, { color: isCustomer ? colors.primaryForeground + 'AA' : colors.mutedForeground }]}>
+        <Text style={[styles.bubbleSender, {
+          color: isCustomer ? colors.primaryForeground + 'AA' : colors.mutedForeground,
+        }]}>
           {isCustomer ? 'You' : 'Driver'}
-          {msg.isFinal ? ' · Final offer' : ''}
+          {msg.isFinal ? ' · Accepted' : ''}
         </Text>
-        <Text style={[styles.bubbleAmount, { color: isCustomer ? colors.primaryForeground : colors.foreground }]}>
-          {msg.amount.toLocaleString()} RWF
-        </Text>
+        {msg.type === 'offer' && msg.amount != null ? (
+          <Text style={[styles.bubbleAmount, {
+            color: isCustomer ? colors.primaryForeground : colors.foreground,
+          }]}>
+            {msg.amount.toLocaleString()} RWF
+          </Text>
+        ) : (
+          <Text style={[styles.bubbleText, {
+            color: isCustomer ? colors.primaryForeground : colors.foreground,
+          }]}>
+            {msg.text}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -52,49 +82,87 @@ function MessageBubble({ msg }: { msg: NegotiationMessage }) {
 export default function NegotiationScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, proposeFare, acceptDriverOffer, declineDriverOffer, cancelRide } = useRide();
+  const { currentRide, counterOffer, acceptDriverOffer, declineDriverOffer, cancelRide } = useRide();
 
   const [offerText, setOfferText] = useState('');
   const [waitingDriver, setWaitingDriver] = useState(false);
+  const [counterLoading, setCounterLoading] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const negotiation = currentRide?.negotiation ?? [];
-  const roundCount = negotiation.filter(m => m.sender === 'customer').length;
-  const lastDriverMsg = [...negotiation].reverse().find(m => m.sender === 'driver');
+  const customerMessages = negotiation.filter(m => m.sender === 'customer');
+  const driverMessages = negotiation.filter(m => m.sender === 'driver' && m.type === 'offer');
+  const lastDriverOffer = [...driverMessages].pop();
   const lastMsg = negotiation[negotiation.length - 1];
-  const isDriverFinalOffer = lastDriverMsg?.isFinal && lastMsg?.sender === 'driver';
-  const canCounter = roundCount < 4 && !isDriverFinalOffer;
-  const isFinalRound = roundCount === 3;
+
+  const customerMsgCount = customerMessages.length;
+  const driverHasSentFirstOffer = driverMessages.length > 0;
+  const limitReached = customerMsgCount >= MAX_MESSAGES || driverMessages.length >= MAX_MESSAGES;
+  const showCallButton = driverHasSentFirstOffer || limitReached;
+  const canCounter = customerMsgCount < MAX_MESSAGES && lastMsg?.sender === 'driver' && !waitingDriver;
+  const isRideAccepted = currentRide?.status === 'confirmed' || currentRide?.status === 'arriving' || currentRide?.status === 'arrived' || currentRide?.status === 'in_progress';
 
   useEffect(() => {
-    if (currentRide?.status === 'confirmed') router.replace('/ride');
-    if (!currentRide || currentRide.status === 'cancelled') router.replace('/(tabs)/');
+    if (isRideAccepted) {
+      router.replace('/ride');
+      return;
+    }
+    if (!currentRide || currentRide.status === 'cancelled') {
+      router.replace('/(tabs)/');
+    }
   }, [currentRide?.status]);
 
-  // Track waiting state
   useEffect(() => {
     if (lastMsg?.sender === 'customer') {
       setWaitingDriver(true);
     } else {
       setWaitingDriver(false);
+      setCounterLoading(false);
     }
   }, [negotiation.length]);
 
-  const handleSendOffer = () => {
+  const handleSendCounter = () => {
     const amount = parseInt(offerText.replace(/\D/g, ''), 10);
     if (isNaN(amount) || amount < 100) return;
     setOfferText('');
-    proposeFare(amount, isFinalRound);
+    setCounterLoading(true);
+    counterOffer(amount);
   };
 
-  const suggestedFare = currentRide?.suggestedFare ?? 0;
+  const handleCall = () => {
+    const phone = currentRide?.driver?.phone;
+    if (phone) {
+      Linking.openURL(`tel:${phone}`).catch(() => {
+        Alert.alert('Cannot call', 'Unable to open the phone dialler.');
+      });
+    }
+  };
+
+  const handleAccept = () => {
+    if (!lastDriverOffer?.amount) return;
+    acceptDriverOffer();
+  };
+
+  const handleDecline = () => {
+    Alert.alert(
+      'Cancel negotiation',
+      'Are you sure you want to cancel this ride?',
+      [
+        { text: 'Back', style: 'cancel' },
+        { text: 'Cancel Ride', style: 'destructive', onPress: () => declineDriverOffer() },
+      ]
+    );
+  };
+
+  if (!currentRide) return null;
+
+  const waitingForFirstOffer = !driverHasSentFirstOffer && !waitingDriver;
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -107,35 +175,46 @@ export default function NegotiationScreen() {
       >
         <View style={styles.driverInfo}>
           <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.driverInitial}>
-              {currentRide?.driver?.name?.[0] ?? 'D'}
+            <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
+              {currentRide.driver?.name?.[0] ?? 'D'}
             </Text>
           </View>
           <View>
             <Text style={[styles.driverName, { color: colors.foreground }]}>
-              {currentRide?.driver?.name ?? 'Driver'}
+              {currentRide.driver?.name ?? 'Driver'}
             </Text>
             <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>
-              {VEHICLE_LABELS[currentRide?.vehicleType ?? 'moto']} · {currentRide?.driver?.plateNumber}
+              {VEHICLE_LABELS[currentRide.vehicleType]} · {currentRide.driver?.plateNumber}
             </Text>
           </View>
         </View>
-        <View style={[styles.roundBadge, { backgroundColor: colors.muted }]}>
-          <Text style={[styles.roundText, { color: colors.mutedForeground }]}>
-            Round {roundCount}/{4}
+        <View style={[styles.counterBadge, { backgroundColor: colors.muted }]}>
+          <Text style={[styles.counterText, {
+            color: limitReached ? colors.destructive : colors.mutedForeground,
+          }]}>
+            {customerMsgCount}/{MAX_MESSAGES} messages
           </Text>
         </View>
       </View>
 
-      {/* Suggested fare banner */}
-      <View style={[styles.fareBanner, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
-        <Feather name="info" size={14} color={colors.primary} />
-        <Text style={[styles.fareText, { color: colors.primary }]}>
-          Suggested: {suggestedFare.toLocaleString()} RWF · {currentRide?.distance} km
-        </Text>
+      <View style={[styles.routeBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={styles.routeItem}>
+          <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
+          <Text style={[styles.routeLabel, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {currentRide.pickup.address ?? 'Pickup'}
+          </Text>
+        </View>
+        <View style={[styles.routeArrow, { backgroundColor: colors.border }]} />
+        <View style={styles.routeItem}>
+          <View style={[styles.routeDot, { backgroundColor: currentRide.destination.locationType === 'generic' ? colors.warning ?? '#FF9500' : colors.destructive }]} />
+          <Text style={[styles.routeLabel, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {currentRide.destination.locationType === 'generic'
+              ? `${currentRide.destination.address ?? 'Unknown'} (to confirm)`
+              : (currentRide.destination.address ?? 'Destination')}
+          </Text>
+        </View>
       </View>
 
-      {/* Messages */}
       <FlatList
         ref={listRef}
         data={negotiation}
@@ -144,17 +223,17 @@ export default function NegotiationScreen() {
         contentContainerStyle={styles.messages}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         ListHeaderComponent={
-          negotiation.length === 0 ? (
+          waitingForFirstOffer ? (
             <View style={styles.emptyChat}>
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.emptyChatText, { color: colors.mutedForeground }]}>
-                Propose a fare to begin negotiation
+                Waiting for driver's price offer...
               </Text>
             </View>
           ) : null
         }
       />
 
-      {/* Waiting indicator */}
       {waitingDriver && (
         <View style={styles.waitingRow}>
           <ActivityIndicator size="small" color={colors.primary} />
@@ -162,72 +241,95 @@ export default function NegotiationScreen() {
         </View>
       )}
 
-      {/* Final offer actions */}
-      {isDriverFinalOffer && (
-        <View style={[styles.finalActions, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-          <Text style={[styles.finalTitle, { color: colors.foreground }]}>
-            Driver's final offer: {lastDriverMsg?.amount.toLocaleString()} RWF
-          </Text>
-          <View style={styles.finalBtns}>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderColor: colors.destructive }]}
-              onPress={declineDriverOffer}
-            >
-              <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Decline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.primary, flex: 1 }]}
-              onPress={acceptDriverOffer}
-            >
-              <Text style={[styles.actionBtnText, { color: colors.primaryForeground }]}>Accept</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Input */}
-      {!isDriverFinalOffer && !waitingDriver && canCounter && (
+      {driverHasSentFirstOffer && (
         <View
           style={[
-            styles.inputArea,
+            styles.actionPanel,
             {
-              backgroundColor: colors.card,
+              backgroundColor: colors.background,
               borderTopColor: colors.border,
               paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 8),
             },
           ]}
         >
-          {isFinalRound && (
-            <Text style={[styles.finalHint, { color: colors.warning ?? colors.mutedForeground }]}>
-              ⚠ This is your final offer — no further negotiation
-            </Text>
-          )}
-          <View style={styles.inputRow}>
-            <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
+          {lastDriverOffer && !limitReached && (
+            <View style={[styles.currentOfferRow, { backgroundColor: colors.muted, borderRadius: 10 }]}>
+              <Text style={[styles.currentOfferLabel, { color: colors.mutedForeground }]}>Driver's offer:</Text>
+              <Text style={[styles.currentOfferAmount, { color: colors.foreground }]}>
+                {lastDriverOffer.amount?.toLocaleString()} RWF
+              </Text>
             </View>
-            <TextInput
-              style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border }]}
-              value={offerText}
-              onChangeText={t => setOfferText(t.replace(/\D/g, ''))}
-              placeholder={String(Math.round(suggestedFare * 0.85 / 100) * 100)}
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="number-pad"
-            />
+          )}
+
+          {canCounter && !limitReached && (
+            <View style={styles.inputRow}>
+              <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
+                <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
+              </View>
+              <TextInput
+                style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                value={offerText}
+                onChangeText={t => setOfferText(t.replace(/\D/g, ''))}
+                placeholder="Your counter-offer"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, { backgroundColor: offerText.length > 0 ? colors.primary : colors.muted }]}
+                onPress={handleSendCounter}
+                disabled={!offerText || counterLoading}
+              >
+                {counterLoading ? (
+                  <ActivityIndicator size="small" color={colors.primaryForeground} />
+                ) : (
+                  <Feather name="send" size={18} color={offerText.length > 0 ? colors.primaryForeground : colors.mutedForeground} />
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {limitReached && (
+            <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '15', borderRadius: 10 }]}>
+              <Feather name="alert-circle" size={14} color={colors.destructive} />
+              <Text style={[styles.limitText, { color: colors.destructive }]}>
+                Message limit reached. Call to continue negotiation.
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.mainActions}>
             <TouchableOpacity
-              style={[
-                styles.sendBtn,
-                { backgroundColor: offerText.length > 0 ? colors.primary : colors.muted },
-              ]}
-              onPress={handleSendOffer}
-              disabled={!offerText}
+              style={[styles.actionBtn, styles.declineBtn, { borderColor: colors.destructive, backgroundColor: colors.destructive + '15' }]}
+              onPress={handleDecline}
             >
-              <Feather name="send" size={18} color={offerText.length > 0 ? colors.primaryForeground : colors.mutedForeground} />
+              <Feather name="x" size={16} color={colors.destructive} />
+              <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Decline</Text>
+            </TouchableOpacity>
+
+            {showCallButton && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.callBtn, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                onPress={handleCall}
+              >
+                <Feather name="phone" size={16} color={colors.foreground} />
+                <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Call</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.acceptBtn, {
+                backgroundColor: lastDriverOffer ? colors.primary : colors.muted,
+                opacity: lastDriverOffer ? 1 : 0.5,
+              }]}
+              onPress={handleAccept}
+              disabled={!lastDriverOffer}
+            >
+              <Feather name="check" size={16} color={lastDriverOffer ? colors.primaryForeground : colors.mutedForeground} />
+              <Text style={[styles.actionBtnText, { color: lastDriverOffer ? colors.primaryForeground : colors.mutedForeground }]}>
+                Accept
+              </Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => { cancelRide(); router.replace('/(tabs)/'); }}>
-            <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel ride</Text>
-          </TouchableOpacity>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -244,28 +346,42 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 12,
   },
-  driverInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  driverInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   driverAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  driverInitial: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#000' },
+  driverInitial: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   driverName: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   driverVehicle: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  roundBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
-  roundText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  fareBanner: {
+  counterBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
+  counterText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  routeBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
+    gap: 8,
   },
-  fareText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  routeItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  routeDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  routeArrow: { width: 1, height: 20 },
+  routeLabel: { fontSize: 12, fontFamily: 'Inter_400Regular', flex: 1 },
   messages: { padding: 16, gap: 10 },
+  systemMsgRow: { alignItems: 'center', marginBottom: 8 },
+  systemBubble: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    maxWidth: '85%',
+  },
+  systemMsgText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   bubbleRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end', marginBottom: 8 },
   bubbleLeft: { justifyContent: 'flex-start' },
   bubbleRight: { justifyContent: 'flex-end' },
   avatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#000' },
+  avatarText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   bubble: {
     maxWidth: '70%',
     borderRadius: 16,
@@ -275,24 +391,21 @@ const styles = StyleSheet.create({
   },
   bubbleSender: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   bubbleAmount: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  emptyChat: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },
+  bubbleText: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20 },
+  emptyChat: { alignItems: 'center', paddingTop: 40, paddingBottom: 20, gap: 12 },
   emptyChatText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, justifyContent: 'center' },
   waitingText: { fontSize: 13, fontFamily: 'Inter_400Regular' },
-  finalActions: { padding: 16, gap: 12, borderTopWidth: 1 },
-  finalTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
-  finalBtns: { flexDirection: 'row', gap: 12 },
-  actionBtn: {
-    flex: 0.5,
-    height: 50,
-    borderRadius: 12,
+  actionPanel: { borderTopWidth: 1, padding: 16, gap: 12 },
+  currentOfferRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
+    padding: 10,
+    paddingHorizontal: 14,
   },
-  actionBtnText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  inputArea: { borderTopWidth: 1, padding: 16, gap: 10 },
-  finalHint: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  currentOfferLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  currentOfferAmount: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   currencyBadge: { height: 48, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   currencyText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
@@ -306,5 +419,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   sendBtn: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  cancelText: { textAlign: 'center', fontSize: 13, fontFamily: 'Inter_400Regular' },
+  limitBanner: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  limitText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular' },
+  mainActions: { flexDirection: 'row', gap: 10 },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+  },
+  declineBtn: { flex: 0 },
+  callBtn: { flex: 0 },
+  acceptBtn: { flex: 1, borderColor: 'transparent' },
+  actionBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 });
