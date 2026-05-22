@@ -16,6 +16,6 @@ export default function Index() {
   }
 
   if (!user) return <Redirect href="/(auth)/welcome" />;
-  if (user.mode === 'driver') return <Redirect href="/(driver)/" />;
-  return <Redirect href="/(tabs)/" />;
+  if (user.mode === 'driver') return <Redirect href="/(driver)" />;
+  return <Redirect href="/(tabs)" />;
 }

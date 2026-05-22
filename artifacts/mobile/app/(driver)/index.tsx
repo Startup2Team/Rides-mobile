@@ -10,27 +10,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { useRide } from '@/context/RideContext';
 import { KIGALI_CENTER, MOCK_DRIVERS, VEHICLE_LABELS } from '@/types';
-
-const MOCK_RIDE_REQUEST = {
-  id: 'req1',
-  customerName: 'Amina K.',
-  pickup: { address: 'Kimironko Market', latitude: -1.9365, longitude: 30.1011 },
-  destination: { address: 'Kigali City Tower', latitude: -1.9438, longitude: 30.0616 },
-  distance: 4.2,
-  suggestedFare: 2500,
-  vehicleType: 'moto' as const,
-};
 
 export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, driverProfile, saveDriverProfile } = useAuth();
+  const { pendingRequest, currentRide, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
   const [countdown, setCountdown] = useState(15);
@@ -46,6 +38,7 @@ export default function DriverDashboard() {
       return;
     }
     const t = setTimeout(() => {
+      simulateIncomingRideRequest();
       setShowRequest(true);
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
       setCountdown(15);
@@ -61,7 +54,12 @@ export default function DriverDashboard() {
       }, 1000);
     }, 5000);
     return () => clearTimeout(t);
-  }, [isOnline]);
+  }, [isOnline, simulateIncomingRideRequest]);
+
+  useEffect(() => {
+    if (currentRide?.status === 'negotiating') router.push('/driver-negotiation');
+    if (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') router.push('/driver-navigate');
+  }, [currentRide?.status]);
 
   const handleDecline = () => {
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -76,10 +74,12 @@ export default function DriverDashboard() {
       };
       saveDriverProfile(updated);
     }
+    declineRideRequest();
   };
 
   const handleAccept = () => {
     if (countdownRef.current) clearInterval(countdownRef.current);
+    acceptRideRequest();
     router.push('/driver-negotiation');
   };
 
@@ -96,6 +96,11 @@ export default function DriverDashboard() {
     { label: 'Total Rides', value: driverProfile?.completedRides ?? 0, icon: 'award' as const },
     { label: 'Declines Today', value: driverProfile?.dailyDeclines ?? 0, icon: 'x-circle' as const },
   ];
+
+  const request = pendingRequest;
+  const requestDestinationLabel = request?.destination.locationType === 'generic'
+    ? 'Unknown - to be negotiated'
+    : request?.destination.address;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -166,6 +171,21 @@ export default function DriverDashboard() {
                 </View>
               </Marker>
             ))}
+            {request && (
+              <>
+                <Marker coordinate={request.pickup}>
+                  <View style={[styles.pinMarker, { backgroundColor: colors.primary }]}>
+                    <Feather name="user" size={12} color="#000" />
+                  </View>
+                </Marker>
+                <Polyline
+                  coordinates={[KIGALI_CENTER, request.pickup]}
+                  strokeColor={colors.primary}
+                  strokeWidth={3}
+                  lineDashPattern={[8, 4]}
+                />
+              </>
+            )}
           </MapView>
           <View style={[styles.mapOverlay, { backgroundColor: colors.background + '60' }]}>
             <Text style={[styles.mapLabel, { color: colors.foreground }]}>Kigali Heat Map</Text>
@@ -204,7 +224,7 @@ export default function DriverDashboard() {
       </ScrollView>
 
       {/* Incoming ride request */}
-      {showRequest && (
+      {showRequest && request && (
         <Animated.View
           style={[
             styles.requestCard,
@@ -226,28 +246,23 @@ export default function DriverDashboard() {
           <View style={styles.requestRoute}>
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.routeText, { color: colors.foreground }]}>{MOCK_RIDE_REQUEST.pickup.address}</Text>
+              <Text style={[styles.routeText, { color: colors.foreground }]}>{request.pickup.address}</Text>
             </View>
             <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
-              <Text style={[styles.routeText, { color: colors.foreground }]}>{MOCK_RIDE_REQUEST.destination.address}</Text>
+              <Text style={[styles.routeText, { color: colors.foreground }]}>{requestDestinationLabel}</Text>
             </View>
           </View>
 
           <View style={styles.requestMeta}>
             <View style={styles.metaItem}>
               <Feather name="map-pin" size={14} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{MOCK_RIDE_REQUEST.distance} km</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Text style={[styles.fareAmt, { color: colors.primary }]}>
-                ~{MOCK_RIDE_REQUEST.suggestedFare.toLocaleString()} RWF
-              </Text>
+              <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{request.distance} km</Text>
             </View>
             <View style={styles.metaItem}>
               <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-                {MOCK_RIDE_REQUEST.customerName}
+                {request.customerName ?? 'Customer'}
               </Text>
             </View>
           </View>
@@ -324,6 +339,13 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1,
   },
+  pinMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -386,7 +408,6 @@ const styles = StyleSheet.create({
   requestMeta: { flexDirection: 'row', gap: 16, alignItems: 'center' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 13, fontFamily: 'Inter_400Regular' },
-  fareAmt: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   requestActions: { flexDirection: 'row', gap: 12 },
   reqBtn: {
     flex: 0.5,

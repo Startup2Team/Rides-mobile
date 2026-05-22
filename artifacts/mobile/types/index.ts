@@ -82,6 +82,8 @@ export interface MockDriver {
 export interface Ride {
   id: string;
   customerId: string;
+  customerName?: string;
+  customerPhone?: string;
   driverId?: string;
   driver?: MockDriver;
   vehicleType: VehicleType;
@@ -96,6 +98,7 @@ export interface Ride {
   createdAt: string;
   completedAt?: string;
   arrivedAt?: string;
+  waitStartedAt?: string;
 }
 
 export const VEHICLE_MCI: Record<VehicleType, string> = {

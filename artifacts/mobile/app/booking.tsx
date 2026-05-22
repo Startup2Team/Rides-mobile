@@ -4,6 +4,6 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 
 export default function BookingRedirect() {
-  useEffect(() => { router.replace('/(tabs)/'); }, []);
+  useEffect(() => { router.replace('/(tabs)'); }, []);
   return null;
 }

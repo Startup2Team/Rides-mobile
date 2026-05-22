@@ -20,7 +20,7 @@ export default function DriverProfileScreen() {
         text: 'Switch',
         onPress: async () => {
           await switchMode('customer');
-          router.replace('/(tabs)/');
+          router.replace('/(tabs)');
         },
       },
     ]);

@@ -17,13 +17,14 @@ import { useColors } from '@/hooks/useColors';
 export default function OTPScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { phone, name, email, mode } = useLocalSearchParams<{
-    phone: string; name: string; email: string; mode: string;
+  const { phone, name, email, mode, length } = useLocalSearchParams<{
+    phone: string; name: string; email: string; mode: string; length?: string;
   }>();
   const { login } = useAuth();
 
-  const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [timer, setTimer] = useState(30);
+  const otpLength = length === '4' ? 4 : 6;
+  const [code, setCode] = useState<string[]>(() => Array(otpLength).fill(''));
+  const [timer, setTimer] = useState(60);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
   const inputRefs = useRef<(TextInput | null)[]>([]);
@@ -40,11 +41,11 @@ export default function OTPScreen() {
     next[idx] = cleaned;
     setCode(next);
     setError('');
-    if (cleaned && idx < 5) inputRefs.current[idx + 1]?.focus();
+    if (cleaned && idx < otpLength - 1) inputRefs.current[idx + 1]?.focus();
     if (!cleaned && idx > 0) inputRefs.current[idx - 1]?.focus();
-    if (cleaned && idx === 5) {
+    if (cleaned && idx === otpLength - 1) {
       const full = [...next].join('');
-      if (full.length === 6) handleVerifyCode(full);
+      if (full.length === otpLength) handleVerifyCode(full);
     }
   };
 
@@ -61,12 +62,12 @@ export default function OTPScreen() {
       isDriver: false,
       createdAt: new Date().toISOString(),
     });
-    router.replace('/(tabs)/');
+    router.replace('/(tabs)');
   };
 
   const handleVerify = async () => {
     const entered = code.join('');
-    if (entered.length < 6) { setError('Enter the 6-digit code'); return; }
+    if (entered.length < otpLength) { setError(`Enter the ${otpLength}-digit code`); return; }
     handleVerifyCode(entered);
   };
 
@@ -92,7 +93,7 @@ export default function OTPScreen() {
         </Text>
         <View style={[styles.simBadge, { backgroundColor: colors.primary + '20' }]}>
           <Text style={[styles.simText, { color: colors.primary }]}>
-            Demo: enter any 6 digits
+            Demo: enter any {otpLength} digits
           </Text>
         </View>
       </View>
@@ -128,12 +129,12 @@ export default function OTPScreen() {
         fullWidth
         size="lg"
         loading={verifying}
-        disabled={code.join('').length < 6}
+        disabled={code.join('').length < otpLength}
       />
 
       <TouchableOpacity
         disabled={timer > 0}
-        onPress={() => setTimer(30)}
+        onPress={() => setTimer(60)}
         style={styles.resend}
       >
         <Text style={[styles.resendText, { color: timer > 0 ? colors.mutedForeground : colors.primary }]}>

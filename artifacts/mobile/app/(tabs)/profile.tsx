@@ -62,7 +62,7 @@ export default function ProfileScreen() {
           text: 'Switch',
           onPress: async () => {
             await switchMode('driver');
-            router.replace('/(driver)/');
+            router.replace('/(driver)');
           },
         },
       ]);

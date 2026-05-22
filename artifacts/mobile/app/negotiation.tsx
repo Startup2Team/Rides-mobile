@@ -20,6 +20,7 @@ import { useRide } from '@/context/RideContext';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
 const MAX_MESSAGES = 3;
+const WARNING = '#FF9500';
 
 function MessageBubble({ msg }: { msg: NegotiationMessage }) {
   const colors = useColors();
@@ -108,7 +109,7 @@ export default function NegotiationScreen() {
       return;
     }
     if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     }
   }, [currentRide?.status]);
 
@@ -192,7 +193,7 @@ export default function NegotiationScreen() {
           <Text style={[styles.counterText, {
             color: limitReached ? colors.destructive : colors.mutedForeground,
           }]}>
-            {customerMsgCount}/{MAX_MESSAGES} messages
+            {customerMsgCount} / {MAX_MESSAGES} messages used
           </Text>
         </View>
       </View>
@@ -206,7 +207,7 @@ export default function NegotiationScreen() {
         </View>
         <View style={[styles.routeArrow, { backgroundColor: colors.border }]} />
         <View style={styles.routeItem}>
-          <View style={[styles.routeDot, { backgroundColor: currentRide.destination.locationType === 'generic' ? colors.warning ?? '#FF9500' : colors.destructive }]} />
+          <View style={[styles.routeDot, { backgroundColor: currentRide.destination.locationType === 'generic' ? WARNING : colors.destructive }]} />
           <Text style={[styles.routeLabel, { color: colors.mutedForeground }]} numberOfLines={1}>
             {currentRide.destination.locationType === 'generic'
               ? `${currentRide.destination.address ?? 'Unknown'} (to confirm)`
@@ -241,97 +242,93 @@ export default function NegotiationScreen() {
         </View>
       )}
 
-      {driverHasSentFirstOffer && (
-        <View
-          style={[
-            styles.actionPanel,
-            {
-              backgroundColor: colors.background,
-              borderTopColor: colors.border,
-              paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 8),
-            },
-          ]}
-        >
-          {lastDriverOffer && !limitReached && (
-            <View style={[styles.currentOfferRow, { backgroundColor: colors.muted, borderRadius: 10 }]}>
-              <Text style={[styles.currentOfferLabel, { color: colors.mutedForeground }]}>Driver's offer:</Text>
-              <Text style={[styles.currentOfferAmount, { color: colors.foreground }]}>
-                {lastDriverOffer.amount?.toLocaleString()} RWF
-              </Text>
-            </View>
-          )}
+      <View
+        style={[
+          styles.actionPanel,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 8),
+          },
+        ]}
+      >
+        {lastDriverOffer && !limitReached && (
+          <View style={[styles.currentOfferRow, { backgroundColor: colors.muted, borderRadius: 10 }]}>
+            <Text style={[styles.currentOfferLabel, { color: colors.mutedForeground }]}>Driver's offer:</Text>
+            <Text style={[styles.currentOfferAmount, { color: colors.foreground }]}>
+              {lastDriverOffer.amount?.toLocaleString()} RWF
+            </Text>
+          </View>
+        )}
 
-          {canCounter && !limitReached && (
-            <View style={styles.inputRow}>
-              <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
-              </View>
-              <TextInput
-                style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-                value={offerText}
-                onChangeText={t => setOfferText(t.replace(/\D/g, ''))}
-                placeholder="Your counter-offer"
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="number-pad"
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, { backgroundColor: offerText.length > 0 ? colors.primary : colors.muted }]}
-                onPress={handleSendCounter}
-                disabled={!offerText || counterLoading}
-              >
-                {counterLoading ? (
-                  <ActivityIndicator size="small" color={colors.primaryForeground} />
-                ) : (
-                  <Feather name="send" size={18} color={offerText.length > 0 ? colors.primaryForeground : colors.mutedForeground} />
-                )}
-              </TouchableOpacity>
+        {canCounter && !limitReached && (
+          <View style={styles.inputRow}>
+            <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
+              <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
             </View>
-          )}
-
-          {limitReached && (
-            <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '15', borderRadius: 10 }]}>
-              <Feather name="alert-circle" size={14} color={colors.destructive} />
-              <Text style={[styles.limitText, { color: colors.destructive }]}>
-                Message limit reached. Call to continue negotiation.
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.mainActions}>
+            <TextInput
+              style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+              value={offerText}
+              onChangeText={t => setOfferText(t.replace(/\D/g, ''))}
+              placeholder="Your counter-offer"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="number-pad"
+            />
             <TouchableOpacity
-              style={[styles.actionBtn, styles.declineBtn, { borderColor: colors.destructive, backgroundColor: colors.destructive + '15' }]}
-              onPress={handleDecline}
+              style={[styles.sendBtn, { backgroundColor: offerText.length > 0 ? colors.primary : colors.muted }]}
+              onPress={handleSendCounter}
+              disabled={!offerText || counterLoading}
             >
-              <Feather name="x" size={16} color={colors.destructive} />
-              <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Decline</Text>
-            </TouchableOpacity>
-
-            {showCallButton && (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.callBtn, { borderColor: colors.border, backgroundColor: colors.muted }]}
-                onPress={handleCall}
-              >
-                <Feather name="phone" size={16} color={colors.foreground} />
-                <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Call</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.acceptBtn, {
-                backgroundColor: lastDriverOffer ? colors.primary : colors.muted,
-                opacity: lastDriverOffer ? 1 : 0.5,
-              }]}
-              onPress={handleAccept}
-              disabled={!lastDriverOffer}
-            >
-              <Feather name="check" size={16} color={lastDriverOffer ? colors.primaryForeground : colors.mutedForeground} />
-              <Text style={[styles.actionBtnText, { color: lastDriverOffer ? colors.primaryForeground : colors.mutedForeground }]}>
-                Accept
-              </Text>
+              {counterLoading ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Feather name="send" size={18} color={offerText.length > 0 ? colors.primaryForeground : colors.mutedForeground} />
+              )}
             </TouchableOpacity>
           </View>
+        )}
+
+        {limitReached && (
+          <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '15', borderRadius: 10 }]}>
+            <Feather name="alert-circle" size={14} color={colors.destructive} />
+            <Text style={[styles.limitText, { color: colors.destructive }]}>
+              Message limit reached. Call to continue negotiation.
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.mainActions}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.declineBtn, { borderColor: colors.destructive, backgroundColor: colors.destructive + '15' }]}
+            onPress={handleDecline}
+          >
+            <Feather name="x" size={16} color={colors.destructive} />
+            <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Decline</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.callBtn, { borderColor: colors.border, backgroundColor: colors.muted }]}
+            onPress={handleCall}
+          >
+            <Feather name="phone" size={16} color={colors.foreground} />
+            <Text style={[styles.actionBtnText, { color: colors.foreground }]}>Call</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.acceptBtn, {
+              backgroundColor: lastDriverOffer ? colors.primary : colors.muted,
+              opacity: lastDriverOffer ? 1 : 0.5,
+            }]}
+            onPress={handleAccept}
+            disabled={!lastDriverOffer}
+          >
+            <Feather name="check" size={16} color={lastDriverOffer ? colors.primaryForeground : colors.mutedForeground} />
+            <Text style={[styles.actionBtnText, { color: lastDriverOffer ? colors.primaryForeground : colors.mutedForeground }]}>
+              Accept
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -437,8 +434,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     paddingHorizontal: 14,
   },
-  declineBtn: { flex: 0 },
-  callBtn: { flex: 0 },
+  declineBtn: { flex: 1 },
+  callBtn: { flex: 1 },
   acceptBtn: { flex: 1, borderColor: 'transparent' },
   actionBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 });

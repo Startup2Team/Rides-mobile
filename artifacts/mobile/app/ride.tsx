@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -35,6 +35,8 @@ export default function RideScreen() {
   const { currentRide, driverLocation, completeRide, startJourney, cancelRide } = useRide();
   const mapRef = useRef<MapView>(null);
 
+  const [waitTimer, setWaitTimer] = useState(180);
+
   const { route: rideRoute } = useRoute(
     currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
     currentRide ? { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude } : null,
@@ -49,10 +51,34 @@ export default function RideScreen() {
   const isArrived = currentRide?.status === 'arrived';
   const isInProgress = currentRide?.status === 'in_progress';
 
+  // Geofencing calculation: straight-line distance in meters to destination
+  const distToDest = activeDriverLocation && currentRide?.destination
+    ? Math.sqrt(
+        Math.pow((currentRide.destination.latitude - activeDriverLocation.latitude) * 111000, 2) +
+        Math.pow((currentRide.destination.longitude - activeDriverLocation.longitude) * 111000, 2)
+      )
+    : 9999;
+
+  const canCompleteRide = distToDest <= 200;
+
   useEffect(() => {
-    if (!currentRide) router.replace('/(tabs)/');
+    if (currentRide?.status !== 'arrived') return;
+    const interval = setInterval(() => {
+      setWaitTimer(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentRide?.status]);
+
+  const formatTimer = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+  };
+
+  useEffect(() => {
+    if (!currentRide) router.replace('/(tabs)');
     if (currentRide?.status === 'negotiating') router.replace('/negotiation');
-    if (currentRide?.status === 'completed') router.replace('/(tabs)/');
+    if (currentRide?.status === 'completed') router.replace('/(tabs)');
   }, [currentRide?.status]);
 
   useEffect(() => {
@@ -71,7 +97,7 @@ export default function RideScreen() {
         text: 'Complete',
         onPress: () => {
           completeRide();
-          router.replace('/(tabs)/');
+          router.replace('/(tabs)');
         },
       },
     ]);
@@ -85,7 +111,7 @@ export default function RideScreen() {
         style: 'destructive',
         onPress: () => {
           completeRide();
-          router.replace('/(tabs)/');
+          router.replace('/(tabs)');
         },
       },
     ]);
@@ -102,7 +128,7 @@ export default function RideScreen() {
           style: 'destructive',
           onPress: () => {
             cancelRide();
-            router.replace('/(tabs)/');
+            router.replace('/(tabs)');
           },
         },
       ]
@@ -181,11 +207,25 @@ export default function RideScreen() {
         )}
       </View>
 
+      {isInProgress && (
+        <View style={[styles.tbtCard, { backgroundColor: colors.card, borderColor: colors.border, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 70 }]}>
+          <MaterialCommunityIcons name="navigation" size={24} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.tbtText, { color: colors.foreground }]}>
+              In 400m, turn left onto Boulevard de l'OUA
+            </Text>
+            <Text style={[styles.tbtSubtext, { color: colors.mutedForeground }]}>
+              Continuing toward destination
+            </Text>
+          </View>
+        </View>
+      )}
+
       {isArrived && (
         <View style={[styles.arrivedBanner, { backgroundColor: colors.primary }]}>
           <Feather name="check-circle" size={18} color={colors.primaryForeground} />
           <Text style={[styles.arrivedBannerText, { color: colors.primaryForeground }]}>
-            Your rider has arrived. Please come to the pickup point.
+            Your rider has arrived. Please come to the pickup point. (Waiting timer: {formatTimer(waitTimer)})
           </Text>
         </View>
       )}
@@ -264,11 +304,19 @@ export default function RideScreen() {
               >
                 <Feather name="alert-octagon" size={20} color={colors.destructive} />
               </TouchableOpacity>
-              <KandaButton
-                title="Complete Ride"
-                onPress={handleComplete}
-                style={{ flex: 1 }}
-              />
+              {canCompleteRide ? (
+                <KandaButton
+                  title="Complete Ride"
+                  onPress={handleComplete}
+                  style={{ flex: 1 }}
+                />
+              ) : (
+                <View style={[styles.geofenceNotice, { backgroundColor: colors.muted }]}>
+                  <Text style={[styles.geofenceText, { color: colors.mutedForeground }]}>
+                    Arriving shortly...
+                  </Text>
+                </View>
+              )}
             </>
           )}
         </View>
@@ -352,4 +400,26 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   actionBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   cancelBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  tbtCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  tbtText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
+  tbtSubtext: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  geofenceNotice: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  geofenceText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 });

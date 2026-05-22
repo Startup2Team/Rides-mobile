@@ -27,6 +27,7 @@ interface RideContextType {
   startJourney: () => void;
   acceptRideRequest: () => void;
   declineRideRequest: () => void;
+  simulateIncomingRideRequest: () => void;
   riderAcceptWithFare: (amount: number) => void;
   loadHistory: () => Promise<void>;
 }
@@ -55,6 +56,38 @@ function calcFare(vehicleType: VehicleType, distanceKm: number): number {
   return Math.round((base + distanceKm * perKm) / 100) * 100;
 }
 
+function buildMockRideRequest(): Ride {
+  const pickup: RideLocation = {
+    address: 'Kimironko Market',
+    latitude: -1.9365,
+    longitude: 30.1011,
+    locationType: 'precise',
+  };
+  const destination: RideLocation = {
+    address: 'Kigali City Tower',
+    latitude: -1.9438,
+    longitude: 30.0616,
+    locationType: 'precise',
+  };
+  const distance = calcDistance(pickup, destination);
+
+  return {
+    id: generateId(),
+    customerId: 'mock_customer',
+    customerName: 'Amina K.',
+    customerPhone: '+250788000000',
+    vehicleType: 'moto',
+    pickup,
+    destination,
+    status: 'searching',
+    distance: parseFloat(distance.toFixed(2)),
+    duration: Math.round(distance * 3 + 5),
+    suggestedFare: calcFare('moto', distance),
+    negotiation: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [rideHistory, setRideHistory] = useState<Ride[]>([]);
@@ -78,9 +111,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const dist = calcDistance(pickup, destination);
     const fare = calcFare(vehicleType, dist);
 
-    const ride: Ride = {
+      const ride: Ride = {
       id: generateId(),
       customerId: 'local_user',
+      customerName: 'Customer',
+      customerPhone: '',
       vehicleType,
       pickup,
       destination,
@@ -151,7 +186,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => {
       if (!prev) return null;
-      const customerMessages = prev.negotiation.filter(m => m.sender === 'customer');
+      
+      // Strictly enforce the 3-message limit per Section 2.3/3.2
+      const customerMessages = prev.negotiation.filter(
+        m => m.sender === 'customer' && m.type === 'offer'
+      );
       if (customerMessages.length >= 3) return prev;
 
       const msg: NegotiationMessage = {
@@ -167,7 +206,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => {
       setCurrentRide(prev => {
         if (!prev || prev.status !== 'negotiating') return prev;
-        const driverMessages = prev.negotiation.filter(m => m.sender === 'driver');
+        
+        // Check driver message limit
+        const driverMessages = prev.negotiation.filter(
+          m => m.sender === 'driver' && m.type === 'offer'
+        );
         if (driverMessages.length >= 3) return prev;
 
         const shouldAccept = amount >= prev.suggestedFare * 0.85 || Math.random() > 0.6;
@@ -225,7 +268,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return { latitude: prev.latitude + noise(), longitude: prev.longitude + noise() };
       });
       if (step === 10) {
-        setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: new Date().toISOString() } : null);
+        const now = new Date().toISOString();
+        setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: now, waitStartedAt: now } : null);
         if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
       }
     }, 2000);
@@ -233,7 +277,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const markArrived = useCallback(() => {
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
-    setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: new Date().toISOString() } : null);
+    setCurrentRide(prev => {
+      const now = new Date().toISOString();
+      return prev ? { ...prev, status: 'arrived', arrivedAt: now, waitStartedAt: now } : null;
+    });
   }, []);
 
   const startJourney = useCallback(() => {
@@ -253,7 +300,15 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const completeRide = useCallback(() => {
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
     setCurrentRide(prev => {
-      if (!prev) return null;
+      if (!prev || !driverLocation) return null;
+      
+      // Section 7.2: Ensure driver is within 200m of destination
+      const distToDest = calcDistance(driverLocation, prev.destination);
+      if (distToDest > 0.2) { // 0.2 km = 200 meters
+        // In a real app, we might trigger an alert here via a separate state
+        return prev;
+      }
+
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       setRideHistory(hist => [completed, ...hist]);
       AsyncStorage.getItem('@taravelis_history').then(str => {
@@ -267,12 +322,27 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const acceptRideRequest = useCallback(() => {
     if (!pendingRequest) return;
-    setCurrentRide({ ...pendingRequest, status: 'negotiating' });
+    const request = pendingRequest;
+    const isGeneric = request.pickup.locationType === 'generic' || request.destination.locationType === 'generic';
+    const initialMessages: NegotiationMessage[] = isGeneric
+      ? [{
+          id: generateId(),
+          sender: 'system',
+          type: 'text',
+          text: `My destination is ${request.destination.address ?? 'Unknown location'}. Please let me know your price.`,
+          timestamp: new Date().toISOString(),
+        }]
+      : [];
+    setCurrentRide({ ...request, status: 'negotiating', negotiation: initialMessages });
     setPendingRequest(null);
   }, [pendingRequest]);
 
   const declineRideRequest = useCallback(() => {
     setPendingRequest(null);
+  }, []);
+
+  const simulateIncomingRideRequest = useCallback(() => {
+    setPendingRequest(prev => prev ?? buildMockRideRequest());
   }, []);
 
   const riderAcceptWithFare = useCallback((amount: number) => {
@@ -317,6 +387,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       startJourney,
       acceptRideRequest,
       declineRideRequest,
+      simulateIncomingRideRequest,
       riderAcceptWithFare,
       loadHistory,
     }}>

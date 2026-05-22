@@ -119,7 +119,7 @@ function CascadeDropdown({ label, value, options, onSelect, disabled, placeholde
 export default function DriverOnboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, saveDriverProfile } = useAuth();
+  const { user, saveDriverProfile, switchMode } = useAuth();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -145,6 +145,7 @@ export default function DriverOnboarding() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [plateWarning, setPlateWarning] = useState('');
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const update = (field: string, val: string) => {
     setForm(f => ({ ...f, [field]: val }));
@@ -217,6 +218,7 @@ export default function DriverOnboarding() {
     if (step === 3) {
       if (!form.momoCode) e.momoCode = 'Required';
       if (form.momoCode && form.momoCode.replace(/\D/g, '').length < 9) e.momoCode = 'Enter a valid phone number';
+      if (!acceptedTerms) e.acceptedTerms = 'Required';
     }
     return e;
   };
@@ -249,14 +251,16 @@ export default function DriverOnboarding() {
       completedRides: 0,
       dailyRides: 0,
       dailyDeclines: 0,
-      policyAccepted: false,
+      policyAccepted: true,
+      policyAcceptedAt: new Date().toISOString(),
       earningsTotal: 0,
       passengerSeats: form.passengerSeats ? parseInt(form.passengerSeats) : undefined,
       loadCapacityKg: form.loadCapacityKg ? parseInt(form.loadCapacityKg) : undefined,
     };
     await saveDriverProfile(profile);
+    await switchMode('driver');
     setLoading(false);
-    router.push('/driver-policy');
+    router.replace('/(driver)');
   };
 
   const steps = ['Personal Info', 'Vehicle Info', 'Documents', 'Payment'];
@@ -541,15 +545,41 @@ export default function DriverOnboarding() {
               keyboardType="phone-pad"
             />
 
+            <TouchableOpacity
+              style={[styles.termsRow, { borderColor: errors.acceptedTerms ? colors.destructive : colors.border, backgroundColor: colors.card }]}
+              onPress={() => {
+                setAcceptedTerms(v => !v);
+                setErrors(e => ({ ...e, acceptedTerms: '' }));
+              }}
+              activeOpacity={0.75}
+            >
+              <View
+                style={[
+                  styles.termsCheckbox,
+                  {
+                    backgroundColor: acceptedTerms ? colors.primary : 'transparent',
+                    borderColor: acceptedTerms ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                {acceptedTerms && <Feather name="check" size={14} color={colors.primaryForeground} />}
+              </View>
+              <Text style={[styles.termsText, { color: colors.foreground }]}>
+                I agree to the Terms of Service and Privacy Policy.
+              </Text>
+            </TouchableOpacity>
+            {errors.acceptedTerms ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.acceptedTerms}</Text> : null}
+
           </View>
         )}
 
         <KandaButton
-          title={step < 3 ? 'Continue' : 'Review Terms & Policies'}
+          title={step < 3 ? 'Continue' : 'Submit Registration'}
           onPress={handleNext}
           fullWidth
           size="lg"
           loading={loading}
+          disabled={step === 3 && !acceptedTerms}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -569,6 +599,7 @@ const styles = StyleSheet.create({
   stepIndicator: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   stepItem: { alignItems: 'center', gap: 4 },
+  stepsRow: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
   stepDot: { width: 8, height: 8, borderRadius: 4 },
   stepLabel: { fontSize: 9, fontFamily: 'Inter_500Medium' },
   content: { padding: 20, gap: 16, paddingBottom: 40 },
@@ -685,6 +716,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  termsCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  termsText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', lineHeight: 20 },
   notice: {
     flexDirection: 'row',
     gap: 8,

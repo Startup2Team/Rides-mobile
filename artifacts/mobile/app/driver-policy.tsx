@@ -68,8 +68,12 @@ export default function DriverPolicyScreen() {
       vehicleType: 'moto',
       plateNumber: 'RAC 000 A',
       licenseNumber: 'DL-0000000',
+      province: 'Kigali City',
+      district: 'Gasabo',
+      sector: 'Kimironko',
       city: 'Kigali',
       momoCode: '250700000000',
+      momoProvider: 'mtn',
       dob: '01/01/1990',
       isOnline: false,
       isVerified: true,
@@ -84,7 +88,7 @@ export default function DriverPolicyScreen() {
     await saveDriverProfile(profile);
     await switchMode('driver');
     setLoading(false);
-    router.replace('/(driver)/');
+    router.replace('/(driver)');
   };
 
   return (

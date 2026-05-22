@@ -1,7 +1,6 @@
 import { Coords } from '@/types';
 
-const TOKEN: string =
-  process.env.EXPO_PUBLIC_MAPBOX_TOKEN
+const TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
 
 export interface GeocodeSuggestion {
   id: string;

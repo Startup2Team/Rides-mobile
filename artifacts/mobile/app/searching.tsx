@@ -1,55 +1,83 @@
 import { router } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
+import { VEHICLE_LABELS, VEHICLE_MCI } from '@/types';
 
 export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, cancelRide } = useRide();
 
-  const ring1 = useRef(new Animated.Value(0)).current;
-  const ring2 = useRef(new Animated.Value(0)).current;
-  const ring3 = useRef(new Animated.Value(0)).current;
+  const pulseA = useRef(new Animated.Value(0)).current;
+  const pulseB = useRef(new Animated.Value(0)).current;
+  const pulseC = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const animate = (anim: Animated.Value, delay: number) =>
+    const startPulse = (anim: Animated.Value, delay: number) => {
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.parallel([
-            Animated.timing(anim, { toValue: 1, duration: 1500, useNativeDriver: true }),
-          ]),
-          Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
         ])
       ).start();
+    };
 
-    animate(ring1, 0);
-    animate(ring2, 500);
-    animate(ring3, 1000);
-  }, []);
+    startPulse(pulseA, 0);
+    startPulse(pulseB, 500);
+    startPulse(pulseC, 1000);
+  }, [pulseA, pulseB, pulseC]);
 
-  // Navigate when driver is found
   useEffect(() => {
     if (currentRide?.status === 'negotiating') {
       router.replace('/negotiation');
     } else if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     }
   }, [currentRide?.status]);
 
   const handleCancel = () => {
     cancelRide();
-    router.replace('/(tabs)/');
+    router.replace('/(tabs)');
   };
 
-  const ringScale = (anim: Animated.Value) =>
-    anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
-  const ringOpacity = (anim: Animated.Value) =>
-    anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.6, 0.3, 0] });
+  const pulseStyle = (anim: Animated.Value) => ({
+    opacity: anim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0.6, 0.25, 0],
+    }),
+    transform: [
+      {
+        scale: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.5, 2],
+        }),
+      },
+    ],
+  });
+
+  const destinationLabel = useMemo(() => {
+    const destination = currentRide?.destination;
+    if (!destination) return 'Destination';
+    return destination.locationType === 'generic'
+      ? 'To be confirmed in chat'
+      : destination.address ?? 'Destination';
+  }, [currentRide?.destination]);
+
+  const vehicleType = currentRide?.vehicleType ?? 'moto';
 
   return (
     <View
@@ -62,35 +90,33 @@ export default function SearchingScreen() {
         },
       ]}
     >
-      {/* Pulsing animation */}
       <View style={styles.pulseArea}>
-        {[ring1, ring2, ring3].map((anim, i) => (
+        {[pulseA, pulseB, pulseC].map((anim, index) => (
           <Animated.View
-            key={i}
+            key={index}
             style={[
-              styles.ring,
+              styles.pulseRing,
               {
                 borderColor: colors.primary,
-                transform: [{ scale: ringScale(anim) }],
-                opacity: ringOpacity(anim),
               },
+              pulseStyle(anim),
             ]}
           />
         ))}
+
         <View style={[styles.centerDot, { backgroundColor: colors.primary }]}>
-          <Text style={styles.centerEmoji}>🏍</Text>
+          <MaterialCommunityIcons
+            name={VEHICLE_MCI[vehicleType] as any}
+            size={36}
+            color={colors.primaryForeground}
+          />
         </View>
       </View>
 
-      <View style={styles.textArea}>
+      <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground }]}>Finding your driver</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Connecting you with nearby{' '}
-          {currentRide?.vehicleType === 'moto'
-            ? 'moto riders'
-            : currentRide?.vehicleType === 'cab'
-            ? 'cab drivers'
-            : 'drivers'}
+          Connecting you with nearby {VEHICLE_LABELS[vehicleType].toLowerCase()} riders
         </Text>
 
         {currentRide && (
@@ -103,21 +129,22 @@ export default function SearchingScreen() {
             </View>
             <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
             <View style={styles.routeRow}>
-              <View style={[styles.routeDot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
+              <View style={[styles.routeDot, styles.dropoffDot, { backgroundColor: colors.destructive }]} />
               <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-                {currentRide.destination.address ?? 'Destination'}
+                {destinationLabel}
               </Text>
             </View>
           </View>
         )}
       </View>
 
-      <View style={styles.bottom}>
+      <View style={styles.footer}>
         <KandaButton
           title="Cancel Search"
           onPress={handleCancel}
           variant="outline"
           fullWidth
+          size="lg"
         />
       </View>
     </View>
@@ -125,13 +152,16 @@ export default function SearchingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center' },
+  container: {
+    flex: 1,
+    alignItems: 'center',
+  },
   pulseArea: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ring: {
+  pulseRing: {
     position: 'absolute',
     width: 180,
     height: 180,
@@ -139,9 +169,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   centerDot: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#00C853',
@@ -150,10 +180,22 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  centerEmoji: { fontSize: 36 },
-  textArea: { width: '100%', paddingHorizontal: 24, gap: 12, paddingBottom: 32 },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  content: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    gap: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontFamily: 'Inter_700Bold',
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+  },
   routeCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -161,9 +203,31 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  routeDot: { width: 10, height: 10, borderRadius: 5 },
-  routeLine: { height: 1, marginLeft: 20 },
-  routeText: { fontSize: 14, fontFamily: 'Inter_400Regular', flex: 1 },
-  bottom: { width: '100%', paddingHorizontal: 24, paddingBottom: 32 },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  routeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  dropoffDot: {
+    borderRadius: 3,
+  },
+  routeLine: {
+    height: 1,
+    marginLeft: 20,
+  },
+  routeText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+  },
+  footer: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+  },
 });

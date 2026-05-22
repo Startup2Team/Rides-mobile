@@ -20,6 +20,7 @@ import { useRide } from '@/context/RideContext';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
 const MAX_MESSAGES = 3;
+const WARNING = '#FF9500';
 
 function MessageBubble({ msg }: { msg: NegotiationMessage }) {
   const colors = useColors();
@@ -98,7 +99,7 @@ export default function DriverNegotiationScreen() {
       router.replace('/driver-navigate');
     }
     if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(driver)/');
+      router.replace('/(driver)');
     }
   }, [currentRide?.status]);
 
@@ -110,7 +111,7 @@ export default function DriverNegotiationScreen() {
   };
 
   const handleCall = () => {
-    const phone = currentRide?.driver?.phone ?? '';
+    const phone = currentRide?.customerPhone ?? '';
     if (phone) {
       Linking.openURL(`tel:${phone}`).catch(() => {
         Alert.alert('Cannot call', 'Unable to open the phone dialler.');
@@ -140,7 +141,7 @@ export default function DriverNegotiationScreen() {
       'Decline this negotiation? The request will return to the pool.',
       [
         { text: 'Back', style: 'cancel' },
-        { text: 'Decline', style: 'destructive', onPress: () => { cancelRide(); router.replace('/(driver)/'); } },
+        { text: 'Decline', style: 'destructive', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
       ]
     );
   };
@@ -160,12 +161,12 @@ export default function DriverNegotiationScreen() {
         <View style={styles.headerLeft}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Negotiation</Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            {VEHICLE_LABELS[currentRide.vehicleType]} · {currentRide.driver?.name ?? 'Customer'}
+            {VEHICLE_LABELS[currentRide.vehicleType]} · {currentRide.customerName ?? 'Customer'}
           </Text>
         </View>
         <View style={[styles.counterBadge, { backgroundColor: colors.muted }]}>
           <Text style={[styles.counterText, { color: limitReached ? colors.destructive : colors.mutedForeground }]}>
-            {riderMsgCount}/{MAX_MESSAGES} offers
+            {riderMsgCount} / {MAX_MESSAGES} messages used
           </Text>
         </View>
       </View>
@@ -177,7 +178,7 @@ export default function DriverNegotiationScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.customerName, { color: colors.foreground }]}>
-              {currentRide.driver?.name ?? 'Customer'}
+              {currentRide.customerName ?? 'Customer'}
             </Text>
             <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>
               {currentRide.pickup.address ?? 'Pickup'} → {' '}
@@ -188,9 +189,9 @@ export default function DriverNegotiationScreen() {
           </View>
         </View>
         {currentRide.destination.locationType === 'generic' && (
-          <View style={[styles.genericBadge, { backgroundColor: (colors.warning ?? '#FF9500') + '20', borderColor: (colors.warning ?? '#FF9500') + '40' }]}>
-            <Feather name="alert-circle" size={12} color={colors.warning ?? '#FF9500'} />
-            <Text style={[styles.genericText, { color: colors.warning ?? '#FF9500' }]}>
+          <View style={[styles.genericBadge, { backgroundColor: WARNING + '20', borderColor: WARNING + '40' }]}>
+            <Feather name="alert-circle" size={12} color={WARNING} />
+            <Text style={[styles.genericText, { color: WARNING }]}>
               Unknown / Generic destination — negotiate exact location
             </Text>
           </View>
@@ -237,7 +238,7 @@ export default function DriverNegotiationScreen() {
             <TextInput
               style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
               value={offerText}
-              onChangeText={t => setOfferText(t.replace(/\D/g, ''))}
+              onChangeText={t => { setOfferText(t.replace(/\D/g, '')); }}
               placeholder={hasRiderSentOffer ? 'Adjust your offer...' : 'Your price offer'}
               placeholderTextColor={colors.mutedForeground}
               keyboardType="number-pad"
@@ -254,7 +255,7 @@ export default function DriverNegotiationScreen() {
 
         <View style={styles.mainActions}>
           <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: colors.destructive, backgroundColor: colors.destructive + '15' }]}
+            style={[styles.actionBtn, { borderColor: colors.destructive, backgroundColor: colors.destructive + '10' }]}
             onPress={handleDecline}
           >
             <Feather name="x" size={16} color={colors.destructive} />

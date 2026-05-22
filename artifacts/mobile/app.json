@@ -15,10 +15,19 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.taravelis.app"
+      "bundleIdentifier": "com.taravelis.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Taravelis needs your location to find the closest vehicles to you.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Taravelis needs your location to find the closest vehicles to you."
+      }
     },
     "android": {
-      "package": "com.taravelis.app"
+      "package": "com.taravelis.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -32,10 +41,12 @@
       ],
       "expo-font",
       "expo-web-browser",
+      "expo-notifications",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Taravelis needs your location to show nearby drivers and track your ride."
+          "locationWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you.",
+          "locationAlwaysAndWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you."
         }
       ]
     ],
