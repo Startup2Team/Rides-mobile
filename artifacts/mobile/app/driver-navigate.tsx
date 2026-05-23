@@ -4,6 +4,7 @@ import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } fr
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useRide } from '@/context/RideContext';
@@ -190,9 +191,7 @@ export default function DriverNavigateScreen() {
         paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
         borderBottomColor: colors.border,
       }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.foreground} />
-        </TouchableOpacity>
+        <BackButton onPress={() => router.back()} />
         <View style={styles.topInfo}>
           <Text style={[styles.topPhase, { color: colors.primary }]}>{phaseLabel}</Text>
           {phase !== 'waiting' && (
