@@ -1,12 +1,25 @@
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
-import { VEHICLE_LABELS, VEHICLE_MCI } from '@/types';
+import { VEHICLE_LABELS, VehicleType } from '@/types';
+
+const VEHICLE_IMAGES: Record<VehicleType, any> = {
+  moto: require('../assets/vehicle-markers/moto.png'),
+  cab: require('../assets/vehicle-markers/cab.png'),
+  hilux: require('../assets/vehicle-markers/hilux.png'),
+  fuso: require('../assets/vehicle-markers/fuso.png'),
+};
+
+const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
+  moto: { width: 66, height: 50 },
+  cab: { width: 62, height: 46 },
+  hilux: { width: 70, height: 46 },
+  fuso: { width: 72, height: 48 },
+};
 
 export default function SearchingScreen() {
   const colors = useColors();
@@ -105,10 +118,10 @@ export default function SearchingScreen() {
         ))}
 
         <View style={[styles.centerDot, { backgroundColor: colors.primary }]}>
-          <MaterialCommunityIcons
-            name={VEHICLE_MCI[vehicleType] as any}
-            size={36}
-            color={colors.primaryForeground}
+          <Image
+            source={VEHICLE_IMAGES[vehicleType]}
+            style={[styles.vehicleImage, VEHICLE_IMAGE_STYLES[vehicleType]]}
+            resizeMode="contain"
           />
         </View>
       </View>
@@ -179,6 +192,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 10,
+  },
+  vehicleImage: {
+    zIndex: 2,
   },
   content: {
     width: '100%',

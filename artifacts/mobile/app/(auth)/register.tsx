@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,8 +11,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { KandaInput } from '@/components/KandaInput';
+import { LanguageSelector } from '@/components/LanguageSelector';
 import { useColors } from '@/hooks/useColors';
 
 export default function RegisterScreen() {
@@ -19,6 +23,19 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const [form, setForm] = useState({ name: '', phone: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [editingForm, setEditingForm] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setEditingForm(true));
+    const willHideSub = Keyboard.addListener('keyboardWillHide', () => setEditingForm(false));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setEditingForm(false));
+
+    return () => {
+      showSub.remove();
+      willHideSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const update = (field: string, val: string) => {
     setForm(f => ({ ...f, [field]: val }));
@@ -27,16 +44,22 @@ export default function RegisterScreen() {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!form.name.trim() || form.name.trim().split(' ').length < 2)
-      e.name = 'Enter your full name';
-    if (form.phone.replace(/\D/g, '').length < 9)
+    if (form.name.trim().length < 2) {
+      e.name = 'Enter your name';
+    }
+    if (form.phone.replace(/\D/g, '').length < 9) {
       e.phone = 'Enter a valid phone number';
+    }
     return e;
   };
 
   const handleContinue = () => {
     const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
+    if (Object.keys(e).length) {
+      setErrors(e);
+      return;
+    }
+
     router.push({
       pathname: '/(auth)/otp',
       params: {
@@ -57,112 +80,137 @@ export default function RegisterScreen() {
           styles.container,
           {
             paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 20) + 20,
+            paddingBottom: editingForm ? insets.bottom + 28 : 20,
           },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={[styles.backText, { color: colors.primary }]}>← Back</Text>
-        </TouchableOpacity>
-
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Create account</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Join Taravelis — Rwanda's fastest ride
-          </Text>
+        <View style={styles.topBar}>
+          <BackButton onPress={() => router.back()} />
+          <LanguageSelector />
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <KandaInput
-            label="Full Name"
-            placeholder="Jean Pierre Mutabazi"
-            value={form.name}
-            onChangeText={t => update('name', t)}
-            error={errors.name}
-            leftIcon="user"
-            autoCapitalize="words"
-          />
-
-          {/* Phone Number field with label above the whole row */}
-          <View style={styles.phoneField}>
-            <Text style={[styles.phoneLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
-            <View style={styles.phoneRow}>
-              <View style={[
-                styles.prefix,
-                {
-                  backgroundColor: colors.input,
-                  borderColor: errors.phone ? colors.destructive : colors.border,
-                },
-              ]}>
-                <Text style={[styles.prefixText, { color: colors.foreground }]}>🇷🇼 +250</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <KandaInput
-                  placeholder="7XX XXX XXX"
-                  value={form.phone}
-                  onChangeText={t => update('phone', t)}
-                  keyboardType="phone-pad"
-                  maxLength={12}
-                  error={errors.phone}
-                />
-              </View>
-            </View>
+        <View style={styles.centerContent}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: colors.foreground }]}>Register your account</Text>
           </View>
+
+          <View style={styles.form}>
+            <KandaInput
+              placeholder="Full name"
+              floatingLabel="Full name"
+              value={form.name}
+              onChangeText={t => update('name', t)}
+              error={errors.name}
+              leftIcon="user"
+              autoCapitalize="words"
+              onFocus={() => setEditingForm(true)}
+            />
+
+            <View style={styles.phoneField}>
+              <KandaInput
+                placeholder="Phone number"
+                floatingLabel="Phone number"
+                value={form.phone}
+                onChangeText={t => update('phone', t)}
+                keyboardType="phone-pad"
+                maxLength={12}
+                error={errors.phone}
+                leftIcon="phone"
+                onFocus={() => setEditingForm(true)}
+              />
+            </View>
+
+            {editingForm && (
+              <View style={styles.inlineContinue}>
+                <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+              </View>
+            )}
+          </View>
+
         </View>
       </ScrollView>
 
-      {/* Sticky bottom */}
-      <View style={[
-        styles.bottom,
-        {
-          backgroundColor: colors.background,
-          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 24),
-          borderTopColor: colors.border,
-        },
-      ]}>
-        <KandaButton
-          title="Continue"
-          onPress={handleContinue}
-          fullWidth
-          size="lg"
-        />
-        <View style={styles.row}>
-          <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
-            <Text style={[styles.hint, { color: colors.primary }]}>Log in</Text>
-          </TouchableOpacity>
+      {!editingForm && (
+        <View
+          style={[
+            styles.bottom,
+            {
+              backgroundColor: colors.background,
+              paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 24),
+            },
+          ]}
+        >
+          <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+          <View style={styles.row}>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+              <Text style={[styles.hint, { color: colors.primary }]}>Log in</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
+
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 24, gap: 24 },
-  backBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
-  backText: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  header: { gap: 6 },
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold' },
-  subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular', lineHeight: 22 },
-  card: { borderRadius: 20, borderWidth: 1, padding: 20, gap: 18 },
-  phoneField: { gap: 6 },
-  phoneLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', marginLeft: 2 },
-  phoneRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  prefix: {
-    height: 52,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: 22,
   },
-  prefixText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  header: {
+    gap: 8,
+    paddingTop: 4,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 22,
+    paddingBottom: 22,
+  },
+  title: {
+    fontSize: 24,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0,
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 22,
+    maxWidth: 320,
+  },
+  form: {
+    gap: 18,
+  },
+  phoneField: {
+    gap: 6,
+  },
+  inlineContinue: {
+    paddingTop: 4,
+  },
+  phoneLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    marginLeft: 2,
+  },
   bottom: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     paddingTop: 16,
     gap: 14,
-    borderTopWidth: 1,
   },
-  row: { flexDirection: 'row', justifyContent: 'center' },
-  hint: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  hint: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+  },
 });

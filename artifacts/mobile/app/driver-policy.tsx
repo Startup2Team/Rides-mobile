@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
@@ -103,11 +104,9 @@ export default function DriverPolicyScreen() {
           },
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.foreground} />
-        </TouchableOpacity>
+        <BackButton onPress={() => router.back()} />
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Policy Agreement</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>

@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   StyleSheet,
   Text,
@@ -10,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KandaButton } from '@/components/KandaButton';
+import { BackButton } from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 
@@ -65,12 +64,6 @@ export default function OTPScreen() {
     router.replace('/(tabs)');
   };
 
-  const handleVerify = async () => {
-    const entered = code.join('');
-    if (entered.length < otpLength) { setError(`Enter the ${otpLength}-digit code`); return; }
-    handleVerifyCode(entered);
-  };
-
   return (
     <View
       style={[
@@ -82,55 +75,45 @@ export default function OTPScreen() {
         },
       ]}
     >
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={[styles.backText, { color: colors.primary }]}>← Back</Text>
-      </TouchableOpacity>
+      <BackButton onPress={() => router.back()} />
 
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Verify number</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Code sent to {phone}
-        </Text>
-        <View style={[styles.simBadge, { backgroundColor: colors.primary + '20' }]}>
-          <Text style={[styles.simText, { color: colors.primary }]}>
-            Demo: enter any {otpLength} digits
+      <View style={styles.centerContent}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.foreground }]}>Verify number</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            Code sent to {phone}
           </Text>
         </View>
+
+        <View style={styles.otpRow}>
+          {code.map((digit, i) => (
+            <TextInput
+              key={i}
+              ref={r => { inputRefs.current[i] = r; }}
+              style={[
+                styles.otpBox,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: digit ? colors.primary : colors.border,
+                  color: colors.foreground,
+                },
+              ]}
+              value={digit}
+              onChangeText={v => handleInput(v, i)}
+              keyboardType="number-pad"
+              maxLength={1}
+              textAlign="center"
+              editable={!verifying}
+            />
+          ))}
+        </View>
+
+        {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+
+        {verifying ? (
+          <Text style={[styles.verifyingText, { color: colors.primary }]}>Verifying...</Text>
+        ) : null}
       </View>
-
-      <View style={styles.otpRow}>
-        {code.map((digit, i) => (
-          <TextInput
-            key={i}
-            ref={r => { inputRefs.current[i] = r; }}
-            style={[
-              styles.otpBox,
-              {
-                backgroundColor: colors.card,
-                borderColor: digit ? colors.primary : colors.border,
-                color: colors.foreground,
-              },
-            ]}
-            value={digit}
-            onChangeText={v => handleInput(v, i)}
-            keyboardType="number-pad"
-            maxLength={1}
-            textAlign="center"
-            autoFocus={i === 0}
-          />
-        ))}
-      </View>
-
-      {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
-
-      <KandaButton
-        title={verifying ? 'Verifying...' : 'Verify & Continue'}
-        onPress={handleVerify}
-        fullWidth
-        size="lg"
-        loading={verifying}
-        disabled={code.join('').length < otpLength}
-      />
 
       <TouchableOpacity
         disabled={timer > 0}
@@ -147,14 +130,16 @@ export default function OTPScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 24, gap: 28 },
-  backBtn: { alignSelf: 'flex-start' },
-  backText: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  header: { gap: 10 },
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold' },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 24,
+    paddingBottom: 82,
+  },
+  header: { gap: 10, alignItems: 'flex-start' },
+  title: { fontSize: 24, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular' },
-  simBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  simText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
-  otpRow: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
+  otpRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', alignSelf: 'center' },
   otpBox: {
     width: 48,
     height: 56,
@@ -164,6 +149,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   error: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  verifyingText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
   resend: { alignItems: 'center' },
   resendText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

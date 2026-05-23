@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
+import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { KandaInput } from '@/components/KandaInput';
 import { VehicleCard } from '@/components/VehicleCard';
@@ -280,9 +281,7 @@ export default function DriverOnboarding() {
         paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
         borderBottomColor: colors.border,
       }]}>
-        <TouchableOpacity onPress={() => step > 0 ? setStep(s => s - 1) : router.back()}>
-          <Feather name="arrow-left" size={24} color={colors.foreground} />
-        </TouchableOpacity>
+        <BackButton onPress={() => step > 0 ? setStep(s => s - 1) : router.back()} />
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Become a Driver</Text>
         <Text style={[styles.stepIndicator, { color: colors.mutedForeground }]}>{step + 1}/{steps.length}</Text>
       </View>

@@ -22,6 +22,7 @@ import {
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
@@ -36,6 +37,9 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
 const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.34, 270);
 const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.46, 370);
+const ROUTE_DRAW_STEP = 0.055;
+const ROUTE_DRAW_INTERVAL_MS = 45;
+const HOME_LOCATION_DELTA = 0.012;
 
 const VEHICLE_TYPES: VehicleType[] = ['moto', 'cab', 'hilux', 'fuso'];
 const SAVED_LOCATIONS_KEY = '@taravelis_saved_locations';
@@ -148,7 +152,9 @@ export default function CustomerHome() {
   const { user } = useAuth();
   const { currentRide, createRide, rideHistory, loadHistory } = useRide();
   const mapRef = useRef<MapView>(null);
+  const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
+  const hasCenteredOnUserRef = useRef(false);
 
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
@@ -191,6 +197,28 @@ export default function CustomerHome() {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
 
+  const centerMapOnUser = (duration = 700) => {
+    mapRef.current?.animateToRegion(
+      {
+        ...userLocation,
+        latitudeDelta: HOME_LOCATION_DELTA,
+        longitudeDelta: HOME_LOCATION_DELTA,
+      },
+      duration,
+    );
+  };
+
+  const centerPickerOnUser = () => {
+    pickerMapRef.current?.animateToRegion(
+      {
+        ...userLocation,
+        latitudeDelta: HOME_LOCATION_DELTA,
+        longitudeDelta: HOME_LOCATION_DELTA,
+      },
+      500,
+    );
+  };
+
   // Redirect if active ride
   useEffect(() => {
     if (currentRide) {
@@ -203,6 +231,12 @@ export default function CustomerHome() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (locLoading || hasCenteredOnUserRef.current || hasPreciseRouteLocations) return;
+    hasCenteredOnUserRef.current = true;
+    requestAnimationFrame(() => centerMapOnUser());
+  }, [locLoading, hasPreciseRouteLocations, userLocation.latitude, userLocation.longitude]);
 
   useEffect(() => {
     AsyncStorage.getItem(SAVED_LOCATIONS_KEY)
@@ -303,8 +337,8 @@ export default function CustomerHome() {
       if (visibleRouteCoords.length < 2) return [];
       return sliceRouteByProgress(
         visibleRouteCoords,
-        routeAnimProgress,
-        Math.min(routeAnimProgress + 0.34, 1),
+        0,
+        Math.min(routeAnimProgress, 1),
       );
     },
     [visibleRouteCoords, routeAnimProgress],
@@ -315,9 +349,16 @@ export default function CustomerHome() {
       return;
     }
 
+    setRouteAnimProgress(0);
     const interval = setInterval(() => {
-      setRouteAnimProgress(prev => (prev >= 0.96 ? 0 : prev + 0.035));
-    }, 160);
+      setRouteAnimProgress(prev => {
+        if (prev >= 1) {
+          clearInterval(interval);
+          return 1;
+        }
+        return Math.min(prev + ROUTE_DRAW_STEP, 1);
+      });
+    }, ROUTE_DRAW_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [visibleRouteCoords]);
@@ -531,7 +572,13 @@ export default function CustomerHome() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        initialRegion={{ ...userLocation, latitudeDelta: 0.04, longitudeDelta: 0.04 }}
+        initialRegion={{ ...userLocation, latitudeDelta: HOME_LOCATION_DELTA, longitudeDelta: HOME_LOCATION_DELTA }}
+        onMapReady={() => {
+          if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
+            hasCenteredOnUserRef.current = true;
+            centerMapOnUser(300);
+          }
+        }}
         showsUserLocation={false}
         showsMyLocationButton={false}
         followsUserLocation={false}
@@ -544,7 +591,7 @@ export default function CustomerHome() {
           <Polyline
             coordinates={visibleRouteCoords}
             strokeColor="#FF3B3055"
-            strokeWidth={5}
+            strokeWidth={3}
             lineCap="round"
             lineJoin="round"
           />
@@ -554,7 +601,7 @@ export default function CustomerHome() {
           <Polyline
             coordinates={animatedRouteCoords}
             strokeColor="#FF3B30"
-            strokeWidth={8}
+            strokeWidth={4}
             lineCap="round"
             lineJoin="round"
           />
@@ -641,7 +688,7 @@ export default function CustomerHome() {
       {/* Recenter button */}
       <TouchableOpacity
         style={[styles.recenterBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset }]}
-        onPress={() => mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 600)}
+        onPress={() => centerMapOnUser(600)}
         activeOpacity={0.8}
       >
         <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
@@ -845,9 +892,7 @@ export default function CustomerHome() {
               },
             ]}
           >
-            <TouchableOpacity style={styles.locationBackBtn} onPress={closeLocationSearch}>
-              <Feather name="arrow-left" size={24} color={colors.foreground} />
-            </TouchableOpacity>
+            <BackButton onPress={closeLocationSearch} />
             <Text style={[styles.locationSearchTitle, { color: colors.foreground }]}>
               {locationSearchTarget === 'pickup' ? 'Pickup Location' : 'Drop off Location'}
             </Text>
@@ -1114,12 +1159,14 @@ export default function CustomerHome() {
       {mapPicker !== null && (
         <View style={styles.mapPickerContainer}>
           <MapView
+            ref={pickerMapRef}
             style={StyleSheet.absoluteFill}
             provider={PROVIDER_DEFAULT}
             initialRegion={{ ...pinCoords, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
             showsUserLocation={false}
             showsMyLocationButton={false}
-            customMapStyle={darkMapStyle}
+            mapType={mapType}
+            customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
             onRegionChangeComplete={region => {
               setPinCoords({ latitude: region.latitude, longitude: region.longitude });
             }}
@@ -1135,14 +1182,38 @@ export default function CustomerHome() {
           </View>
 
           {/* Top back button */}
-          <TouchableOpacity
+          <BackButton
             style={[
               styles.mapPickerBack,
-              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 },
+              { top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 },
             ]}
             onPress={() => setMapPicker(null)}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.mapPickerControl,
+              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 },
+            ]}
+            onPress={cycleMapType}
+            activeOpacity={0.8}
           >
-            <Feather name="arrow-left" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons
+              name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
+              size={22}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.mapPickerControl,
+              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 68 },
+            ]}
+            onPress={centerPickerOnUser}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
           </TouchableOpacity>
 
           {/* Instruction label */}
@@ -1599,7 +1670,8 @@ const styles = StyleSheet.create({
   // Map picker
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 50 },
   fixedPinContainer: { position: 'absolute', top: '50%', left: '50%', marginLeft: -24, marginTop: -48 },
-  mapPickerBack: { position: 'absolute', left: 16, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
+  mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
+  mapPickerControl: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   mapPickerHint: { position: 'absolute', top: '18%', alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
   mapPickerHintText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
   mapPickerFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20 },

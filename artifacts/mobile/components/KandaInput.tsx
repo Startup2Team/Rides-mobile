@@ -12,6 +12,7 @@ import { useColors } from '@/hooks/useColors';
 
 interface KandaInputProps extends TextInputProps {
   label?: string;
+  floatingLabel?: string;
   error?: string;
   leftIcon?: keyof typeof Feather.glyphMap;
   rightIcon?: keyof typeof Feather.glyphMap;
@@ -20,6 +21,7 @@ interface KandaInputProps extends TextInputProps {
 
 export function KandaInput({
   label,
+  floatingLabel,
   error,
   leftIcon,
   rightIcon,
@@ -35,6 +37,7 @@ export function KandaInput({
     : focused
     ? colors.primary
     : colors.border;
+  const showFloatingLabel = Boolean(floatingLabel && (focused || String(props.value ?? '').length > 0));
 
   return (
     <View style={styles.wrapper}>
@@ -51,11 +54,26 @@ export function KandaInput({
           },
         ]}
       >
+        {showFloatingLabel && (
+          <Text
+            style={[
+              styles.floatingLabel,
+              {
+                backgroundColor: colors.background,
+                color: focused ? colors.primary : colors.mutedForeground,
+                left: leftIcon ? 38 : 12,
+              },
+            ]}
+          >
+            {floatingLabel}
+          </Text>
+        )}
         {leftIcon && (
           <Feather name={leftIcon} size={18} color={colors.mutedForeground} style={styles.leftIcon} />
         )}
         <TextInput
           {...props}
+          placeholder={showFloatingLabel ? '' : props.placeholder}
           placeholderTextColor={colors.mutedForeground}
           style={[
             styles.input,
@@ -97,6 +115,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     height: 52,
     paddingHorizontal: 14,
+  },
+  floatingLabel: {
+    position: 'absolute',
+    top: -8,
+    paddingHorizontal: 3,
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    zIndex: 2,
   },
   input: {
     flex: 1,
