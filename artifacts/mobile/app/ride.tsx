@@ -288,13 +288,20 @@ export default function RideScreen() {
             <Feather name="message-circle" size={20} color={colors.foreground} />
           </TouchableOpacity>
           {isArrived && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive, flex: 1 }]}
-              onPress={handleCancelArrived}
-            >
-              <Feather name="x" size={18} color={colors.destructive} />
-              <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>Cancel Ride</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive, flex: 1 }]}
+                onPress={handleCancelArrived}
+              >
+                <Feather name="x" size={18} color={colors.destructive} />
+                <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>Cancel Ride</Text>
+              </TouchableOpacity>
+              <KandaButton
+                title="Start Journey"
+                onPress={startJourney}
+                style={{ flex: 1 }}
+              />
+            </>
           )}
           {isInProgress && (
             <>

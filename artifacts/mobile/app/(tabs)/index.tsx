@@ -34,12 +34,14 @@ import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_MC
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
-const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.42, 330);
-const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.58, 455);
+const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.34, 270);
+const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.46, 370);
 
 const VEHICLE_TYPES: VehicleType[] = ['moto', 'cab', 'hilux', 'fuso'];
 const SAVED_LOCATIONS_KEY = '@taravelis_saved_locations';
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
+const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
+type AppMapType = typeof MAP_TYPES[number];
 
 interface SavedLocation extends RideLocation {
   id: string;
@@ -79,6 +81,67 @@ function calcEstFare(type: VehicleType, dist: number) {
   return Math.round((base + dist * perKm) / 100) * 100;
 }
 
+function getCoordDistance(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const latMeters = (b.latitude - a.latitude) * 111000;
+  const lngMeters = (b.longitude - a.longitude) * 111000 * Math.cos((a.latitude * Math.PI) / 180);
+  return Math.sqrt(latMeters * latMeters + lngMeters * lngMeters);
+}
+
+function interpolateCoord(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+  progress: number,
+) {
+  return {
+    latitude: a.latitude + (b.latitude - a.latitude) * progress,
+    longitude: a.longitude + (b.longitude - a.longitude) * progress,
+  };
+}
+
+function sliceRouteByProgress(
+  coords: { latitude: number; longitude: number }[],
+  startProgress: number,
+  endProgress: number,
+) {
+  if (coords.length < 2) return [];
+
+  const segmentLengths = coords.slice(0, -1).map((coord, index) => getCoordDistance(coord, coords[index + 1]));
+  const totalLength = segmentLengths.reduce((sum, length) => sum + length, 0);
+  if (totalLength <= 0) return coords.slice(0, 2);
+
+  const startDistance = totalLength * Math.max(0, Math.min(1, startProgress));
+  const endDistance = totalLength * Math.max(0, Math.min(1, endProgress));
+  const sliced: { latitude: number; longitude: number }[] = [];
+  let travelled = 0;
+
+  for (let i = 0; i < segmentLengths.length; i++) {
+    const segmentStart = travelled;
+    const segmentEnd = travelled + segmentLengths[i];
+    const segmentLength = segmentLengths[i];
+    const from = coords[i];
+    const to = coords[i + 1];
+
+    if (segmentEnd < startDistance) {
+      travelled = segmentEnd;
+      continue;
+    }
+    if (segmentStart > endDistance) break;
+
+    const localStart = Math.max(startDistance, segmentStart);
+    const localEnd = Math.min(endDistance, segmentEnd);
+    const startRatio = segmentLength === 0 ? 0 : (localStart - segmentStart) / segmentLength;
+    const endRatio = segmentLength === 0 ? 1 : (localEnd - segmentStart) / segmentLength;
+    const startCoord = interpolateCoord(from, to, startRatio);
+    const endCoord = interpolateCoord(from, to, endRatio);
+
+    if (sliced.length === 0) sliced.push(startCoord);
+    sliced.push(endCoord);
+    travelled = segmentEnd;
+  }
+
+  return sliced.length > 1 ? sliced : coords.slice(0, 2);
+}
+
 export default function CustomerHome() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -89,6 +152,7 @@ export default function CustomerHome() {
 
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
+  const [mapType, setMapType] = useState<AppMapType>('standard');
   const [locLoading, setLocLoading] = useState(true);
 
   // Booking sheet state
@@ -107,15 +171,25 @@ export default function CustomerHome() {
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<SavedLocation[]>([]);
   const [pendingSaveLocation, setPendingSaveLocation] = useState<RideLocation | null>(null);
+  const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const hasRideActions = destination !== null || destText.trim().length > 0;
   const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
+  const recenterBottomOffset = showBooking ? activePanelHeight + 16 : COMPACT_PANEL_HEIGHT + 64;
   const bookingBottomPadding = insets.bottom + (
     Platform.OS === 'web'
-      ? hasRideActions ? 84 : 44
-      : hasRideActions ? 80 : 36
+      ? hasRideActions ? 92 : 44
+      : hasRideActions ? 84 : 36
   );
+  const hasPreciseRouteLocations =
+    showBooking &&
+    destination !== null &&
+    pickup.locationType !== 'generic' &&
+    destination.locationType !== 'generic';
+  const cycleMapType = () => {
+    setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
+  };
 
   // Redirect if active ride
   useEffect(() => {
@@ -200,37 +274,82 @@ export default function CustomerHome() {
 
   // Real road route via Mapbox Directions API
   const { route, loading: routeLoading } = useRoute(
-    showBooking ? { latitude: pickup.latitude, longitude: pickup.longitude } : null,
-    showBooking && destination ? { latitude: destination.latitude, longitude: destination.longitude } : null,
+    hasPreciseRouteLocations ? { latitude: pickup.latitude, longitude: pickup.longitude } : null,
+    hasPreciseRouteLocations && destination
+      ? { latitude: destination.latitude, longitude: destination.longitude }
+      : null,
   );
 
   // Mirror route coordinates into local state so MapView children re-render immediately
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const routePreviewCoords = useMemo(
+    () => hasPreciseRouteLocations && destination
+      ? [
+          { latitude: pickup.latitude, longitude: pickup.longitude },
+          { latitude: destination.latitude, longitude: destination.longitude },
+        ]
+      : [],
+    [
+      hasPreciseRouteLocations,
+      pickup.latitude,
+      pickup.longitude,
+      destination?.latitude,
+      destination?.longitude,
+    ],
+  );
+  const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
+  const animatedRouteCoords = useMemo(
+    () => {
+      if (visibleRouteCoords.length < 2) return [];
+      return sliceRouteByProgress(
+        visibleRouteCoords,
+        routeAnimProgress,
+        Math.min(routeAnimProgress + 0.34, 1),
+      );
+    },
+    [visibleRouteCoords, routeAnimProgress],
+  );
+  useEffect(() => {
+    if (visibleRouteCoords.length < 2) {
+      setRouteAnimProgress(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setRouteAnimProgress(prev => (prev >= 0.96 ? 0 : prev + 0.035));
+    }, 160);
+
+    return () => clearInterval(interval);
+  }, [visibleRouteCoords]);
+
   useEffect(() => {
     if (route && route.coordinates.length > 1) {
       setRouteCoords(route.coordinates);
       mapRef.current?.fitToCoordinates(route.coordinates, {
-        edgePadding: { top: 80, right: 60, bottom: activePanelHeight + 160, left: 60 },
+        edgePadding: { top: 64, right: 32, bottom: activePanelHeight + 72, left: 32 },
+        animated: true,
+      });
+    } else if (routePreviewCoords.length > 1) {
+      setRouteCoords([]);
+      mapRef.current?.fitToCoordinates(routePreviewCoords, {
+        edgePadding: { top: 64, right: 32, bottom: activePanelHeight + 72, left: 32 },
         animated: true,
       });
     } else {
       setRouteCoords([]);
     }
-  }, [route]);
+  }, [route, routePreviewCoords]);
 
   // Fit map immediately when destination is set (before route loads)
   useEffect(() => {
-    if (destination && showBooking) {
+    if (routePreviewCoords.length > 1) {
       mapRef.current?.fitToCoordinates(
-        [
-          { latitude: pickup.latitude, longitude: pickup.longitude },
-          { latitude: destination.latitude, longitude: destination.longitude },
-        ],
-        { edgePadding: { top: 80, right: 60, bottom: activePanelHeight + 160, left: 60 }, animated: true },
+        routePreviewCoords,
+        { edgePadding: { top: 64, right: 32, bottom: activePanelHeight + 72, left: 32 }, animated: true },
       );
     }
     if (!destination) setRouteCoords([]);
-  }, [destination?.latitude, destination?.longitude]);
+  }, [routePreviewCoords]);
 
   const openBooking = () => {
     setShowBooking(true);
@@ -417,29 +536,27 @@ export default function CustomerHome() {
         showsMyLocationButton={false}
         followsUserLocation={false}
         userLocationAnnotationTitle=""
-        customMapStyle={darkMapStyle}
+        mapType={mapType}
+        customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
         {/* Real road route polyline */}
-        {showBooking && routeCoords.length > 1 && (
+        {visibleRouteCoords.length > 1 && (
           <Polyline
-            coordinates={routeCoords}
-            strokeColor="#FF3B30"
-            strokeWidth={4}
+            coordinates={visibleRouteCoords}
+            strokeColor="#FF3B3055"
+            strokeWidth={5}
             lineCap="round"
             lineJoin="round"
           />
         )}
 
-        {/* Fallback dashed line while route is loading */}
-        {showBooking && destination && routeCoords.length < 2 && (
+        {animatedRouteCoords.length > 1 && (
           <Polyline
-            coordinates={[
-              { latitude: pickup.latitude, longitude: pickup.longitude },
-              { latitude: destination.latitude, longitude: destination.longitude },
-            ]}
-            strokeColor="#FF3B3088"
-            strokeWidth={3}
-            lineDashPattern={[8, 6]}
+            coordinates={animatedRouteCoords}
+            strokeColor="#FF3B30"
+            strokeWidth={8}
+            lineCap="round"
+            lineJoin="round"
           />
         )}
 
@@ -461,7 +578,7 @@ export default function CustomerHome() {
           </Marker>
         )}
 
-        {!locLoading && (
+        {!locLoading && !hasPreciseRouteLocations && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 1 }}>
             <View style={styles.youAreHereContainer}>
               <View style={styles.youAreHereBubble}>
@@ -480,7 +597,6 @@ export default function CustomerHome() {
             tracksViewChanges={false}
           >
             <View style={styles.vehicleMarkerWrap}>
-              <View style={styles.vehicleImageShadow} />
               <Image
                 source={VEHICLE_MARKER_IMAGES[selectedVehicle]}
                 style={[
@@ -509,9 +625,22 @@ export default function CustomerHome() {
         </TouchableOpacity>
       </View>
 
+      {/* Map layer button */}
+      <TouchableOpacity
+        style={[styles.mapLayerBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset + 56 }]}
+        onPress={cycleMapType}
+        activeOpacity={0.8}
+      >
+        <MaterialCommunityIcons
+          name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
+          size={22}
+          color={colors.primary}
+        />
+      </TouchableOpacity>
+
       {/* Recenter button */}
       <TouchableOpacity
-        style={[styles.recenterBtn, { backgroundColor: colors.card, bottom: activePanelHeight + 16 }]}
+        style={[styles.recenterBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset }]}
         onPress={() => mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 600)}
         activeOpacity={0.8}
       >
@@ -624,7 +753,7 @@ export default function CustomerHome() {
                 activeOpacity={0.7}
               >
                 <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
-                <Text style={[styles.currentLocText, { color: colors.primary }]}>Use Map</Text>
+                <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>Use Map</Text>
               </TouchableOpacity>
 
               {focusedField === 'dropoff' ? (
@@ -632,21 +761,35 @@ export default function CustomerHome() {
                   style={styles.currentLocBtn}
                   onPress={() => {
                     setDestText('Current Location');
-                    setDestination({ latitude: userLocation.latitude, longitude: userLocation.longitude, address: 'Current Location' });
+                    setDestination({
+                      latitude: userLocation.latitude,
+                      longitude: userLocation.longitude,
+                      address: 'Current Location',
+                      locationType: 'precise',
+                    });
                   }}
                   activeOpacity={0.7}
                 >
                   <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
-                  <Text style={[styles.currentLocText, { color: colors.primary }]}>Use current location as destination</Text>
+                  <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
+                    Use GPS as destination
+                  </Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   style={styles.currentLocBtn}
-                  onPress={() => setPickup({ latitude: userLocation.latitude, longitude: userLocation.longitude, address: 'Current Location' })}
+                  onPress={() => setPickup({
+                    latitude: userLocation.latitude,
+                    longitude: userLocation.longitude,
+                    address: 'Current Location',
+                    locationType: 'precise',
+                  })}
                   activeOpacity={0.7}
                 >
                   <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
-                  <Text style={[styles.currentLocText, { color: colors.primary }]}>Use current location as pickup</Text>
+                  <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
+                    Use GPS as pickup
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -655,7 +798,7 @@ export default function CustomerHome() {
             {destination && (
               <View style={styles.rideInfoRow}>
                 <View style={[styles.rideInfoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <MaterialCommunityIcons name="clock-outline" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Est. Time</Text>
                     <Text style={[styles.rideInfoValue, { color: colors.foreground }]}>
@@ -664,7 +807,7 @@ export default function CustomerHome() {
                   </View>
                 </View>
                 <View style={[styles.rideInfoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <MaterialCommunityIcons name="map-marker-distance" size={18} color={colors.primary} />
+                  <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Distance</Text>
                     <Text style={[styles.rideInfoValue, { color: colors.foreground }]}>
@@ -676,13 +819,15 @@ export default function CustomerHome() {
             )}
 
             {(destination || destText.trim().length > 0) && (
-              <KandaButton
-                title="Find Driver"
-                onPress={handleBook}
-                fullWidth
-                size="lg"
-                loading={bookLoading}
-              />
+              <View style={styles.findDriverAction}>
+                <KandaButton
+                  title="Find Driver"
+                  onPress={handleBook}
+                  fullWidth
+                  size="sm"
+                  loading={bookLoading}
+                />
+              </View>
             )}
           </Animated.View>
           </KeyboardAvoidingView>
@@ -1059,6 +1204,7 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 14, fontFamily: 'Inter_500Medium', flex: 1 },
   notifBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
   recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
+  mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   youAreHereContainer: { alignItems: 'center' },
   youAreHereBubble: { backgroundColor: '#00C853', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
   youAreHereText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#fff' },
@@ -1076,26 +1222,27 @@ const styles = StyleSheet.create({
   // Booking sheet
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 20 },
   bookingSheetWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30 },
-  bookingSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, gap: 14, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 8 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  sheetTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold' },
-  locationCard: { borderRadius: 16, padding: 16 },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  bookingSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 18, paddingTop: 6, paddingBottom: 12, gap: 7, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 2 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  locationCard: { borderRadius: 14, padding: 9 },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
   locDot: { width: 12, height: 12, borderRadius: 6 },
   locLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', marginBottom: 2 },
   locInlineLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
   locTextBlock: { flex: 1, gap: 2 },
   locValue: { fontSize: 15, fontFamily: 'Inter_500Medium' },
   locDivider: { height: 1, marginLeft: 24 },
-  currentLocBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
-  currentLocText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
-  locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rideInfoRow: { flexDirection: 'row', gap: 10 },
-  rideInfoCard: { flex: 1, minHeight: 54, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, gap: 10 },
+  currentLocBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 1, flexShrink: 1, maxWidth: '52%' },
+  currentLocText: { fontSize: 12, fontFamily: 'Inter_500Medium', flexShrink: 1 },
+  locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  rideInfoRow: { flexDirection: 'row', gap: 6 },
+  rideInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 7, borderRadius: 9, borderWidth: 1, gap: 5 },
+  findDriverAction: { marginTop: 'auto', width: '100%' },
   rideInfoText: { flex: 1, gap: 2 },
-  rideInfoValue: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  rideInfoLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  rideInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
   suggestionsBox: { borderRadius: 10, marginTop: 4, overflow: 'hidden' },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   suggestionText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
@@ -1109,16 +1256,6 @@ const styles = StyleSheet.create({
   },
   vehicleMarkerImage: {
     zIndex: 2,
-  },
-  vehicleImageShadow: {
-    position: 'absolute',
-    width: 48,
-    height: 16,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    bottom: 11,
-    transform: [{ rotate: '-8deg' }],
-    zIndex: 1,
   },
   vehicleMarkerShadow: {
     position: 'absolute',
