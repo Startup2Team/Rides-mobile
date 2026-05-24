@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -32,7 +32,7 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_MCI, VEHICLE_LABELS } from '@/types';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
 const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.34, 270);
@@ -146,6 +146,37 @@ function sliceRouteByProgress(
   return sliced.length > 1 ? sliced : coords.slice(0, 2);
 }
 
+function buildVisibleCenteredRouteRegion(
+  coords: { latitude: number; longitude: number }[],
+  panelHeight: number,
+) {
+  const latitudes = coords.map(coord => coord.latitude);
+  const longitudes = coords.map(coord => coord.longitude);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+  const visibleHeightRatio = Math.max((SCREEN_HEIGHT - panelHeight) / SCREEN_HEIGHT, 0.35);
+  const screenAspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+  const latSpan = Math.max(maxLat - minLat, 0.002);
+  const lngSpan = Math.max(maxLng - minLng, 0.002);
+  const latitudeDelta = Math.max(
+    latSpan * 1.45 / visibleHeightRatio,
+    lngSpan * 1.45 / screenAspect,
+    HOME_LOCATION_DELTA,
+  );
+  const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * latitudeDelta;
+
+  return {
+    latitude: centerLat - latitudeOffset,
+    longitude: centerLng,
+    latitudeDelta,
+    longitudeDelta: latitudeDelta * screenAspect,
+  };
+}
+
 export default function CustomerHome() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -198,9 +229,12 @@ export default function CustomerHome() {
   };
 
   const centerMapOnUser = (duration = 700) => {
+    const panelHeight = showBooking ? activePanelHeight : COMPACT_PANEL_HEIGHT;
+    const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     mapRef.current?.animateToRegion(
       {
-        ...userLocation,
+        latitude: userLocation.latitude - latitudeOffset,
+        longitude: userLocation.longitude,
         latitudeDelta: HOME_LOCATION_DELTA,
         longitudeDelta: HOME_LOCATION_DELTA,
       },
@@ -332,6 +366,13 @@ export default function CustomerHome() {
     ],
   );
   const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
+  const centerRouteInVisibleMap = useCallback((coords: { latitude: number; longitude: number }[]) => {
+    if (coords.length < 2) return;
+    mapRef.current?.animateToRegion(
+      buildVisibleCenteredRouteRegion(coords, activePanelHeight),
+      700,
+    );
+  }, [activePanelHeight]);
   const animatedRouteCoords = useMemo(
     () => {
       if (visibleRouteCoords.length < 2) return [];
@@ -366,31 +407,22 @@ export default function CustomerHome() {
   useEffect(() => {
     if (route && route.coordinates.length > 1) {
       setRouteCoords(route.coordinates);
-      mapRef.current?.fitToCoordinates(route.coordinates, {
-        edgePadding: { top: 64, right: 32, bottom: activePanelHeight + 72, left: 32 },
-        animated: true,
-      });
+      centerRouteInVisibleMap(route.coordinates);
     } else if (routePreviewCoords.length > 1) {
       setRouteCoords([]);
-      mapRef.current?.fitToCoordinates(routePreviewCoords, {
-        edgePadding: { top: 64, right: 32, bottom: activePanelHeight + 72, left: 32 },
-        animated: true,
-      });
+      centerRouteInVisibleMap(routePreviewCoords);
     } else {
       setRouteCoords([]);
     }
-  }, [route, routePreviewCoords]);
+  }, [route, routePreviewCoords, centerRouteInVisibleMap]);
 
   // Fit map immediately when destination is set (before route loads)
   useEffect(() => {
     if (routePreviewCoords.length > 1) {
-      mapRef.current?.fitToCoordinates(
-        routePreviewCoords,
-        { edgePadding: { top: 64, right: 32, bottom: activePanelHeight + 72, left: 32 }, animated: true },
-      );
+      centerRouteInVisibleMap(routePreviewCoords);
     }
     if (!destination) setRouteCoords([]);
-  }, [routePreviewCoords]);
+  }, [routePreviewCoords, centerRouteInVisibleMap]);
 
   const openBooking = () => {
     setShowBooking(true);
@@ -554,12 +586,20 @@ export default function CustomerHome() {
       .slice(0, 5);
   }, [rideHistory]);
 
+  const homeMapLatitudeOffset = (COMPACT_PANEL_HEIGHT / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
+  const homeInitialRegion = {
+    latitude: userLocation.latitude - homeMapLatitudeOffset,
+    longitude: userLocation.longitude,
+    latitudeDelta: HOME_LOCATION_DELTA,
+    longitudeDelta: HOME_LOCATION_DELTA,
+  };
+
   if (locLoading) {
     return (
       <View style={[styles.loaderContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loaderText, { color: colors.foreground }]}>
-          Resolving precise GPS coordinates...
+          Finding your pickup point
         </Text>
       </View>
     );
@@ -572,7 +612,7 @@ export default function CustomerHome() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        initialRegion={{ ...userLocation, latitudeDelta: HOME_LOCATION_DELTA, longitudeDelta: HOME_LOCATION_DELTA }}
+        initialRegion={homeInitialRegion}
         onMapReady={() => {
           if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
             hasCenteredOnUserRef.current = true;
@@ -626,7 +666,7 @@ export default function CustomerHome() {
         )}
 
         {!locLoading && !hasPreciseRouteLocations && (
-          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 1 }}>
+          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.youAreHereContainer}>
               <View style={styles.youAreHereBubble}>
                 <Text style={styles.youAreHereText}>You're Here</Text>
@@ -659,16 +699,30 @@ export default function CustomerHome() {
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 }]}>
-        <View style={[styles.topCard, { backgroundColor: colors.card }]}>
+        <View
+          style={[styles.topCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
           <View style={styles.locationRow}>
-            <View style={[styles.locationDot, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.locationText, { color: colors.foreground }]} numberOfLines={1}>
-              {locLoading ? 'Getting location...' : 'Kigali, Rwanda'}
-            </Text>
+            <View style={styles.locationIcon}>
+              <Feather name="map-pin" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.locationCopy}>
+              <Text style={[styles.locationLabel, { color: colors.mutedForeground }]}>
+                Current location
+              </Text>
+              <Text style={[styles.locationText, { color: colors.foreground }]} numberOfLines={1}>
+                {locLoading ? 'Getting location...' : 'Kigali, Rwanda'}
+              </Text>
+            </View>
           </View>
         </View>
-        <TouchableOpacity style={[styles.notifBtn, { backgroundColor: colors.card }]}>
+        <TouchableOpacity
+          style={[styles.notifBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => router.push('/notifications')}
+          activeOpacity={0.82}
+        >
           <Feather name="bell" size={20} color={colors.foreground} />
+          <View style={[styles.notifBadge, { backgroundColor: colors.destructive, borderColor: colors.card }]} />
         </TouchableOpacity>
       </View>
 
@@ -1268,12 +1322,15 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', paddingHorizontal: 16, gap: 10, zIndex: 10 },
-  topCard: { flex: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  locationDot: { width: 8, height: 8, borderRadius: 4 },
-  locationText: { fontSize: 14, fontFamily: 'Inter_500Medium', flex: 1 },
-  notifBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, gap: 10, zIndex: 10 },
+  topCard: { flex: 1, minHeight: 44, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
+  locationRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  locationIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  locationCopy: { flex: 1, alignItems: 'center', minWidth: 0 },
+  locationLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  locationText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', maxWidth: '100%', textAlign: 'center' },
+  notifBtn: { width: 44, height: 44, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
+  notifBadge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   youAreHereContainer: { alignItems: 'center' },

@@ -61,7 +61,7 @@ export default function OTPScreen() {
       isDriver: false,
       createdAt: new Date().toISOString(),
     });
-    router.replace('/(tabs)');
+    router.replace({ pathname: '/(tabs)' });
   };
 
   return (
