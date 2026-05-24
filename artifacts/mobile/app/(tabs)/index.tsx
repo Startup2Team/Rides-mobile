@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
@@ -35,17 +36,29 @@ import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_MC
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
-const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.34, 270);
+const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.35, 282);
 const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.46, 370);
 const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
+const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
+const SAVE_LABEL_GAP = 4;
+const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = 20;
+const SAVE_LABEL_AVAILABLE_WIDTH =
+  SCREEN_WIDTH - SAVE_LABEL_SHEET_HORIZONTAL_PADDING * 2 - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
+const SAVE_LABEL_WIDTHS: Record<string, number> = {
+  Home: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
+  Work: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
+  School: SAVE_LABEL_AVAILABLE_WIDTH * 0.22,
+  Market: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
+  Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
+};
 
 const VEHICLE_TYPES: VehicleType[] = ['moto', 'cab', 'hilux', 'fuso'];
 const SAVED_LOCATIONS_KEY = '@taravelis_saved_locations';
-const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
+type MapPickerTarget = 'pickup' | 'dropoff' | 'savedLocation';
 
 interface SavedLocation extends RideLocation {
   id: string;
@@ -177,6 +190,20 @@ function buildVisibleCenteredRouteRegion(
   };
 }
 
+function FormCloseButton({ onPress }: { onPress: () => void }) {
+  const colors = useColors();
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.formCloseButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+      activeOpacity={0.8}
+    >
+      <Feather name="x" size={22} color={colors.foreground} />
+    </TouchableOpacity>
+  );
+}
+
 export default function CustomerHome() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -194,7 +221,7 @@ export default function CustomerHome() {
 
   // Booking sheet state
   const [showBooking, setShowBooking] = useState(false);
-  const [mapPicker, setMapPicker] = useState<'pickup' | 'dropoff' | null>(null);
+  const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
   const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: 'Current Location' });
   const [destText, setDestText] = useState('');
@@ -208,28 +235,39 @@ export default function CustomerHome() {
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<SavedLocation[]>([]);
   const [pendingSaveLocation, setPendingSaveLocation] = useState<RideLocation | null>(null);
+  const [isCustomSaveLabel, setIsCustomSaveLabel] = useState(false);
+  const [customSaveLabel, setCustomSaveLabel] = useState('');
+  const [editingSavedLocation, setEditingSavedLocation] = useState<SavedLocation | null>(null);
+  const [editingSavedLabel, setEditingSavedLabel] = useState('');
+  const [editingSavedAddress, setEditingSavedAddress] = useState('');
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
+  const editSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
+  const editSheetEnterAnim = useRef(new Animated.Value(24)).current;
+  const editSheetOpacityAnim = useRef(new Animated.Value(0)).current;
+  const estimatedKeyboardOffset = Math.max(240, Math.min(SCREEN_HEIGHT * 0.34, 340));
   const hasRideActions = destination !== null || destText.trim().length > 0;
   const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
   const recenterBottomOffset = showBooking ? activePanelHeight + 16 : COMPACT_PANEL_HEIGHT + 64;
   const bookingBottomPadding = insets.bottom + (
     Platform.OS === 'web'
-      ? hasRideActions ? 92 : 44
-      : hasRideActions ? 84 : 36
+      ? hasRideActions ? 104 : 58
+      : hasRideActions ? 96 : 52
   );
   const hasPreciseRouteLocations =
     showBooking &&
     destination !== null &&
     pickup.locationType !== 'generic' &&
     destination.locationType !== 'generic';
+  const pickupOverlapsUser = getCoordDistance(pickup, userLocation) < 20;
+  const shouldShowPickupMarker = showBooking && (!pickupOverlapsUser || destination !== null);
   const cycleMapType = () => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
 
-  const centerMapOnUser = (duration = 700) => {
-    const panelHeight = showBooking ? activePanelHeight : COMPACT_PANEL_HEIGHT;
+  const centerMapOnUser = (duration = 700, panelHeightOverride?: number) => {
+    const panelHeight = panelHeightOverride ?? (showBooking ? activePanelHeight : COMPACT_PANEL_HEIGHT);
     const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     mapRef.current?.animateToRegion(
       {
@@ -279,6 +317,64 @@ export default function CustomerHome() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const liftEditSheet = (height: number) => {
+      Animated.spring(editSheetKeyboardAnim, {
+        toValue: Math.max(0, height - insets.bottom),
+        damping: 24,
+        stiffness: 260,
+        mass: 0.8,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const willShowSub = Keyboard.addListener('keyboardWillShow', event => {
+      liftEditSheet(event.endCoordinates.height);
+    });
+    const showSub = Keyboard.addListener('keyboardDidShow', event => {
+      liftEditSheet(event.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      Animated.timing(editSheetKeyboardAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      willShowSub.remove();
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [editSheetKeyboardAnim, insets.bottom]);
+
+  useEffect(() => {
+    if (!editingSavedLocation) {
+      editSheetKeyboardAnim.setValue(0);
+      editSheetEnterAnim.setValue(24);
+      editSheetOpacityAnim.setValue(0);
+      return;
+    }
+
+    editSheetEnterAnim.setValue(24);
+    editSheetOpacityAnim.setValue(0);
+    Animated.parallel([
+      Animated.spring(editSheetEnterAnim, {
+        toValue: 0,
+        damping: 20,
+        stiffness: 240,
+        mass: 0.85,
+        useNativeDriver: true,
+      }),
+      Animated.timing(editSheetOpacityAnim, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [editingSavedLocation, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim]);
 
   // Get user location and notification permissions using native OS prompts only.
   useEffect(() => {
@@ -452,6 +548,11 @@ export default function CustomerHome() {
     setLocationSearchLoading(false);
     setSuggestions([]);
     setPendingSaveLocation(null);
+    setIsCustomSaveLabel(false);
+    setCustomSaveLabel('');
+    setEditingSavedLocation(null);
+    setEditingSavedLabel('');
+    setEditingSavedAddress('');
     Keyboard.dismiss();
   };
 
@@ -490,17 +591,86 @@ export default function CustomerHome() {
 
   const saveLocationAs = async (label: string) => {
     if (!pendingSaveLocation) return;
+    const cleanLabel = label.trim();
+    if (!cleanLabel) return;
 
     const saved: SavedLocation = {
       ...pendingSaveLocation,
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      label,
+      label: cleanLabel,
     };
-    const next = [saved, ...savedPlaces.filter(place => place.label !== label)].slice(0, 20);
+    const next = [saved, ...savedPlaces.filter(place => place.label !== cleanLabel)].slice(0, 20);
     setSavedPlaces(next);
     setPendingSaveLocation(null);
+    setIsCustomSaveLabel(false);
+    setCustomSaveLabel('');
     setLocationListTab('saved');
     await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
+  };
+
+  const closePendingSaveLocation = () => {
+    setPendingSaveLocation(null);
+    setIsCustomSaveLabel(false);
+    setCustomSaveLabel('');
+    Keyboard.dismiss();
+  };
+
+  const handleSaveLocationLabelPress = (label: string) => {
+    if (label === 'Other') {
+      setIsCustomSaveLabel(true);
+      setCustomSaveLabel('');
+      return;
+    }
+    saveLocationAs(label);
+  };
+
+  const openSavedLocationMenu = (location: SavedLocation) => {
+    editSheetKeyboardAnim.setValue(0);
+    setEditingSavedLocation(location);
+    setEditingSavedLabel(location.label);
+    setEditingSavedAddress(location.address ?? '');
+    setPendingSaveLocation(null);
+    setIsCustomSaveLabel(false);
+    setCustomSaveLabel('');
+    Keyboard.dismiss();
+  };
+
+  const persistSavedPlaces = async (next: SavedLocation[]) => {
+    setSavedPlaces(next);
+    await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
+  };
+
+  const renameSavedLocation = async () => {
+    const label = editingSavedLabel.trim();
+    const address = editingSavedAddress.trim();
+    if (!editingSavedLocation || label.length === 0) return;
+
+    const next = savedPlaces.map(place =>
+      place.id === editingSavedLocation.id
+        ? { ...place, label, address: address || place.address }
+        : place
+    );
+    await persistSavedPlaces(next);
+    setEditingSavedLocation(null);
+    setEditingSavedLabel('');
+    setEditingSavedAddress('');
+  };
+
+  const openSavedLocationMap = () => {
+    if (!editingSavedLocation) return;
+    Keyboard.dismiss();
+    setPinCoords(userLocation);
+    setMapPicker('savedLocation');
+  };
+
+  const deleteSavedLocation = async () => {
+    if (!editingSavedLocation) return;
+
+    const next = savedPlaces.filter(place => place.id !== editingSavedLocation.id);
+    await persistSavedPlaces(next);
+    setEditingSavedLocation(null);
+    setEditingSavedLabel('');
+    setEditingSavedAddress('');
   };
 
   const handleChooseOnMap = () => {
@@ -546,32 +716,7 @@ export default function CustomerHome() {
     }));
   }, [selectedVehicle, userLocation]);
 
-  const savedLocations = useMemo<SavedLocation[]>(() => [
-    ...savedPlaces,
-    {
-      id: 'current-location',
-      label: 'Current',
-      ...userLocation,
-      address: 'Current Location',
-      locationType: 'precise',
-    },
-    {
-      id: 'kigali-city-center',
-      label: 'City Center',
-      latitude: -1.9441,
-      longitude: 30.0619,
-      address: 'Kigali City Center',
-      locationType: 'precise',
-    },
-    {
-      id: 'kigali-convention-centre',
-      label: 'Convention Centre',
-      latitude: -1.9536,
-      longitude: 30.0926,
-      address: 'Kigali Convention Centre',
-      locationType: 'precise',
-    },
-  ], [savedPlaces, userLocation]);
+  const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
 
   const recentLocations = useMemo<RideLocation[]>(() => {
     const seen = new Set<string>();
@@ -648,7 +793,7 @@ export default function CustomerHome() {
         )}
 
         {/* Pickup marker */}
-        {showBooking && (
+        {shouldShowPickupMarker && (
           <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} anchor={{ x: 0.5, y: 1 }}>
             <View style={styles.routeMarker}>
               <View style={[styles.routeMarkerDot, { backgroundColor: '#00C853' }]} />
@@ -807,9 +952,7 @@ export default function CustomerHome() {
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
-              <TouchableOpacity onPress={closeBooking}>
-                <Feather name="x" size={22} color={colors.mutedForeground} />
-              </TouchableOpacity>
+              <FormCloseButton onPress={closeBooking} />
             </View>
 
             {/* Pickup / Destination */}
@@ -972,9 +1115,13 @@ export default function CustomerHome() {
                 placeholderTextColor={colors.mutedForeground}
                 returnKeyType="search"
               />
-              {locationSearchText.length > 0 && (
+              {locationSearchLoading ? (
+                <View style={styles.locationSearchClear}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : locationSearchText.length > 0 && (
                 <TouchableOpacity
-                  style={styles.locationSearchClear}
+                  style={[styles.locationSearchClear, { backgroundColor: colors.muted, borderColor: colors.border }]}
                   onPress={event => {
                     event.stopPropagation();
                     setLocationSearchText('');
@@ -987,10 +1134,10 @@ export default function CustomerHome() {
                   <Feather name="x" size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
               )}
-              {locationSearchLoading && <ActivityIndicator size="small" color={colors.primary} />}
             </TouchableOpacity>
 
             <ScrollView
+              style={styles.locationSearchScroll}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               onScrollBeginDrag={Keyboard.dismiss}
@@ -1016,8 +1163,8 @@ export default function CustomerHome() {
                   onPress={handleChooseOnMap}
                   activeOpacity={0.85}
                 >
-                  <View style={[styles.locationQuickIcon, { backgroundColor: colors.muted }]}>
-                    <MaterialCommunityIcons name="map-outline" size={16} color={colors.foreground} />
+                  <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
+                    <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
                   </View>
                   <View style={styles.locationQuickText}>
                     <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Choose on map</Text>
@@ -1030,14 +1177,14 @@ export default function CustomerHome() {
                 <TouchableOpacity
                   style={[
                     styles.locationTab,
-                    locationListTab === 'saved' && { backgroundColor: colors.card },
+                    locationListTab === 'saved' && { backgroundColor: colors.primary },
                   ]}
                   onPress={() => setLocationListTab('saved')}
                   activeOpacity={0.85}
                 >
                   <Text style={[
                     styles.locationTabText,
-                    { color: locationListTab === 'saved' ? colors.foreground : colors.mutedForeground },
+                    { color: locationListTab === 'saved' ? colors.primaryForeground : colors.mutedForeground },
                   ]}>
                     Saved locations
                   </Text>
@@ -1045,14 +1192,14 @@ export default function CustomerHome() {
                 <TouchableOpacity
                   style={[
                     styles.locationTab,
-                    locationListTab === 'previous' && { backgroundColor: colors.card },
+                    locationListTab === 'previous' && { backgroundColor: colors.primary },
                   ]}
                   onPress={() => setLocationListTab('previous')}
                   activeOpacity={0.85}
                 >
                   <Text style={[
                     styles.locationTabText,
-                    { color: locationListTab === 'previous' ? colors.foreground : colors.mutedForeground },
+                    { color: locationListTab === 'previous' ? colors.primaryForeground : colors.mutedForeground },
                   ]}>
                     Previous rides
                   </Text>
@@ -1142,6 +1289,18 @@ export default function CustomerHome() {
                       {location.address}
                     </Text>
                   </View>
+                  {savedPlaces.some(place => place.id === location.id) && (
+                    <TouchableOpacity
+                      style={styles.savedLocationMenuButton}
+                      onPress={event => {
+                        event.stopPropagation();
+                        openSavedLocationMenu(location);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="more-horizontal" size={18} color={colors.foreground} />
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               ))}
 
@@ -1172,40 +1331,222 @@ export default function CustomerHome() {
           </Pressable>
 
           {pendingSaveLocation && (
-            <View
-              style={[
-                styles.saveLocationSheet,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 18),
-                },
-              ]}
-            >
-              <View style={styles.saveLocationHeader}>
-                <View style={styles.saveLocationHeaderText}>
-                  <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Save location as</Text>
-                  <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {pendingSaveLocation.address ?? 'Selected location'}
-                  </Text>
+            <>
+              <Pressable
+                style={styles.saveLocationBackdrop}
+                onPress={closePendingSaveLocation}
+              >
+                <BlurView intensity={22} tint="light" style={StyleSheet.absoluteFill} />
+                <View style={styles.saveLocationBackdropTint} />
+              </Pressable>
+
+              <Animated.View
+                style={[
+                  styles.saveLocationSheet,
+                  styles.saveLocationSheetFocused,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.primary + '55',
+                    paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
+                    transform: [
+                      {
+                        translateY: isCustomSaveLabel
+                          ? Animated.multiply(editSheetKeyboardAnim, -1)
+                          : 0,
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <View style={styles.saveLocationHeader}>
+                  <View style={styles.saveLocationHeaderText}>
+                    <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Save location as</Text>
+                    <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {pendingSaveLocation.address ?? 'Selected location'}
+                    </Text>
+                    <Text style={[styles.saveLocationPrompt, { color: colors.primary }]}>
+                      {isCustomSaveLabel ? 'Type a custom label to finish saving.' : 'Choose one label to finish saving.'}
+                    </Text>
+                  </View>
+                  <FormCloseButton onPress={closePendingSaveLocation} />
                 </View>
-                <TouchableOpacity onPress={() => setPendingSaveLocation(null)} style={styles.saveLocationClose}>
-                  <Feather name="x" size={18} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.saveLocationLabels}>
-                {SAVE_LOCATION_LABELS.map(label => (
+                <View style={styles.saveLocationLabels}>
+                  {SAVE_LOCATION_LABELS.map(label => (
+                    <TouchableOpacity
+                      key={label}
+                      style={[
+                        styles.saveLocationLabel,
+                        styles.saveLocationLabelFocused,
+                        { width: SAVE_LABEL_WIDTHS[label] },
+                        { backgroundColor: colors.card, borderColor: colors.primary + '50' },
+                      ]}
+                      onPress={() => handleSaveLocationLabelPress(label)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.saveLocationLabelText, { color: colors.foreground }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {isCustomSaveLabel && (
+                  <View style={styles.customSaveLabelSection}>
+                    <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.card, borderColor: colors.primary + '50' }]}>
+                      <Feather name="tag" size={16} color={colors.mutedForeground} />
+                      <TextInput
+                        style={[styles.savedLocationEditInput, { color: colors.foreground }]}
+                        value={customSaveLabel}
+                        onChangeText={setCustomSaveLabel}
+                        placeholder="Custom label"
+                        placeholderTextColor={colors.mutedForeground}
+                        autoFocus
+                        returnKeyType="done"
+                        onSubmitEditing={() => saveLocationAs(customSaveLabel)}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.customSaveLabelButton,
+                        {
+                          backgroundColor: customSaveLabel.trim() ? colors.primary : colors.muted,
+                          opacity: customSaveLabel.trim() ? 1 : 0.6,
+                        },
+                      ]}
+                      onPress={() => saveLocationAs(customSaveLabel)}
+                      disabled={!customSaveLabel.trim()}
+                      activeOpacity={0.85}
+                    >
+                      <Feather
+                        name="check"
+                        size={16}
+                        color={customSaveLabel.trim() ? colors.primaryForeground : colors.mutedForeground}
+                      />
+                      <Text
+                        style={[
+                          styles.customSaveLabelButtonText,
+                          { color: customSaveLabel.trim() ? colors.primaryForeground : colors.mutedForeground },
+                        ]}
+                      >
+                        Save custom label
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </Animated.View>
+            </>
+          )}
+
+          {editingSavedLocation && (
+            <>
+              <Pressable
+                style={styles.saveLocationBackdrop}
+                onPress={() => setEditingSavedLocation(null)}
+              >
+                <BlurView intensity={22} tint="light" style={StyleSheet.absoluteFill} />
+                <View style={styles.saveLocationBackdropTint} />
+              </Pressable>
+
+              <Animated.View
+                style={[
+                  styles.saveLocationSheet,
+                  styles.saveLocationSheetFocused,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.primary + '55',
+                    paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
+                    opacity: editSheetOpacityAnim,
+                    transform: [
+                      {
+                        translateY: Animated.add(
+                          editSheetEnterAnim,
+                          Animated.multiply(editSheetKeyboardAnim, -1),
+                        ),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <View style={styles.saveLocationHeader}>
+                  <View style={styles.saveLocationHeaderText}>
+                    <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Edit saved location</Text>
+                    <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {editingSavedLocation.address ?? 'Saved location'}
+                    </Text>
+                    <Text style={[styles.saveLocationPrompt, { color: colors.primary }]}>
+                      Rename, update, or delete this saved place.
+                    </Text>
+                  </View>
+                  <FormCloseButton onPress={() => setEditingSavedLocation(null)} />
+                </View>
+
+                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.card, borderColor: colors.primary + '50' }]}>
+                  <Feather name="edit-3" size={16} color={colors.mutedForeground} />
+                  <TextInput
+                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
+                    value={editingSavedLabel}
+                    onChangeText={setEditingSavedLabel}
+                    onFocus={() => {
+                      Animated.spring(editSheetKeyboardAnim, {
+                        toValue: estimatedKeyboardOffset,
+                        damping: 24,
+                        stiffness: 280,
+                        mass: 0.8,
+                        useNativeDriver: true,
+                      }).start();
+                    }}
+                    placeholder="Location name"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </View>
+
+                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.card, borderColor: colors.primary + '50' }]}>
+                  <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.mutedForeground} />
+                  <TextInput
+                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
+                    value={editingSavedAddress}
+                    onChangeText={setEditingSavedAddress}
+                    onFocus={() => {
+                      Animated.spring(editSheetKeyboardAnim, {
+                        toValue: estimatedKeyboardOffset,
+                        damping: 24,
+                        stiffness: 280,
+                        mass: 0.8,
+                        useNativeDriver: true,
+                      }).start();
+                    }}
+                    placeholder="Address"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.savedLocationActions}>
                   <TouchableOpacity
-                    key={label}
-                    style={[styles.saveLocationLabel, { backgroundColor: colors.card, borderColor: colors.border }]}
-                    onPress={() => saveLocationAs(label)}
+                    style={[styles.savedLocationAction, { backgroundColor: colors.primary }]}
+                    onPress={renameSavedLocation}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.saveLocationLabelText, { color: colors.foreground }]}>{label}</Text>
+                    <Feather name="check" size={16} color={colors.primaryForeground} />
+                    <Text style={[styles.savedLocationActionText, { color: colors.primaryForeground }]}>Save changes</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                  <TouchableOpacity
+                    style={[styles.savedLocationAction, { backgroundColor: colors.card, borderColor: colors.primary + '50', borderWidth: 1 }]}
+                    onPress={openSavedLocationMap}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
+                    <Text style={[styles.savedLocationActionText, { color: colors.foreground }]}>Use GPS</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.savedLocationDelete, { backgroundColor: colors.destructive + '14', borderColor: colors.destructive + '40' }]}
+                  onPress={deleteSavedLocation}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="trash-2" size={16} color={colors.destructive} />
+                  <Text style={[styles.savedLocationDeleteText, { color: colors.destructive }]}>Delete saved location</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </>
           )}
         </View>
       )}
@@ -1231,7 +1572,7 @@ export default function CustomerHome() {
             <MaterialCommunityIcons
               name="map-marker"
               size={48}
-              color={mapPicker === 'pickup' ? '#00C853' : '#FF4444'}
+              color={mapPicker === 'pickup' ? '#00C853' : mapPicker === 'savedLocation' ? colors.primary : '#FF4444'}
             />
           </View>
 
@@ -1275,7 +1616,9 @@ export default function CustomerHome() {
             <Text style={[styles.mapPickerHintText, { color: colors.foreground }]}>
               {mapPicker === 'pickup'
                 ? 'Drag the map to set your pickup location'
-                : 'Drag the map to set your drop off location'}
+                : mapPicker === 'savedLocation'
+                  ? 'Drag the map to update this saved location'
+                  : 'Drag the map to set your drop off location'}
             </Text>
           </View>
 
@@ -1285,20 +1628,44 @@ export default function CustomerHome() {
             { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 16 },
           ]}>
             <KandaButton
-              title={mapPicker === 'pickup' ? 'Confirm Pickup Location' : 'Confirm Drop Off Location'}
+              title={
+                mapPicker === 'pickup'
+                  ? 'Confirm Pickup Location'
+                  : mapPicker === 'savedLocation'
+                    ? 'Confirm Saved Location'
+                    : 'Confirm Drop Off Location'
+              }
               fullWidth
               size="lg"
               onPress={async () => {
-                let address = mapPicker === 'pickup' ? 'Selected Pickup' : 'Selected Drop Off';
+                let address =
+                  mapPicker === 'pickup'
+                    ? 'Selected Pickup'
+                    : mapPicker === 'savedLocation'
+                      ? 'Selected Saved Location'
+                      : 'Selected Drop Off';
                 try {
                   const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
                   if (geo) address = `${geo.street ?? ''} ${geo.city ?? ''}`.trim() || address;
                 } catch {}
                 if (mapPicker === 'pickup') {
                   setPickup({ ...pinCoords, address, locationType: 'precise' });
-                } else {
+                } else if (mapPicker === 'dropoff') {
                   setDestText(address);
                   setDestination({ ...pinCoords, address, locationType: 'precise' });
+                } else if (editingSavedLocation) {
+                  const updated: SavedLocation = {
+                    ...editingSavedLocation,
+                    ...pinCoords,
+                    address,
+                    locationType: 'precise',
+                  };
+                  const next = savedPlaces.map(place =>
+                    place.id === editingSavedLocation.id ? updated : place
+                  );
+                  await persistSavedPlaces(next);
+                  setEditingSavedLocation(updated);
+                  setEditingSavedAddress(address);
                 }
                 setMapPicker(null);
               }}
@@ -1350,7 +1717,7 @@ const styles = StyleSheet.create({
   // Booking sheet
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 20 },
   bookingSheetWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30 },
-  bookingSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 18, paddingTop: 6, paddingBottom: 12, gap: 7, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
+  bookingSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 19, paddingTop: 7, paddingBottom: 13, gap: 7, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 2 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sheetTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
@@ -1540,6 +1907,14 @@ const styles = StyleSheet.create({
   },
   // Full-screen location search
   locationSearchScreen: { ...StyleSheet.absoluteFillObject, zIndex: 80 },
+  formCloseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   locationSearchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1551,6 +1926,9 @@ const styles = StyleSheet.create({
   locationBackBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   locationSearchTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   locationSearchContent: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+  locationSearchScroll: {
+    marginHorizontal: -20,
+  },
   locationSearchInputWrap: {
     height: 52,
     borderRadius: 14,
@@ -1562,13 +1940,14 @@ const styles = StyleSheet.create({
   },
   locationSearchInput: { flex: 1, fontSize: 16, fontFamily: 'Inter_500Medium' },
   locationSearchClear: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationSearchList: { paddingTop: 12, paddingBottom: 36 },
+  locationSearchList: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36 },
   locationQuickRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1646,6 +2025,13 @@ const styles = StyleSheet.create({
   locationOptionText: { flex: 1, gap: 2 },
   locationOptionTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   locationOptionSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  savedLocationMenuButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   saveLocationButton: {
     minWidth: 54,
     height: 34,
@@ -1691,6 +2077,23 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 20,
   },
+  saveLocationBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 85,
+  },
+  saveLocationBackdropTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+  },
+  saveLocationSheetFocused: {
+    zIndex: 90,
+    borderTopWidth: 1.5,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    elevation: 28,
+  },
   saveLocationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1700,32 +2103,91 @@ const styles = StyleSheet.create({
   saveLocationHeaderText: { flex: 1, gap: 2 },
   saveLocationTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   saveLocationAddress: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  saveLocationClose: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  saveLocationPrompt: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   saveLocationLabels: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
   },
   saveLocationLabel: {
-    minHeight: 40,
-    borderRadius: 20,
+    minHeight: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  saveLocationLabelFocused: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   saveLocationLabelText: {
-    fontSize: 13,
+    fontSize: 9,
     fontFamily: 'Inter_600SemiBold',
   },
+  customSaveLabelSection: {
+    gap: 10,
+  },
+  customSaveLabelButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  customSaveLabelButtonText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
+  savedLocationEditInputWrap: {
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  savedLocationEditInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  savedLocationActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  savedLocationAction: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  savedLocationActionText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
+  savedLocationDelete: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  savedLocationDeleteText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
   // Map picker
-  mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 50 },
+  mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
   fixedPinContainer: { position: 'absolute', top: '50%', left: '50%', marginLeft: -24, marginTop: -48 },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   mapPickerControl: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
