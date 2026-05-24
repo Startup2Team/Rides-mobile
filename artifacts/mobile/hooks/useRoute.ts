@@ -8,9 +8,31 @@ interface UseRouteResult {
   error: string | null;
 }
 
+const routeCache = new Map<string, RouteResult>();
+const MAX_ROUTE_CACHE_SIZE = 20;
+
+function getRouteKey(origin: Coords, destination: Coords) {
+  return [
+    origin.latitude.toFixed(4),
+    origin.longitude.toFixed(4),
+    destination.latitude.toFixed(4),
+    destination.longitude.toFixed(4),
+  ].join(',');
+}
+
+function cacheRoute(key: string, route: RouteResult) {
+  if (routeCache.has(key)) routeCache.delete(key);
+  routeCache.set(key, route);
+
+  if (routeCache.size > MAX_ROUTE_CACHE_SIZE) {
+    const oldestKey = routeCache.keys().next().value;
+    if (oldestKey) routeCache.delete(oldestKey);
+  }
+}
+
 /**
  * Fetches a real road route between origin and destination.
- * Re-fetches only when coordinates actually change.
+ * Re-fetches only when coordinates actually change and no cached route exists.
  * Returns null route while loading or when either coord is missing.
  */
 export function useRoute(origin: Coords | null, destination: Coords | null): UseRouteResult {
@@ -27,15 +49,18 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
       return;
     }
 
-    const key = [
-      origin.latitude.toFixed(4),
-      origin.longitude.toFixed(4),
-      destination.latitude.toFixed(4),
-      destination.longitude.toFixed(4),
-    ].join(',');
+    const key = getRouteKey(origin, destination);
 
     if (key === lastKey.current) return;
     lastKey.current = key;
+
+    const cachedRoute = routeCache.get(key);
+    if (cachedRoute) {
+      setRoute(cachedRoute);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
     let cancelled = false;
     setLoading(true);
@@ -45,6 +70,7 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     fetchRoute(origin, destination)
       .then(result => {
         if (!cancelled) {
+          cacheRoute(key, result);
           setRoute(result);
           setLoading(false);
         }
