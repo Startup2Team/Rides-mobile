@@ -25,6 +25,7 @@ export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, cancelRide } = useRide();
+  const isCancellingRef = useRef(false);
 
   const pulseA = useRef(new Animated.Value(0)).current;
   const pulseB = useRef(new Animated.Value(0)).current;
@@ -57,12 +58,13 @@ export default function SearchingScreen() {
   useEffect(() => {
     if (currentRide?.status === 'negotiating') {
       router.replace('/negotiation');
-    } else if (!currentRide || currentRide.status === 'cancelled') {
+    } else if (!isCancellingRef.current && (!currentRide || currentRide.status === 'cancelled')) {
       router.replace('/(tabs)');
     }
   }, [currentRide?.status]);
 
   const handleCancel = () => {
+    isCancellingRef.current = true;
     cancelRide();
     router.replace('/(tabs)');
   };

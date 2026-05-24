@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -159,37 +160,6 @@ function sliceRouteByProgress(
   return sliced.length > 1 ? sliced : coords.slice(0, 2);
 }
 
-function buildVisibleCenteredRouteRegion(
-  coords: { latitude: number; longitude: number }[],
-  panelHeight: number,
-) {
-  const latitudes = coords.map(coord => coord.latitude);
-  const longitudes = coords.map(coord => coord.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
-  const visibleHeightRatio = Math.max((SCREEN_HEIGHT - panelHeight) / SCREEN_HEIGHT, 0.35);
-  const screenAspect = SCREEN_WIDTH / SCREEN_HEIGHT;
-  const latSpan = Math.max(maxLat - minLat, 0.002);
-  const lngSpan = Math.max(maxLng - minLng, 0.002);
-  const latitudeDelta = Math.max(
-    latSpan * 1.45 / visibleHeightRatio,
-    lngSpan * 1.45 / screenAspect,
-    HOME_LOCATION_DELTA,
-  );
-  const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * latitudeDelta;
-
-  return {
-    latitude: centerLat - latitudeOffset,
-    longitude: centerLng,
-    latitudeDelta,
-    longitudeDelta: latitudeDelta * screenAspect,
-  };
-}
-
 function FormCloseButton({ onPress }: { onPress: () => void }) {
   const colors = useColors();
 
@@ -218,6 +188,7 @@ export default function CustomerHome() {
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [locLoading, setLocLoading] = useState(true);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   // Booking sheet state
   const [showBooking, setShowBooking] = useState(false);
@@ -241,6 +212,7 @@ export default function CustomerHome() {
   const [editingSavedLabel, setEditingSavedLabel] = useState('');
   const [editingSavedAddress, setEditingSavedAddress] = useState('');
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
+  const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const editSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
@@ -298,6 +270,19 @@ export default function CustomerHome() {
       else if (currentRide.status === 'negotiating') router.push('/negotiation');
       else if (['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) router.push('/ride');
     }
+  }, [currentRide?.status]);
+
+  useEffect(() => {
+    if (currentRide?.status !== 'cancelled') return;
+
+    setSelectedVehicle(currentRide.vehicleType);
+    setPickup(currentRide.pickup);
+    setDestination(currentRide.destination);
+    setDestText(currentRide.destination.address ?? '');
+    setSuggestions([]);
+    setShowBooking(true);
+    sheetAnim.setValue(0);
+    setRouteRecenterRequest(value => value + 1);
   }, [currentRide?.status]);
 
   useEffect(() => {
@@ -461,14 +446,27 @@ export default function CustomerHome() {
       destination?.longitude,
     ],
   );
-  const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
-  const centerRouteInVisibleMap = useCallback((coords: { latitude: number; longitude: number }[]) => {
-    if (coords.length < 2) return;
-    mapRef.current?.animateToRegion(
-      buildVisibleCenteredRouteRegion(coords, activePanelHeight),
-      700,
-    );
-  }, [activePanelHeight]);
+  const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : [];
+  const routeCenterCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
+  const centerRouteInVisibleMap = useCallback((
+    coords: { latitude: number; longitude: number }[],
+    panelHeightOverride?: number,
+  ) => {
+    if (!isMapReady || coords.length < 2) return;
+    const panelHeight = panelHeightOverride ?? activePanelHeight;
+    const topPadding = insets.top + (Platform.OS === 'web' ? 92 : 42);
+    const bottomPadding = panelHeight + insets.bottom + 36;
+
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: {
+        top: topPadding,
+        right: 54,
+        bottom: bottomPadding,
+        left: 54,
+      },
+      animated: true,
+    });
+  }, [activePanelHeight, insets.bottom, insets.top, isMapReady]);
   const animatedRouteCoords = useMemo(
     () => {
       if (visibleRouteCoords.length < 2) return [];
@@ -519,6 +517,36 @@ export default function CustomerHome() {
     }
     if (!destination) setRouteCoords([]);
   }, [routePreviewCoords, centerRouteInVisibleMap]);
+
+  useEffect(() => {
+    if (!routeRecenterRequest || !showBooking || !destination || routeCenterCoords.length < 2) return;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        centerRouteInVisibleMap(routeCenterCoords, EXPANDED_PANEL_HEIGHT);
+        setRouteRecenterRequest(0);
+      });
+    });
+
+    return () => task.cancel();
+  }, [
+    routeRecenterRequest,
+    showBooking,
+    destination,
+    routeCenterCoords,
+    centerRouteInVisibleMap,
+  ]);
+
+  useEffect(() => {
+    if (!isMapReady || !showBooking || routeCenterCoords.length < 2) return;
+    centerRouteInVisibleMap(routeCenterCoords, activePanelHeight);
+  }, [
+    isMapReady,
+    showBooking,
+    routeCenterCoords,
+    activePanelHeight,
+    centerRouteInVisibleMap,
+  ]);
 
   const openBooking = () => {
     setShowBooking(true);
@@ -694,10 +722,9 @@ export default function CustomerHome() {
           longitude: userLocation.longitude + 0.02,
           address: destText.trim(),
           locationType: 'generic',
-        };
+    };
     await createRide(pickup, finalDestination, selectedVehicle);
     setBookLoading(false);
-    closeBooking();
     router.push('/searching');
   };
 
@@ -759,7 +786,10 @@ export default function CustomerHome() {
         provider={PROVIDER_DEFAULT}
         initialRegion={homeInitialRegion}
         onMapReady={() => {
-          if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
+          setIsMapReady(true);
+          if (routeCenterCoords.length > 1) {
+            requestAnimationFrame(() => centerRouteInVisibleMap(routeCenterCoords, activePanelHeight));
+          } else if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
             hasCenteredOnUserRef.current = true;
             centerMapOnUser(300);
           }
@@ -771,17 +801,6 @@ export default function CustomerHome() {
         mapType={mapType}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
-        {/* Real road route polyline */}
-        {visibleRouteCoords.length > 1 && (
-          <Polyline
-            coordinates={visibleRouteCoords}
-            strokeColor="#FF3B3055"
-            strokeWidth={3}
-            lineCap="round"
-            lineJoin="round"
-          />
-        )}
-
         {animatedRouteCoords.length > 1 && (
           <Polyline
             coordinates={animatedRouteCoords}
