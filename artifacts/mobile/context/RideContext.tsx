@@ -20,7 +20,9 @@ interface RideContextType {
   createRide: (pickup: RideLocation, destination: RideLocation, vehicleType: VehicleType) => Promise<void>;
   cancelRide: () => void;
   counterOffer: (amount: number) => void;
+  sendDriverOffer: (amount: number) => void;
   acceptDriverOffer: () => void;
+  acceptCustomerOffer: () => void;
   declineDriverOffer: () => void;
   completeRide: () => void;
   markArrived: () => void;
@@ -254,6 +256,50 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const sendDriverOffer = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    setCurrentRide(prev => {
+      if (!prev || prev.status !== 'negotiating') return prev;
+
+      const driverMessages = prev.negotiation.filter(
+        m => m.sender === 'driver' && m.type === 'offer'
+      );
+      if (driverMessages.length >= 3) return prev;
+
+      const msg: NegotiationMessage = {
+        id: generateId(),
+        sender: 'driver',
+        type: 'offer',
+        amount,
+        timestamp: new Date().toISOString(),
+      };
+
+      return { ...prev, negotiation: [...prev.negotiation, msg] };
+    });
+  }, []);
+
+  const acceptCustomerOffer = useCallback(() => {
+    setCurrentRide(prev => {
+      if (!prev) return null;
+      const lastCustomerMsg = [...prev.negotiation].reverse().find(m => m.sender === 'customer' && m.type === 'offer');
+      if (!lastCustomerMsg?.amount) return prev;
+      const agreedMsg: NegotiationMessage = {
+        id: generateId(),
+        sender: 'driver',
+        type: 'offer',
+        amount: lastCustomerMsg.amount,
+        timestamp: new Date().toISOString(),
+        isFinal: true,
+      };
+      return {
+        ...prev,
+        status: 'confirmed',
+        agreedFare: lastCustomerMsg.amount,
+        negotiation: [...prev.negotiation, agreedMsg],
+      };
+    });
+  }, []);
+
   const declineDriverOffer = useCallback(() => {
     cancelRide();
   }, [cancelRide]);
@@ -380,7 +426,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       createRide,
       cancelRide,
       counterOffer,
+      sendDriverOffer,
       acceptDriverOffer,
+      acceptCustomerOffer,
       declineDriverOffer,
       completeRide,
       markArrived,
