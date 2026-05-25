@@ -22,6 +22,7 @@ import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
+const GOLD = '#D6A21E';
 
 function formatFare(amount?: number) {
   return amount ? `${amount.toLocaleString()} RWF` : '--';
@@ -124,7 +125,7 @@ export default function NegotiationScreen() {
         : lastDriverOffer
           ? 'Driver offer ready'
           : 'Waiting for driver offer...';
-  const offerProgress = Math.min(customerOffers.length, MAX_OFFERS);
+  const messagesUsed = Math.min(customerOffers.length, MAX_OFFERS);
 
   const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !limitReached && customerOffers.length < MAX_OFFERS;
 
@@ -151,11 +152,6 @@ export default function NegotiationScreen() {
     setOfferText('');
     setCounterLoading(true);
     counterOffer(amount);
-  };
-
-  const setQuickOffer = (amount: number) => {
-    if (!canCounter) return;
-    setOfferText(Math.max(100, amount).toString());
   };
 
   const handleSendCounter = () => {
@@ -204,9 +200,17 @@ export default function NegotiationScreen() {
               <Text style={[styles.title, { color: colors.foreground }]}>
                 {currentRide.driver?.name ?? 'Driver'}
               </Text>
-              <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {VEHICLE_LABELS[currentRide.vehicleType]} · {currentRide.driver?.plateNumber ?? 'Plate pending'} · {currentRide.driver?.rating?.toFixed(1) ?? '4.8'}★
-              </Text>
+              <View style={styles.subtitleRow}>
+                <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+                  {VEHICLE_LABELS[currentRide.vehicleType]} - {currentRide.driver?.plateNumber ?? 'Plate pending'}
+                </Text>
+                <View style={styles.ratingWrap}>
+                  <Feather name="star" size={12} color={GOLD} />
+                  <Text style={[styles.ratingText, { color: GOLD }]}>
+                    {currentRide.driver?.rating?.toFixed(1) ?? '4.8'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
           <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleCall}>
@@ -254,21 +258,9 @@ export default function NegotiationScreen() {
               {negotiationStatus}
             </Text>
           </View>
-          <View style={styles.offerProgress}>
-            {Array.from({ length: MAX_OFFERS }).map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.offerProgressSegment,
-                  {
-                    backgroundColor: index < offerProgress
-                      ? limitReached ? colors.destructive : colors.primary
-                      : colors.border,
-                  },
-                ]}
-              />
-            ))}
-          </View>
+          <Text style={[styles.messagesUsedText, { color: limitReached ? colors.destructive : colors.mutedForeground }]}>
+            {messagesUsed}/{MAX_OFFERS} messages used
+          </Text>
         </View>
 
         <View style={styles.timeline}>
@@ -311,21 +303,6 @@ export default function NegotiationScreen() {
 
         {canCounter && (
           <>
-            <View style={styles.quickRow}>
-              {[
-                { label: '-500', value: (lastDriverOffer?.amount ?? 0) - 500 },
-                { label: 'Match', value: lastDriverOffer?.amount ?? 0 },
-                { label: '+500', value: (lastDriverOffer?.amount ?? 0) + 500 },
-              ].map(option => (
-                <TouchableOpacity
-                  key={option.label}
-                  style={[styles.quickChip, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => setQuickOffer(option.value)}
-                >
-                  <Text style={[styles.quickText, { color: colors.foreground }]}>{option.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
             <View style={styles.inputRow}>
               <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
                 <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
@@ -453,6 +430,9 @@ const styles = StyleSheet.create({
   identityText: { flex: 1, minWidth: 0 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
+  ratingWrap: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   statusBanner: { minHeight: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusText: { flex: 1, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
@@ -479,8 +459,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   negotiationStatus: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   offerCount: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  offerProgress: { flexDirection: 'row', gap: 4 },
-  offerProgressSegment: { width: 24, height: 5, borderRadius: 999 },
+  messagesUsedText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   timeline: { gap: 10 },
   emptyTimeline: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', paddingVertical: 20 },
   timelineItem: { flexDirection: 'row' },
@@ -518,9 +497,6 @@ const styles = StyleSheet.create({
   currentOfferBar: { minHeight: 46, borderRadius: 13, borderWidth: 1, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   currentOfferLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
   currentOfferAmount: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  quickRow: { flexDirection: 'row', gap: 8 },
-  quickChip: { flex: 1, minHeight: 38, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  quickText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   currencyBadge: { height: 48, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   currencyText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
