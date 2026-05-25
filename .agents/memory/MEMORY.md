@@ -1,1 +1,0 @@
-- [Expo workflow setup](expo-workflow-setup.md) — artifact.toml exists but listArtifacts() returns empty; must use verifyAndReplaceArtifactToml to re-register, then PORT must be explicit in workflow command.
