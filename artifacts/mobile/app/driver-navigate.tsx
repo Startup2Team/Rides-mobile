@@ -14,6 +14,19 @@ import { formatDuration } from '@/utils/mapUtils';
 import { KIGALI_CENTER, VEHICLE_MCI } from '@/types';
 
 const WAIT_LIMIT_SECONDS = 180;
+const ARRIVAL_UNLOCK_KM = 1;
+
+function getDistanceKm(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  return Math.sqrt(
+    Math.pow((b.latitude - a.latitude) * 111, 2) +
+    Math.pow((b.longitude - a.longitude) * 111, 2)
+  );
+}
+
+function formatDistance(km: number) {
+  if (km < 1) return `${Math.max(Math.round(km * 1000), 10)} m`;
+  return `${km.toFixed(1)} km`;
+}
 
 export default function DriverNavigateScreen() {
   const colors = useColors();
@@ -91,14 +104,10 @@ export default function DriverNavigateScreen() {
 
   if (!currentRide) return null;
 
-  const etaMin = target
-    ? Math.round(
-        Math.sqrt(
-          Math.pow((target.latitude - driverPos.latitude) * 111, 2) +
-          Math.pow((target.longitude - driverPos.longitude) * 111, 2)
-        ) * 3 + 1
-      )
-    : 0;
+  const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
+  const etaMin = target ? Math.round(distanceToTargetKm * 3 + 1) : 0;
+  const canMarkArrived = phase !== 'pickup' || distanceToTargetKm <= ARRIVAL_UNLOCK_KM;
+  const pickupDistanceText = formatDistance(distanceToTargetKm);
 
   const phaseLabel =
     phase === 'pickup' ? 'Heading to pickup' :
@@ -115,6 +124,13 @@ export default function DriverNavigateScreen() {
     if (!currentRide.customerPhone) return;
     Linking.openURL(`tel:${currentRide.customerPhone}`).catch(() =>
       Alert.alert('Cannot call', 'Unable to open the phone dialler.')
+    );
+  };
+
+  const handleMessage = () => {
+    if (!currentRide.customerPhone) return;
+    Linking.openURL(`sms:${currentRide.customerPhone}`).catch(() =>
+      Alert.alert('Cannot message', 'Unable to open messages.')
     );
   };
 
@@ -232,29 +248,83 @@ export default function DriverNavigateScreen() {
         <View style={styles.routePreview}>
           <View style={styles.routeRow}>
             <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.routeText, { color: colors.foreground }]}>{currentRide.pickup.address}</Text>
+            <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={2}>
+              {currentRide.pickup.address}
+            </Text>
           </View>
           <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
           <View style={styles.routeRow}>
             <View style={[styles.dot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
-            <Text style={[styles.routeText, { color: colors.foreground }]}>{currentRide.destination.address}</Text>
-          </View>
-        </View>
-
-        <View style={styles.customerRow}>
-          <View style={[styles.customerAvatar, { backgroundColor: colors.muted }]}>
-            <Feather name="user" size={20} color={colors.foreground} />
-          </View>
-          <View>
-            <Text style={[styles.customerName, { color: colors.foreground }]}>{currentRide.customerName ?? 'Customer'}</Text>
-            <Text style={[styles.fareText, { color: colors.primary }]}>
-              Agreed: {currentRide.agreedFare?.toLocaleString() ?? '-'} RWF
+            <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={2}>
+              {currentRide.destination.address}
             </Text>
           </View>
         </View>
 
         {phase === 'pickup' && (
-          <KandaButton title="I Have Arrived" onPress={markArrived} fullWidth size="lg" />
+          <View style={[styles.arrivingPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.arrivingHeader}>
+              <View>
+                <Text style={[styles.arrivingEyebrow, { color: colors.primary }]}>Pickup in progress</Text>
+                <Text style={[styles.arrivingTitle, { color: colors.foreground }]}>Navigate to the customer</Text>
+              </View>
+              <View style={[styles.arrivingBadge, { backgroundColor: colors.primary + '18' }]}>
+                <Feather name="navigation" size={14} color={colors.primary} />
+                <Text style={[styles.arrivingBadgeText, { color: colors.primary }]}>{pickupDistanceText}</Text>
+              </View>
+            </View>
+
+            <View style={styles.tripMetrics}>
+              <View style={[styles.metricBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>
+                  {route && !routeLoading ? formatDuration(route.durationSeconds) : `${etaMin} min`}
+                </Text>
+              </View>
+              <View style={[styles.metricBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>Fare</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>
+                  {currentRide.agreedFare?.toLocaleString() ?? '-'} RWF
+                </Text>
+              </View>
+            </View>
+
+            {!canMarkArrived && (
+              <Text style={[styles.arrivalHint, { color: colors.mutedForeground }]}>
+                Arrival unlocks when you are within {formatDistance(ARRIVAL_UNLOCK_KM)} of pickup.
+              </Text>
+            )}
+          </View>
+        )}
+
+        <View style={styles.customerRow}>
+          <View style={[styles.customerAvatar, { backgroundColor: colors.muted }]}>
+            <Feather name="user" size={20} color={colors.foreground} />
+          </View>
+          <View style={styles.customerInfo}>
+            <Text style={[styles.customerName, { color: colors.foreground }]}>{currentRide.customerName ?? 'Customer'}</Text>
+            <Text style={[styles.fareText, { color: colors.primary }]}>
+              Agreed: {currentRide.agreedFare?.toLocaleString() ?? '-'} RWF
+            </Text>
+          </View>
+          <View style={styles.contactActions}>
+            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.muted }]} onPress={handleMessage}>
+              <Feather name="message-circle" size={18} color={colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.primary }]} onPress={handleCall}>
+              <Feather name="phone" size={18} color={colors.primaryForeground} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {phase === 'pickup' && (
+          <KandaButton
+            title={canMarkArrived ? 'I Have Arrived' : `Arrive closer (${pickupDistanceText})`}
+            onPress={markArrived}
+            disabled={!canMarkArrived}
+            fullWidth
+            size="lg"
+          />
         )}
 
         {phase === 'waiting' && (
@@ -377,11 +447,43 @@ const styles = StyleSheet.create({
   routeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   routeLine: { height: 1, marginLeft: 15 },
-  routeText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  routeText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', lineHeight: 19 },
+  arrivingPanel: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  arrivingHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  arrivingEyebrow: { fontSize: 12, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
+  arrivingTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 2 },
+  arrivingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  arrivingBadgeText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  tripMetrics: { flexDirection: 'row', gap: 10 },
+  metricBox: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  metricLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', marginBottom: 3 },
+  metricValue: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  arrivalHint: { fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17 },
   customerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   customerAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  customerInfo: { flex: 1 },
   customerName: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   fareText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  contactActions: { flexDirection: 'row', gap: 8 },
+  contactBtn: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   waitingBlock: { gap: 12 },
   waitingActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   cancelRideBtn: {
