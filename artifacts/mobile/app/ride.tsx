@@ -1,14 +1,15 @@
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -18,8 +19,8 @@ import { useRide } from '@/context/RideContext';
 import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
-import { formatDistance, formatDuration } from '@/utils/mapUtils';
-import { VEHICLE_LABELS, VEHICLE_LABELS_FULL, VEHICLE_MCI } from '@/types';
+import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
+import { VehicleType, VEHICLE_LABELS, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
@@ -28,6 +29,50 @@ const STATUS_MESSAGES: Record<string, string> = {
   in_progress: 'Heading to destination',
   completed: 'Ride completed!',
 };
+
+const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
+const ARRIVING_ROUTE_COLOR = '#FF3B30';
+
+const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
+  moto: require('../assets/vehicle-markers/moto.png'),
+  cab: require('../assets/vehicle-markers/cab.png'),
+  hilux: require('../assets/vehicle-markers/hilux.png'),
+  fuso: require('../assets/vehicle-markers/fuso.png'),
+};
+
+const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
+  moto: { width: 58, height: 44 },
+  cab: { width: 54, height: 40 },
+  hilux: { width: 64, height: 40 },
+  fuso: { width: 66, height: 44 },
+};
+
+function formatAwayEta(seconds: number) {
+  if (seconds <= 0) return '0 secs away';
+  if (seconds < 60) return `${seconds} ${seconds === 1 ? 'sec' : 'secs'} away`;
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} ${minutes === 1 ? 'min' : 'mins'} away`;
+}
+
+function getRemainingRouteCoordinates(routeCoordinates: Array<{ latitude: number; longitude: number }>, driverPosition: { latitude: number; longitude: number }) {
+  if (routeCoordinates.length < 2) return routeCoordinates;
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  routeCoordinates.forEach((coord, index) => {
+    const distance =
+      Math.pow(coord.latitude - driverPosition.latitude, 2) +
+      Math.pow(coord.longitude - driverPosition.longitude, 2);
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  return [driverPosition, ...routeCoordinates.slice(Math.min(nearestIndex + 1, routeCoordinates.length - 1))];
+}
 
 export default function RideScreen() {
   const colors = useColors();
@@ -42,14 +87,31 @@ export default function RideScreen() {
     currentRide ? { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude } : null,
   );
 
+  const isArriving = currentRide?.status === 'arriving';
+  const { route: driverToPickupRoute } = useRoute(
+    isArriving && driverLocation ? driverLocation : null,
+    isArriving && currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
+  );
+  const driverNavigationRoute = isArriving
+    ? driverToPickupRoute?.coordinates ?? []
+    : rideRoute?.coordinates ?? [];
+
   const liveDriverCoords = useDriverTracking({
     enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
-    routeCoordinates: rideRoute?.coordinates ?? [],
+    routeCoordinates: driverNavigationRoute,
   });
 
   const activeDriverLocation = liveDriverCoords ?? driverLocation;
   const isArrived = currentRide?.status === 'arrived';
   const isInProgress = currentRide?.status === 'in_progress';
+  const remainingDriverToPickupRoute = useMemo(
+    () => {
+      if (!isArriving || !activeDriverLocation || !currentRide) return null;
+      if (!driverToPickupRoute) return null;
+      return getRemainingRouteCoordinates(driverToPickupRoute.coordinates, activeDriverLocation);
+    },
+    [activeDriverLocation, currentRide?.pickup.latitude, currentRide?.pickup.longitude, driverToPickupRoute, isArriving],
+  );
 
   // Geofencing calculation: straight-line distance in meters to destination
   const distToDest = activeDriverLocation && currentRide?.destination
@@ -82,13 +144,23 @@ export default function RideScreen() {
   }, [currentRide?.status]);
 
   useEffect(() => {
-    if (activeDriverLocation && mapRef.current && currentRide?.pickup) {
+    if (!mapRef.current || !currentRide) return;
+
+    if (isArriving && activeDriverLocation) {
       mapRef.current.fitToCoordinates(
         [activeDriverLocation, currentRide.pickup],
         { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
       );
+      return;
     }
-  }, [activeDriverLocation]);
+
+    if (isArrived) {
+      mapRef.current.fitToCoordinates(
+        [currentRide.pickup, currentRide.destination],
+        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
+      );
+    }
+  }, [activeDriverLocation, currentRide, isArrived, isArriving]);
 
   const handleComplete = () => {
     Alert.alert('Complete Ride', 'Confirm that you have arrived at your destination?', [
@@ -138,6 +210,18 @@ export default function RideScreen() {
   if (!currentRide) return null;
 
   const statusMsg = STATUS_MESSAGES[currentRide.status] ?? 'Ride confirmed';
+  const pickupEtaSeconds = isArriving && activeDriverLocation
+    ? Math.max(0, Math.ceil((haversineKm(activeDriverLocation, currentRide.pickup) * 1000) / ARRIVING_AVERAGE_SPEED_MPS))
+    : null;
+  const pickupEtaText = pickupEtaSeconds !== null
+    ? formatAwayEta(pickupEtaSeconds)
+    : isArriving && currentRide.driver
+      ? `${currentRide.driver.eta} min away`
+      : null;
+  const displayEta = pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`);
+  const pickupDistanceText = isArriving && activeDriverLocation
+    ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
+    : null;
 
   return (
     <View style={styles.container}>
@@ -154,12 +238,14 @@ export default function RideScreen() {
         customMapStyle={darkMapStyle}
       >
         {activeDriverLocation && (
-          <Marker coordinate={activeDriverLocation} anchor={{ x: 0.5, y: 0.5 }}>
-            <MaterialCommunityIcons
-              name={VEHICLE_MCI[currentRide.vehicleType] as any}
-              size={32}
-              color="#00C853"
-            />
+          <Marker coordinate={activeDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+            <View style={styles.vehicleMarkerWrap}>
+              <Image
+                source={VEHICLE_MARKER_IMAGES[currentRide.vehicleType]}
+                style={[styles.vehicleMarkerImage, VEHICLE_IMAGE_STYLES[currentRide.vehicleType]]}
+                resizeMode="contain"
+              />
+            </View>
           </Marker>
         )}
         <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }}>
@@ -167,22 +253,20 @@ export default function RideScreen() {
             <Feather name="circle" size={10} color="#fff" />
           </View>
         </Marker>
-        <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
-            <Feather name="map-pin" size={10} color="#fff" />
-          </View>
-        </Marker>
+        {!isArriving && (
+          <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }}>
+            <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
+              <Feather name="map-pin" size={10} color="#fff" />
+            </View>
+          </Marker>
+        )}
         {/* Real road route */}
-        {rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color="#FF3B30" width={4} />}
-
-        {/* Driver-to-pickup dashed line while arriving (before route loads) */}
-        {!rideRoute && activeDriverLocation && currentRide.status === 'arriving' && (
-          <Polyline
-            coordinates={[activeDriverLocation, currentRide.pickup]}
-            strokeColor={colors.primary}
-            strokeWidth={3}
-            lineDashPattern={[8, 4]}
-          />
+        {isArriving ? (
+          remainingDriverToPickupRoute && (
+            <RoutePolyline coordinates={remainingDriverToPickupRoute} color={ARRIVING_ROUTE_COLOR} width={4} />
+          )
+        ) : (
+          rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color={ARRIVING_ROUTE_COLOR} width={4} />
         )}
       </MapView>
 
@@ -198,11 +282,16 @@ export default function RideScreen() {
       >
         <View style={styles.statusRow}>
           <StatusChip status={currentRide.status} />
-          <Text style={[styles.statusMsg, { color: colors.foreground }]}>{statusMsg}</Text>
+          <View style={styles.statusTextWrap}>
+            <Text style={[styles.statusMsg, { color: colors.foreground }]}>{statusMsg}</Text>
+            {pickupEtaText && (
+              <Text style={[styles.statusEtaText, { color: colors.primary }]}>{pickupEtaText}</Text>
+            )}
+          </View>
         </View>
         {currentRide.driver && (
           <Text style={[styles.eta, { color: colors.primary }]}>
-            {rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`}
+            {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`)}
           </Text>
         )}
       </View>
@@ -231,7 +320,7 @@ export default function RideScreen() {
       )}
       <View style={[styles.driverCard, {
         backgroundColor: colors.background,
-        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20),
+        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 24 : 12),
       }]}>
         <View style={styles.handle} />
 
@@ -267,26 +356,34 @@ export default function RideScreen() {
           <View style={[styles.fareItem]}>
             <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Distance</Text>
             <Text style={[styles.fareValue, { color: colors.foreground }]}>
-              {rideRoute ? formatDistance(rideRoute.distanceMeters) : `${currentRide.distance} km`}
+              {pickupDistanceText ?? (rideRoute ? formatDistance(rideRoute.distanceMeters) : `${currentRide.distance} km`)}
             </Text>
           </View>
           <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
           <View style={styles.fareItem}>
             <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>ETA</Text>
             <Text style={[styles.fareValue, { color: colors.foreground }]}>
-              {rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`}
+              {displayEta}
             </Text>
           </View>
         </View>
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.muted }]}>
-            <Feather name="phone" size={20} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.muted }]}>
-            <Feather name="message-circle" size={20} color={colors.foreground} />
-          </TouchableOpacity>
+          {(isArriving || isArrived) && (
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                isArriving && styles.wideActionBtn,
+                { backgroundColor: colors.muted },
+              ]}
+            >
+              <Feather name="phone" size={20} color={colors.foreground} />
+              {isArriving && (
+                <Text style={[styles.callBtnText, { color: colors.foreground }]}>Call driver</Text>
+              )}
+            </TouchableOpacity>
+          )}
           {isArrived && (
             <>
               <TouchableOpacity
@@ -351,8 +448,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statusRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statusTextWrap: { flex: 1 },
   statusMsg: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  statusEtaText: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 2 },
   eta: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   arrivedBanner: {
     position: 'absolute',
@@ -367,46 +466,57 @@ const styles = StyleSheet.create({
   },
   arrivedBannerText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
   pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  vehicleMarkerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 70,
+    height: 70,
+  },
+  vehicleMarkerImage: {
+    zIndex: 2,
+  },
   driverCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    gap: 16,
+    paddingTop: 8,
+    paddingHorizontal: 16,
+    gap: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 16,
   },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center' },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  driverAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  driverInitial: { fontSize: 22, fontFamily: 'Inter_700Bold' },
-  driverName: { fontSize: 17, fontFamily: 'Inter_600SemiBold' },
-  driverVehicle: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center' },
+  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  driverAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  driverInitial: { fontSize: 19, fontFamily: 'Inter_700Bold' },
+  driverName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  driverVehicle: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   ratingBadge: {
     backgroundColor: '#FF9F0A20',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 100,
   },
-  ratingText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FF9F0A' },
+  ratingText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FF9F0A' },
   fareRow: {
     flexDirection: 'row',
     borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
   },
-  fareItem: { flex: 1, alignItems: 'center', paddingVertical: 12, gap: 4 },
+  fareItem: { flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 },
   fareDivider: { width: 1 },
-  fareLabel: { fontSize: 11, fontFamily: 'Inter_500Medium' },
-  fareValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  actions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  actionBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  cancelBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  fareLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  fareValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  actionBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  wideActionBtn: { flex: 1, width: undefined, flexDirection: 'row', gap: 8 },
+  callBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  cancelBtnText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   tbtCard: {
     position: 'absolute',
     left: 16,
