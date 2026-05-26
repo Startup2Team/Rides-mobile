@@ -68,8 +68,9 @@ function FlagPreview({ flag }: { flag: LanguageFlag }) {
 export function LanguageSelector() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [languageFlag, setLanguageFlag] = useState<LanguageFlag>('rw');
+  const [languageFlag, setLanguageFlag] = useState<LanguageFlag>('uk');
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
+  const languageCode = languageFlag === 'rw' ? 'KIN' : 'EN';
 
   const openLanguageSheet = () => {
     Keyboard.dismiss();
@@ -85,10 +86,14 @@ export function LanguageSelector() {
     <>
       <TouchableOpacity
         onPress={openLanguageSheet}
-        style={[styles.languageBtn, { backgroundColor: colors.card }]}
+        style={[styles.languageBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
         activeOpacity={0.8}
       >
-        <FlagPreview flag={languageFlag} />
+        <Text style={[styles.languageBtnText, { color: colors.foreground }]}>{languageCode}</Text>
+        <Feather name="chevron-down" size={15} color={colors.mutedForeground} />
+        <View style={styles.languageBtnFlag}>
+          <FlagPreview flag={languageFlag} />
+        </View>
       </TouchableOpacity>
 
       <Modal
@@ -145,15 +150,31 @@ export function LanguageSelector() {
 
 const styles = StyleSheet.create({
   languageBtn: {
-    width: 44,
+    minWidth: 92,
     height: 44,
     borderRadius: 22,
+    borderWidth: 1,
+    paddingLeft: 13,
+    paddingRight: 9,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+  },
+  languageBtnText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
+  languageBtnFlag: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   flagSvg: {
-    transform: [{ scale: 1.05 }],
+    transform: [{ scale: 0.64 }],
   },
   modalOverlay: {
     flex: 1,

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { BackButton } from '@/components/BackButton';
 import { useColors } from '@/hooks/useColors';
 
 const CUSTOMER_NOTIFICATIONS = [
@@ -54,13 +55,7 @@ export default function NotificationsScreen() {
           },
         ]}
       >
-        <TouchableOpacity
-          style={[styles.headerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => router.back()}
-          activeOpacity={0.82}
-        >
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
-        </TouchableOpacity>
+        <BackButton onPress={() => router.back()} />
         <View style={styles.headerTitleWrap}>
           <Text style={[styles.title, { color: colors.foreground }]}>Notifications</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Customer updates</Text>
@@ -116,16 +111,8 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerTitleWrap: { flex: 1, alignItems: 'center' },
-  headerSpacer: { width: 42 },
+  headerSpacer: { width: 44 },
   title: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
   content: { padding: 16, gap: 10 },
