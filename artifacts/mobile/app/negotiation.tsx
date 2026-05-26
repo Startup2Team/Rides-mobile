@@ -108,17 +108,17 @@ export default function NegotiationScreen() {
   const driverOffers = negotiation.filter(m => m.sender === 'driver' && m.type === 'offer');
   const lastDriverOffer = [...driverOffers].pop();
   const lastMsg = negotiation[negotiation.length - 1];
-  const limitReached = customerOffers.length >= MAX_OFFERS || driverOffers.length >= MAX_OFFERS;
+  const customerLimitReached = customerOffers.length >= MAX_OFFERS;
   const isRideAccepted = currentRide
     ? ['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)
     : false;
   const isDriverReplying =
     currentRide?.status === 'negotiating' &&
     lastMsg?.sender === 'customer' &&
-    !limitReached;
+    !customerLimitReached;
   const negotiationStatus = isRideAccepted
     ? 'Fare locked'
-    : limitReached
+    : customerLimitReached
       ? 'Offer limit reached'
       : isDriverReplying
         ? 'Driver is replying...'
@@ -126,8 +126,13 @@ export default function NegotiationScreen() {
           ? 'Driver offer ready'
           : 'Waiting for driver offer...';
   const messagesUsed = Math.min(customerOffers.length, MAX_OFFERS);
+  const offerPlaceholder = customerOffers.length === 0
+    ? 'Enter your offer'
+    : customerOffers.length === MAX_OFFERS - 1
+      ? 'Enter your final offer'
+      : 'Enter your counter offer';
 
-  const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !limitReached && customerOffers.length < MAX_OFFERS;
+  const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
 
   useEffect(() => {
     if (isRideAccepted) {
@@ -180,14 +185,11 @@ export default function NegotiationScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={[
+      <View
+        style={[
           styles.content,
           { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 14 },
         ]}
-        keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         <View style={styles.header}>
           <View style={styles.identityRow}>
@@ -213,9 +215,6 @@ export default function NegotiationScreen() {
               </View>
             </View>
           </View>
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleCall}>
-            <Feather name="phone" size={19} color={colors.foreground} />
-          </TouchableOpacity>
         </View>
 
         <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -254,16 +253,23 @@ export default function NegotiationScreen() {
         <View style={styles.sectionHeader}>
           <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Messages</Text>
-            <Text style={[styles.negotiationStatus, { color: limitReached ? colors.destructive : colors.mutedForeground }]}>
+            <Text style={[styles.negotiationStatus, { color: customerLimitReached ? colors.destructive : colors.mutedForeground }]}>
               {negotiationStatus}
             </Text>
           </View>
-          <Text style={[styles.messagesUsedText, { color: limitReached ? colors.destructive : colors.mutedForeground }]}>
+          <Text style={[styles.messagesUsedText, { color: customerLimitReached ? colors.destructive : colors.mutedForeground }]}>
             {messagesUsed}/{MAX_OFFERS} messages used
           </Text>
         </View>
 
-        <View style={styles.timeline}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.messagesScroll}
+          contentContainerStyle={styles.timeline}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        >
           {negotiation.length === 0 ? (
             <Text style={[styles.emptyTimeline, { color: colors.mutedForeground }]}>
               The first fare offer will appear here.
@@ -279,24 +285,15 @@ export default function NegotiationScreen() {
               </Text>
             </View>
           )}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
-      <View style={[styles.actionPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 10) }]}>
-        {limitReached && (
+      <View style={[styles.actionPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 24 : 6) }]}>
+        {customerLimitReached && (
           <View style={[styles.limitBanner, { backgroundColor: colors.primary + '14' }]}>
             <Feather name="phone-call" size={15} color={colors.primary} />
             <Text style={[styles.limitText, { color: colors.foreground }]}>
               Offer limit reached. Call the driver to continue.
-            </Text>
-          </View>
-        )}
-
-        {lastDriverOffer && (
-          <View style={[styles.currentOfferBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.currentOfferLabel, { color: colors.mutedForeground }]}>Driver offer</Text>
-            <Text style={[styles.currentOfferAmount, { color: colors.foreground }]}>
-              {formatFare(lastDriverOffer.amount)}
             </Text>
           </View>
         )}
@@ -311,7 +308,7 @@ export default function NegotiationScreen() {
                 style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
                 value={offerText}
                 onChangeText={text => setOfferText(text.replace(/\D/g, ''))}
-                placeholder="Enter your counter offer"
+                placeholder={offerPlaceholder}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="number-pad"
               />
@@ -338,17 +335,17 @@ export default function NegotiationScreen() {
           <TouchableOpacity
             style={[
               styles.actionBtn,
-              limitReached && styles.callFallbackBtn,
+              customerLimitReached && styles.callFallbackBtn,
               {
-                backgroundColor: limitReached ? colors.primary : colors.muted,
-                borderColor: limitReached ? colors.primary : colors.border,
+                backgroundColor: customerLimitReached ? colors.primary : colors.muted,
+                borderColor: customerLimitReached ? colors.primary : colors.border,
               },
             ]}
             onPress={handleCall}
           >
-            <Feather name="phone" size={17} color={limitReached ? colors.primaryForeground : colors.foreground} />
-            <Text style={[styles.actionText, { color: limitReached ? colors.primaryForeground : colors.foreground }]}>
-              {limitReached ? 'Call Driver' : 'Call'}
+            <Feather name="phone" size={17} color={customerLimitReached ? colors.primaryForeground : colors.foreground} />
+            <Text style={[styles.actionText, { color: customerLimitReached ? colors.primaryForeground : colors.foreground }]}>
+              {customerLimitReached ? 'Call Driver' : 'Call'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -422,7 +419,7 @@ export default function NegotiationScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 16, paddingBottom: 18, gap: 14 },
+  content: { flex: 1, minHeight: 0, paddingHorizontal: 16, paddingBottom: 10, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   identityRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
@@ -460,7 +457,8 @@ const styles = StyleSheet.create({
   negotiationStatus: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   offerCount: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   messagesUsedText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  timeline: { gap: 10 },
+  messagesScroll: { flex: 1, minHeight: 0 },
+  timeline: { gap: 10, paddingBottom: 18 },
   emptyTimeline: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center', paddingVertical: 20 },
   timelineItem: { flexDirection: 'row' },
   timelineLeftItem: { justifyContent: 'flex-start', paddingRight: 46 },
@@ -491,12 +489,9 @@ const styles = StyleSheet.create({
   messageTime: { alignSelf: 'flex-end', fontSize: 10, fontFamily: 'Inter_500Medium', marginTop: 1 },
   lockedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 },
   lockedText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  actionPanel: { borderTopWidth: 1, padding: 14, gap: 12 },
+  actionPanel: { flexShrink: 0, borderTopWidth: 1, padding: 14, gap: 12 },
   limitBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12 },
   limitText: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
-  currentOfferBar: { minHeight: 46, borderRadius: 13, borderWidth: 1, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  currentOfferLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
-  currentOfferAmount: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   currencyBadge: { height: 48, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   currencyText: { fontSize: 13, fontFamily: 'Inter_700Bold' },

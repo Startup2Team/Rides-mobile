@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -20,7 +21,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
-import { VehicleType, VEHICLE_LABELS, VEHICLE_LABELS_FULL } from '@/types';
+import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
@@ -47,6 +48,13 @@ const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number 
   fuso: { width: 66, height: 44 },
 };
 
+const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
+  moto: 270,
+  cab: 315,
+  hilux: 90,
+  fuso: 90,
+};
+
 function formatAwayEta(seconds: number) {
   if (seconds <= 0) return '0 secs away';
   if (seconds < 60) return `${seconds} ${seconds === 1 ? 'sec' : 'secs'} away`;
@@ -71,7 +79,18 @@ function getRemainingRouteCoordinates(routeCoordinates: Array<{ latitude: number
     }
   });
 
-  return [driverPosition, ...routeCoordinates.slice(Math.min(nearestIndex + 1, routeCoordinates.length - 1))];
+  return routeCoordinates.slice(Math.min(nearestIndex + 1, routeCoordinates.length - 1));
+}
+
+function getBearingDegrees(from: { latitude: number; longitude: number }, to: { latitude: number; longitude: number }) {
+  const fromLat = (from.latitude * Math.PI) / 180;
+  const toLat = (to.latitude * Math.PI) / 180;
+  const deltaLng = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const y = Math.sin(deltaLng) * Math.cos(toLat);
+  const x =
+    Math.cos(fromLat) * Math.sin(toLat) -
+    Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
+  return (Math.atan2(y, x) * 180) / Math.PI;
 }
 
 export default function RideScreen() {
@@ -79,8 +98,11 @@ export default function RideScreen() {
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, completeRide, startJourney, cancelRide } = useRide();
   const mapRef = useRef<MapView>(null);
+  const fittedMapStateRef = useRef<string | null>(null);
+  const previousRideStatusRef = useRef<string | null>(null);
 
   const [waitTimer, setWaitTimer] = useState(180);
+  const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
 
   const { route: rideRoute } = useRoute(
     currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
@@ -88,8 +110,16 @@ export default function RideScreen() {
   );
 
   const isArriving = currentRide?.status === 'arriving';
+  useEffect(() => {
+    const status = currentRide?.status ?? null;
+    if (status === 'arriving' && previousRideStatusRef.current !== 'arriving') {
+      setArrivingRouteOrigin(driverLocation ?? KIGALI_CENTER);
+    }
+    previousRideStatusRef.current = status;
+  }, [currentRide?.status, driverLocation]);
+
   const { route: driverToPickupRoute } = useRoute(
-    isArriving && driverLocation ? driverLocation : null,
+    isArriving ? arrivingRouteOrigin : null,
     isArriving && currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
   );
   const driverNavigationRoute = isArriving
@@ -99,6 +129,7 @@ export default function RideScreen() {
   const liveDriverCoords = useDriverTracking({
     enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
     routeCoordinates: driverNavigationRoute,
+    stepCount: isArriving ? 10 : 24,
   });
 
   const activeDriverLocation = liveDriverCoords ?? driverLocation;
@@ -112,6 +143,20 @@ export default function RideScreen() {
     },
     [activeDriverLocation, currentRide?.pickup.latitude, currentRide?.pickup.longitude, driverToPickupRoute, isArriving],
   );
+  const remainingPickupToDestinationRoute = useMemo(
+    () => {
+      if (!isInProgress || !activeDriverLocation || !rideRoute) return null;
+      return getRemainingRouteCoordinates(rideRoute.coordinates, activeDriverLocation);
+    },
+    [activeDriverLocation, isInProgress, rideRoute],
+  );
+  const activeRemainingRoute = isArriving ? remainingDriverToPickupRoute : remainingPickupToDestinationRoute;
+  const activeVehicleType = currentRide?.vehicleType ?? 'moto';
+  const vehicleRotationDeg = useMemo(() => {
+    if (!activeRemainingRoute || activeRemainingRoute.length < 2) return 0;
+    const bearing = getBearingDegrees(activeRemainingRoute[0], activeRemainingRoute[1]);
+    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
+  }, [activeRemainingRoute, activeVehicleType]);
 
   // Geofencing calculation: straight-line distance in meters to destination
   const distToDest = activeDriverLocation && currentRide?.destination
@@ -145,22 +190,25 @@ export default function RideScreen() {
 
   useEffect(() => {
     if (!mapRef.current || !currentRide) return;
+    if (fittedMapStateRef.current === currentRide.status) return;
 
     if (isArriving && activeDriverLocation) {
       mapRef.current.fitToCoordinates(
         [activeDriverLocation, currentRide.pickup],
         { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
       );
+      fittedMapStateRef.current = currentRide.status;
       return;
     }
 
-    if (isArrived) {
+    if (isArrived || isInProgress) {
       mapRef.current.fitToCoordinates(
         [currentRide.pickup, currentRide.destination],
         { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
       );
+      fittedMapStateRef.current = currentRide.status;
     }
-  }, [activeDriverLocation, currentRide, isArrived, isArriving]);
+  }, [activeDriverLocation, currentRide, isArrived, isArriving, isInProgress]);
 
   const handleComplete = () => {
     Alert.alert('Complete Ride', 'Confirm that you have arrived at your destination?', [
@@ -207,6 +255,17 @@ export default function RideScreen() {
     );
   };
 
+  const handleCallDriver = () => {
+    const phone = currentRide?.driver?.phone;
+    if (!phone) {
+      Alert.alert('Cannot call', 'No driver phone number is available.');
+      return;
+    }
+    Linking.openURL(`tel:${phone}`).catch(() => {
+      Alert.alert('Cannot call', 'Unable to open the phone dialler.');
+    });
+  };
+
   if (!currentRide) return null;
 
   const statusMsg = STATUS_MESSAGES[currentRide.status] ?? 'Ride confirmed';
@@ -242,17 +301,26 @@ export default function RideScreen() {
             <View style={styles.vehicleMarkerWrap}>
               <Image
                 source={VEHICLE_MARKER_IMAGES[currentRide.vehicleType]}
-                style={[styles.vehicleMarkerImage, VEHICLE_IMAGE_STYLES[currentRide.vehicleType]]}
+                style={[
+                  styles.vehicleMarkerImage,
+                  VEHICLE_IMAGE_STYLES[currentRide.vehicleType],
+                  { transform: [{ rotate: `${vehicleRotationDeg}deg` }] },
+                ]}
                 resizeMode="contain"
               />
             </View>
           </Marker>
         )}
-        <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.primary }]}>
-            <Feather name="circle" size={10} color="#fff" />
-          </View>
-        </Marker>
+        {!isInProgress && (
+          <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }}>
+            <View style={styles.pickupMarker}>
+              <View style={[styles.pickupMarkerRing, { borderColor: colors.primary }]}>
+                <View style={[styles.pickupMarkerDot, { backgroundColor: colors.primary }]} />
+              </View>
+              <View style={[styles.pickupMarkerStem, { backgroundColor: colors.primary }]} />
+            </View>
+          </Marker>
+        )}
         {!isArriving && (
           <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }}>
             <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
@@ -264,6 +332,10 @@ export default function RideScreen() {
         {isArriving ? (
           remainingDriverToPickupRoute && (
             <RoutePolyline coordinates={remainingDriverToPickupRoute} color={ARRIVING_ROUTE_COLOR} width={4} />
+          )
+        ) : isInProgress ? (
+          remainingPickupToDestinationRoute && (
+            <RoutePolyline coordinates={remainingPickupToDestinationRoute} color={ARRIVING_ROUTE_COLOR} width={4} />
           )
         ) : (
           rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color={ARRIVING_ROUTE_COLOR} width={4} />
@@ -283,14 +355,13 @@ export default function RideScreen() {
         <View style={styles.statusRow}>
           <StatusChip status={currentRide.status} />
           <View style={styles.statusTextWrap}>
-            <Text style={[styles.statusMsg, { color: colors.foreground }]}>{statusMsg}</Text>
-            {pickupEtaText && (
-              <Text style={[styles.statusEtaText, { color: colors.primary }]}>{pickupEtaText}</Text>
-            )}
+            <Text style={[styles.statusMsg, { color: colors.foreground }]} numberOfLines={1}>
+              {statusMsg}
+            </Text>
           </View>
         </View>
         {currentRide.driver && (
-          <Text style={[styles.eta, { color: colors.primary }]}>
+          <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>
             {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`)}
           </Text>
         )}
@@ -377,6 +448,7 @@ export default function RideScreen() {
                 isArriving && styles.wideActionBtn,
                 { backgroundColor: colors.muted },
               ]}
+              onPress={handleCallDriver}
             >
               <Feather name="phone" size={20} color={colors.foreground} />
               {isArriving && (
@@ -441,18 +513,18 @@ const styles = StyleSheet.create({
   topStatus: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  statusRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  statusTextWrap: { flex: 1 },
-  statusMsg: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  statusRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusTextWrap: { flex: 1, minWidth: 0, alignItems: 'center' },
+  statusMsg: { fontSize: 13, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
   statusEtaText: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 2 },
-  eta: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  eta: { flexShrink: 0, fontSize: 13, fontFamily: 'Inter_700Bold' },
   arrivedBanner: {
     position: 'absolute',
     top: 110,
@@ -466,6 +538,18 @@ const styles = StyleSheet.create({
   },
   arrivedBannerText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
   pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  pickupMarker: { alignItems: 'center' },
+  pickupMarkerRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 3,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickupMarkerDot: { width: 6, height: 6, borderRadius: 3 },
+  pickupMarkerStem: { width: 2, height: 10, borderRadius: 1, marginTop: -1 },
   vehicleMarkerWrap: {
     alignItems: 'center',
     justifyContent: 'center',

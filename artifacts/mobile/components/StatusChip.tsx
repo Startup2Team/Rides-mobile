@@ -40,7 +40,7 @@ export function StatusChip({ status }: StatusChipProps) {
 
   return (
     <View style={[styles.chip, { backgroundColor: chip.bg }]}>
-      <Text style={[styles.text, { color: chip.text }]}>{STATUS_LABELS[status]}</Text>
+      <Text style={[styles.text, { color: chip.text }]} numberOfLines={1}>{STATUS_LABELS[status]}</Text>
     </View>
   );
 }

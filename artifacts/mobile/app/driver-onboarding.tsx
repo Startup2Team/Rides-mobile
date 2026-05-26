@@ -26,7 +26,6 @@ import {
   getDistricts,
   getSectors,
   getCells,
-  getVillages,
 } from '@/data/rwanda-locations';
 
 const RWANDAN_PLATE_PATTERNS = [
@@ -55,6 +54,11 @@ const VEHICLE_QUESTIONS: Record<VehicleType, { field: string; label: string; pla
   cab: [{ field: 'passengerSeats', label: 'How many passenger seats does your vehicle have?', placeholder: 'e.g. 4', keyboardType: 'numeric' }],
   hilux: [{ field: 'passengerSeats', label: 'How many passenger seats does your vehicle have?', placeholder: 'e.g. 5', keyboardType: 'numeric' }],
   fuso: [{ field: 'loadCapacityKg', label: 'Maximum load capacity (kg)', placeholder: 'e.g. 5000', keyboardType: 'numeric' }],
+};
+
+const PAYMENT_PROVIDER_LOGOS = {
+  mtn: require('../assets/payment-providers/mtn.png'),
+  airtel: require('../assets/payment-providers/airtel.png'),
 };
 
 type CascadeField = 'province' | 'district' | 'sector' | 'cell' | 'village';
@@ -135,6 +139,7 @@ export default function DriverOnboarding() {
     village: '',
     momoProvider: 'mtn' as 'mtn' | 'airtel',
     momoCode: '',
+    merchantCode: '',
     passengerSeats: '',
     loadCapacityKg: '',
   });
@@ -158,7 +163,7 @@ export default function DriverOnboarding() {
     if (field === 'province') resets.district = resets.sector = resets.cell = resets.village = '';
     if (field === 'district') resets.sector = resets.cell = resets.village = '';
     if (field === 'sector') resets.cell = resets.village = '';
-    if (field === 'cell') resets.village = '';
+    if (field === 'village') resets.cell = '';
     setForm(f => ({ ...f, ...resets, [field]: val }));
     setErrors(e => ({ ...e, [field]: '' }));
   };
@@ -174,6 +179,11 @@ export default function DriverOnboarding() {
     }
   };
 
+  const setDocumentUri = (key: DocumentKey, uri: string) => {
+    setDocs(d => ({ ...d, [key]: uri }));
+    setErrors(e => ({ ...e, [key]: '' }));
+  };
+
   const pickDocument = async (key: DocumentKey) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -186,8 +196,23 @@ export default function DriverOnboarding() {
       allowsEditing: false,
     });
     if (!result.canceled && result.assets[0]) {
-      setDocs(d => ({ ...d, [key]: result.assets[0].uri }));
-      setErrors(e => ({ ...e, [key]: '' }));
+      setDocumentUri(key, result.assets[0].uri);
+    }
+  };
+
+  const takeDocumentPhoto = async (key: DocumentKey) => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow camera access to take document photos.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setDocumentUri(key, result.assets[0].uri);
     }
   };
 
@@ -217,8 +242,14 @@ export default function DriverOnboarding() {
       if (!docs.authorization) e.authorization = 'Authorization certificate is required';
     }
     if (step === 3) {
-      if (!form.momoCode) e.momoCode = 'Required';
-      if (form.momoCode && form.momoCode.replace(/\D/g, '').length < 9) e.momoCode = 'Enter a valid phone number';
+      const hasMomoCode = form.momoCode.replace(/\D/g, '').length > 0;
+      const hasMerchantCode = form.merchantCode.trim().length > 0;
+      if (!hasMomoCode && !hasMerchantCode) {
+        e.momoCode = 'Enter a phone number or merchant code';
+        e.merchantCode = 'Enter a phone number or merchant code';
+      }
+      if (hasMomoCode && form.momoCode.replace(/\D/g, '').length < 9) e.momoCode = 'Enter a valid phone number';
+      if (hasMerchantCode && form.merchantCode.trim().length < 3) e.merchantCode = 'Enter a valid merchant code';
       if (!acceptedTerms) e.acceptedTerms = 'Required';
     }
     return e;
@@ -244,6 +275,7 @@ export default function DriverOnboarding() {
       district: form.district,
       sector: form.sector,
       momoCode: form.momoCode,
+      merchantCode: form.merchantCode,
       momoProvider: form.momoProvider,
       dob: form.dob,
       isOnline: false,
@@ -269,7 +301,12 @@ export default function DriverOnboarding() {
   const districts = getDistricts(form.province);
   const sectors = getSectors(form.province, form.district);
   const cells = getCells(form.province, form.district, form.sector);
-  const villages = getVillages(form.province, form.district, form.sector, form.cell);
+  const villages = Array.from(
+    new Set(cells.flatMap(cell => cell.villages ?? [])),
+  ).sort((a, b) => a.localeCompare(b));
+  const cellOptions = form.village
+    ? cells.filter(cell => cell.villages?.includes(form.village))
+    : cells;
   const vehicleQuestions = VEHICLE_QUESTIONS[form.vehicleType];
 
   return (
@@ -362,24 +399,24 @@ export default function DriverOnboarding() {
             {form.sector ? (
               <>
                 <CascadeDropdown
-                  label="Cell"
-                  value={form.cell}
-                  options={cells.map(c => c.name)}
-                  onSelect={v => updateCascade('cell', v)}
-                />
-                {errors.cell ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.cell}</Text> : null}
-              </>
-            ) : null}
-
-            {form.cell ? (
-              <>
-                <CascadeDropdown
                   label="Village"
                   value={form.village}
                   options={villages}
-                  onSelect={v => update('village', v)}
+                  onSelect={v => updateCascade('village', v)}
                 />
                 {errors.village ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.village}</Text> : null}
+              </>
+            ) : null}
+
+            {form.village ? (
+              <>
+                <CascadeDropdown
+                  label="Cell"
+                  value={form.cell}
+                  options={cellOptions.map(c => c.name)}
+                  onSelect={v => updateCascade('cell', v)}
+                />
+                {errors.cell ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.cell}</Text> : null}
               </>
             ) : null}
           </View>
@@ -477,25 +514,47 @@ export default function DriverOnboarding() {
                         <Feather name="check-circle" size={14} color={colors.primary} />
                         <Text style={[styles.docUploadedText, { color: colors.primary }]}>Uploaded</Text>
                       </View>
-                      <TouchableOpacity
-                        style={[styles.docChangeBtn, { borderColor: colors.border }]}
-                        onPress={() => pickDocument(doc.key)}
-                      >
-                        <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Change</Text>
-                      </TouchableOpacity>
+                      <View style={styles.docActionRow}>
+                        <TouchableOpacity
+                          style={[styles.docChangeBtn, { borderColor: colors.border }]}
+                          onPress={() => pickDocument(doc.key)}
+                        >
+                          <Feather name="image" size={13} color={colors.mutedForeground} />
+                          <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Change</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.docChangeBtn, { borderColor: colors.border }]}
+                          onPress={() => takeDocumentPhoto(doc.key)}
+                        >
+                          <Feather name="camera" size={13} color={colors.mutedForeground} />
+                          <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 ) : (
-                  <TouchableOpacity
-                    style={[styles.docUploadBtn, {
-                      borderColor: errors[doc.key] ? colors.destructive : colors.border,
-                      backgroundColor: colors.card,
-                    }]}
-                    onPress={() => pickDocument(doc.key)}
-                  >
-                    <Feather name="upload" size={20} color={colors.primary} />
-                    <Text style={[styles.docUploadText, { color: colors.primary }]}>Tap to upload</Text>
-                  </TouchableOpacity>
+                  <View style={styles.docActionRow}>
+                    <TouchableOpacity
+                      style={[styles.docUploadBtn, {
+                        borderColor: errors[doc.key] ? colors.destructive : colors.border,
+                        backgroundColor: colors.card,
+                      }]}
+                      onPress={() => pickDocument(doc.key)}
+                    >
+                      <Feather name="upload" size={20} color={colors.primary} />
+                      <Text style={[styles.docUploadText, { color: colors.primary }]}>Upload</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.docUploadBtn, {
+                        borderColor: errors[doc.key] ? colors.destructive : colors.border,
+                        backgroundColor: colors.card,
+                      }]}
+                      onPress={() => takeDocumentPhoto(doc.key)}
+                    >
+                      <Feather name="camera" size={20} color={colors.primary} />
+                      <Text style={[styles.docUploadText, { color: colors.primary }]}>Camera</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
                 {errors[doc.key] ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors[doc.key]}</Text> : null}
               </View>
@@ -507,7 +566,7 @@ export default function DriverOnboarding() {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Setup</Text>
             <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
-              Choose how you want to receive your earnings. Only one method is required.
+              Add a phone number, merchant code, or both to receive your earnings.
             </Text>
 
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Payment Provider</Text>
@@ -521,7 +580,11 @@ export default function DriverOnboarding() {
                   }]}
                   onPress={() => update('momoProvider', provider)}
                 >
-                  <Text style={{ fontSize: 28 }}>{provider === 'mtn' ? '🟡' : '🔴'}</Text>
+                  <Image
+                    source={PAYMENT_PROVIDER_LOGOS[provider]}
+                    style={styles.providerLogo}
+                    resizeMode="contain"
+                  />
                   <Text style={[styles.providerName, { color: colors.foreground }]}>
                     {provider === 'mtn' ? 'MTN MoMo' : 'Airtel Money'}
                   </Text>
@@ -542,6 +605,16 @@ export default function DriverOnboarding() {
               error={errors.momoCode}
               leftIcon="smartphone"
               keyboardType="phone-pad"
+            />
+
+            <KandaInput
+              label={form.momoProvider === 'mtn' ? 'MoMo Pay Code' : 'Airtel Merchant Code'}
+              placeholder="e.g. 123456"
+              value={form.merchantCode}
+              onChangeText={t => update('merchantCode', t.toUpperCase())}
+              error={errors.merchantCode}
+              leftIcon="briefcase"
+              autoCapitalize="characters"
             />
 
             <TouchableOpacity
@@ -665,6 +738,7 @@ const styles = StyleSheet.create({
   docLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   docHint: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   docUploadBtn: {
+    flex: 1,
     height: 80,
     borderWidth: 1.5,
     borderRadius: 14,
@@ -686,7 +760,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   docUploadedText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  docActionRow: { flexDirection: 'row', gap: 10 },
   docChangeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'center',
     height: 32,
@@ -705,6 +783,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   providerName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  providerLogo: {
+    width: '100%',
+    height: 48,
+    borderRadius: 8,
+  },
   providerCheck: {
     position: 'absolute',
     top: 8,
