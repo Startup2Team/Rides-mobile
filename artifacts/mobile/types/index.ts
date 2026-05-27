@@ -43,6 +43,7 @@ export interface DriverProfile {
   sector: string;
   city?: string;
   momoCode: string;
+  merchantCode?: string;
   momoProvider: 'mtn' | 'airtel';
   dob: string;
   isOnline: boolean;

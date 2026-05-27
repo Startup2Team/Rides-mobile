@@ -30,6 +30,10 @@ export default function DriverStats() {
     dailyDeclines: 0,
     earningsTotal: 0,
   };
+  const todayGross = dp.dailyRides * 2800;
+  const platformFee = Math.round(todayGross * 0.15);
+  const todayPayout = todayGross - platformFee;
+  const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
 
   return (
     <ScrollView
@@ -48,7 +52,10 @@ export default function DriverStats() {
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
         <StatRow label="Rides Completed" value={String(dp.dailyRides)} icon="navigation" />
         <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructive} />
-        <StatRow label="Earnings" value={`${((dp.dailyRides) * 2800).toLocaleString()} RWF`} icon="dollar-sign" color={colors.primary} />
+        <StatRow label="Gross Earnings" value={`${todayGross.toLocaleString()} RWF`} icon="dollar-sign" color={colors.primary} />
+        <StatRow label="Platform Fee" value={`-${platformFee.toLocaleString()} RWF`} icon="percent" />
+        <StatRow label="Today's Payout" value={`${todayPayout.toLocaleString()} RWF`} icon="credit-card" color={colors.primary} />
+        <StatRow label="Payment Target" value={paymentTarget} icon="smartphone" />
       </View>
 
       {/* Overall */}

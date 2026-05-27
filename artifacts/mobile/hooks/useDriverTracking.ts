@@ -6,6 +6,8 @@ interface UseDriverTrackingOptions {
   routeCoordinates: Coords[];
   /** How many ms between each position update. Default 1500 */
   intervalMs?: number;
+  /** Number of visible steps to use across the route. Default 24 */
+  stepCount?: number;
 }
 
 /**
@@ -18,6 +20,7 @@ export function useDriverTracking({
   enabled,
   routeCoordinates,
   intervalMs = 1500,
+  stepCount = 24,
 }: UseDriverTrackingOptions): Coords | null {
   const [driverCoords, setDriverCoords] = useState<Coords | null>(null);
   const stepRef = useRef(0);
@@ -31,9 +34,10 @@ export function useDriverTracking({
 
     stepRef.current = 0;
     setDriverCoords(routeCoordinates[0]);
+    const stepSize = Math.max(1, Math.ceil(routeCoordinates.length / stepCount));
 
     intervalRef.current = setInterval(() => {
-      stepRef.current = Math.min(stepRef.current + 1, routeCoordinates.length - 1);
+      stepRef.current = Math.min(stepRef.current + stepSize, routeCoordinates.length - 1);
       setDriverCoords(routeCoordinates[stepRef.current]);
 
       if (stepRef.current >= routeCoordinates.length - 1) {
@@ -44,7 +48,7 @@ export function useDriverTracking({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [enabled, routeCoordinates, intervalMs]);
+  }, [enabled, routeCoordinates, intervalMs, stepCount]);
 
   return driverCoords;
 }

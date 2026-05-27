@@ -99,8 +99,8 @@ export default function DriverNegotiationScreen() {
   const lastDriverOffer = [...driverOffers].pop();
   const lastCustomerOffer = [...customerOffers].pop();
   const lastOffer = [...negotiation].reverse().find(m => m.type === 'offer');
-  const limitReached = driverOffers.length >= MAX_OFFERS || customerOffers.length >= MAX_OFFERS;
-  const canSendOffer = driverOffers.length < MAX_OFFERS && !limitReached;
+  const driverLimitReached = driverOffers.length >= MAX_OFFERS;
+  const canSendOffer = !driverLimitReached;
   const suggestedFare = currentRide?.suggestedFare ?? 0;
   const acceptAmount = lastCustomerOffer?.amount;
 
@@ -217,7 +217,7 @@ export default function DriverNegotiationScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Offer timeline</Text>
-          <Text style={[styles.offerCount, { color: limitReached ? colors.destructive : colors.mutedForeground }]}>
+          <Text style={[styles.offerCount, { color: driverLimitReached ? colors.destructive : colors.mutedForeground }]}>
             {driverOffers.length}/{MAX_OFFERS} offers sent
           </Text>
         </View>
@@ -234,7 +234,7 @@ export default function DriverNegotiationScreen() {
       </ScrollView>
 
       <View style={[styles.actionPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 10) }]}>
-        {limitReached && (
+        {driverLimitReached && (
           <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '12' }]}>
             <Feather name="alert-circle" size={15} color={colors.destructive} />
             <Text style={[styles.limitText, { color: colors.destructive }]}>Offer limit reached. Use Call to continue.</Text>

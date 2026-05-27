@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { KandaButton } from '@/components/KandaButton';
 
 function MenuItem({
   icon,
@@ -93,6 +92,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
         paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 20,
@@ -130,13 +130,17 @@ export default function ProfileScreen() {
 
       {/* Switch mode if already a driver */}
       {driverProfile && (
-        <KandaButton
-          title="Switch to Driver Mode"
+        <TouchableOpacity
+          style={[styles.switchDriverButton, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={handleSwitchToDriver}
-          variant="outline"
-          fullWidth
-          style={{ marginHorizontal: 20 }}
-        />
+          activeOpacity={0.75}
+        >
+          <View style={[styles.switchDriverIcon, { backgroundColor: colors.primary + '15' }]}>
+            <Feather name="navigation" size={16} color={colors.primary} />
+          </View>
+          <Text style={[styles.switchDriverText, { color: colors.foreground }]}>Switch to Driver Mode</Text>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        </TouchableOpacity>
       )}
 
       {/* Menu */}
@@ -189,6 +193,25 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   bannerDesc: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  switchDriverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 14,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  switchDriverIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchDriverText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   menuSection: {
     marginHorizontal: 20,
     marginBottom: 16,

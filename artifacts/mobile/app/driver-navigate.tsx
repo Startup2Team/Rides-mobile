@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,10 +11,31 @@ import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { formatDuration } from '@/utils/mapUtils';
-import { KIGALI_CENTER, VEHICLE_MCI } from '@/types';
+import { KIGALI_CENTER, VehicleType } from '@/types';
 
 const WAIT_LIMIT_SECONDS = 180;
 const ARRIVAL_UNLOCK_KM = 1;
+
+const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
+  moto: require('../assets/vehicle-markers/moto.png'),
+  cab: require('../assets/vehicle-markers/cab.png'),
+  hilux: require('../assets/vehicle-markers/hilux.png'),
+  fuso: require('../assets/vehicle-markers/fuso.png'),
+};
+
+const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
+  moto: { width: 58, height: 44 },
+  cab: { width: 54, height: 40 },
+  hilux: { width: 64, height: 40 },
+  fuso: { width: 66, height: 44 },
+};
+
+const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
+  moto: 270,
+  cab: 315,
+  hilux: 90,
+  fuso: 90,
+};
 
 function getDistanceKm(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
   return Math.sqrt(
@@ -28,6 +49,37 @@ function formatDistance(km: number) {
   return `${km.toFixed(1)} km`;
 }
 
+function getRemainingRouteCoordinates(routeCoordinates: Array<{ latitude: number; longitude: number }>, driverPosition: { latitude: number; longitude: number }) {
+  if (routeCoordinates.length < 2) return routeCoordinates;
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  routeCoordinates.forEach((coord, index) => {
+    const distance =
+      Math.pow(coord.latitude - driverPosition.latitude, 2) +
+      Math.pow(coord.longitude - driverPosition.longitude, 2);
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  return [driverPosition, ...routeCoordinates.slice(Math.min(nearestIndex + 1, routeCoordinates.length - 1))];
+}
+
+function getBearingDegrees(from: { latitude: number; longitude: number }, to: { latitude: number; longitude: number }) {
+  const fromLat = (from.latitude * Math.PI) / 180;
+  const toLat = (to.latitude * Math.PI) / 180;
+  const deltaLng = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const y = Math.sin(deltaLng) * Math.cos(toLat);
+  const x =
+    Math.cos(fromLat) * Math.sin(toLat) -
+    Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
+  return (Math.atan2(y, x) * 180) / Math.PI;
+}
+
 export default function DriverNavigateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -35,6 +87,8 @@ export default function DriverNavigateScreen() {
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
   const [showReroute, setShowReroute] = useState(false);
+  const mapRef = useRef<MapView>(null);
+  const fittedMapPhaseRef = useRef<string | null>(null);
   const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waitRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -44,9 +98,10 @@ export default function DriverNavigateScreen() {
       ? 'waiting'
       : 'pickup';
   const target = phase === 'inprogress' ? currentRide?.destination : currentRide?.pickup;
+  const [navigationOrigin, setNavigationOrigin] = useState(driverLocation ?? KIGALI_CENTER);
 
   const { route, loading: routeLoading } = useRoute(
-    currentRide ? driverPos : null,
+    currentRide ? navigationOrigin : null,
     target ? { latitude: target.latitude, longitude: target.longitude } : null,
   );
 
@@ -55,24 +110,40 @@ export default function DriverNavigateScreen() {
   }, [currentRide]);
 
   useEffect(() => {
-    if (driverLocation) setDriverPos(driverLocation);
-  }, [driverLocation]);
+    if (!currentRide && driverLocation) {
+      setDriverPos(driverLocation);
+      setNavigationOrigin(driverLocation);
+    }
+  }, [currentRide, driverLocation]);
+
+  useEffect(() => {
+    if (!target || !currentRide) return;
+
+    const origin = phase === 'inprogress' ? currentRide.pickup : driverPos;
+    setNavigationOrigin(origin);
+    fittedMapPhaseRef.current = null;
+  }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
   useEffect(() => {
     if (moveRef.current) clearInterval(moveRef.current);
-    if (!target || phase === 'waiting') return;
+    if (!route || route.coordinates.length === 0 || phase === 'waiting') return;
+
+    let step = 0;
+    setDriverPos(route.coordinates[0]);
 
     moveRef.current = setInterval(() => {
-      setDriverPos(prev => ({
-        latitude: prev.latitude + (target.latitude - prev.latitude) * 0.15,
-        longitude: prev.longitude + (target.longitude - prev.longitude) * 0.15,
-      }));
-    }, 3000);
+      step = Math.min(step + 1, route.coordinates.length - 1);
+      setDriverPos(route.coordinates[step]);
+
+      if (step >= route.coordinates.length - 1 && moveRef.current) {
+        clearInterval(moveRef.current);
+      }
+    }, 1500);
 
     return () => {
       if (moveRef.current) clearInterval(moveRef.current);
     };
-  }, [phase, target?.latitude, target?.longitude]);
+  }, [phase, route]);
 
   useEffect(() => {
     if (phase !== 'waiting') {
@@ -101,6 +172,21 @@ export default function DriverNavigateScreen() {
     const timer = setTimeout(() => setShowReroute(true), 5000);
     return () => clearTimeout(timer);
   }, [phase]);
+
+  useEffect(() => {
+    if (!mapRef.current || !target || !currentRide) return;
+    if (fittedMapPhaseRef.current === phase) return;
+
+    const coordinates = phase === 'inprogress'
+      ? [currentRide.pickup, currentRide.destination]
+      : [driverPos, target];
+
+    mapRef.current.fitToCoordinates(coordinates, {
+      edgePadding: { top: 120, right: 40, bottom: 330, left: 40 },
+      animated: true,
+    });
+    fittedMapPhaseRef.current = phase;
+  }, [currentRide, driverPos, phase, target]);
 
   if (!currentRide) return null;
 
@@ -175,18 +261,36 @@ export default function DriverNavigateScreen() {
   };
 
   const timerExpired = waitSeconds === 0;
+  const remainingRoute = useMemo(
+    () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
+    [driverPos, route],
+  );
+  const vehicleRotationDeg = useMemo(() => {
+    if (!remainingRoute || remainingRoute.length < 2) return 0;
+    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
+    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
+  }, [currentRide.vehicleType, remainingRoute]);
 
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        region={{ ...driverPos, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
+        initialRegion={{ ...driverPos, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
         customMapStyle={darkMapStyle}
       >
         <Marker coordinate={driverPos} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={[styles.youMarker, { borderColor: colors.primary }]}>
-            <MaterialCommunityIcons name={VEHICLE_MCI[currentRide.vehicleType] as any} size={22} color={colors.primary} />
+          <View style={styles.vehicleMarkerWrap}>
+            <Image
+              source={VEHICLE_MARKER_IMAGES[currentRide.vehicleType]}
+              style={[
+                styles.vehicleMarkerImage,
+                VEHICLE_IMAGE_STYLES[currentRide.vehicleType],
+                { transform: [{ rotate: `${vehicleRotationDeg}deg` }] },
+              ]}
+              resizeMode="contain"
+            />
           </View>
         </Marker>
         <Marker coordinate={currentRide.pickup}>
@@ -199,7 +303,7 @@ export default function DriverNavigateScreen() {
             <Feather name="map-pin" size={14} color="#fff" />
           </View>
         </Marker>
-        {route && <RoutePolyline coordinates={route.coordinates} color={colors.primary} width={4} />}
+        {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.primary} width={4} />}
       </MapView>
 
       <View style={[styles.topBar, {
@@ -426,11 +530,14 @@ const styles = StyleSheet.create({
   rerouteText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
   rerouteBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  youMarker: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(0,200,83,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2,
+  vehicleMarkerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 70,
+    height: 70,
+  },
+  vehicleMarkerImage: {
+    zIndex: 2,
   },
   pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   bottomCard: {

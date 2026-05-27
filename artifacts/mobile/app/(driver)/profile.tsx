@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { KandaButton } from '@/components/KandaButton';
 import { VEHICLE_LABELS } from '@/types';
 
 export default function DriverProfileScreen() {
@@ -83,13 +82,17 @@ export default function DriverProfileScreen() {
         </View>
       )}
 
-      <KandaButton
-        title="Switch to Customer Mode"
+      <TouchableOpacity
+        style={[styles.switchModeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={handleSwitchToCustomer}
-        variant="outline"
-        fullWidth
-        style={{ marginHorizontal: 20, marginBottom: 16 }}
-      />
+        activeOpacity={0.75}
+      >
+        <View style={[styles.switchModeIcon, { backgroundColor: colors.primary + '15' }]}>
+          <Feather name="user" size={16} color={colors.primary} />
+        </View>
+        <Text style={[styles.switchModeText, { color: colors.foreground }]}>Switch to Customer Mode</Text>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+      </TouchableOpacity>
 
       <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]}>
@@ -137,6 +140,25 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   infoValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  switchModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 14,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  switchModeIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchModeText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   menuSection: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1 },
   menuText: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular' },
