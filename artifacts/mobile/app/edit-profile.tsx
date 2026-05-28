@@ -8,7 +8,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
 import { KandaInput } from '@/components/KandaInput';
 import { useColors } from '@/hooks/useColors';
@@ -27,6 +27,7 @@ const PROFILE_IMAGE_KEY = '@taravelis_profile_image';
 export default function EditProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
   const { user, updateUser } = useAuth();
 
   const [name, setName] = useState(user?.name ?? '');
@@ -144,29 +145,14 @@ export default function EditProfileScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <BackButton onPress={() => router.back()} />
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Edit Profile</Text>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
+      <GlassHeader title="Edit Profile" />
 
-      <ScrollView
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.scroll,
-          { paddingBottom: insets.bottom + 40 },
+          { paddingTop: headerMetrics.contentTop + 28, paddingBottom: insets.bottom + 40 },
         ]}
-        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {/* Avatar preview */}
@@ -248,23 +234,14 @@ export default function EditProfileScreen() {
           fullWidth
           size="lg"
         />
-      </ScrollView>
+      </GlassScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  scroll: { paddingHorizontal: 20, paddingTop: 28 },
+  scroll: { paddingHorizontal: 20 },
   avatarSection: { alignItems: 'center', marginBottom: 32, gap: 8 },
   avatarContainer: { position: 'relative', marginBottom: 4 },
   avatar: {

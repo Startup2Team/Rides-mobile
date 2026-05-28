@@ -40,7 +40,6 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
 const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.35, 282);
 const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.46, 370);
-const PROMO_EXPANDED_HEIGHT = Math.min(SCREEN_HEIGHT * 0.60, 480);
 const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
@@ -213,9 +212,6 @@ export default function CustomerHome() {
   const [editingSavedLocation, setEditingSavedLocation] = useState<SavedLocation | null>(null);
   const [editingSavedLabel, setEditingSavedLabel] = useState('');
   const [editingSavedAddress, setEditingSavedAddress] = useState('');
-  const [promoCode, setPromoCode] = useState('');
-  const [promoExpanded, setPromoExpanded] = useState(false);
-  const [promoApplied, setPromoApplied] = useState<{ code: string; discount: number } | null>(null);
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -225,9 +221,7 @@ export default function CustomerHome() {
   const editSheetOpacityAnim = useRef(new Animated.Value(0)).current;
   const estimatedKeyboardOffset = Math.max(240, Math.min(SCREEN_HEIGHT * 0.34, 340));
   const hasRideActions = destination !== null || destText.trim().length > 0;
-  const activePanelHeight = hasRideActions
-    ? (promoExpanded ? PROMO_EXPANDED_HEIGHT : EXPANDED_PANEL_HEIGHT)
-    : COMPACT_PANEL_HEIGHT;
+  const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
   const recenterBottomOffset = showBooking ? activePanelHeight + 16 : COMPACT_PANEL_HEIGHT + 64;
   const bookingBottomPadding = insets.bottom + (
     Platform.OS === 'web'
@@ -566,9 +560,6 @@ export default function CustomerHome() {
       setDestText('');
       setDestination(null);
       setSuggestions([]);
-      setPromoExpanded(false);
-      setPromoApplied(null);
-      setPromoCode('');
     });
   };
 
@@ -736,17 +727,6 @@ export default function CustomerHome() {
     setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
     setMapPicker(locationSearchTarget);
     closeLocationSearch();
-  };
-
-  const handleApplyPromo = () => {
-    const code = promoCode.trim().toUpperCase();
-    const VALID_CODES: Record<string, number> = { WELCOME500: 500, RIDE200: 200, KIGALI100: 100 };
-    if (VALID_CODES[code]) {
-      setPromoApplied({ code, discount: VALID_CODES[code] });
-      setPromoExpanded(false);
-    } else {
-      Alert.alert('Invalid code', 'This promo code is not valid or has expired.');
-    }
   };
 
   const handleBook = async () => {
@@ -1116,61 +1096,6 @@ export default function CustomerHome() {
                     </Text>
                   </View>
                 </View>
-              </View>
-            )}
-
-            {destination && (
-              <View style={styles.promoRow}>
-                {promoApplied ? (
-                  <TouchableOpacity
-                    style={[styles.promoAppliedBadge, { backgroundColor: colors.primary + '18', borderColor: colors.primary }]}
-                    onPress={() => { setPromoApplied(null); setPromoCode(''); }}
-                    activeOpacity={0.8}
-                  >
-                    <Feather name="tag" size={13} color={colors.primary} />
-                    <Text style={[styles.promoAppliedText, { color: colors.primary }]}>
-                      {promoApplied.code} · −{promoApplied.discount.toLocaleString()} RWF
-                    </Text>
-                    <Feather name="x" size={13} color={colors.primary} />
-                  </TouchableOpacity>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => setPromoExpanded(prev => !prev)}
-                      style={styles.promoToggle}
-                      activeOpacity={0.75}
-                    >
-                      <Feather name="tag" size={14} color={colors.mutedForeground} />
-                      <Text style={[styles.promoToggleText, { color: colors.mutedForeground }]}>
-                        {promoExpanded ? 'Hide promo code' : 'Have a promo code?'}
-                      </Text>
-                    </TouchableOpacity>
-                    {promoExpanded && (
-                      <View style={[styles.promoInputRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                        <TextInput
-                          style={[styles.promoInput, { color: colors.foreground }]}
-                          placeholder="Enter code"
-                          placeholderTextColor={colors.mutedForeground}
-                          value={promoCode}
-                          onChangeText={setPromoCode}
-                          autoCapitalize="characters"
-                          returnKeyType="done"
-                          onSubmitEditing={handleApplyPromo}
-                        />
-                        <TouchableOpacity
-                          style={[styles.promoApplyBtn, { backgroundColor: promoCode.trim() ? colors.primary : colors.border }]}
-                          onPress={handleApplyPromo}
-                          disabled={!promoCode.trim()}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.promoApplyText, { color: promoCode.trim() ? colors.primaryForeground : colors.mutedForeground }]}>
-                            Apply
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </>
-                )}
               </View>
             )}
 
@@ -1874,31 +1799,6 @@ const styles = StyleSheet.create({
   rideInfoRow: { flexDirection: 'row', gap: 6 },
   rideInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 7, borderRadius: 9, borderWidth: 1, gap: 5 },
   findDriverAction: { marginTop: 'auto', width: '100%' },
-  promoRow: { width: '100%', gap: 6 },
-  promoToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  promoToggleText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  promoInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
-    height: 40,
-  },
-  promoInput: { flex: 1, paddingHorizontal: 12, fontSize: 14, fontFamily: 'Inter_500Medium', height: '100%' },
-  promoApplyBtn: { paddingHorizontal: 14, height: '100%', alignItems: 'center', justifyContent: 'center' },
-  promoApplyText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  promoAppliedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
-  promoAppliedText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   rideInfoText: { flex: 1, gap: 2 },
   rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   rideInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },

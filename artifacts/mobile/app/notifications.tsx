@@ -2,8 +2,6 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  FlatList,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +9,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 
@@ -77,15 +76,6 @@ const STATIC_NOTIFICATIONS: AppNotification[] = [
     time: new Date(Date.now() - 7200000).toISOString(),
     read: true,
   },
-  {
-    id: 'promo_1',
-    type: 'promo',
-    icon: 'gift',
-    title: 'Refer & earn',
-    message: 'Invite a friend to Taravelis and both of you get 500 RWF off your next ride.',
-    time: new Date(Date.now() - 86400000).toISOString(),
-    read: true,
-  },
 ];
 
 function EmptyState({ color, mutedColor }: { color: string; mutedColor: string }) {
@@ -112,6 +102,7 @@ const emptyStyles = StyleSheet.create({
 export default function NotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
   const { rideHistory } = useRide();
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -135,7 +126,7 @@ export default function NotificationsScreen() {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
-  const renderItem = ({ item }: { item: AppNotification }) => {
+  const renderItem = (item: AppNotification) => {
     const accentColor = TYPE_ICON_COLOR[item.type];
     return (
       <TouchableOpacity
@@ -177,65 +168,47 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <BackButton onPress={() => router.back()} />
-        <View style={styles.headerCenter}>
-          <View style={styles.headerTitleRow}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Notifications</Text>
-            {unreadCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.badgeText}>{unreadCount}</Text>
-              </View>
-            )}
+      <GlassHeader
+        title="Notifications"
+        titleAccessory={unreadCount > 0 && (
+          <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.badgeText}>{unreadCount}</Text>
           </View>
-        </View>
-        {unreadCount > 0 ? (
+        )}
+        right={unreadCount > 0 ? (
           <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
             <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 80 }} />
         )}
-      </View>
+      />
 
-      <FlatList
-        data={notifications}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 90 : 28) },
+          { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 28 },
           notifications.length === 0 && { flex: 1 },
         ]}
-        ListEmptyComponent={
+      >
+        {notifications.length === 0 ? (
           <EmptyState color={colors.primary} mutedColor={colors.mutedForeground} />
-        }
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-      />
+        ) : (
+          notifications.map((item, index) => (
+            <React.Fragment key={item.id}>
+              {index > 0 && <View style={{ height: 8 }} />}
+              {renderItem(item)}
+            </React.Fragment>
+          ))
+        )}
+      </GlassScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   badge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   badgeText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#000' },
   markAllBtn: { width: 80, alignItems: 'flex-end' },

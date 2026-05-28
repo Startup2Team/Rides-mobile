@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -15,7 +14,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 
@@ -68,6 +68,7 @@ function isValidProviderNumber(provider: PaymentProvider, phoneNumber: string) {
 export default function PaymentMethodsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
 
   const scrollRef = useRef<ScrollView>(null);
   const phoneInputRef = useRef<TextInput>(null);
@@ -149,35 +150,23 @@ export default function PaymentMethodsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <BackButton onPress={() => router.back()} />
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Payment Methods</Text>
-          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Manage how you pay</Text>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
+      <GlassHeader title="Payment Methods" subtitle="Manage how you pay" />
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoiding}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
+        <GlassScrollView
           ref={scrollRef}
+          indicatorTop={headerMetrics.indicatorTop}
+          indicatorBottom={insets.bottom + 64}
           contentContainerStyle={[
             styles.scroll,
-            { paddingBottom: insets.bottom + (adding ? 1 : 88) },
+            {
+              paddingTop: headerMetrics.contentTop,
+              paddingBottom: insets.bottom + (adding ? 1 : 88),
+            },
           ]}
-          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           onContentSizeChange={() => {
@@ -306,7 +295,7 @@ export default function PaymentMethodsScreen() {
             </View>
           );
         })}
-        </ScrollView>
+        </GlassScrollView>
       </KeyboardAvoidingView>
 
       <View style={[styles.infoBox, { paddingBottom: insets.bottom + 16 }]}>
@@ -321,16 +310,6 @@ export default function PaymentMethodsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   keyboardAvoiding: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   scroll: { padding: 20, gap: 0 },
   sectionLabel: {
     fontSize: 11,
