@@ -1,9 +1,6 @@
-import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Linking,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +8,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 
 const FAQS = [
@@ -68,30 +66,16 @@ const CONTACT_CHANNELS = [
 export default function HelpSupportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <BackButton onPress={() => router.back()} />
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Help & Support</Text>
-          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>We're here for you</Text>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
+      <GlassHeader title="Help & Support" subtitle="We're here for you" />
 
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
-        showsVerticalScrollIndicator={false}
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
       >
         {/* Contact */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CONTACT US</Text>
@@ -141,28 +125,17 @@ export default function HelpSupportScreen() {
 
         {/* Response time */}
         <View style={[styles.infoBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Feather name="clock" size={14} color={colors.mutedForeground} />
-          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+         <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
             Average response time: under 2 hours · Available 7 days a week, 7 AM – 10 PM
           </Text>
         </View>
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   scroll: { padding: 20 },
   sectionLabel: {
     fontSize: 11,

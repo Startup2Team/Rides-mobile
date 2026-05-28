@@ -1,9 +1,6 @@
-import { router } from 'expo-router';
 import React from 'react';
 import {
   Linking,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +8,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 
 const LINKS = [
@@ -29,28 +27,15 @@ const STATS = [
 export default function AboutScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <BackButton onPress={() => router.back()} />
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>About Taravelis</Text>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
+      <GlassHeader title="About Taravelis" />
 
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 40 }]}
       >
         {/* Brand hero */}
         <View style={styles.hero}>
@@ -112,22 +97,13 @@ export default function AboutScreen() {
         <Text style={[styles.copyright, { color: colors.mutedForeground }]}>
           © 2026 Taravelis Ltd. · Kigali, Rwanda
         </Text>
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   scroll: { paddingHorizontal: 20 },
   hero: { alignItems: 'center', paddingTop: 32, paddingBottom: 28, gap: 8 },
   logoMark: {

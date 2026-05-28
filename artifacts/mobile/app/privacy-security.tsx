@@ -1,9 +1,6 @@
-import { router } from 'expo-router';
 import React from 'react';
 import {
   Linking,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +8,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 
 const SECTIONS = [
@@ -59,28 +57,15 @@ const SECTIONS = [
 export default function PrivacySecurityScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <BackButton onPress={() => router.back()} />
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Privacy & Security</Text>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
+      <GlassHeader title="Privacy & Security" />
 
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
-        showsVerticalScrollIndicator={false}
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
       >
         {/* Shield banner */}
         <View style={[styles.banner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
@@ -125,22 +110,13 @@ export default function PrivacySecurityScreen() {
         <Text style={[styles.lastUpdated, { color: colors.mutedForeground }]}>
           Last updated: May 2026 · Version 1.0
         </Text>
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   scroll: { padding: 20, gap: 0 },
   banner: {
     flexDirection: 'row',

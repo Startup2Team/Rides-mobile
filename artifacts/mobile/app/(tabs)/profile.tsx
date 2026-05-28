@@ -5,7 +5,6 @@ import {
   Alert,
   Image,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,6 +12,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -54,6 +55,7 @@ function MenuItem({
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile, logout, switchMode } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
@@ -109,15 +111,15 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-    <OfflineBanner />
-    <ScrollView
-      style={{ flex: 1 }}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
-        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 20,
-      }}
-    >
+      <OfflineBanner />
+      <GlassHeader title="Profile" showBack={false} />
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
+        contentContainerStyle={{
+          paddingTop: headerMetrics.contentTop,
+          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 20,
+        }}
+      >
       {/* Avatar */}
       <View style={styles.avatarSection}>
         {profileImage ? (
@@ -187,7 +189,7 @@ export default function ProfileScreen() {
       </View>
 
       <Text style={[styles.version, { color: colors.mutedForeground }]}>Taravelis v1.0.0</Text>
-    </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }

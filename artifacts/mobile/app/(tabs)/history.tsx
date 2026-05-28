@@ -1,13 +1,16 @@
 import React, { useEffect } from 'react';
 import {
-  FlatList,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { Ride, VEHICLE_LABELS } from '@/types';
@@ -21,7 +24,20 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
   const timeStr = date.toLocaleTimeString('en-RW', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ride details for ${ride.destination.address ?? 'destination'}`}
+      onPress={() => router.push(`/ride-detail?rideId=${ride.id}` as any)}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          opacity: pressed ? 0.78 : 1,
+          transform: [{ scale: pressed ? 0.99 : 1 }],
+        },
+      ]}
+    >
       <View style={styles.cardTop}>
         <View style={styles.vehicleBadge}>
           <Text style={[styles.vehicleLabel, { color: colors.foreground }]}>
@@ -64,13 +80,14 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
           </Text>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
   const { rideHistory, loadHistory } = useRide();
 
   useEffect(() => { loadHistory(); }, []);
@@ -78,28 +95,20 @@ export default function HistoryScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.title, { color: colors.foreground }]}>My Rides</Text>
-      </View>
+      <GlassHeader title="My Rides" showBack={false} />
 
-      <FlatList
-        data={rideHistory}
-        keyExtractor={r => r.id}
-        renderItem={({ item }) => <RideHistoryCard ride={item} />}
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.list,
-          { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 16 },
+          {
+            paddingTop: headerMetrics.contentTop,
+            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 16,
+          },
         ]}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        ListEmptyComponent={() => (
+        scrollEnabled={rideHistory.length > 0}
+      >
+        {rideHistory.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="map" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No rides yet</Text>
@@ -107,21 +116,21 @@ export default function HistoryScreen() {
               Your completed rides will appear here
             </Text>
           </View>
+        ) : (
+          rideHistory.map((ride, index) => (
+            <React.Fragment key={ride.id}>
+              {index > 0 && <View style={{ height: 12 }} />}
+              <RideHistoryCard ride={ride} />
+            </React.Fragment>
+          ))
         )}
-        scrollEnabled={rideHistory.length > 0}
-      />
+      </GlassScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  title: { fontSize: 26, fontFamily: 'Inter_700Bold' },
   list: { padding: 20 },
   card: {
     borderRadius: 16,
