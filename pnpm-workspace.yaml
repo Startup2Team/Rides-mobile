@@ -160,4 +160,6 @@ overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
+  '@sentry/cli': true
   esbuild: true
+  unrs-resolver: true

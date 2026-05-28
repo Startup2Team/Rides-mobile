@@ -36,6 +36,13 @@ function RootLayoutNav() {
       <Stack.Screen name="driver-onboarding" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />
+      <Stack.Screen name="rating" options={{ presentation: 'modal', gestureEnabled: false }} />
+      <Stack.Screen name="payment-methods" />
+      <Stack.Screen name="edit-profile" />
+      <Stack.Screen name="help-support" />
+      <Stack.Screen name="privacy-security" />
+      <Stack.Screen name="about" />
+      <Stack.Screen name="ride-detail" />
     </Stack>
   );
 }

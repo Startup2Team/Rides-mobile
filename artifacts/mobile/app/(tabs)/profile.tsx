@@ -1,7 +1,9 @@
-import { router } from 'expo-router';
-import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,6 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { OfflineBanner } from '@/components/OfflineBanner';
+
+const PROFILE_IMAGE_KEY = '@taravelis_profile_image';
 
 function MenuItem({
   icon,
@@ -34,7 +39,7 @@ function MenuItem({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.menuIcon, { backgroundColor: destructive ? colors.destructive + '15' : colors.muted }]}>
+      <View style={styles.menuIcon}>
         <Feather name={icon} size={18} color={destructive ? colors.destructive : colors.foreground} />
       </View>
       <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>
@@ -50,6 +55,19 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, driverProfile, logout, switchMode } = useAuth();
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      AsyncStorage.getItem(PROFILE_IMAGE_KEY).then(uri => {
+        if (active) setProfileImage(uri);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   const handleSwitchToDriver = () => {
     if (!driverProfile) {
@@ -90,8 +108,10 @@ export default function ProfileScreen() {
     .toUpperCase() ?? 'KR';
 
   return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <OfflineBanner />
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={{ flex: 1 }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
@@ -100,9 +120,13 @@ export default function ProfileScreen() {
     >
       {/* Avatar */}
       <View style={styles.avatarSection}>
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
+        {profileImage ? (
+          <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+        ) : (
+          <View style={styles.avatar}>
+            <Feather name="user" size={42} color={colors.primary} />
+          </View>
+        )}
         <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
         <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
         {user?.email && (
@@ -135,7 +159,7 @@ export default function ProfileScreen() {
           onPress={handleSwitchToDriver}
           activeOpacity={0.75}
         >
-          <View style={[styles.switchDriverIcon, { backgroundColor: colors.primary + '15' }]}>
+          <View style={styles.switchDriverIcon}>
             <Feather name="navigation" size={16} color={colors.primary} />
           </View>
           <Text style={[styles.switchDriverText, { color: colors.foreground }]}>Switch to Driver Mode</Text>
@@ -145,11 +169,12 @@ export default function ProfileScreen() {
 
       {/* Menu */}
       <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <MenuItem icon="user" label="Edit Profile" onPress={() => {}} />
+        <MenuItem icon="user" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
+        <MenuItem icon="credit-card" label="Payment Methods" onPress={() => router.push('/payment-methods')} />
         <MenuItem icon="phone" label="Phone" onPress={() => {}} value={user?.phone} />
-        <MenuItem icon="shield" label="Privacy & Security" onPress={() => {}} />
-        <MenuItem icon="help-circle" label="Help & Support" onPress={() => {}} />
-        <MenuItem icon="info" label="About Taravelis" onPress={() => {}} />
+        <MenuItem icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
+        <MenuItem icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
+        <MenuItem icon="info" label="About Taravelis" onPress={() => router.push('/about')} />
       </View>
 
       <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -163,6 +188,7 @@ export default function ProfileScreen() {
 
       <Text style={[styles.version, { color: colors.mutedForeground }]}>Taravelis v1.0.0</Text>
     </ScrollView>
+    </View>
   );
 }
 
@@ -177,7 +203,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  avatarText: { fontSize: 32, fontFamily: 'Inter_700Bold', color: '#000' },
+  avatarImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    marginBottom: 8,
+  },
   name: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   phone: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   email: { fontSize: 13, fontFamily: 'Inter_400Regular' },

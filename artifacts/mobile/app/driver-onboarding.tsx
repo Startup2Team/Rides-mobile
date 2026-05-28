@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -43,10 +44,13 @@ function validatePlate(plate: string): { valid: boolean; warning?: string } {
 }
 
 type DocumentKey = 'license' | 'insurance' | 'authorization';
+// front face = index 0, back face = index 1
+type DocFaces = [string | null, string | null];
+
 const DOCS: { key: DocumentKey; label: string; hint: string }[] = [
-  { key: 'license', label: "Driver's Licence (front face)", hint: 'JPEG, PNG or PDF' },
-  { key: 'insurance', label: 'Vehicle Insurance document', hint: 'JPEG, PNG or PDF' },
-  { key: 'authorization', label: 'Vehicle Authorization / Inspection certificate', hint: 'JPEG, PNG or PDF' },
+  { key: 'license', label: "Driver's Licence", hint: 'Front and back faces — JPEG or PNG' },
+  { key: 'insurance', label: 'Vehicle Insurance document', hint: 'Front face required — JPEG, PNG or PDF' },
+  { key: 'authorization', label: 'Vehicle Authorization / Inspection certificate', hint: 'Front face required — JPEG, PNG or PDF' },
 ];
 
 const VEHICLE_QUESTIONS: Record<VehicleType, { field: string; label: string; placeholder: string; keyboardType?: 'numeric' }[]> = {
@@ -143,11 +147,12 @@ export default function DriverOnboarding() {
     passengerSeats: '',
     loadCapacityKg: '',
   });
-  const [docs, setDocs] = useState<Record<DocumentKey, string | null>>({
-    license: null,
-    insurance: null,
-    authorization: null,
+  const [docs, setDocs] = useState<Record<DocumentKey, DocFaces>>({
+    license: [null, null],
+    insurance: [null, null],
+    authorization: [null, null],
   });
+  const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [plateWarning, setPlateWarning] = useState('');
   const [loading, setLoading] = useState(false);
@@ -179,46 +184,69 @@ export default function DriverOnboarding() {
     }
   };
 
-  const setDocumentUri = (key: DocumentKey, uri: string) => {
-    setDocs(d => ({ ...d, [key]: uri }));
+  const setDocumentFace = (key: DocumentKey, face: 0 | 1, uri: string) => {
+    setDocs(d => {
+      const updated: DocFaces = [d[key][0], d[key][1]];
+      updated[face] = uri;
+      return { ...d, [key]: updated };
+    });
     setErrors(e => ({ ...e, [key]: '' }));
   };
 
-  const pickDocument = async (key: DocumentKey) => {
+  const pickDocument = async (key: DocumentKey, face: 0 | 1) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission required', 'Please allow photo access to upload documents.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.85,
       allowsEditing: false,
     });
     if (!result.canceled && result.assets[0]) {
-      setDocumentUri(key, result.assets[0].uri);
+      setDocumentFace(key, face, result.assets[0].uri);
     }
   };
 
-  const takeDocumentPhoto = async (key: DocumentKey) => {
+  const takeDocumentPhoto = async (key: DocumentKey, face: 0 | 1) => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission required', 'Please allow camera access to take document photos.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.85,
       allowsEditing: false,
     });
     if (!result.canceled && result.assets[0]) {
-      setDocumentUri(key, result.assets[0].uri);
+      setDocumentFace(key, face, result.assets[0].uri);
+    }
+  };
+
+  const takeSelfie = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow camera access for identity verification.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.9,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (!result.canceled && result.assets[0]) {
+      setSelfieUri(result.assets[0].uri);
+      setErrors(e => ({ ...e, selfie: '' }));
     }
   };
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
     if (step === 0) {
+      if (!selfieUri) e.selfie = 'Identity photo is required';
       if (!form.dob) e.dob = 'Required';
       if (!form.province) e.province = 'Required';
       if (!form.district) e.district = 'Required';
@@ -237,9 +265,9 @@ export default function DriverOnboarding() {
       }
     }
     if (step === 2) {
-      if (!docs.license) e.license = 'Driver\'s licence photo is required';
-      if (!docs.insurance) e.insurance = 'Insurance document is required';
-      if (!docs.authorization) e.authorization = 'Authorization certificate is required';
+      if (!docs.license[0]) e.license = "Driver's licence front face is required";
+      if (!docs.insurance[0]) e.insurance = 'Insurance document is required';
+      if (!docs.authorization[0]) e.authorization = 'Authorization certificate is required';
     }
     if (step === 3) {
       const hasMomoCode = form.momoCode.replace(/\D/g, '').length > 0;
@@ -278,6 +306,7 @@ export default function DriverOnboarding() {
       merchantCode: form.merchantCode,
       momoProvider: form.momoProvider,
       dob: form.dob,
+      profileImage: selfieUri ?? undefined,
       isOnline: false,
       isVerified: false,
       acceptanceRate: 100,
@@ -358,6 +387,50 @@ export default function DriverOnboarding() {
               leftIcon="calendar"
               keyboardType="number-pad"
             />
+
+            {/* Identity Verification */}
+            <Text style={[styles.sectionSubtitle, { color: colors.foreground }]}>Identity Verification</Text>
+            <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
+              Take a clear selfie so we can verify your identity. Gallery upload is not allowed — use your front camera.
+            </Text>
+
+            {selfieUri ? (
+              <View style={styles.selfiePreviewRow}>
+                <Image source={{ uri: selfieUri }} style={styles.selfieImage} resizeMode="cover" />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <View style={[styles.docUploaded, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                    <Feather name="check-circle" size={14} color={colors.primary} />
+                    <Text style={[styles.docUploadedText, { color: colors.primary }]}>Photo taken</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.selfieRetakeBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                    onPress={takeSelfie}
+                  >
+                    <Feather name="camera" size={14} color={colors.mutedForeground} />
+                    <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake selfie</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.selfieBtn,
+                  {
+                    borderColor: errors.selfie ? colors.destructive : colors.primary,
+                    backgroundColor: colors.primary + '08',
+                  },
+                ]}
+                onPress={takeSelfie}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.selfieIconCircle, { backgroundColor: colors.primary + '20' }]}>
+                  <Feather name="camera" size={24} color={colors.primary} />
+                </View>
+                <Text style={[styles.selfieLabel, { color: colors.primary }]}>Take Selfie</Text>
+                <Text style={[styles.selfieSubLabel, { color: colors.mutedForeground }]}>Front camera only · No uploads</Text>
+              </TouchableOpacity>
+            )}
+            {errors.selfie ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.selfie}</Text> : null}
 
             <Text style={[styles.sectionSubtitle, { color: colors.foreground }]}>Location</Text>
             <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
@@ -493,7 +566,7 @@ export default function DriverOnboarding() {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Document Uploads</Text>
             <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
-              All documents are required. Accepted formats: JPEG, PNG, PDF.
+              Front face of each document is required. Add the back face where applicable.
             </Text>
 
             {DOCS.map(doc => (
@@ -506,9 +579,11 @@ export default function DriverOnboarding() {
                   <Text style={[styles.docHint, { color: colors.mutedForeground }]}>{doc.hint}</Text>
                 </View>
 
-                {docs[doc.key] ? (
+                {/* Front face */}
+                <Text style={[styles.docFaceLabel, { color: colors.mutedForeground }]}>Front face</Text>
+                {docs[doc.key][0] ? (
                   <View style={styles.docPreviewRow}>
-                    <Image source={{ uri: docs[doc.key]! }} style={styles.docThumb} resizeMode="cover" />
+                    <Image source={{ uri: docs[doc.key][0]! }} style={styles.docThumb} resizeMode="cover" />
                     <View style={{ flex: 1, gap: 6 }}>
                       <View style={[styles.docUploaded, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
                         <Feather name="check-circle" size={14} color={colors.primary} />
@@ -517,14 +592,14 @@ export default function DriverOnboarding() {
                       <View style={styles.docActionRow}>
                         <TouchableOpacity
                           style={[styles.docChangeBtn, { borderColor: colors.border }]}
-                          onPress={() => pickDocument(doc.key)}
+                          onPress={() => pickDocument(doc.key, 0)}
                         >
                           <Feather name="image" size={13} color={colors.mutedForeground} />
                           <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Change</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.docChangeBtn, { borderColor: colors.border }]}
-                          onPress={() => takeDocumentPhoto(doc.key)}
+                          onPress={() => takeDocumentPhoto(doc.key, 0)}
                         >
                           <Feather name="camera" size={13} color={colors.mutedForeground} />
                           <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake</Text>
@@ -539,7 +614,7 @@ export default function DriverOnboarding() {
                         borderColor: errors[doc.key] ? colors.destructive : colors.border,
                         backgroundColor: colors.card,
                       }]}
-                      onPress={() => pickDocument(doc.key)}
+                      onPress={() => pickDocument(doc.key, 0)}
                     >
                       <Feather name="upload" size={20} color={colors.primary} />
                       <Text style={[styles.docUploadText, { color: colors.primary }]}>Upload</Text>
@@ -549,7 +624,7 @@ export default function DriverOnboarding() {
                         borderColor: errors[doc.key] ? colors.destructive : colors.border,
                         backgroundColor: colors.card,
                       }]}
-                      onPress={() => takeDocumentPhoto(doc.key)}
+                      onPress={() => takeDocumentPhoto(doc.key, 0)}
                     >
                       <Feather name="camera" size={20} color={colors.primary} />
                       <Text style={[styles.docUploadText, { color: colors.primary }]}>Camera</Text>
@@ -557,6 +632,56 @@ export default function DriverOnboarding() {
                   </View>
                 )}
                 {errors[doc.key] ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors[doc.key]}</Text> : null}
+
+                {/* Back face — revealed once front is uploaded */}
+                {docs[doc.key][0] && (
+                  <>
+                    <Text style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: 4 }]}>Back face</Text>
+                    {docs[doc.key][1] ? (
+                      <View style={styles.docPreviewRow}>
+                        <Image source={{ uri: docs[doc.key][1]! }} style={styles.docThumb} resizeMode="cover" />
+                        <View style={{ flex: 1, gap: 6 }}>
+                          <View style={[styles.docUploaded, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                            <Feather name="check-circle" size={14} color={colors.primary} />
+                            <Text style={[styles.docUploadedText, { color: colors.primary }]}>Uploaded</Text>
+                          </View>
+                          <View style={styles.docActionRow}>
+                            <TouchableOpacity
+                              style={[styles.docChangeBtn, { borderColor: colors.border }]}
+                              onPress={() => pickDocument(doc.key, 1)}
+                            >
+                              <Feather name="image" size={13} color={colors.mutedForeground} />
+                              <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Change</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.docChangeBtn, { borderColor: colors.border }]}
+                              onPress={() => takeDocumentPhoto(doc.key, 1)}
+                            >
+                              <Feather name="camera" size={13} color={colors.mutedForeground} />
+                              <Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.docAddBackBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                        onPress={() => Alert.alert(
+                          'Add back face',
+                          'Choose how to add the back face of this document.',
+                          [
+                            { text: 'Take photo', onPress: () => takeDocumentPhoto(doc.key, 1) },
+                            { text: 'Upload from gallery', onPress: () => pickDocument(doc.key, 1) },
+                            { text: 'Cancel', style: 'cancel' },
+                          ],
+                        )}
+                      >
+                        <Feather name="plus" size={15} color={colors.mutedForeground} />
+                        <Text style={[styles.docAddBackText, { color: colors.mutedForeground }]}>Add another photo (back face)</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
               </View>
             ))}
           </View>
@@ -617,8 +742,9 @@ export default function DriverOnboarding() {
               autoCapitalize="characters"
             />
 
+            {/* Terms — outside any card border */}
             <TouchableOpacity
-              style={[styles.termsRow, { borderColor: errors.acceptedTerms ? colors.destructive : colors.border, backgroundColor: colors.card }]}
+              style={styles.termsRow}
               onPress={() => {
                 setAcceptedTerms(v => !v);
                 setErrors(e => ({ ...e, acceptedTerms: '' }));
@@ -630,18 +756,31 @@ export default function DriverOnboarding() {
                   styles.termsCheckbox,
                   {
                     backgroundColor: acceptedTerms ? colors.primary : 'transparent',
-                    borderColor: acceptedTerms ? colors.primary : colors.border,
+                    borderColor: acceptedTerms ? colors.primary : errors.acceptedTerms ? colors.destructive : colors.border,
                   },
                 ]}
               >
                 {acceptedTerms && <Feather name="check" size={14} color={colors.primaryForeground} />}
               </View>
               <Text style={[styles.termsText, { color: colors.foreground }]}>
-                I agree to the Terms of Service and Privacy Policy.
+                {'I agree to the '}
+                <Text
+                  style={[styles.termsLink, { color: colors.primary }]}
+                  onPress={() => Linking.openURL('https://taravelis.rw/terms')}
+                >
+                  Terms of Service
+                </Text>
+                {' and '}
+                <Text
+                  style={[styles.termsLink, { color: colors.primary }]}
+                  onPress={() => Linking.openURL('https://taravelis.rw/privacy')}
+                >
+                  Privacy Policy
+                </Text>
+                .
               </Text>
             </TouchableOpacity>
             {errors.acceptedTerms ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.acceptedTerms}</Text> : null}
-
           </View>
         )}
 
@@ -733,10 +872,36 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   plateWarningText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  // Selfie
+  selfieBtn: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 28,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  selfieIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  selfieLabel: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  selfieSubLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  selfiePreviewRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  selfieImage: { width: 80, height: 80, borderRadius: 40 },
+  selfieRetakeBtn: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+  },
+  // Documents
   docRow: { gap: 8 },
   docHeader: { gap: 2 },
   docLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   docHint: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  docFaceLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.5 },
   docUploadBtn: {
     flex: 1,
     height: 80,
@@ -772,6 +937,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   docChangeBtnText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  docAddBackBtn: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  docAddBackText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  // Payment
   providerRow: { flexDirection: 'row', gap: 12 },
   providerCard: {
     flex: 1,
@@ -798,13 +975,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Terms — bare row, no card border
   termsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingVertical: 4,
   },
   termsCheckbox: {
     width: 24,
@@ -813,8 +989,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
   },
-  termsText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', lineHeight: 20 },
+  termsText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', lineHeight: 22 },
+  termsLink: { fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' },
   notice: {
     flexDirection: 'row',
     gap: 8,
