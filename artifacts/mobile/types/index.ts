@@ -46,6 +46,7 @@ export interface DriverProfile {
   merchantCode?: string;
   momoProvider: 'mtn' | 'airtel';
   dob: string;
+  profileImage?: string;
   isOnline: boolean;
   isVerified: boolean;
   acceptanceRate: number;
@@ -75,6 +76,7 @@ export interface MockDriver {
   phone: string;
   vehicleType: VehicleType;
   plateNumber: string;
+  profileImage?: string;
   location: Coords;
   rating: number;
   eta: number;

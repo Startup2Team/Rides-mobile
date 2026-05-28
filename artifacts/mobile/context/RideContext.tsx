@@ -346,15 +346,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const completeRide = useCallback(() => {
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
     setCurrentRide(prev => {
-      if (!prev || !driverLocation) return null;
-      
-      // Section 7.2: Ensure driver is within 200m of destination
-      const distToDest = calcDistance(driverLocation, prev.destination);
-      if (distToDest > 0.2) { // 0.2 km = 200 meters
-        // In a real app, we might trigger an alert here via a separate state
-        return prev;
-      }
-
+      if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       setRideHistory(hist => [completed, ...hist]);
       AsyncStorage.getItem('@taravelis_history').then(str => {

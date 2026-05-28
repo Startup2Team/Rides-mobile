@@ -12,6 +12,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { Ride, VEHICLE_LABELS } from '@/types';
 import { StatusChip } from '@/components/StatusChip';
+import { OfflineBanner } from '@/components/OfflineBanner';
 
 function RideHistoryCard({ ride }: { ride: Ride }) {
   const colors = useColors();
@@ -76,6 +77,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.header,

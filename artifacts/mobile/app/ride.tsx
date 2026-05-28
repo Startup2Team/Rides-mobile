@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -21,7 +22,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
-import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS, VEHICLE_LABELS_FULL } from '@/types';
+import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
@@ -96,13 +97,19 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, completeRide, startJourney, cancelRide } = useRide();
+  const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
   const previousRideStatusRef = useRef<string | null>(null);
 
+  const navigatingToRatingRef = useRef(false);
+
   const [waitTimer, setWaitTimer] = useState(180);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelModalReasons, setCancelModalReasons] = useState<string[]>([]);
+  const [cancelModalKeepLabel, setCancelModalKeepLabel] = useState('Keep ride');
+  const [completeModalVisible, setCompleteModalVisible] = useState(false);
 
   const { route: rideRoute } = useRoute(
     currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
@@ -158,15 +165,6 @@ export default function RideScreen() {
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
   }, [activeRemainingRoute, activeVehicleType]);
 
-  // Geofencing calculation: straight-line distance in meters to destination
-  const distToDest = activeDriverLocation && currentRide?.destination
-    ? Math.sqrt(
-        Math.pow((currentRide.destination.latitude - activeDriverLocation.latitude) * 111000, 2) +
-        Math.pow((currentRide.destination.longitude - activeDriverLocation.longitude) * 111000, 2)
-      )
-    : 9999;
-
-  const canCompleteRide = distToDest <= 200;
 
   useEffect(() => {
     if (currentRide?.status !== 'arrived') return;
@@ -183,9 +181,8 @@ export default function RideScreen() {
   };
 
   useEffect(() => {
-    if (!currentRide) router.replace('/(tabs)');
+    if (!currentRide && !navigatingToRatingRef.current) router.replace('/(tabs)');
     if (currentRide?.status === 'negotiating') router.replace('/negotiation');
-    if (currentRide?.status === 'completed') router.replace('/(tabs)');
   }, [currentRide?.status]);
 
   useEffect(() => {
@@ -210,17 +207,26 @@ export default function RideScreen() {
     }
   }, [activeDriverLocation, currentRide, isArrived, isArriving, isInProgress]);
 
+  const navigateToRating = () => {
+    if (!currentRide) return;
+    const rideId = currentRide.id;
+    const driverName = currentRide.driver?.name ?? '';
+    const fare = currentRide.agreedFare ?? 0;
+    const vehicleType = currentRide.vehicleType;
+    navigatingToRatingRef.current = true;
+    router.replace({
+      pathname: '/rating',
+      params: { rideId, driverName, fare: String(fare), vehicleType },
+    });
+  };
+
   const handleComplete = () => {
-    Alert.alert('Complete Ride', 'Confirm that you have arrived at your destination?', [
-      { text: 'Not yet', style: 'cancel' },
-      {
-        text: 'Complete',
-        onPress: () => {
-          completeRide();
-          router.replace('/(tabs)');
-        },
-      },
-    ]);
+    setCompleteModalVisible(true);
+  };
+
+  const confirmCompleteRide = () => {
+    setCompleteModalVisible(false);
+    navigateToRating();
   };
 
   const handleEmergencyEnd = () => {
@@ -229,28 +235,47 @@ export default function RideScreen() {
       {
         text: 'End Journey',
         style: 'destructive',
-        onPress: () => {
-          completeRide();
-          router.replace('/(tabs)');
-        },
+        onPress: navigateToRating,
       },
     ]);
   };
 
+  const openCancelModal = (reasons: string[], keepLabel: string) => {
+    setCancelModalReasons(reasons);
+    setCancelModalKeepLabel(keepLabel);
+    setCancelModalVisible(true);
+  };
+
   const handleCancelArrived = () => {
+    openCancelModal(
+      ['Driver asked me to cancel', 'Waited too long', 'Changed plans'],
+      'Keep ride',
+    );
+  };
+
+  const handleCancelArriving = () => {
+    openCancelModal(
+      ['Driver too far', 'Changed plans', 'Booked by mistake'],
+      'Keep searching',
+    );
+  };
+
+  const doCancelRide = () => {
+    cancelRide();
+    router.replace('/(tabs)');
+  };
+
+  const handleSOS = () => {
     Alert.alert(
-      'Cancel Ride',
-      'The driver has arrived. Are you sure you want to cancel?',
+      '🆘 Emergency',
+      `Driver: ${currentRide?.driver?.name ?? 'Unknown'}\nPlate: ${currentRide?.driver?.plateNumber ?? 'Unknown'}\n\nWhat do you need?`,
       [
-        { text: 'No, keep ride', style: 'cancel' },
         {
-          text: 'Cancel Ride',
+          text: 'Call Police (112)',
           style: 'destructive',
-          onPress: () => {
-            cancelRide();
-            router.replace('/(tabs)');
-          },
+          onPress: () => Linking.openURL('tel:112'),
         },
+        { text: 'Dismiss', style: 'cancel' },
       ]
     );
   };
@@ -456,6 +481,14 @@ export default function RideScreen() {
               )}
             </TouchableOpacity>
           )}
+          {isArriving && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive }]}
+              onPress={handleCancelArriving}
+            >
+              <Feather name="x" size={18} color={colors.destructive} />
+            </TouchableOpacity>
+          )}
           {isArrived && (
             <>
               <TouchableOpacity
@@ -475,28 +508,100 @@ export default function RideScreen() {
           {isInProgress && (
             <>
               <TouchableOpacity
+                style={[styles.sosBtn, { backgroundColor: colors.destructive }]}
+                onPress={handleSOS}
+                accessibilityLabel="Emergency SOS"
+                accessibilityRole="button"
+              >
+                <Text style={styles.sosBtnText}>SOS</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive }]}
                 onPress={handleEmergencyEnd}
               >
                 <Feather name="alert-octagon" size={20} color={colors.destructive} />
               </TouchableOpacity>
-              {canCompleteRide ? (
-                <KandaButton
-                  title="Complete Ride"
-                  onPress={handleComplete}
-                  style={{ flex: 1 }}
-                />
-              ) : (
-                <View style={[styles.geofenceNotice, { backgroundColor: colors.muted }]}>
-                  <Text style={[styles.geofenceText, { color: colors.mutedForeground }]}>
-                    Arriving shortly...
-                  </Text>
-                </View>
-              )}
+              <KandaButton
+                title="Complete Ride"
+                onPress={handleComplete}
+                style={{ flex: 1 }}
+              />
             </>
           )}
         </View>
       </View>
+
+      {/* Cancellation reason modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.cancelOverlay}>
+          <View style={[styles.cancelCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <Text style={[styles.cancelTitle, { color: colors.foreground }]}>Why are you cancelling?</Text>
+
+            {/* "Keep" button — primary/blue, selected by default */}
+            <TouchableOpacity
+              style={[styles.cancelOption, { backgroundColor: colors.primary }]}
+              onPress={() => setCancelModalVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.cancelOptionText, { color: colors.primaryForeground }]}>
+                {cancelModalKeepLabel}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Reason options */}
+            {cancelModalReasons.map(reason => (
+              <TouchableOpacity
+                key={reason}
+                style={[styles.cancelOption, { backgroundColor: colors.muted, borderColor: colors.border, borderWidth: 1 }]}
+                onPress={() => { setCancelModalVisible(false); doCancelRide(); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.cancelOptionText, { color: colors.foreground }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={completeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCompleteModalVisible(false)}
+      >
+        <View style={styles.completeOverlay}>
+          <View style={[styles.completeCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.completeIconWrap, { backgroundColor: colors.primary + '18' }]}>
+              <Feather name="check-circle" size={30} color={colors.primary} />
+            </View>
+            <Text style={[styles.completeTitle, { color: colors.foreground }]}>Complete ride?</Text>
+            <Text style={[styles.completeMessage, { color: colors.mutedForeground }]}>
+              Confirm only when you have reached your destination. You will rate your driver next.
+            </Text>
+            <View style={styles.completeActions}>
+              <TouchableOpacity
+                style={[styles.completeSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                onPress={() => setCompleteModalVisible(false)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.completeSecondaryText, { color: colors.foreground }]}>Not yet</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.completePrimaryBtn, { backgroundColor: colors.primary }]}
+                onPress={confirmCompleteRide}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.completePrimaryText, { color: colors.primaryForeground }]}>Complete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -614,13 +719,92 @@ const styles = StyleSheet.create({
   },
   tbtText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
   tbtSubtext: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  geofenceNotice: {
+  cancelOverlay: {
     flex: 1,
-    height: 48,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    padding: 20,
+    paddingBottom: 40,
+  },
+  cancelCard: {
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  cancelTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center', marginBottom: 4 },
+  cancelOption: {
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  cancelOptionText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  completeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  completeCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: 'center',
+  },
+  completeIconWrap: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  completeTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  completeMessage: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  completeActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 20 },
+  completeSecondaryBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  completePrimaryBtn: {
+    flex: 1,
+    height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
-  geofenceText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  completeSecondaryText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  completePrimaryText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  sosBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  sosBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.5 },
 });

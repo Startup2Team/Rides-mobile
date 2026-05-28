@@ -1,8 +1,9 @@
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  FlatList,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,40 +13,170 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { useColors } from '@/hooks/useColors';
+import { useRide } from '@/context/RideContext';
 
-const CUSTOMER_NOTIFICATIONS = [
+type NotifType = 'ride' | 'promo' | 'system' | 'safety';
+
+interface AppNotification {
+  id: string;
+  type: NotifType;
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  rideId?: string;
+}
+
+const TYPE_ICON_COLOR: Record<NotifType, string> = {
+  ride: '#00C853',
+  promo: '#FFB800',
+  system: '#007AFF',
+  safety: '#FF3B30',
+};
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function buildRideNotifications(rideHistory: { id: string; destination?: { address?: string }; agreedFare?: number; completedAt?: string }[]): AppNotification[] {
+  return rideHistory.slice(0, 5).map(ride => ({
+    id: `ride_${ride.id}`,
+    type: 'ride' as const,
+    icon: 'check-circle' as const,
+    title: 'Ride completed',
+    message: `Your ride to ${ride.destination?.address ?? 'destination'} was completed. Fare: ${ride.agreedFare?.toLocaleString() ?? '—'} RWF`,
+    time: ride.completedAt ?? new Date().toISOString(),
+    read: true,
+    rideId: ride.id,
+  }));
+}
+
+const STATIC_NOTIFICATIONS: AppNotification[] = [
   {
-    id: 'location',
-    icon: 'map-pin' as const,
-    title: 'Pickup point ready',
-    message: 'Your current pickup point is set to Kigali, Rwanda.',
-    time: 'Now',
-    unread: true,
-  },
-  {
-    id: 'drivers',
-    icon: 'navigation' as const,
-    title: 'Drivers nearby',
-    message: 'Moto and cab drivers are available around your area.',
-    time: '5 min ago',
-    unread: true,
-  },
-  {
-    id: 'safety',
-    icon: 'shield' as const,
+    id: 'safety_1',
+    type: 'safety',
+    icon: 'shield',
     title: 'Safety reminder',
-    message: 'Confirm the plate number and driver name before starting your ride.',
-    time: 'Today',
-    unread: false,
+    message: 'Always confirm the plate number and driver name before starting your ride.',
+    time: new Date(Date.now() - 3600000).toISOString(),
+    read: false,
+  },
+  {
+    id: 'system_1',
+    type: 'system',
+    icon: 'map-pin',
+    title: 'Drivers nearby',
+    message: 'Moto and cab drivers are available around your area right now.',
+    time: new Date(Date.now() - 7200000).toISOString(),
+    read: true,
+  },
+  {
+    id: 'promo_1',
+    type: 'promo',
+    icon: 'gift',
+    title: 'Refer & earn',
+    message: 'Invite a friend to Taravelis and both of you get 500 RWF off your next ride.',
+    time: new Date(Date.now() - 86400000).toISOString(),
+    read: true,
   },
 ];
+
+function EmptyState({ color, mutedColor }: { color: string; mutedColor: string }) {
+  return (
+    <View style={emptyStyles.wrap}>
+      <View style={emptyStyles.iconCircle}>
+        <Feather name="bell-off" size={32} color={color} />
+      </View>
+      <Text style={[emptyStyles.title, { color }]}>No notifications yet</Text>
+      <Text style={[emptyStyles.desc, { color: mutedColor }]}>
+        We'll notify you when your driver is confirmed, on the way, or has arrived.
+      </Text>
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingVertical: 60 },
+  iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  title: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 8 },
+  desc: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 22 },
+});
 
 export default function NotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { rideHistory } = useRide();
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  useEffect(() => {
+    const rideNotifs = buildRideNotifications(rideHistory as any);
+    const merged = [...STATIC_NOTIFICATIONS, ...rideNotifs].sort(
+      (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
+    );
+    setNotifications(merged);
+  }, [rideHistory]);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markAllRead = () => {
+    Haptics.selectionAsync();
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const markRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const renderItem = ({ item }: { item: AppNotification }) => {
+    const accentColor = TYPE_ICON_COLOR[item.type];
+    return (
+      <TouchableOpacity
+        style={[
+          styles.row,
+          {
+            backgroundColor: item.read ? colors.card : colors.primary + '08',
+            borderColor: item.read ? colors.border : colors.primary + '30',
+          },
+        ]}
+        onPress={() => {
+            markRead(item.id);
+            if (item.type === 'ride' && item.rideId) {
+              router.push(`/ride-detail?rideId=${item.rideId}` as any);
+            }
+          }}
+        activeOpacity={0.75}
+      >
+        <View style={styles.iconWrap}>
+          <Feather name={item.icon} size={18} color={accentColor} />
+        </View>
+        <View style={styles.textWrap}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={[styles.time, { color: colors.mutedForeground }]}>
+              {timeAgo(item.time)}
+            </Text>
+          </View>
+          <Text style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
+            {item.message}
+          </Text>
+        </View>
+        {!item.read && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View
         style={[
           styles.header,
@@ -56,54 +187,45 @@ export default function NotificationsScreen() {
         ]}
       >
         <BackButton onPress={() => router.back()} />
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Notifications</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Customer updates</Text>
+        <View style={styles.headerCenter}>
+          <View style={styles.headerTitleRow}>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Notifications</Text>
+            {unreadCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
+              </View>
+            )}
+          </View>
         </View>
-        <View style={styles.headerSpacer} />
+        {unreadCount > 0 ? (
+          <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
+            <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 80 }} />
+        )}
       </View>
 
-      <ScrollView
+      <FlatList
+        data={notifications}
+        keyExtractor={item => item.id}
+        renderItem={renderItem}
         contentContainerStyle={[
-          styles.content,
+          styles.list,
           { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 90 : 28) },
+          notifications.length === 0 && { flex: 1 },
         ]}
-      >
-        {CUSTOMER_NOTIFICATIONS.map(item => (
-          <View
-            key={item.id}
-            style={[styles.notificationRow, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: item.unread ? colors.primary + '18' : colors.muted }]}>
-              <Feather
-                name={item.icon}
-                size={18}
-                color={item.unread ? colors.primary : colors.mutedForeground}
-              />
-            </View>
-            <View style={styles.notificationText}>
-              <View style={styles.notificationTitleRow}>
-                <Text style={[styles.notificationTitle, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={[styles.notificationTime, { color: colors.mutedForeground }]}>
-                  {item.time}
-                </Text>
-              </View>
-              <Text style={[styles.notificationMessage, { color: colors.mutedForeground }]} numberOfLines={2}>
-                {item.message}
-              </Text>
-            </View>
-            {item.unread && <View style={[styles.unreadDot, { backgroundColor: colors.destructive }]} />}
-          </View>
-        ))}
-      </ScrollView>
+        ListEmptyComponent={
+          <EmptyState color={colors.primary} mutedColor={colors.mutedForeground} />
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -111,31 +233,28 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitleWrap: { flex: 1, alignItems: 'center' },
-  headerSpacer: { width: 44 },
-  title: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
-  content: { padding: 16, gap: 10 },
-  notificationRow: {
-    minHeight: 82,
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  badge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  badgeText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#000' },
+  markAllBtn: { width: 80, alignItems: 'flex-end' },
+  markAllText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  list: { padding: 14 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
+    minHeight: 76,
   },
-  iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationText: { flex: 1, gap: 4, minWidth: 0 },
-  notificationTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  notificationTitle: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  notificationTime: { fontSize: 11, fontFamily: 'Inter_500Medium' },
-  notificationMessage: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4 },
+  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  textWrap: { flex: 1, gap: 4, minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold' },
+  time: { fontSize: 11, fontFamily: 'Inter_500Medium', flexShrink: 0 },
+  message: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
 });

@@ -172,10 +172,16 @@ export default function NegotiationScreen() {
   };
 
   const handleDecline = () => {
-    Alert.alert('Cancel negotiation', 'Are you sure you want to cancel this ride?', [
-      { text: 'Back', style: 'cancel' },
-      { text: 'Cancel Ride', style: 'destructive', onPress: () => declineDriverOffer() },
-    ]);
+    Alert.alert(
+      'Why are you declining?',
+      'Your feedback helps improve the experience.',
+      [
+        { text: 'Price is too high', style: 'destructive', onPress: () => declineDriverOffer() },
+        { text: 'Driver is too far', style: 'destructive', onPress: () => declineDriverOffer() },
+        { text: 'Changed my plans', style: 'destructive', onPress: () => declineDriverOffer() },
+        { text: 'Keep negotiating', style: 'cancel' },
+      ],
+    );
   };
 
   if (!currentRide) return null;
