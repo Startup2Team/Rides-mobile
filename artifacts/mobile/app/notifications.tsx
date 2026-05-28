@@ -1,7 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
+  Dimensions,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
@@ -44,6 +47,22 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function getDayBucket(time: string): 'today' | 'yesterday' | 'previous' {
+  const notificationDate = new Date(time);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfNotificationDay = new Date(
+    notificationDate.getFullYear(),
+    notificationDate.getMonth(),
+    notificationDate.getDate(),
+  ).getTime();
+  const diffDays = Math.floor((startOfToday - startOfNotificationDay) / 86400000);
+
+  if (diffDays <= 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  return 'previous';
+}
+
 function buildRideNotifications(rideHistory: { id: string; destination?: { address?: string }; agreedFare?: number; completedAt?: string }[]): AppNotification[] {
   return rideHistory.slice(0, 5).map(ride => ({
     id: `ride_${ride.id}`,
@@ -76,6 +95,24 @@ const STATIC_NOTIFICATIONS: AppNotification[] = [
     time: new Date(Date.now() - 7200000).toISOString(),
     read: true,
   },
+  {
+    id: 'promo_1',
+    type: 'promo',
+    icon: 'gift',
+    title: 'Weekend promo',
+    message: 'Get 15% off your next 2 rides this weekend.',
+    time: new Date(Date.now() - 26 * 3600000).toISOString(),
+    read: true,
+  },
+  {
+    id: 'system_2',
+    type: 'system',
+    icon: 'clock',
+    title: 'App update',
+    message: 'Performance and reliability improvements are now live.',
+    time: new Date(Date.now() - 4 * 24 * 3600000).toISOString(),
+    read: true,
+  },
 ];
 
 function EmptyState({ color, mutedColor }: { color: string; mutedColor: string }) {
@@ -104,8 +141,15 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { rideHistory } = useRide();
+  const screenWidth = Dimensions.get('window').width;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [swipeResetKey, setSwipeResetKey] = useState(0);
+  const swipeRefs = useRef<Record<string, Swipeable | null>>({});
+  const openRowId = useRef<string | null>(null);
+  const autoSwipeLockRef = useRef<Record<string, 'read' | 'delete' | undefined>>({});
+  const horizontalListPadding = 28;
+  const halfCardSwipeThreshold = Math.max(44, (screenWidth - horizontalListPadding) / 2);
 
   useEffect(() => {
     const rideNotifs = buildRideNotifications(rideHistory as any);
@@ -116,6 +160,9 @@ export default function NotificationsScreen() {
   }, [rideHistory]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const todayNotifications = notifications.filter(n => getDayBucket(n.time) === 'today');
+  const yesterdayNotifications = notifications.filter(n => getDayBucket(n.time) === 'yesterday');
+  const previousNotifications = notifications.filter(n => getDayBucket(n.time) === 'previous');
 
   const markAllRead = () => {
     Haptics.selectionAsync();
@@ -126,45 +173,190 @@ export default function NotificationsScreen() {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
+  const toggleReadState = (id: string) => {
+    Haptics.selectionAsync();
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n));
+  };
+
+  const deleteNotification = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const confirmDeleteNotification = (id: string) => {
+    Alert.alert(
+      'Delete notification',
+      'Are you sure you want to delete this notification?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteNotification(id),
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
+  const closeAllRows = (exceptId?: string) => {
+    Object.entries(swipeRefs.current).forEach(([rowId, row]) => {
+      if (!row || rowId === exceptId) return;
+      row.close();
+    });
+  };
+
   const renderItem = (item: AppNotification) => {
     const accentColor = TYPE_ICON_COLOR[item.type];
+
     return (
-      <TouchableOpacity
-        style={[
-          styles.row,
-          {
-            backgroundColor: item.read ? colors.card : colors.primary + '08',
-            borderColor: item.read ? colors.border : colors.primary + '30',
-          },
-        ]}
-        onPress={() => {
+      <Swipeable
+        key={`${item.id}-${swipeResetKey}`}
+        ref={ref => {
+          swipeRefs.current[item.id] = ref;
+        }}
+        overshootLeft={false}
+        overshootRight={false}
+        friction={1}
+        leftThreshold={halfCardSwipeThreshold}
+        rightThreshold={halfCardSwipeThreshold}
+        dragOffsetFromLeftEdge={22}
+        dragOffsetFromRightEdge={22}
+        onSwipeableWillOpen={() => {
+          closeAllRows(item.id);
+          openRowId.current = item.id;
+        }}
+        onSwipeableWillClose={() => {
+          if (openRowId.current === item.id) {
+            openRowId.current = null;
+          }
+          autoSwipeLockRef.current[item.id] = undefined;
+        }}
+        onSwipeableOpen={(direction) => {
+          // direction 'left' = swiped right (reveals mail / read toggle)
+          // direction 'right' = swiped left (reveals delete)
+          if (direction === 'left') {
+            if (autoSwipeLockRef.current[item.id] === 'read') return;
+            autoSwipeLockRef.current[item.id] = 'read';
+            swipeRefs.current[item.id]?.close();
+            openRowId.current = null;
+            setSwipeResetKey(prev => prev + 1);
+            toggleReadState(item.id);
+            return;
+          }
+          if (direction === 'right') {
+            if (autoSwipeLockRef.current[item.id] === 'delete') return;
+            autoSwipeLockRef.current[item.id] = 'delete';
+            swipeRefs.current[item.id]?.close();
+            openRowId.current = null;
+            setSwipeResetKey(prev => prev + 1);
+            confirmDeleteNotification(item.id);
+          }
+        }}
+        renderLeftActions={() => (
+          <View style={[styles.leftActionTrack, { width: halfCardSwipeThreshold }]}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: colors.primary,
+                  marginRight: 8,
+                },
+              ]}
+              onPress={() => {
+                swipeRefs.current[item.id]?.close();
+                openRowId.current = null;
+                setSwipeResetKey(prev => prev + 1);
+                toggleReadState(item.id);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={item.read ? 'Mark notification unread' : 'Mark notification read'}
+              accessibilityHint={item.read ? 'Marks this notification as unread' : 'Marks this notification as read'}
+            >
+              <Feather name="mail" size={14} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+        renderRightActions={() => (
+          <View style={[styles.rightActionTrack, { width: halfCardSwipeThreshold }]}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: colors.destructive,
+                  marginLeft: 8,
+                },
+              ]}
+              onPress={() => {
+                swipeRefs.current[item.id]?.close();
+                openRowId.current = null;
+                setSwipeResetKey(prev => prev + 1);
+                confirmDeleteNotification(item.id);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Delete notification"
+              accessibilityHint="Removes this notification from the list"
+            >
+              <Feather name="trash-2" size={14} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+      >
+        <TouchableOpacity
+          style={[
+            styles.row,
+            {
+              backgroundColor: item.read ? colors.card : colors.primary + '08',
+              borderColor: item.read ? colors.border : colors.primary + '30',
+            },
+          ]}
+          onPress={() => {
             markRead(item.id);
             if (item.type === 'ride' && item.rideId) {
               router.push(`/ride-detail?rideId=${item.rideId}` as any);
             }
           }}
-        activeOpacity={0.75}
-      >
-        <View style={styles.iconWrap}>
-          <Feather name={item.icon} size={18} color={accentColor} />
-        </View>
-        <View style={styles.textWrap}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
-              {item.title}
-            </Text>
-            <Text style={[styles.time, { color: colors.mutedForeground }]}>
-              {timeAgo(item.time)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.iconWrap}>
+            <Feather name={item.icon} size={18} color={accentColor} />
+          </View>
+          <View style={styles.textWrap}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={[styles.time, { color: colors.mutedForeground }]}>
+                {timeAgo(item.time)}
+              </Text>
+            </View>
+            <Text style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
+              {item.message}
             </Text>
           </View>
-          <Text style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
-            {item.message}
-          </Text>
-        </View>
-        {!item.read && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
-      </TouchableOpacity>
+          {!item.read && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
+
+  const renderSection = (title: string, items: AppNotification[]) => (
+    <>
+      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</Text>
+      {items.length === 0 ? (
+        <Text style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
+          No notifications
+        </Text>
+      ) : (
+        items.map((item, index) => (
+          <React.Fragment key={item.id}>
+            {index > 0 && <View style={{ height: 8 }} />}
+            {renderItem(item)}
+          </React.Fragment>
+        ))
+      )}
+    </>
+  );
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -195,12 +387,11 @@ export default function NotificationsScreen() {
         {notifications.length === 0 ? (
           <EmptyState color={colors.primary} mutedColor={colors.mutedForeground} />
         ) : (
-          notifications.map((item, index) => (
-            <React.Fragment key={item.id}>
-              {index > 0 && <View style={{ height: 8 }} />}
-              {renderItem(item)}
-            </React.Fragment>
-          ))
+          <>
+            {renderSection('Today', todayNotifications)}
+            {renderSection('Yesterday', yesterdayNotifications)}
+            {renderSection('Previous', previousNotifications)}
+          </>
         )}
       </GlassScrollView>
     </View>
@@ -214,6 +405,19 @@ const styles = StyleSheet.create({
   markAllBtn: { width: 80, alignItems: 'flex-end' },
   markAllText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   list: { padding: 14 },
+  sectionTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 16,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  emptySectionText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 8,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,6 +426,24 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 12,
     minHeight: 76,
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+  },
+  leftActionTrack: {
+    minHeight: 76,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  rightActionTrack: {
+    minHeight: 76,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   textWrap: { flex: 1, gap: 4, minWidth: 0 },
