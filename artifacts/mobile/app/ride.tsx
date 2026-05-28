@@ -234,7 +234,6 @@ export default function RideScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'End Journey',
-        style: 'destructive',
         onPress: navigateToRating,
       },
     ]);
@@ -272,7 +271,6 @@ export default function RideScreen() {
       [
         {
           text: 'Call Police (112)',
-          style: 'destructive',
           onPress: () => Linking.openURL('tel:112'),
         },
         { text: 'Dismiss', style: 'cancel' },
@@ -436,7 +434,7 @@ export default function RideScreen() {
             </Text>
           </View>
           <View style={styles.ratingBadge}>
-            <Text style={styles.ratingText}>★ {currentRide.driver?.rating?.toFixed(1)}</Text>
+            <Text style={[styles.ratingText, { color: colors.star }]}>★ {currentRide.driver?.rating?.toFixed(1)}</Text>
           </View>
         </View>
 
@@ -581,7 +579,7 @@ export default function RideScreen() {
             </View>
             <Text style={[styles.completeTitle, { color: colors.foreground }]}>Complete ride?</Text>
             <Text style={[styles.completeMessage, { color: colors.mutedForeground }]}>
-              Confirm only when you have reached your destination. You will rate your driver next.
+              Confirm only when you have reached your destination.
             </Text>
             <View style={styles.completeActions}>
               <TouchableOpacity
@@ -685,12 +683,11 @@ const styles = StyleSheet.create({
   driverName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   driverVehicle: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   ratingBadge: {
-    backgroundColor: '#FF9F0A20',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 100,
   },
-  ratingText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FF9F0A' },
+  ratingText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   fareRow: {
     flexDirection: 'row',
     borderRadius: 14,

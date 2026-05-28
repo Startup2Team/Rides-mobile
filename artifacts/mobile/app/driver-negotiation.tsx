@@ -134,7 +134,7 @@ export default function DriverNegotiationScreen() {
   const handleDecline = () => {
     Alert.alert('Decline ride', 'Decline this negotiation? The request will return to the pool.', [
       { text: 'Back', style: 'cancel' },
-      { text: 'Decline', style: 'destructive', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
+      { text: 'Decline', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
     ]);
   };
 

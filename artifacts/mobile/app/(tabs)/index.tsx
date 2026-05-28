@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
@@ -13,6 +12,7 @@ import {
   InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -26,25 +26,30 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
+import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
+import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_MCI, VEHICLE_LABELS } from '@/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
-const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.35, 282);
-const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.46, 370);
+// ~0.3 cm shorter than prior compact/expanded sizes (~11pt)
+const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.375, 297);
+const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.515, 401);
 const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
-const SAVE_LABEL_GAP = 4;
+const SAVE_LABEL_GAP = 8;
 const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = 20;
 const SAVE_LABEL_AVAILABLE_WIDTH =
   SCREEN_WIDTH - SAVE_LABEL_SHEET_HORIZONTAL_PADDING * 2 - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
@@ -98,12 +103,6 @@ function calcEstFare(type: VehicleType, dist: number) {
   const base = VEHICLE_BASE_FARE[type];
   const perKm = type === 'moto' ? 200 : type === 'cab' ? 400 : type === 'hilux' ? 600 : 800;
   return Math.round((base + dist * perKm) / 100) * 100;
-}
-
-function getCoordDistance(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
-  const latMeters = (b.latitude - a.latitude) * 111000;
-  const lngMeters = (b.longitude - a.longitude) * 111000 * Math.cos((a.latitude * Math.PI) / 180);
-  return Math.sqrt(latMeters * latMeters + lngMeters * lngMeters);
 }
 
 function interpolateCoord(
@@ -178,8 +177,9 @@ function FormCloseButton({ onPress }: { onPress: () => void }) {
 export default function CustomerHome() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const locationHeaderMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
-  const { currentRide, createRide, rideHistory, loadHistory } = useRide();
+  const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
@@ -216,17 +216,36 @@ export default function CustomerHome() {
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
+  const sheetDragStart = useRef(0);
+  const activePanelHeightRef = useRef(COMPACT_PANEL_HEIGHT);
+  const closeBookingRef = useRef<() => void>(() => {});
   const editSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
   const editSheetEnterAnim = useRef(new Animated.Value(24)).current;
   const editSheetOpacityAnim = useRef(new Animated.Value(0)).current;
+  const formSheetDragAnim = useRef(new Animated.Value(0)).current;
+  const formSheetDragStart = useRef(0);
+  const formSheetHeightRef = useRef(280);
+  const [formSheetMeasuredHeight, setFormSheetMeasuredHeight] = useState(280);
+  const closePendingSaveLocationRef = useRef<() => void>(() => {});
+  const closeEditSavedLocationRef = useRef<() => void>(() => {});
+  const dismissFormSheetAnimatedRef = useRef<(close: () => void) => void>(() => {});
   const estimatedKeyboardOffset = Math.max(240, Math.min(SCREEN_HEIGHT * 0.34, 340));
+  const formSheetBackdropOpacity = useMemo(
+    () =>
+      formSheetDragAnim.interpolate({
+        inputRange: [0, Math.max(formSheetMeasuredHeight, 1)],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+      }),
+    [formSheetDragAnim, formSheetMeasuredHeight],
+  );
   const hasRideActions = destination !== null || destText.trim().length > 0;
   const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
   const recenterBottomOffset = showBooking ? activePanelHeight + 16 : COMPACT_PANEL_HEIGHT + 64;
   const bookingBottomPadding = insets.bottom + (
     Platform.OS === 'web'
-      ? hasRideActions ? 104 : 58
-      : hasRideActions ? 96 : 52
+      ? hasRideActions ? 92 : 54
+      : hasRideActions ? 84 : 48
   );
   const hasPreciseRouteLocations =
     showBooking &&
@@ -268,10 +287,10 @@ export default function CustomerHome() {
   useEffect(() => {
     if (currentRide) {
       if (currentRide.status === 'searching') router.push('/searching');
-      else if (currentRide.status === 'negotiating') router.push('/negotiation');
+      else if (currentRide.status === 'negotiating' && !isMatchingPaused) router.push('/negotiation');
       else if (['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) router.push('/ride');
     }
-  }, [currentRide?.status]);
+  }, [currentRide?.status, isMatchingPaused]);
 
   useEffect(() => {
     if (currentRide?.status !== 'cancelled') return;
@@ -337,22 +356,31 @@ export default function CustomerHome() {
   }, [editSheetKeyboardAnim, insets.bottom]);
 
   useEffect(() => {
+    if (!pendingSaveLocation) return;
+    formSheetDragAnim.setValue(formSheetHeightRef.current);
+    Animated.spring(formSheetDragAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+    }).start();
+  }, [pendingSaveLocation, formSheetDragAnim]);
+
+  useEffect(() => {
     if (!editingSavedLocation) {
       editSheetKeyboardAnim.setValue(0);
-      editSheetEnterAnim.setValue(24);
+      editSheetEnterAnim.setValue(0);
       editSheetOpacityAnim.setValue(0);
       return;
     }
 
-    editSheetEnterAnim.setValue(24);
+    formSheetDragAnim.setValue(formSheetHeightRef.current);
+    editSheetEnterAnim.setValue(0);
     editSheetOpacityAnim.setValue(0);
     Animated.parallel([
-      Animated.spring(editSheetEnterAnim, {
+      Animated.spring(formSheetDragAnim, {
         toValue: 0,
-        damping: 20,
-        stiffness: 240,
-        mass: 0.85,
         useNativeDriver: true,
+        bounciness: 4,
       }),
       Animated.timing(editSheetOpacityAnim, {
         toValue: 1,
@@ -360,7 +388,7 @@ export default function CustomerHome() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [editingSavedLocation, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim]);
+  }, [editingSavedLocation, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim, formSheetDragAnim]);
 
   // Get user location and notification permissions using native OS prompts only.
   useEffect(() => {
@@ -563,22 +591,59 @@ export default function CustomerHome() {
     });
   };
 
+  const snapBookingSheetOpen = () => {
+    Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+  };
+
   const closeBooking = () => {
     if (destination !== null || destText.trim().length > 0) {
       Alert.alert(
         'Cancel search?',
         'Why are you closing the booking form?',
         [
-          { text: 'Changed my plans', style: 'destructive', onPress: doCloseBooking },
-          { text: 'Wrong location selected', style: 'destructive', onPress: doCloseBooking },
-          { text: 'Need a different vehicle', style: 'destructive', onPress: doCloseBooking },
-          { text: 'Keep searching', style: 'cancel' },
+          { text: 'Changed my plans', onPress: doCloseBooking },
+          { text: 'Wrong location selected', onPress: doCloseBooking },
+          { text: 'Need a different vehicle', onPress: doCloseBooking },
+          { text: 'Keep searching', style: 'cancel', onPress: snapBookingSheetOpen },
         ],
       );
     } else {
       doCloseBooking();
     }
   };
+
+  closeBookingRef.current = closeBooking;
+  activePanelHeightRef.current = activePanelHeight;
+
+  const bookingSheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onPanResponderGrant: () => {
+          sheetAnim.stopAnimation(value => {
+            sheetDragStart.current = value;
+          });
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const max = activePanelHeightRef.current;
+          const next = Math.max(0, Math.min(max, sheetDragStart.current + gestureState.dy));
+          sheetAnim.setValue(next);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const max = activePanelHeightRef.current;
+          const current = Math.max(0, Math.min(max, sheetDragStart.current + gestureState.dy));
+          const shouldClose = current > max * 0.28 || gestureState.vy > 0.65;
+          if (shouldClose) {
+            closeBookingRef.current();
+          } else {
+            snapBookingSheetOpen();
+          }
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [sheetAnim],
+  );
 
   const openLocationSearch = (target: 'pickup' | 'dropoff') => {
     setLocationSearchTarget(target);
@@ -655,11 +720,99 @@ export default function CustomerHome() {
   };
 
   const closePendingSaveLocation = () => {
+    formSheetDragAnim.setValue(0);
     setPendingSaveLocation(null);
     setIsCustomSaveLabel(false);
     setCustomSaveLabel('');
     Keyboard.dismiss();
   };
+
+  const closeEditSavedLocation = () => {
+    formSheetDragAnim.setValue(0);
+    editSheetKeyboardAnim.setValue(0);
+    setEditingSavedLocation(null);
+    setEditingSavedLabel('');
+    setEditingSavedAddress('');
+    Keyboard.dismiss();
+  };
+
+  closePendingSaveLocationRef.current = closePendingSaveLocation;
+  closeEditSavedLocationRef.current = closeEditSavedLocation;
+
+  const snapFormSheetOpen = useCallback(() => {
+    Animated.spring(formSheetDragAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+    }).start();
+  }, [formSheetDragAnim]);
+
+  const dismissFormSheetAnimated = useCallback(
+    (close: () => void) => {
+      const max = formSheetHeightRef.current;
+      Animated.timing(formSheetDragAnim, {
+        toValue: max,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        formSheetDragAnim.setValue(0);
+        close();
+      });
+    },
+    [formSheetDragAnim],
+  );
+
+  dismissFormSheetAnimatedRef.current = dismissFormSheetAnimated;
+
+  const createFormSheetPanResponder = useCallback(
+    (close: () => void) =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onPanResponderGrant: () => {
+          formSheetDragAnim.stopAnimation(value => {
+            formSheetDragStart.current = value;
+          });
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const max = formSheetHeightRef.current;
+          const next = Math.max(0, Math.min(max, formSheetDragStart.current + gestureState.dy));
+          formSheetDragAnim.setValue(next);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const max = formSheetHeightRef.current;
+          const current = Math.max(0, Math.min(max, formSheetDragStart.current + gestureState.dy));
+          const shouldClose = current > max * 0.28 || gestureState.vy > 0.65;
+          if (shouldClose) {
+            dismissFormSheetAnimatedRef.current(close);
+          } else {
+            snapFormSheetOpen();
+          }
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [formSheetDragAnim, snapFormSheetOpen],
+  );
+
+  const dismissSaveFormSheet = useCallback(
+    () => dismissFormSheetAnimated(() => closePendingSaveLocationRef.current()),
+    [dismissFormSheetAnimated],
+  );
+
+  const dismissEditFormSheet = useCallback(
+    () => dismissFormSheetAnimated(() => closeEditSavedLocationRef.current()),
+    [dismissFormSheetAnimated],
+  );
+
+  const saveFormSheetPanResponder = useMemo(
+    () => createFormSheetPanResponder(() => closePendingSaveLocationRef.current()),
+    [createFormSheetPanResponder],
+  );
+
+  const editFormSheetPanResponder = useMemo(
+    () => createFormSheetPanResponder(() => closeEditSavedLocationRef.current()),
+    [createFormSheetPanResponder],
+  );
 
   const handleSaveLocationLabelPress = (label: string) => {
     if (label === 'Other') {
@@ -729,10 +882,19 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
-  const handleBook = async () => {
-    if (!destination && !destText.trim()) return;
+  const proceedWithBooking = async (finalDestination: RideLocation) => {
     setBookLoading(true);
-    // If user typed a name without selecting from autocomplete, use it as a generic location
+    try {
+      await createRide(pickup, finalDestination, selectedVehicle);
+      router.push('/searching');
+    } finally {
+      setBookLoading(false);
+    }
+  };
+
+  const handleBook = () => {
+    if (!destination && !destText.trim()) return;
+
     const finalDestination: RideLocation = destination
       ? { ...destination, locationType: destination.locationType ?? 'precise' }
       : {
@@ -740,10 +902,22 @@ export default function CustomerHome() {
           longitude: userLocation.longitude + 0.02,
           address: destText.trim(),
           locationType: 'generic',
-    };
-    await createRide(pickup, finalDestination, selectedVehicle);
-    setBookLoading(false);
-    router.push('/searching');
+        };
+
+    if (arePickupAndDropoffSame(pickup, finalDestination)) {
+      Alert.alert(
+        'Same location',
+        'Pickup and drop off locations are the same. Are you sure you want to continue?',
+        [
+          { text: 'Change pickup', onPress: () => openLocationSearch('pickup') },
+          { text: 'Change drop off', onPress: () => openLocationSearch('dropoff') },
+          { text: 'Continue anyway', onPress: () => { void proceedWithBooking(finalDestination); } },
+        ],
+      );
+      return;
+    }
+
+    void proceedWithBooking(finalDestination);
   };
 
   const dist = destination
@@ -933,7 +1107,6 @@ export default function CustomerHome() {
       {/* Home bottom panel */}
       {!showBooking && (
         <View style={[styles.bottomPanel, { backgroundColor: colors.background, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 28 : 55) }]}>
-          <View style={styles.handle} />
           <Text style={[styles.greeting, { color: colors.foreground }]}>
             Hi {user?.name?.split(' ')[0]} 👋
           </Text>
@@ -985,11 +1158,13 @@ export default function CustomerHome() {
               },
             ]}
           >
-            {/* Handle + header */}
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
-              <FormCloseButton onPress={closeBooking} />
+            {/* Handle + header — swipe down to return to home panel */}
+            <View style={styles.sheetDragZone} {...bookingSheetPanResponder.panHandlers}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
+                <FormCloseButton onPress={closeBooking} />
+              </View>
             </View>
 
             {/* Pickup / Destination */}
@@ -1117,29 +1292,24 @@ export default function CustomerHome() {
       {/* Map picker — full screen pin drag */}
       {locationSearchTarget && (
         <View style={[styles.locationSearchScreen, { backgroundColor: colors.background }]}>
+          <GlassHeader
+            title={locationSearchTarget === 'pickup' ? 'Pickup Location' : 'Drop off Location'}
+            onBackPress={closeLocationSearch}
+          />
+
           <View
             style={[
-              styles.locationSearchHeader,
+              styles.locationSearchBody,
               {
-                paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-                borderBottomColor: colors.border,
+                paddingTop: locationHeaderMetrics.contentTop + 12,
+                paddingBottom: insets.bottom,
               },
             ]}
           >
-            <BackButton onPress={closeLocationSearch} />
-            <Text style={[styles.locationSearchTitle, { color: colors.foreground }]}>
-              {locationSearchTarget === 'pickup' ? 'Pickup Location' : 'Drop off Location'}
-            </Text>
-            <View style={styles.locationBackBtn} />
-          </View>
-
-          <Pressable style={styles.locationSearchContent} onPress={Keyboard.dismiss}>
+            <View style={styles.locationSearchFixed}>
             <TouchableOpacity
               style={[styles.locationSearchInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={event => {
-                event.stopPropagation();
-                locationSearchInputRef.current?.focus();
-              }}
+              onPress={() => locationSearchInputRef.current?.focus()}
               activeOpacity={1}
             >
               <Feather name="search" size={18} color={colors.mutedForeground} />
@@ -1173,86 +1343,92 @@ export default function CustomerHome() {
               )}
             </TouchableOpacity>
 
-            <ScrollView
+            <View style={styles.locationQuickRow}>
+              <TouchableOpacity
+                style={[styles.locationQuickCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => applyLocation(locationSearchTarget, { ...userLocation, address: 'Current Location', locationType: 'precise' })}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
+                  <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.locationQuickText}>
+                  <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Use current location</Text>
+                  <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>GPS precise</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.locationQuickCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={handleChooseOnMap}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
+                  <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.locationQuickText}>
+                  <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Choose on map</Text>
+                  <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>Drag map</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.locationTabs, { backgroundColor: colors.muted }]}>
+              <TouchableOpacity
+                style={[
+                  styles.locationTab,
+                  locationListTab === 'saved' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setLocationListTab('saved')}
+                activeOpacity={0.85}
+              >
+                <Text style={[
+                  styles.locationTabText,
+                  { color: locationListTab === 'saved' ? colors.primaryForeground : colors.mutedForeground },
+                ]}>
+                  Saved locations
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.locationTab,
+                  locationListTab === 'previous' && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setLocationListTab('previous')}
+                activeOpacity={0.85}
+              >
+                <Text style={[
+                  styles.locationTabText,
+                  { color: locationListTab === 'previous' ? colors.primaryForeground : colors.mutedForeground },
+                ]}>
+                  Previous rides
+                </Text>
+              </TouchableOpacity>
+            </View>
+            </View>
+
+            <GlassScrollView
               style={styles.locationSearchScroll}
+              indicatorTop={8}
+              indicatorBottom={insets.bottom + 20}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               onScrollBeginDrag={Keyboard.dismiss}
-              contentContainerStyle={styles.locationSearchList}
+              contentContainerStyle={[
+                styles.locationSearchList,
+                { paddingHorizontal: 20, paddingBottom: insets.bottom + 20 },
+              ]}
             >
-              <View style={styles.locationQuickRow}>
-                <TouchableOpacity
-                  style={[styles.locationQuickCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => applyLocation(locationSearchTarget, { ...userLocation, address: 'Current Location', locationType: 'precise' })}
-                  activeOpacity={0.85}
-                >
-                  <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
-                    <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
-                  </View>
-                  <View style={styles.locationQuickText}>
-                    <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Use current location</Text>
-                    <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>GPS precise</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.locationQuickCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={handleChooseOnMap}
-                  activeOpacity={0.85}
-                >
-                  <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
-                    <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
-                  </View>
-                  <View style={styles.locationQuickText}>
-                    <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Choose on map</Text>
-                    <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>Drag map</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <View style={[styles.locationTabs, { backgroundColor: colors.muted }]}>
-                <TouchableOpacity
-                  style={[
-                    styles.locationTab,
-                    locationListTab === 'saved' && { backgroundColor: colors.primary },
-                  ]}
-                  onPress={() => setLocationListTab('saved')}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[
-                    styles.locationTabText,
-                    { color: locationListTab === 'saved' ? colors.primaryForeground : colors.mutedForeground },
-                  ]}>
-                    Saved locations
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.locationTab,
-                    locationListTab === 'previous' && { backgroundColor: colors.primary },
-                  ]}
-                  onPress={() => setLocationListTab('previous')}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[
-                    styles.locationTabText,
-                    { color: locationListTab === 'previous' ? colors.primaryForeground : colors.mutedForeground },
-                  ]}>
-                    Previous rides
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
               {(locationSearchText.trim().length >= 2 || suggestions.length > 0) && (
+                <>
                 <Text style={[styles.locationSectionTitle, { color: colors.mutedForeground }]}>Search results</Text>
-              )}
 
               {locationSearchText.trim().length >= 2 && (
                 <TouchableOpacity
                   style={[styles.locationOption, { borderBottomColor: colors.border }]}
                   onPress={() => applyLocation(locationSearchTarget, buildTypedLocation())}
                 >
-                  <View style={[styles.locationOptionIcon, { backgroundColor: colors.muted }]}>
+                  <View style={styles.locationOptionIcon}>
                     <Feather name="edit-3" size={16} color={colors.foreground} />
                   </View>
                   <View style={styles.locationOptionText}>
@@ -1285,7 +1461,7 @@ export default function CustomerHome() {
                     locationType: 'precise',
                   })}
                 >
-                  <View style={[styles.locationOptionIcon, { backgroundColor: colors.muted }]}>
+                  <View style={styles.locationOptionIcon}>
                     <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.foreground} />
                   </View>
                   <View style={styles.locationOptionText}>
@@ -1311,6 +1487,20 @@ export default function CustomerHome() {
                   </TouchableOpacity>
                 </TouchableOpacity>
               ))}
+                </>
+              )}
+
+              {locationListTab === 'saved' && (
+                <Text
+                  style={[
+                    styles.locationSectionTitle,
+                    { color: colors.mutedForeground },
+                    (locationSearchText.trim().length >= 2 || suggestions.length > 0) && styles.locationSectionTitleAfterSearch,
+                  ]}
+                >
+                  Saved locations
+                </Text>
+              )}
 
               {locationListTab === 'saved' && savedLocations.length === 0 && (
                 <View style={[styles.locationEmptyState, { borderColor: colors.border }]}>
@@ -1330,7 +1520,6 @@ export default function CustomerHome() {
                       { text: 'Edit', onPress: () => openSavedLocationMenu(location) },
                       {
                         text: 'Delete',
-                        style: 'destructive',
                         onPress: async () => {
                           const next = savedPlaces.filter(p => p.id !== location.id);
                           setSavedPlaces(next);
@@ -1342,7 +1531,7 @@ export default function CustomerHome() {
                   }}
                   delayLongPress={400}
                 >
-                  <View style={[styles.locationOptionIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <View style={styles.locationOptionIcon}>
                     <Feather name="bookmark" size={16} color={colors.primary} />
                   </View>
                   <View style={styles.locationOptionText}>
@@ -1368,6 +1557,18 @@ export default function CustomerHome() {
                 </TouchableOpacity>
               ))}
 
+              {locationListTab === 'previous' && (
+                <Text
+                  style={[
+                    styles.locationSectionTitle,
+                    { color: colors.mutedForeground },
+                    (locationSearchText.trim().length >= 2 || suggestions.length > 0) && styles.locationSectionTitleAfterSearch,
+                  ]}
+                >
+                  Previous rides
+                </Text>
+              )}
+
               {locationListTab === 'previous' && recentLocations.length === 0 && (
                 <View style={[styles.locationEmptyState, { borderColor: colors.border }]}>
                   <Feather name="clock" size={18} color={colors.mutedForeground} />
@@ -1391,73 +1592,76 @@ export default function CustomerHome() {
                   </View>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-          </Pressable>
+            </GlassScrollView>
+          </View>
 
           {pendingSaveLocation && (
             <>
-              <Pressable
-                style={styles.saveLocationBackdrop}
-                onPress={closePendingSaveLocation}
-              >
-                <BlurView intensity={22} tint="light" style={StyleSheet.absoluteFill} />
-                <View style={styles.saveLocationBackdropTint} />
-              </Pressable>
+              <SheetBackdrop onPress={dismissSaveFormSheet} animatedOpacity={formSheetBackdropOpacity} />
 
               <Animated.View
+                onLayout={event => {
+                  const height = event.nativeEvent.layout.height;
+                  formSheetHeightRef.current = height;
+                  setFormSheetMeasuredHeight(height);
+                }}
                 style={[
                   styles.saveLocationSheet,
-                  styles.saveLocationSheetFocused,
+                  styles.saveAsLocationSheet,
+                  styles.saveLocationSheetRaised,
                   {
                     backgroundColor: colors.background,
-                    borderColor: colors.primary + '55',
-                    paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
+                    borderTopColor: colors.border,
+                    paddingBottom: insets.bottom + (Platform.OS === 'web' ? 88 : 72),
                     transform: [
                       {
-                        translateY: isCustomSaveLabel
-                          ? Animated.multiply(editSheetKeyboardAnim, -1)
-                          : 0,
+                        translateY: Animated.add(
+                          formSheetDragAnim,
+                          isCustomSaveLabel ? Animated.multiply(editSheetKeyboardAnim, -1) : 0,
+                        ),
                       },
                     ],
                   },
                 ]}
               >
-                <View style={styles.saveLocationHeader}>
-                  <View style={styles.saveLocationHeaderText}>
-                    <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Save location as</Text>
-                    <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {pendingSaveLocation.address ?? 'Selected location'}
-                    </Text>
-                    <Text style={[styles.saveLocationPrompt, { color: colors.primary }]}>
-                      {isCustomSaveLabel ? 'Type a custom label to finish saving.' : 'Choose one label to finish saving.'}
-                    </Text>
+                <View style={styles.sheetDragZone} {...saveFormSheetPanResponder.panHandlers}>
+                  <View style={styles.sheetHandle} />
+                  <View style={styles.saveLocationHeader}>
+                    <View style={styles.saveAsLocationHeaderText}>
+                      <Text style={[styles.saveAsLocationTitle, { color: colors.foreground }]}>Save location as</Text>
+                      <Text style={[styles.saveAsLocationAddress, { color: colors.mutedForeground }]} numberOfLines={2}>
+                        {pendingSaveLocation.address ?? 'Selected location'}
+                      </Text>
+                      <Text style={[styles.saveAsLocationPrompt, { color: colors.mutedForeground }]}>
+                        {isCustomSaveLabel ? 'Type a custom label to finish saving.' : 'Choose one label to finish saving.'}
+                      </Text>
+                    </View>
+                    <FormCloseButton onPress={dismissSaveFormSheet} />
                   </View>
-                  <FormCloseButton onPress={closePendingSaveLocation} />
                 </View>
-                <View style={styles.saveLocationLabels}>
+                <View style={styles.saveAsLocationLabels}>
                   {SAVE_LOCATION_LABELS.map(label => (
                     <TouchableOpacity
                       key={label}
                       style={[
-                        styles.saveLocationLabel,
-                        styles.saveLocationLabelFocused,
+                        styles.saveAsLocationLabel,
                         { width: SAVE_LABEL_WIDTHS[label] },
-                        { backgroundColor: colors.card, borderColor: colors.primary + '50' },
+                        { backgroundColor: colors.card, borderColor: colors.border },
                       ]}
                       onPress={() => handleSaveLocationLabelPress(label)}
                       activeOpacity={0.85}
                     >
-                      <Text style={[styles.saveLocationLabelText, { color: colors.foreground }]}>{label}</Text>
+                      <Text style={[styles.saveAsLocationLabelText, { color: colors.foreground }]}>{label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
                 {isCustomSaveLabel && (
-                  <View style={styles.customSaveLabelSection}>
-                    <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.card, borderColor: colors.primary + '50' }]}>
-                      <Feather name="tag" size={16} color={colors.mutedForeground} />
+                  <View style={styles.saveAsCustomLabelSection}>
+                    <View style={[styles.saveAsLocationInputWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
+                      <Feather name="tag" size={18} color={colors.mutedForeground} />
                       <TextInput
-                        style={[styles.savedLocationEditInput, { color: colors.foreground }]}
+                        style={[styles.saveAsLocationInput, { color: colors.foreground }]}
                         value={customSaveLabel}
                         onChangeText={setCustomSaveLabel}
                         placeholder="Custom label"
@@ -1469,7 +1673,7 @@ export default function CustomerHome() {
                     </View>
                     <TouchableOpacity
                       style={[
-                        styles.customSaveLabelButton,
+                        styles.saveAsCustomLabelButton,
                         {
                           backgroundColor: customSaveLabel.trim() ? colors.primary : colors.muted,
                           opacity: customSaveLabel.trim() ? 1 : 0.6,
@@ -1481,12 +1685,12 @@ export default function CustomerHome() {
                     >
                       <Feather
                         name="check"
-                        size={16}
+                        size={18}
                         color={customSaveLabel.trim() ? colors.primaryForeground : colors.mutedForeground}
                       />
                       <Text
                         style={[
-                          styles.customSaveLabelButtonText,
+                          styles.saveAsCustomLabelButtonText,
                           { color: customSaveLabel.trim() ? colors.primaryForeground : colors.mutedForeground },
                         ]}
                       >
@@ -1501,27 +1705,26 @@ export default function CustomerHome() {
 
           {editingSavedLocation && (
             <>
-              <Pressable
-                style={styles.saveLocationBackdrop}
-                onPress={() => setEditingSavedLocation(null)}
-              >
-                <BlurView intensity={22} tint="light" style={StyleSheet.absoluteFill} />
-                <View style={styles.saveLocationBackdropTint} />
-              </Pressable>
+              <SheetBackdrop onPress={dismissEditFormSheet} animatedOpacity={formSheetBackdropOpacity} />
 
               <Animated.View
+                onLayout={event => {
+                  const height = event.nativeEvent.layout.height;
+                  formSheetHeightRef.current = height;
+                  setFormSheetMeasuredHeight(height);
+                }}
                 style={[
                   styles.saveLocationSheet,
-                  styles.saveLocationSheetFocused,
+                  styles.saveLocationSheetRaised,
                   {
                     backgroundColor: colors.background,
-                    borderColor: colors.primary + '55',
+                    borderTopColor: colors.border,
                     paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
                     opacity: editSheetOpacityAnim,
                     transform: [
                       {
                         translateY: Animated.add(
-                          editSheetEnterAnim,
+                          formSheetDragAnim,
                           Animated.multiply(editSheetKeyboardAnim, -1),
                         ),
                       },
@@ -1529,20 +1732,23 @@ export default function CustomerHome() {
                   },
                 ]}
               >
-                <View style={styles.saveLocationHeader}>
-                  <View style={styles.saveLocationHeaderText}>
-                    <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Edit saved location</Text>
-                    <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {editingSavedLocation.address ?? 'Saved location'}
-                    </Text>
-                    <Text style={[styles.saveLocationPrompt, { color: colors.primary }]}>
-                      Rename, update, or delete this saved place.
-                    </Text>
+                <View style={styles.sheetDragZone} {...editFormSheetPanResponder.panHandlers}>
+                  <View style={styles.sheetHandle} />
+                  <View style={styles.saveLocationHeader}>
+                    <View style={styles.saveLocationHeaderText}>
+                      <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Edit saved location</Text>
+                      <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        {editingSavedLocation.address ?? 'Saved location'}
+                      </Text>
+                      <Text style={[styles.saveLocationPrompt, { color: colors.mutedForeground }]}>
+                        Rename, update, or delete this saved place.
+                      </Text>
+                    </View>
+                    <FormCloseButton onPress={dismissEditFormSheet} />
                   </View>
-                  <FormCloseButton onPress={() => setEditingSavedLocation(null)} />
                 </View>
 
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.card, borderColor: colors.primary + '50' }]}>
+                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
                   <Feather name="edit-3" size={16} color={colors.mutedForeground} />
                   <TextInput
                     style={[styles.savedLocationEditInput, { color: colors.foreground }]}
@@ -1562,7 +1768,7 @@ export default function CustomerHome() {
                   />
                 </View>
 
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.card, borderColor: colors.primary + '50' }]}>
+                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
                   <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
                     style={[styles.savedLocationEditInput, { color: colors.foreground }]}
@@ -1592,11 +1798,11 @@ export default function CustomerHome() {
                     <Text style={[styles.savedLocationActionText, { color: colors.primaryForeground }]}>Save changes</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.savedLocationAction, { backgroundColor: colors.card, borderColor: colors.primary + '50', borderWidth: 1 }]}
+                    style={[styles.savedLocationAction, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
                     onPress={openSavedLocationMap}
                     activeOpacity={0.85}
                   >
-                    <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
+                    <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.foreground} />
                     <Text style={[styles.savedLocationActionText, { color: colors.foreground }]}>Use GPS</Text>
                   </TouchableOpacity>
                 </View>
@@ -1769,8 +1975,7 @@ const styles = StyleSheet.create({
   youAreHereText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#fff' },
   youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#00C853' },
   // Home bottom panel
-  bottomPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingHorizontal: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 16 },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 4 },
+  bottomPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 24, paddingHorizontal: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 16 },
   greeting: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   selectRide: { fontSize: 14, fontFamily: 'Inter_500Medium', marginTop: -6 },
   vehicleRow: { flexDirection: 'row', gap: 8 },
@@ -1781,8 +1986,9 @@ const styles = StyleSheet.create({
   // Booking sheet
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 20 },
   bookingSheetWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30 },
-  bookingSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 19, paddingTop: 7, paddingBottom: 13, gap: 7, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 2 },
+  bookingSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 19, paddingTop: 8, paddingBottom: 13, gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
+  sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 8 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sheetTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   locationCard: { borderRadius: 14, padding: 9 },
@@ -1798,7 +2004,7 @@ const styles = StyleSheet.create({
   locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   rideInfoRow: { flexDirection: 'row', gap: 6 },
   rideInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 7, borderRadius: 9, borderWidth: 1, gap: 5 },
-  findDriverAction: { marginTop: 'auto', width: '100%' },
+  findDriverAction: { marginTop: 'auto', width: '100%', paddingTop: 4, paddingBottom: 2 },
   rideInfoText: { flex: 1, gap: 2 },
   rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   rideInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
@@ -1970,7 +2176,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   // Full-screen location search
-  locationSearchScreen: { ...StyleSheet.absoluteFillObject, zIndex: 80 },
+  locationSearchScreen: { ...StyleSheet.absoluteFillObject, zIndex: 80, flex: 1 },
   formCloseButton: {
     width: 44,
     height: 44,
@@ -1979,20 +2185,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationSearchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-  },
-  locationBackBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  locationSearchTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  locationSearchContent: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
-  locationSearchScroll: {
-    marginHorizontal: -20,
-  },
+  locationSearchBody: { flex: 1 },
+  locationSearchFixed: { paddingHorizontal: 20 },
+  locationSearchScroll: { flex: 1 },
   locationSearchInputWrap: {
     height: 52,
     borderRadius: 14,
@@ -2011,10 +2206,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationSearchList: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36 },
+  locationSearchList: { paddingTop: 8 },
   locationQuickRow: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 16,
     marginBottom: 6,
   },
   locationQuickCard: {
@@ -2048,8 +2244,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 4,
     borderRadius: 12,
-    marginTop: 18,
-    marginBottom: 6,
+    marginTop: 12,
+    marginBottom: 8,
     gap: 4,
   },
   locationTab: {
@@ -2068,8 +2264,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
     textTransform: 'uppercase',
-    marginTop: 18,
+    marginTop: 4,
     marginBottom: 6,
+  },
+  locationSectionTitleAfterSearch: {
+    marginTop: 18,
   },
   locationOption: {
     minHeight: 60,
@@ -2080,9 +2279,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   locationOptionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2129,34 +2326,77 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderTopWidth: 1,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    gap: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 8,
+    paddingHorizontal: 19,
+    gap: 8,
+  },
+  saveLocationSheetRaised: {
+    zIndex: 90,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    elevation: 20,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 24,
   },
-  saveLocationBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 85,
+  saveAsLocationSheet: {
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    gap: 16,
+    minHeight: 220,
   },
-  saveLocationBackdropTint: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.34)',
+  saveAsLocationHeaderText: { flex: 1, gap: 4 },
+  saveAsLocationTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  saveAsLocationAddress: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  saveAsLocationPrompt: { fontSize: 13, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  saveAsLocationLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
   },
-  saveLocationSheetFocused: {
-    zIndex: 90,
-    borderTopWidth: 1.5,
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 24,
-    elevation: 28,
+  saveAsLocationLabel: {
+    minHeight: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveAsLocationLabelText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  saveAsCustomLabelSection: {
+    gap: 12,
+    marginTop: 4,
+  },
+  saveAsLocationInputWrap: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  saveAsLocationInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+  },
+  saveAsCustomLabelButton: {
+    minHeight: 52,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveAsCustomLabelButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
   },
   saveLocationHeader: {
     flexDirection: 'row',
@@ -2179,13 +2419,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  saveLocationLabelFocused: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
   },
   saveLocationLabelText: {
     fontSize: 9,

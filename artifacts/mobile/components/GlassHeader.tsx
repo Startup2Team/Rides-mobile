@@ -28,6 +28,7 @@ interface GlassHeaderProps {
   title: string;
   subtitle?: string;
   showBack?: boolean;
+  onBackPress?: () => void;
   right?: React.ReactNode;
   titleAccessory?: React.ReactNode;
 }
@@ -36,6 +37,7 @@ export function GlassHeader({
   title,
   subtitle,
   showBack = true,
+  onBackPress,
   right,
   titleAccessory,
 }: GlassHeaderProps) {
@@ -67,7 +69,7 @@ export function GlassHeader({
       />
       <View style={styles.headerContent}>
         {showBack ? (
-          <BackButton onPress={() => router.back()} />
+          <BackButton onPress={onBackPress ?? (() => router.back())} />
         ) : (
           <View style={styles.sideSlot} />
         )}

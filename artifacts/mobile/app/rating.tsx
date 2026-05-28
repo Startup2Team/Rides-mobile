@@ -129,7 +129,7 @@ export default function RatingScreen() {
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
             >
-              <Text style={[styles.star, { color: n <= stars ? colors.primary : colors.border }]}>★</Text>
+              <Text style={[styles.star, { color: n <= stars ? colors.star : colors.starMuted }]}>★</Text>
             </TouchableOpacity>
           ))}
         </View>

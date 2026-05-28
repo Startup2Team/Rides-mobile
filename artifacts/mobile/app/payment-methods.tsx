@@ -114,7 +114,6 @@ export default function PaymentMethodsScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
-        style: 'destructive',
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           await persist(methods.filter(m => m.id !== id));

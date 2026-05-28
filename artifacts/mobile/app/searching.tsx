@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
+import { showCancelSearchAlert } from '@/utils/cancelSearchAlert';
 import { VEHICLE_LABELS, VehicleType } from '@/types';
 
 const VEHICLE_IMAGES: Record<VehicleType, any> = {
@@ -24,7 +25,7 @@ const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number 
 export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, cancelRide } = useRide();
+  const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching, isMatchingPaused } = useRide();
   const isCancellingRef = useRef(false);
 
   const pulseA = useRef(new Animated.Value(0)).current;
@@ -56,17 +57,24 @@ export default function SearchingScreen() {
   }, [pulseA, pulseB, pulseC]);
 
   useEffect(() => {
-    if (currentRide?.status === 'negotiating') {
+    if (currentRide?.status === 'negotiating' && !isMatchingPaused) {
       router.replace('/negotiation');
     } else if (!isCancellingRef.current && (!currentRide || currentRide.status === 'cancelled')) {
       router.replace('/(tabs)');
     }
-  }, [currentRide?.status]);
+  }, [currentRide?.status, isMatchingPaused]);
 
-  const handleCancel = () => {
+  const finishCancelSearch = () => {
     isCancellingRef.current = true;
     cancelRide();
     router.replace('/(tabs)');
+  };
+
+  const handleCancel = () => {
+    showCancelSearchAlert(finishCancelSearch, {
+      onPauseMatching: pauseDriverMatching,
+      onResumeMatching: resumeDriverMatching,
+    });
   };
 
   const pulseStyle = (anim: Animated.Value) => ({
