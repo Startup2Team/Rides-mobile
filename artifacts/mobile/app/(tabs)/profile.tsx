@@ -93,7 +93,6 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
-        style: 'destructive',
         onPress: async () => {
           await logout();
           router.replace('/(auth)/welcome');

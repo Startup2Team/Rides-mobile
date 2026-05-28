@@ -211,7 +211,7 @@ export default function RideDetailScreen() {
                   </Text>
                 </View>
                 <View style={styles.ratingBadge}>
-                  <Text style={[styles.ratingText, { color: colors.primary }]}>★ {ride.driver.rating?.toFixed(1)}</Text>
+                  <Text style={[styles.ratingText, { color: colors.star }]}>★ {ride.driver.rating?.toFixed(1)}</Text>
                 </View>
               </View>
             </View>

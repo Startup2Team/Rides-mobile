@@ -11,6 +11,8 @@ const colors = {
 
     primary: '#00C853',
     primaryForeground: '#000000',
+    star: '#00C853',
+    starMuted: '#00C85355',
 
     secondary: '#E8F5E9',
     secondaryForeground: '#1a1a1a',
@@ -43,6 +45,8 @@ const colors = {
 
     primary: '#00C853',
     primaryForeground: '#000000',
+    star: '#00C853',
+    starMuted: '#00C85355',
 
     secondary: '#0A2A0A',
     secondaryForeground: '#FFFFFF',

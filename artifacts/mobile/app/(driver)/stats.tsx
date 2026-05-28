@@ -70,9 +70,9 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>PRIORITY STATUS</Text>
         <View style={styles.priorityRow}>
-          <View style={[styles.priorityBadge, { backgroundColor: colors.primary + '20' }]}>
-            <Feather name="star" size={16} color={colors.primary} />
-            <Text style={[styles.priorityText, { color: colors.primary }]}>High Priority</Text>
+          <View style={styles.priorityBadge}>
+            <Feather name="star" size={16} color={colors.star} />
+            <Text style={[styles.priorityText, { color: colors.star }]}>High Priority</Text>
           </View>
           <Text style={[styles.priorityDesc, { color: colors.mutedForeground }]}>
             {dp.dailyDeclines >= 10

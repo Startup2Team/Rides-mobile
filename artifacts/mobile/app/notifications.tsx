@@ -191,7 +191,6 @@ export default function NotificationsScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
-          style: 'destructive',
           onPress: () => deleteNotification(id),
         },
       ],

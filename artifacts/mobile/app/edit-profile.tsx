@@ -89,10 +89,10 @@ export default function EditProfileScreen() {
       'Before you go…',
       'Help us improve — why are you deleting your account?',
       [
-        { text: 'Found a better service', style: 'destructive', onPress: confirmDelete },
-        { text: 'Privacy concerns', style: 'destructive', onPress: confirmDelete },
-        { text: 'Too many issues', style: 'destructive', onPress: confirmDelete },
-        { text: 'No longer need it', style: 'destructive', onPress: confirmDelete },
+        { text: 'Found a better service', onPress: confirmDelete },
+        { text: 'Privacy concerns', onPress: confirmDelete },
+        { text: 'Too many issues', onPress: confirmDelete },
+        { text: 'No longer need it', onPress: confirmDelete },
         { text: 'Keep my account', style: 'cancel' },
       ],
     );
@@ -104,7 +104,7 @@ export default function EditProfileScreen() {
       'This will permanently delete your account and all ride history. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete Forever', style: 'destructive', onPress: () => {} },
+        { text: 'Delete Forever', onPress: () => {} },
       ],
     );
   };

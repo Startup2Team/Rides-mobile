@@ -230,7 +230,6 @@ export default function DriverNavigateScreen() {
         { text: 'Back', style: 'cancel' },
         {
           text: 'Cancel Ride',
-          style: 'destructive',
           onPress: () => {
             cancelRide();
             router.replace('/(driver)');
@@ -256,7 +255,7 @@ export default function DriverNavigateScreen() {
   const handleEmergencyEnd = () => {
     Alert.alert('End Journey', 'End this journey early?', [
       { text: 'Back', style: 'cancel' },
-      { text: 'End Journey', style: 'destructive', onPress: handleCompleteRide },
+      { text: 'End Journey', onPress: handleCompleteRide },
     ]);
   };
 

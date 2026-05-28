@@ -19,6 +19,9 @@ interface RideContextType {
   pendingRequest: Ride | null;
   createRide: (pickup: RideLocation, destination: RideLocation, vehicleType: VehicleType) => Promise<void>;
   cancelRide: () => void;
+  pauseDriverMatching: () => void;
+  resumeDriverMatching: () => void;
+  isMatchingPaused: boolean;
   counterOffer: (amount: number) => void;
   sendDriverOffer: (amount: number) => void;
   acceptDriverOffer: () => void;
@@ -95,7 +98,111 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const [rideHistory, setRideHistory] = useState<Ride[]>([]);
   const [driverLocation, setDriverLocation] = useState<Coords | null>(null);
   const [pendingRequest, setPendingRequest] = useState<Ride | null>(null);
+  const [isMatchingPaused, setIsMatchingPaused] = useState(false);
   const driverIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const matchDriverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const driverOfferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMatchingPausedRef = useRef(false);
+
+  const clearSearchTimers = useCallback(() => {
+    if (matchDriverTimeoutRef.current) clearTimeout(matchDriverTimeoutRef.current);
+    if (driverOfferTimeoutRef.current) clearTimeout(driverOfferTimeoutRef.current);
+    matchDriverTimeoutRef.current = null;
+    driverOfferTimeoutRef.current = null;
+  }, []);
+
+  const assignMatchedDriver = useCallback((
+    vehicleType: VehicleType,
+    pickup: RideLocation,
+    destination: RideLocation,
+    dist: number,
+  ) => {
+    if (isMatchingPausedRef.current) return;
+
+    const matching = MOCK_DRIVERS.filter(d => d.vehicleType === vehicleType);
+    const driver: MockDriver = matching.length > 0
+      ? matching[Math.floor(Math.random() * matching.length)]
+      : MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
+
+    setDriverLocation(driver.location);
+
+    const isGeneric = pickup.locationType === 'generic' || destination.locationType === 'generic';
+    const initialMessages: NegotiationMessage[] = [];
+    if (isGeneric) {
+      const destLabel = destination.address ?? 'Unknown location';
+      initialMessages.push({
+        id: generateId(),
+        sender: 'system',
+        type: 'text',
+        text: `My destination is ${destLabel}. Please let me know your price.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    setCurrentRide(prev => {
+      if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
+      return {
+        ...prev,
+        status: 'negotiating',
+        driver,
+        driverId: driver.id,
+        negotiation: initialMessages,
+      };
+    });
+
+    driverOfferTimeoutRef.current = setTimeout(() => {
+      driverOfferTimeoutRef.current = null;
+      if (isMatchingPausedRef.current) return;
+      setCurrentRide(prev => {
+        if (!prev || prev.status !== 'negotiating') return prev;
+        const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
+        const driverMsg: NegotiationMessage = {
+          id: generateId(),
+          sender: 'driver',
+          type: 'offer',
+          amount: driverOffer,
+          timestamp: new Date().toISOString(),
+        };
+        return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
+      });
+    }, 2500);
+  }, []);
+
+  const scheduleDriverMatch = useCallback((
+    vehicleType: VehicleType,
+    pickup: RideLocation,
+    destination: RideLocation,
+    dist: number,
+    delayMs?: number,
+  ) => {
+    const delay = delayMs ?? 4000 + Math.random() * 2000;
+    matchDriverTimeoutRef.current = setTimeout(() => {
+      matchDriverTimeoutRef.current = null;
+      assignMatchedDriver(vehicleType, pickup, destination, dist);
+    }, delay);
+  }, [assignMatchedDriver]);
+
+  const pauseDriverMatching = useCallback(() => {
+    isMatchingPausedRef.current = true;
+    setIsMatchingPaused(true);
+    clearSearchTimers();
+  }, [clearSearchTimers]);
+
+  const resumeDriverMatching = useCallback(() => {
+    isMatchingPausedRef.current = false;
+    setIsMatchingPaused(false);
+    setCurrentRide(prev => {
+      if (!prev || prev.status !== 'searching') return prev;
+      scheduleDriverMatch(
+        prev.vehicleType,
+        prev.pickup,
+        prev.destination,
+        prev.distance,
+        2000,
+      );
+      return prev;
+    });
+  }, [scheduleDriverMatch]);
 
   const updateStatus = (status: RideStatus, extra?: Partial<Ride>) => {
     setCurrentRide(prev => prev ? { ...prev, status, ...extra } : null);
@@ -129,61 +236,22 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
+    isMatchingPausedRef.current = false;
+    setIsMatchingPaused(false);
+    clearSearchTimers();
     setCurrentRide(ride);
-
-    const delay = 4000 + Math.random() * 2000;
-    setTimeout(() => {
-      const matching = MOCK_DRIVERS.filter(d => d.vehicleType === vehicleType);
-      const driver: MockDriver = matching.length > 0
-        ? matching[Math.floor(Math.random() * matching.length)]
-        : MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
-
-      setDriverLocation(driver.location);
-
-      const isGeneric = pickup.locationType === 'generic' || destination.locationType === 'generic';
-
-      const initialMessages: NegotiationMessage[] = [];
-      if (isGeneric) {
-        const destLabel = destination.address || destination.locationType === 'generic' ? (destination.address ?? 'Unknown location') : (pickup.address ?? 'Unknown location');
-        initialMessages.push({
-          id: generateId(),
-          sender: 'system',
-          type: 'text',
-          text: `My destination is ${destLabel}. Please let me know your price.`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      setCurrentRide(prev => prev ? {
-        ...prev,
-        status: 'negotiating',
-        driver,
-        driverId: driver.id,
-        negotiation: initialMessages,
-      } : null);
-
-      setTimeout(() => {
-        setCurrentRide(prev => {
-          if (!prev || prev.status !== 'negotiating') return prev;
-          const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
-          const driverMsg: NegotiationMessage = {
-            id: generateId(),
-            sender: 'driver',
-            type: 'offer',
-            amount: driverOffer,
-            timestamp: new Date().toISOString(),
-          };
-          return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
-        });
-      }, 2500);
-    }, delay);
-  }, [currentRide]);
+    scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
+  }, [clearSearchTimers, currentRide, scheduleDriverMatch]);
 
   const cancelRide = useCallback(() => {
+    isMatchingPausedRef.current = false;
+    setIsMatchingPaused(false);
+    clearSearchTimers();
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    setDriverLocation(null);
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
     setTimeout(() => setCurrentRide(null), 2000);
-  }, []);
+  }, [clearSearchTimers]);
 
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => {
@@ -417,6 +485,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       pendingRequest,
       createRide,
       cancelRide,
+      pauseDriverMatching,
+      resumeDriverMatching,
+      isMatchingPaused,
       counterOffer,
       sendDriverOffer,
       acceptDriverOffer,

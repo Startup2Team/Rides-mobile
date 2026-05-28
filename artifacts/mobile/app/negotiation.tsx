@@ -22,7 +22,6 @@ import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
-const GOLD = '#D6A21E';
 
 function formatFare(amount?: number) {
   return amount ? `${amount.toLocaleString()} RWF` : '--';
@@ -176,9 +175,10 @@ export default function NegotiationScreen() {
       'Why are you declining?',
       'Your feedback helps improve the experience.',
       [
-        { text: 'Price is too high', style: 'destructive', onPress: () => declineDriverOffer() },
-        { text: 'Driver is too far', style: 'destructive', onPress: () => declineDriverOffer() },
-        { text: 'Changed my plans', style: 'destructive', onPress: () => declineDriverOffer() },
+        { text: 'Price is too high', onPress: () => declineDriverOffer() },
+        { text: 'Driver is too far', onPress: () => declineDriverOffer() },
+        { text: 'Driver asked me to cancel', onPress: () => declineDriverOffer() },
+        { text: 'Changed my plans', onPress: () => declineDriverOffer() },
         { text: 'Keep negotiating', style: 'cancel' },
       ],
     );
@@ -212,12 +212,9 @@ export default function NegotiationScreen() {
                 <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
                   {VEHICLE_LABELS[currentRide.vehicleType]} - {currentRide.driver?.plateNumber ?? 'Plate pending'}
                 </Text>
-                <View style={styles.ratingWrap}>
-                  <Feather name="star" size={12} color={GOLD} />
-                  <Text style={[styles.ratingText, { color: GOLD }]}>
-                    {currentRide.driver?.rating?.toFixed(1) ?? '4.8'}
-                  </Text>
-                </View>
+                <Text style={[styles.ratingText, { color: colors.star }]}>
+                  ★ {currentRide.driver?.rating?.toFixed(1) ?? '4.8'}
+                </Text>
               </View>
             </View>
           </View>
@@ -434,8 +431,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
-  ratingWrap: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 2 },
   iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   statusBanner: { minHeight: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusText: { flex: 1, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
