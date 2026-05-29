@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   topInfo: { flex: 1 },
   topPhase: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   topEta: { fontSize: 13, fontFamily: 'Inter_400Regular' },
-  callBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  callBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   turnCard: {
     position: 'absolute',
     left: 16,
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   rerouteText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
+  rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   rerouteBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   vehicleMarkerWrap: {
     alignItems: 'center',
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   fareText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   contactActions: { flexDirection: 'row', gap: 8 },
-  contactBtn: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  contactBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   waitingBlock: { gap: 12 },
   waitingActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   cancelRideBtn: {
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 50,
     paddingHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 25,
     borderWidth: 1.5,
   },
   cancelRideBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },

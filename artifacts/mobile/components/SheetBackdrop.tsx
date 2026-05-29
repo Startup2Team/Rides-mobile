@@ -21,7 +21,7 @@ interface SheetBackdropProps {
 export function SheetBackdrop({ onPress, animatedOpacity }: SheetBackdropProps) {
   const scheme = useColorScheme();
   const glassTint = scheme === 'dark' ? 'dark' : 'light';
-  const scrimColor = scheme === 'dark' ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.38)';
+  const scrimColor = scheme === 'dark' ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.42)';
 
   const content = (
     <>

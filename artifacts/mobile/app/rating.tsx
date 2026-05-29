@@ -1,8 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -39,6 +40,22 @@ export default function RatingScreen() {
 
   const driverName = params.driverName ?? 'Your Driver';
   const finalizedRideRef = useRef(false);
+
+  const ratedRide = useMemo(() => {
+    if (currentRide && (!params.rideId || currentRide.id === params.rideId)) {
+      return currentRide;
+    }
+    if (params.rideId) {
+      return rideHistory.find(ride => ride.id === params.rideId) ?? currentRide;
+    }
+    return currentRide;
+  }, [currentRide, params.rideId, rideHistory]);
+
+  const driverPhotoUri = useMemo(() => {
+    const driver = ratedRide?.driver;
+    if (!driver) return undefined;
+    return driver.profileImage ?? `https://i.pravatar.cc/160?u=${encodeURIComponent(driver.id)}`;
+  }, [ratedRide?.driver]);
 
   const finalizeRide = () => {
     if (finalizedRideRef.current || !currentRide) return;
@@ -111,9 +128,17 @@ export default function RatingScreen() {
 
         {/* Driver avatar */}
         <View style={styles.avatarSection}>
-          <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.driverInitials, { color: colors.primaryForeground }]}>{initials}</Text>
-          </View>
+          {driverPhotoUri ? (
+            <Image
+              source={{ uri: driverPhotoUri }}
+              style={styles.driverAvatarImage}
+              accessibilityLabel={`${driverName} profile photo`}
+            />
+          ) : (
+            <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.driverInitials, { color: colors.primaryForeground }]}>{initials}</Text>
+            </View>
+          )}
           <Text style={[styles.driverName, { color: colors.foreground }]}>{driverName}</Text>
           <Text style={[styles.prompt, { color: colors.mutedForeground }]}>
             {step === 'rating' ? 'How was your ride?' : 'Add a few details'}
@@ -256,6 +281,12 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
+  },
+  driverAvatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     marginBottom: 4,
   },
   driverInitials: { fontSize: 28, fontFamily: 'Inter_700Bold' },

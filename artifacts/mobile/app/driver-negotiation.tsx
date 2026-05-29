@@ -5,7 +5,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Linking,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { KandaButton } from '@/components/KandaButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
@@ -43,7 +44,6 @@ function OfferTimelineItem({
       ? perspective === 'customer' ? 'You' : 'Customer'
       : perspective === 'driver' ? 'You' : 'Driver';
   const bubbleBackground = isCustomer ? colors.primary : colors.card;
-  const bubbleBorder = isCustomer ? colors.primary : colors.border;
   const textColor = isCustomer ? colors.primaryForeground : colors.foreground;
   const metaColor = isCustomer ? colors.primaryForeground + 'CC' : colors.mutedForeground;
 
@@ -59,7 +59,7 @@ function OfferTimelineItem({
         isCustomer && styles.timelineCustomerCard,
         isDriver && styles.timelineDriverCard,
         isSystem && styles.timelineSystemCard,
-        { backgroundColor: isSystem ? colors.card : bubbleBackground, borderColor: isSystem ? colors.border : bubbleBorder },
+        { backgroundColor: isSystem ? colors.card : bubbleBackground },
       ]}>
         <View style={styles.timelineHeader}>
           <Text style={[styles.timelineActor, { color: isSystem ? colors.mutedForeground : metaColor }]}>{label}</Text>
@@ -181,7 +181,7 @@ export default function DriverNegotiationScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.summaryCard, { backgroundColor: colors.card }]}>
           <View style={styles.routeRow}>
             <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
             <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
@@ -198,7 +198,7 @@ export default function DriverNegotiationScreen() {
             </Text>
           </View>
           {currentRide.destination.locationType === 'generic' && (
-            <View style={[styles.genericBadge, { backgroundColor: WARNING + '16', borderColor: WARNING + '40' }]}>
+            <View style={[styles.genericBadge, { backgroundColor: WARNING + '16' }]}>
               <Feather name="alert-circle" size={14} color={WARNING} />
               <Text style={[styles.genericText, { color: WARNING }]}>Confirm exact destination before locking fare.</Text>
             </View>
@@ -261,92 +261,110 @@ export default function DriverNegotiationScreen() {
         )}
 
         <View style={styles.mainActions}>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive }]} onPress={handleDecline}>
-            <Feather name="x" size={17} color={colors.destructive} />
-            <Text style={[styles.actionText, { color: colors.destructive }]}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]} onPress={handleCall}>
-            <Feather name="phone" size={17} color={colors.foreground} />
-            <Text style={[styles.actionText, { color: colors.foreground }]}>Call</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.acceptBtn, { backgroundColor: acceptAmount ? colors.primary : colors.muted, opacity: acceptAmount ? 1 : 0.6 }]}
+          <KandaButton
+            title="Decline"
+            icon="x"
+            variant="dangerPlain"
+            size="sm"
+            onPress={handleDecline}
+            style={styles.actionFlexNarrow}
+          />
+          <KandaButton
+            title="Call"
+            icon="phone"
+            variant="secondary"
+            size="sm"
+            onPress={handleCall}
+            style={styles.actionFlexNarrow}
+          />
+          <KandaButton
+            title="Accept"
+            icon="check"
+            variant="primary"
+            size="sm"
             onPress={() => setShowAcceptModal(true)}
             disabled={!acceptAmount}
-          >
-            <Feather name="check" size={18} color={acceptAmount ? colors.primaryForeground : colors.mutedForeground} />
-            <Text style={[styles.acceptText, { color: acceptAmount ? colors.primaryForeground : colors.mutedForeground }]}>Accept</Text>
-          </TouchableOpacity>
+            style={styles.actionFlexPrimary}
+          />
         </View>
-        <TouchableOpacity style={[styles.manualLock, { borderColor: colors.border }]} onPress={() => {
-          setManualAmount((lastOffer?.amount ?? suggestedFare).toString());
-          setManualError('');
-          setShowManualModal(true);
-        }}>
-          <Feather name="lock" size={15} color={colors.primary} />
-          <Text style={[styles.manualLockText, { color: colors.foreground }]}>Lock manually agreed fare</Text>
-        </TouchableOpacity>
+        <KandaButton
+          title="Lock manually agreed fare"
+          icon="lock"
+          variant="plain"
+          size="sm"
+          fullWidth
+          onPress={() => {
+            setManualAmount((lastOffer?.amount ?? suggestedFare).toString());
+            setManualError('');
+            setShowManualModal(true);
+          }}
+        />
       </View>
 
-      <Modal visible={showAcceptModal} transparent animationType="fade" onRequestClose={() => setShowAcceptModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <View style={[styles.modalIcon, { backgroundColor: colors.primary + '20' }]}>
-              <Feather name="shield" size={24} color={colors.primary} />
-            </View>
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Accept {formatFare(acceptAmount)}?</Text>
-            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
-              This fare will be locked for the ride and visible to both you and the customer.
-            </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.muted, borderColor: colors.border }]} onPress={() => setShowAcceptModal(false)}>
-                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                onPress={() => {
-                  setShowAcceptModal(false);
-                  acceptCustomerOffer();
-                }}
-              >
-                <Text style={[styles.modalBtnText, { color: colors.primaryForeground }]}>Accept Fare</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+      <ConfirmDialog visible={showAcceptModal} onClose={() => setShowAcceptModal(false)}>
+        <View style={[styles.modalIcon, { backgroundColor: colors.primary + '20' }]}>
+          <Feather name="shield" size={24} color={colors.primary} />
         </View>
-      </Modal>
+        <Text style={[styles.modalTitle, { color: colors.foreground }]}>Accept {formatFare(acceptAmount)}?</Text>
+        <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
+          This fare will be locked for the ride and visible to both you and the customer.
+        </Text>
+        <View style={styles.modalActions}>
+          <KandaButton
+            title="Back"
+            variant="secondary"
+            size="md"
+            onPress={() => setShowAcceptModal(false)}
+            style={styles.modalActionBtn}
+          />
+          <KandaButton
+            title="Accept Fare"
+            variant="primary"
+            size="md"
+            onPress={() => {
+              setShowAcceptModal(false);
+              acceptCustomerOffer();
+            }}
+            style={styles.modalActionBtn}
+          />
+        </View>
+      </ConfirmDialog>
 
-      <Modal visible={showManualModal} transparent animationType="fade" onRequestClose={() => setShowManualModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Final agreed fare</Text>
-            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
-              Use this only after confirming the amount with the customer.
-            </Text>
-            <View style={[styles.modalInputRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.currencyText, { color: colors.mutedForeground }]}>RWF</Text>
-              <TextInput
-                style={[styles.modalInput, { color: colors.foreground }]}
-                value={manualAmount}
-                onChangeText={text => { setManualAmount(text.replace(/\D/g, '')); setManualError(''); }}
-                placeholder="e.g. 2500"
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="number-pad"
-                autoFocus
-              />
-            </View>
-            {manualError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{manualError}</Text> : null}
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.muted, borderColor: colors.border }]} onPress={() => setShowManualModal(false)}>
-                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={confirmManualFare}>
-                <Text style={[styles.modalBtnText, { color: colors.primaryForeground }]}>Lock Fare</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+      <ConfirmDialog visible={showManualModal} onClose={() => setShowManualModal(false)}>
+        <Text style={[styles.modalTitle, { color: colors.foreground }]}>Final agreed fare</Text>
+        <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
+          Use this only after confirming the amount with the customer.
+        </Text>
+        <View style={[styles.modalInputRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+          <Text style={[styles.currencyText, { color: colors.mutedForeground }]}>RWF</Text>
+          <TextInput
+            style={[styles.modalInput, { color: colors.foreground }]}
+            value={manualAmount}
+            onChangeText={text => { setManualAmount(text.replace(/\D/g, '')); setManualError(''); }}
+            placeholder="e.g. 2500"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="number-pad"
+            autoFocus
+          />
         </View>
-      </Modal>
+        {manualError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{manualError}</Text> : null}
+        <View style={styles.modalActions}>
+          <KandaButton
+            title="Back"
+            variant="secondary"
+            size="md"
+            onPress={() => setShowManualModal(false)}
+            style={styles.modalActionBtn}
+          />
+          <KandaButton
+            title="Lock Fare"
+            variant="primary"
+            size="md"
+            onPress={confirmManualFare}
+            style={styles.modalActionBtn}
+          />
+        </View>
+      </ConfirmDialog>
     </KeyboardAvoidingView>
   );
 }
@@ -359,21 +377,21 @@ const styles = StyleSheet.create({
   identityText: { flex: 1, minWidth: 0 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
-  iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  statusBanner: { minHeight: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  statusBanner: { minHeight: 46, borderRadius: 14, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusText: { flex: 1, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  summaryCard: { borderRadius: 16, borderWidth: 1, padding: 14, gap: 8 },
+  summaryCard: { borderRadius: 16, padding: 14, gap: 8 },
   routeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   routeDot: { width: 10, height: 10, borderRadius: 5 },
   routeLine: { width: 1, height: 14, marginLeft: 4 },
   routeText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
-  genericBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, padding: 10, marginTop: 6 },
+  genericBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, padding: 10, marginTop: 6 },
   genericText: { flex: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   metaGrid: { borderTopWidth: 1, marginTop: 8, paddingTop: 12, flexDirection: 'row', gap: 8 },
   metaItem: { flex: 1, gap: 2 },
   metaLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
   metaValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  offerCard: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 6 },
+  offerCard: { borderRadius: 18, padding: 18, gap: 6 },
   offerLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
   offerAmount: { fontSize: 34, fontFamily: 'Inter_700Bold' },
   trustCopy: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
@@ -386,7 +404,7 @@ const styles = StyleSheet.create({
   timelineLeftItem: { justifyContent: 'flex-start', paddingRight: 46 },
   timelineRightItem: { justifyContent: 'flex-end', paddingLeft: 46 },
   timelineSystemItem: { justifyContent: 'center' },
-  timelineCard: { maxWidth: '84%', borderRadius: 18, borderWidth: 1, padding: 12, gap: 4 },
+  timelineCard: { maxWidth: '84%', borderRadius: 18, padding: 12, gap: 4 },
   timelineCustomerCard: { borderTopRightRadius: 6 },
   timelineDriverCard: { borderTopLeftRadius: 6 },
   timelineSystemCard: { flex: 0, width: '86%', alignSelf: 'center' },
@@ -400,28 +418,21 @@ const styles = StyleSheet.create({
   limitBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12 },
   limitText: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
   quickRow: { flexDirection: 'row', gap: 8 },
-  quickChip: { flex: 1, minHeight: 38, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  quickChip: { flex: 1, minHeight: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   quickText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   currencyBadge: { height: 48, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   currencyText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   offerInput: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, fontSize: 17, fontFamily: 'Inter_700Bold' },
-  sendBtn: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  mainActions: { flexDirection: 'row', gap: 9 },
-  actionBtn: { flex: 0.9, height: 50, borderRadius: 13, borderWidth: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  actionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  acceptBtn: { flex: 1.1, height: 50, borderRadius: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  acceptText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  manualLock: { minHeight: 44, borderRadius: 13, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  manualLockText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  modalCard: { width: '100%', borderRadius: 20, borderWidth: 1, padding: 22, gap: 14, alignItems: 'center' },
+  sendBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  mainActions: { flexDirection: 'row', gap: 9, alignItems: 'center' },
+  actionFlexNarrow: { flex: 0.9 },
+  actionFlexPrimary: { flex: 1.1 },
   modalIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   modalSub: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, textAlign: 'center' },
   modalActions: { flexDirection: 'row', gap: 10, width: '100%' },
-  modalBtn: { flex: 1, height: 50, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  modalBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  modalActionBtn: { flex: 1 },
   modalInputRow: { width: '100%', height: 54, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   modalInput: { flex: 1, fontSize: 20, fontFamily: 'Inter_700Bold' },
   errorText: { alignSelf: 'flex-start', fontSize: 12, fontFamily: 'Inter_500Medium' },

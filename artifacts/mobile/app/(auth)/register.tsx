@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   },
   countryOption: {
     minHeight: 60,
-    borderRadius: 14,
+    borderRadius: 30,
     borderWidth: 1.5,
     paddingHorizontal: 14,
     flexDirection: 'row',
