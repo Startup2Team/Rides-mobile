@@ -664,6 +664,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
+  ratingWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 2 },
   iconButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   statusBanner: { minHeight: 46, borderRadius: 14, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
