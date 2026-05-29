@@ -169,10 +169,10 @@ export default function DriverNegotiationScreen() {
             </View>
             <View style={styles.identityText}>
               <Text style={[styles.title, { color: colors.foreground }]}>
-                {currentRide.customerName ?? 'Customer'}
+                {currentRide.customerName ?? '--'}
               </Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {VEHICLE_LABELS[currentRide.vehicleType]} request · {currentRide.distance} km · {currentRide.duration} min
+                {VEHICLE_LABELS[currentRide.vehicleType]} request · {currentRide.distance} km
               </Text>
             </View>
           </View>
@@ -185,7 +185,7 @@ export default function DriverNegotiationScreen() {
           <View style={styles.routeRow}>
             <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
             <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-              {currentRide.pickup.address ?? 'Pickup'}
+              {currentRide.pickup.address ?? '--'}
             </Text>
           </View>
           <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
@@ -193,8 +193,8 @@ export default function DriverNegotiationScreen() {
             <View style={[styles.routeDot, { backgroundColor: currentRide.destination.locationType === 'generic' ? WARNING : colors.destructive }]} />
             <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
               {currentRide.destination.locationType === 'generic'
-                ? `${currentRide.destination.address ?? 'Unknown'} (to confirm)`
-                : currentRide.destination.address ?? 'Destination'}
+                ? `${currentRide.destination.address ?? '--'} (to confirm)`
+                : currentRide.destination.address ?? '--'}
             </Text>
           </View>
           {currentRide.destination.locationType === 'generic' && (

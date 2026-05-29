@@ -253,7 +253,7 @@ export default function RideScreen() {
   const handleSOS = () => {
     Alert.alert(
       '🆘 Emergency',
-      `Driver: ${currentRide?.driver?.name ?? 'Unknown'}\nPlate: ${currentRide?.driver?.plateNumber ?? 'Unknown'}\n\nWhat do you need?`,
+      `Driver: ${currentRide?.driver?.name ?? '--'}\nPlate: ${currentRide?.driver?.plateNumber ?? '--'}\n\nWhat do you need?`,
       [
         {
           text: 'Call Police (112)',
@@ -284,9 +284,9 @@ export default function RideScreen() {
   const pickupEtaText = pickupEtaSeconds !== null
     ? formatAwayEta(pickupEtaSeconds)
     : isArriving && currentRide.driver
-      ? `${currentRide.driver.eta} min away`
+      ? '--'
       : null;
-  const displayEta = pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`);
+  const displayEta = pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : '--');
   const pickupDistanceText = isArriving && activeDriverLocation
     ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
     : null;
@@ -364,7 +364,7 @@ export default function RideScreen() {
         </View>
         {currentRide.driver && (
           <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>
-            {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`)}
+            {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : '--')}
           </Text>
         )}
       </View>
@@ -374,10 +374,10 @@ export default function RideScreen() {
           <MaterialCommunityIcons name="navigation" size={24} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.tbtText, { color: colors.foreground }]}>
-              In 400m, turn left onto Boulevard de l'OUA
+              Follow the current route
             </Text>
             <Text style={[styles.tbtSubtext, { color: colors.mutedForeground }]}>
-              Continuing toward destination
+              Live navigation update
             </Text>
           </View>
         </View>
@@ -406,7 +406,7 @@ export default function RideScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.driverName, { color: colors.foreground }]}>
-              {currentRide.driver?.name ?? 'Driver'}
+              {currentRide.driver?.name ?? '--'}
             </Text>
             <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>
               {VEHICLE_LABELS_FULL[currentRide.vehicleType]} · {currentRide.driver?.plateNumber}
@@ -422,7 +422,7 @@ export default function RideScreen() {
           <View style={styles.fareItem}>
             <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Agreed Fare</Text>
             <Text style={[styles.fareValue, { color: colors.primary }]}>
-              {currentRide.agreedFare?.toLocaleString()} RWF
+              {currentRide.agreedFare ? `${currentRide.agreedFare.toLocaleString()} RWF` : '--'}
             </Text>
           </View>
           <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />

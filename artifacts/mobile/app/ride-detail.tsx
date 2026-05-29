@@ -161,14 +161,14 @@ export default function RideDetailScreen() {
               <View style={styles.routeItem}>
                 <Text style={[styles.routeItemLabel, { color: colors.mutedForeground }]}>Pickup</Text>
                 <Text style={[styles.routeItemValue, { color: colors.foreground }]}>
-                  {ride.pickup.address ?? 'Pickup location'}
+                  {ride.pickup.address ?? '--'}
                 </Text>
               </View>
               <View style={[styles.routeDivider, { backgroundColor: colors.border }]} />
               <View style={styles.routeItem}>
                 <Text style={[styles.routeItemLabel, { color: colors.mutedForeground }]}>Drop off</Text>
                 <Text style={[styles.routeItemValue, { color: colors.foreground }]}>
-                  {ride.destination.address ?? 'Destination'}
+                  {ride.destination.address ?? '--'}
                 </Text>
               </View>
             </View>

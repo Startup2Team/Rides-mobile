@@ -21,6 +21,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { KandaInput } from '@/components/KandaInput';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useColors } from '@/hooks/useColors';
+import { register, toE164 } from '@/services/auth';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -48,6 +49,7 @@ export default function RegisterScreen() {
   const [editingForm, setEditingForm] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountrySheet, setShowCountrySheet] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () => setEditingForm(true));
@@ -77,21 +79,35 @@ export default function RegisterScreen() {
     return e;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const e = validate();
     if (Object.keys(e).length) {
       setErrors(e);
       return;
     }
-
-    router.push({
-      pathname: '/(auth)/otp',
-      params: {
-        phone: `${selectedCountry.dialCode}${form.phone.replace(/\D/g, '')}`,
-        name: form.name.trim(),
-        mode: 'register',
-      },
-    });
+    try {
+      setSubmitting(true);
+      const phoneNumber = toE164(selectedCountry.dialCode, form.phone);
+      const { devOtp } = await register(phoneNumber, form.name.trim());
+      router.push({
+        pathname: '/(auth)/otp',
+        params: {
+          phone: phoneNumber,
+          name: form.name.trim(),
+          mode: 'register',
+          ...(devOtp ? { dev_otp: devOtp } : {}),
+        },
+      });
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error?.message ??
+        err?.response?.data?.message ??
+        err?.message ??
+        'Could not send OTP. Try again.';
+      setErrors(prev => ({ ...prev, phone: msg }));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -180,7 +196,7 @@ export default function RegisterScreen() {
 
             {editingForm && (
               <View style={styles.inlineContinue}>
-                <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+                <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" loading={submitting} />
               </View>
             )}
           </View>
@@ -198,7 +214,7 @@ export default function RegisterScreen() {
             },
           ]}
         >
-          <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+          <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" loading={submitting} />
           <View style={styles.row}>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
             <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>

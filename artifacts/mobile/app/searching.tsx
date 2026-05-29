@@ -57,7 +57,10 @@ export default function SearchingScreen() {
   }, [pulseA, pulseB, pulseC]);
 
   useEffect(() => {
-    if (currentRide?.status === 'negotiating' && !isMatchingPaused) {
+    if (
+      (currentRide?.status === 'negotiating' || currentRide?.status === 'driver_assigned') &&
+      !isMatchingPaused
+    ) {
       router.replace('/negotiation');
     } else if (!isCancellingRef.current && (!currentRide || currentRide.status === 'cancelled')) {
       router.replace('/(tabs)');
@@ -94,10 +97,10 @@ export default function SearchingScreen() {
 
   const destinationLabel = useMemo(() => {
     const destination = currentRide?.destination;
-    if (!destination) return 'Destination';
+    if (!destination) return '--';
     return destination.locationType === 'generic'
       ? 'To be confirmed in chat'
-      : destination.address ?? 'Destination';
+      : destination.address ?? '--';
   }, [currentRide?.destination]);
 
   const vehicleType = currentRide?.vehicleType ?? 'moto';
@@ -147,7 +150,7 @@ export default function SearchingScreen() {
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
               <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-                {currentRide.pickup.address ?? 'Pickup'}
+                {currentRide.pickup.address ?? '--'}
               </Text>
             </View>
             <View style={[styles.routeLine, { backgroundColor: colors.border }]} />

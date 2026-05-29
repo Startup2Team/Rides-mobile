@@ -21,6 +21,7 @@ import { KandaInput } from '@/components/KandaInput';
 import { VehicleCard } from '@/components/VehicleCard';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 import { DriverProfile, VehicleType } from '@/types';
 import {
   RWANDA_PROVINCES,
@@ -128,7 +129,7 @@ function CascadeDropdown({ label, value, options, onSelect, disabled, placeholde
 export default function DriverOnboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, saveDriverProfile, switchMode } = useAuth();
+  const { user, saveDriverProfile, switchMode, refreshSession } = useAuth();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -171,6 +172,18 @@ export default function DriverOnboarding() {
     if (field === 'village') resets.cell = '';
     setForm(f => ({ ...f, ...resets, [field]: val }));
     setErrors(e => ({ ...e, [field]: '' }));
+  };
+
+  // Auto-formats DOB digits into DD/MM/YYYY as the user types
+  const handleDobChange = (text: string) => {
+    const digits = text.replace(/\D/g, '').slice(0, 8);
+    let formatted = digits;
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    update('dob', formatted);
   };
 
   const handlePlateChange = (text: string) => {
@@ -247,7 +260,11 @@ export default function DriverOnboarding() {
     const e: Record<string, string> = {};
     if (step === 0) {
       if (!selfieUri) e.selfie = 'Identity photo is required';
-      if (!form.dob) e.dob = 'Required';
+      if (!form.dob) {
+        e.dob = 'Required';
+      } else if (form.dob.replace(/\D/g, '').length < 8) {
+        e.dob = 'Enter a complete date — DD/MM/YYYY';
+      }
       if (!form.province) e.province = 'Required';
       if (!form.district) e.district = 'Required';
       if (!form.sector) e.sector = 'Required';
@@ -293,36 +310,105 @@ export default function DriverOnboarding() {
     }
   };
 
+  // Maps mobile vehicle type keys to backend enum values
+  const VEHICLE_TYPE_MAP: Record<VehicleType, string> = {
+    moto: 'MOTO_BIKE',
+    cab: 'CAB_TAXI',
+    hilux: 'LIGHT_HILUX',
+    fuso: 'HEAVY_FUSO',
+  };
+
+  // Converts DD/MM/YYYY or DDMMYYYY → YYYY-MM-DD for the API
+  const toISODate = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length === 8) {
+      const dd = digits.slice(0, 2);
+      const mm = digits.slice(2, 4);
+      const yyyy = digits.slice(4, 8);
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    // Already slash-separated fallback
+    const parts = raw.split('/');
+    if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    return raw; // backend will reject with INVALID_DOB — shouldn't reach here
+  };
+
   const saveAndContinue = async () => {
     setLoading(true);
-    const profile: DriverProfile = {
-      vehicleType: form.vehicleType,
-      plateNumber: form.plateNumber,
-      licenseNumber: form.licenseNumber,
-      province: form.province,
-      district: form.district,
-      sector: form.sector,
-      momoCode: form.momoCode,
-      merchantCode: form.merchantCode,
-      momoProvider: form.momoProvider,
-      dob: form.dob,
-      profileImage: selfieUri ?? undefined,
-      isOnline: false,
-      isVerified: false,
-      acceptanceRate: 100,
-      completedRides: 0,
-      dailyRides: 0,
-      dailyDeclines: 0,
-      policyAccepted: true,
-      policyAcceptedAt: new Date().toISOString(),
-      earningsTotal: 0,
-      passengerSeats: form.passengerSeats ? parseInt(form.passengerSeats) : undefined,
-      loadCapacityKg: form.loadCapacityKg ? parseInt(form.loadCapacityKg) : undefined,
-    };
-    await saveDriverProfile(profile);
-    await switchMode('driver');
-    setLoading(false);
-    router.replace('/(driver)');
+    try {
+      // 1. Register the driver profile with the backend
+      await api.post('/driver/apply', {
+        transport_type: VEHICLE_TYPE_MAP[form.vehicleType] ?? form.vehicleType.toUpperCase(),
+        vehicle_plate: form.plateNumber,
+        license_number: form.licenseNumber,
+        date_of_birth: toISODate(form.dob),
+        city: form.district || 'Kigali',
+        momo_pay_code: form.momoCode || form.merchantCode,
+        momo_provider: form.momoProvider,
+        province: form.province,
+        district: form.district,
+        sector: form.sector,
+        cell: form.cell,
+        village: form.village,
+        ...(form.passengerSeats ? { passenger_seats: parseInt(form.passengerSeats) } : {}),
+        ...(form.loadCapacityKg ? { load_capacity_kg: parseInt(form.loadCapacityKg) } : {}),
+      });
+
+      // 2. Refresh tokens — picks up DRIVER_ACTIVE role_state from DB
+      await refreshSession();
+
+      // 3. Accept driver policy (required before mode switch; user accepted terms in step 4)
+      await api.post('/driver/policy/accept');
+
+      // 4. Cache the driver profile locally so the dashboard renders immediately
+      await saveDriverProfile({
+        vehicleType: form.vehicleType,
+        plateNumber: form.plateNumber,
+        licenseNumber: form.licenseNumber,
+        province: form.province,
+        district: form.district,
+        sector: form.sector,
+        momoCode: form.momoCode,
+        merchantCode: form.merchantCode,
+        momoProvider: form.momoProvider,
+        dob: form.dob,
+        profileImage: selfieUri ?? undefined,
+        isOnline: false,
+        isVerified: true, // auto-approved in dev
+        acceptanceRate: 100,
+        completedRides: 0,
+        dailyRides: 0,
+        dailyDeclines: 0,
+        policyAccepted: true,
+        policyAcceptedAt: new Date().toISOString(),
+        earningsTotal: 0,
+        passengerSeats: form.passengerSeats ? parseInt(form.passengerSeats) : undefined,
+        loadCapacityKg: form.loadCapacityKg ? parseInt(form.loadCapacityKg) : undefined,
+      });
+
+      // 4. Switch mode — now works because the refreshed JWT has driver role
+      await switchMode('driver');
+
+      router.replace('/(driver)');
+    } catch (err: any) {
+      const code = err?.response?.data?.error?.code;
+      const message = err?.response?.data?.error?.message ?? 'Something went wrong. Please try again.';
+      if (code === 'DRIVER_ALREADY_APPLIED') {
+        // Profile already exists — refresh session, accept policy, then switch mode
+        try {
+          await refreshSession();
+          await api.post('/driver/policy/accept').catch(() => {}); // idempotent — ignore if already accepted
+          await switchMode('driver');
+          router.replace('/(driver)');
+        } catch {
+          Alert.alert('Error', 'Could not switch to driver mode. Please log out and back in.');
+        }
+      } else {
+        Alert.alert('Registration failed', message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const steps = ['Personal Info', 'Vehicle Info', 'Documents', 'Payment'];
@@ -382,7 +468,7 @@ export default function DriverOnboarding() {
               label="Date of Birth"
               placeholder="DD/MM/YYYY"
               value={form.dob}
-              onChangeText={t => update('dob', t)}
+              onChangeText={handleDobChange}
               error={errors.dob}
               leftIcon="calendar"
               keyboardType="number-pad"

@@ -73,7 +73,6 @@ export default function DriverNavigateScreen() {
   const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
-  const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
   const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -152,15 +151,6 @@ export default function DriverNavigateScreen() {
   }, [phase, currentRide?.waitStartedAt]);
 
   useEffect(() => {
-    if (phase !== 'inprogress') {
-      setShowReroute(false);
-      return;
-    }
-    const timer = setTimeout(() => setShowReroute(true), 5000);
-    return () => clearTimeout(timer);
-  }, [phase]);
-
-  useEffect(() => {
     if (!mapRef.current || !target || !currentRide) return;
     if (fittedMapPhaseRef.current === phase) return;
 
@@ -178,9 +168,9 @@ export default function DriverNavigateScreen() {
   if (!currentRide) return null;
 
   const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
-  const etaMin = target ? Math.round(distanceToTargetKm * 3 + 1) : 0;
   const canMarkArrived = phase !== 'pickup' || distanceToTargetKm <= ARRIVAL_UNLOCK_KM;
   const pickupDistanceText = formatDistance(distanceToTargetKm);
+  const routeEtaText = route && !routeLoading ? formatDuration(route.durationSeconds) : '--';
 
   const phaseLabel =
     phase === 'pickup' ? 'Heading to pickup' :
@@ -295,7 +285,7 @@ export default function DriverNavigateScreen() {
           <Text style={[styles.topPhase, { color: colors.primary }]}>{phaseLabel}</Text>
           {phase !== 'waiting' && (
             <Text style={[styles.topEta, { color: colors.foreground }]}>
-              ETA: {route && !routeLoading ? formatDuration(route.durationSeconds) : `${etaMin} min`}
+              ETA: {routeEtaText}
             </Text>
           )}
         </View>
@@ -308,18 +298,9 @@ export default function DriverNavigateScreen() {
         <View style={[styles.turnCard, { backgroundColor: colors.card, borderColor: colors.border, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 82 }]}>
           <MaterialCommunityIcons name="navigation" size={24} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.turnText, { color: colors.foreground }]}>In 400m, continue on the fastest route</Text>
-            <Text style={[styles.turnSubtext, { color: colors.mutedForeground }]}>Turn-by-turn navigation active</Text>
+            <Text style={[styles.turnText, { color: colors.foreground }]}>Follow current route to destination</Text>
+            <Text style={[styles.turnSubtext, { color: colors.mutedForeground }]}>Navigation powered by live route data</Text>
           </View>
-        </View>
-      )}
-
-      {showReroute && (
-        <View style={[styles.rerouteBanner, { backgroundColor: colors.primary, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 152 }]}>
-          <Text style={[styles.rerouteText, { color: colors.primaryForeground }]}>Faster route available</Text>
-          <TouchableOpacity style={styles.rerouteBtn} onPress={() => setShowReroute(false)}>
-            <Text style={[styles.rerouteBtnText, { color: colors.primaryForeground }]}>Reroute</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -361,7 +342,7 @@ export default function DriverNavigateScreen() {
               <View style={[styles.metricBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA</Text>
                 <Text style={[styles.metricValue, { color: colors.foreground }]}>
-                  {route && !routeLoading ? formatDuration(route.durationSeconds) : `${etaMin} min`}
+                  {routeEtaText}
                 </Text>
               </View>
               <View style={[styles.metricBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -385,7 +366,7 @@ export default function DriverNavigateScreen() {
             <Feather name="user" size={20} color={colors.foreground} />
           </View>
           <View style={styles.customerInfo}>
-            <Text style={[styles.customerName, { color: colors.foreground }]}>{currentRide.customerName ?? 'Customer'}</Text>
+            <Text style={[styles.customerName, { color: colors.foreground }]}>{currentRide.customerName ?? '--'}</Text>
             <Text style={[styles.fareText, { color: colors.primary }]}>
               Agreed: {currentRide.agreedFare?.toLocaleString() ?? '-'} RWF
             </Text>

@@ -19,6 +19,7 @@ import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useColors } from '@/hooks/useColors';
+import { register, toE164 } from '@/services/auth';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: 'ðŸ‡·ðŸ‡¼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -46,16 +47,32 @@ export default function LoginScreen() {
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountrySheet, setShowCountrySheet] = useState(false);
 
-  const handleContinue = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleContinue = async () => {
     if (phone.replace(/\D/g, '').length < selectedCountry.minLength) {
       setError('Enter a valid phone number');
       return;
     }
     setError('');
-    router.push({
-      pathname: '/(auth)/otp',
-      params: { phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`, mode: 'login' },
-    });
+    try {
+      setSubmitting(true);
+      const phoneNumber = toE164(selectedCountry.dialCode, phone);
+      const { devOtp } = await register(phoneNumber);
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone: phoneNumber, mode: 'login', ...(devOtp ? { dev_otp: devOtp } : {}) },
+      });
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error?.message ??
+        err?.response?.data?.message ??
+        err?.message ??
+        'Could not send OTP. Please try again.';
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -139,6 +156,7 @@ export default function LoginScreen() {
             onPress={handleContinue}
             fullWidth
             size="lg"
+            loading={submitting}
             disabled={phone.replace(/\D/g, '').length < selectedCountry.minLength}
           />
         </View>
