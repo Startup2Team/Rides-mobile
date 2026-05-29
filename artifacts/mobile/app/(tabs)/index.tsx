@@ -30,7 +30,7 @@ import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/Ba
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
-import { buttonCornerRadius } from '@/constants/buttons';
+import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
@@ -50,6 +50,31 @@ const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.515, 401);
 const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
+const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
+/** ~94% card width and bottom gap — matches iOS system sheets (AirPods-style). */
+/** Minimal side inset (~0.001cm) — card nearly full width with a hairline gap for corners/shadow. */
+const FLOATING_PANEL_MARGIN_H = 2;
+/** iOS system sheets (AirPods-style) use ~44–47pt continuous corners. */
+const FLOATING_PANEL_RADIUS = Platform.OS === 'ios' ? 47 : 28;
+const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
+/** ~0.5cm extra inset for floating panel content alignment. */
+const GREETING_LEFT_INSET = 14;
+/** ~0.2cm inset for controls tucked into the floating panel corner radius. */
+const FLOATING_PANEL_CORNER_INSET = 6;
+const floatingPanelSurface = {
+  borderRadius: FLOATING_PANEL_RADIUS,
+  ...Platform.select({
+    ios: { borderCurve: 'continuous' as const },
+    default: {},
+  }),
+  borderWidth: StyleSheet.hairlineWidth,
+  overflow: 'hidden' as const,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.14,
+  shadowRadius: 24,
+  elevation: 14,
+};
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
 const SAVE_LABEL_GAP = 8;
 const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = 20;
@@ -185,6 +210,7 @@ export default function CustomerHome() {
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
   const [mapType, setMapType] = useState<AppMapType>('standard');
+  const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
   const [locLoading, setLocLoading] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
 
@@ -241,12 +267,13 @@ export default function CustomerHome() {
   );
   const hasRideActions = destination !== null || destText.trim().length > 0;
   const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
-  const recenterBottomOffset = showBooking ? activePanelHeight + 16 : COMPACT_PANEL_HEIGHT + 64;
-  const bookingBottomPadding = insets.bottom + (
-    Platform.OS === 'web'
-      ? hasRideActions ? 92 : 54
-      : hasRideActions ? 84 : 48
-  );
+  const bookingPanelMapInset = activePanelHeight + FLOATING_PANEL_MARGIN_H;
+  const homePanelNavPadding = Platform.OS === 'web'
+    ? HOME_TAB_BAR_HEIGHT + 20
+    : HOME_TAB_BAR_HEIGHT + insets.bottom;
+  const homePanelBottomInset = FLOATING_PANEL_MARGIN_H;
+  const homePanelMapInset = homePanelHeight + homePanelBottomInset;
+  const recenterBottomOffset = showBooking ? bookingPanelMapInset + 16 : homePanelMapInset + 16;
   const hasPreciseRouteLocations =
     showBooking &&
     destination !== null &&
@@ -259,7 +286,7 @@ export default function CustomerHome() {
   };
 
   const centerMapOnUser = (duration = 700, panelHeightOverride?: number) => {
-    const panelHeight = panelHeightOverride ?? (showBooking ? activePanelHeight : COMPACT_PANEL_HEIGHT);
+    const panelHeight = panelHeightOverride ?? (showBooking ? bookingPanelMapInset : homePanelMapInset);
     const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     mapRef.current?.animateToRegion(
       {
@@ -490,7 +517,7 @@ export default function CustomerHome() {
     panelHeightOverride?: number,
   ) => {
     if (!isMapReady || coords.length < 2) return;
-    const panelHeight = panelHeightOverride ?? activePanelHeight;
+    const panelHeight = panelHeightOverride ?? bookingPanelMapInset;
     const topPadding = insets.top + (Platform.OS === 'web' ? 92 : 42);
     const bottomPadding = panelHeight + insets.bottom + 36;
 
@@ -503,7 +530,7 @@ export default function CustomerHome() {
       },
       animated: true,
     });
-  }, [activePanelHeight, insets.bottom, insets.top, isMapReady]);
+  }, [bookingPanelMapInset, insets.bottom, insets.top, isMapReady]);
   const animatedRouteCoords = useMemo(
     () => {
       if (visibleRouteCoords.length < 2) return [];
@@ -563,7 +590,7 @@ export default function CustomerHome() {
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        centerRouteInVisibleMap(routeCenterCoords, EXPANDED_PANEL_HEIGHT);
+        centerRouteInVisibleMap(routeCenterCoords, EXPANDED_PANEL_HEIGHT + FLOATING_PANEL_MARGIN_H);
         setRouteRecenterRequest(0);
       });
     });
@@ -579,12 +606,12 @@ export default function CustomerHome() {
 
   useEffect(() => {
     if (!isMapReady || !showBooking || routeCenterCoords.length < 2) return;
-    centerRouteInVisibleMap(routeCenterCoords, activePanelHeight);
+    centerRouteInVisibleMap(routeCenterCoords, bookingPanelMapInset);
   }, [
     isMapReady,
     showBooking,
     routeCenterCoords,
-    activePanelHeight,
+    bookingPanelMapInset,
     centerRouteInVisibleMap,
   ]);
 
@@ -608,9 +635,9 @@ export default function CustomerHome() {
         address: 'Current Location',
         locationType: 'precise',
       });
-      requestAnimationFrame(() => centerMapOnUser(400, COMPACT_PANEL_HEIGHT));
+      requestAnimationFrame(() => centerMapOnUser(400, homePanelMapInset));
     });
-  }, [activePanelHeight, sheetAnim, userLocation.latitude, userLocation.longitude]);
+  }, [activePanelHeight, homePanelMapInset, sheetAnim, userLocation.latitude, userLocation.longitude]);
 
   const snapBookingSheetOpen = () => {
     bookingCloseRef.current?.spinOpen();
@@ -1001,7 +1028,7 @@ export default function CustomerHome() {
       .slice(0, 5);
   }, [rideHistory]);
 
-  const homeMapLatitudeOffset = (COMPACT_PANEL_HEIGHT / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
+  const homeMapLatitudeOffset = (homePanelMapInset / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
   const homeInitialRegion = {
     latitude: userLocation.latitude - homeMapLatitudeOffset,
     longitude: userLocation.longitude,
@@ -1031,7 +1058,7 @@ export default function CustomerHome() {
         onMapReady={() => {
           setIsMapReady(true);
           if (routeCenterCoords.length > 1) {
-            requestAnimationFrame(() => centerRouteInVisibleMap(routeCenterCoords, activePanelHeight));
+            requestAnimationFrame(() => centerRouteInVisibleMap(routeCenterCoords, bookingPanelMapInset));
           } else if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
             hasCenteredOnUserRef.current = true;
             centerMapOnUser(300);
@@ -1158,7 +1185,22 @@ export default function CustomerHome() {
 
       {/* Home bottom panel */}
       {!showBooking && (
-        <View style={[styles.bottomPanel, { backgroundColor: colors.background, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 28 : 55) }]}>
+        <View
+          onLayout={event => {
+            const height = event.nativeEvent.layout.height;
+            if (height > 0) setHomePanelHeight(height);
+          }}
+          style={[
+            styles.bottomPanel,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              bottom: homePanelBottomInset,
+              width: SCREEN_WIDTH - FLOATING_PANEL_MARGIN_H * 2,
+              paddingBottom: homePanelNavPadding,
+            },
+          ]}
+        >
           <Text style={[styles.greeting, { color: colors.foreground }]}>
             Hi {user?.name?.split(' ')[0]} 👋
           </Text>
@@ -1188,12 +1230,9 @@ export default function CustomerHome() {
         </View>
       )}
 
-      {/* Distance & time floating cards — rendered outside booking block so they sit above the overlay */}
       {/* Booking bottom sheet — same height as home panel, sits above tab bar */}
       {showBooking && (
         <>
-          <View pointerEvents="none" style={styles.overlay} />
-
           <KeyboardAvoidingView
             style={[styles.bookingSheetWrapper, { height: activePanelHeight }]}
             behavior={Platform.OS === 'ios' ? 'position' : 'height'}
@@ -1203,31 +1242,33 @@ export default function CustomerHome() {
             style={[
               styles.bookingSheet,
               {
-                backgroundColor: colors.background,
+                backgroundColor: colors.card,
+                borderColor: colors.border,
                 height: activePanelHeight,
-                paddingBottom: bookingBottomPadding,
+                paddingBottom: homePanelNavPadding,
                 transform: [{ translateY: sheetAnim }],
               },
             ]}
           >
             {/* Handle + header — swipe down on handle only (close is not in pan zone) */}
-            <View style={styles.sheetDragZone}>
-              <View style={styles.sheetHandleTouch} {...bookingSheetPanResponder.panHandlers}>
+            <View style={[styles.sheetDragZone, styles.bookingSheetDragZone]}>
+              <View style={[styles.sheetHandleTouch, styles.bookingSheetHandleTouch]} {...bookingSheetPanResponder.panHandlers}>
                 <View style={styles.sheetHandle} />
               </View>
-              <View style={styles.sheetHeader}>
+              <View style={styles.bookingSheetHeader}>
                 <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
                 <CloseButton
                   ref={bookingCloseRef}
                   shutOnPress={false}
                   onPress={closeBooking}
                   accessibilityLabel="Close booking"
+                  style={styles.bookingCloseButton}
                 />
               </View>
             </View>
 
             {/* Pickup / Destination */}
-            <View style={[styles.locationCard, { backgroundColor: colors.card }]}>
+            <View style={[styles.locationCard, { backgroundColor: colors.muted }]}>
               <TouchableOpacity style={styles.locRow} onPress={() => openLocationSearch('pickup')} activeOpacity={0.75}>
                 <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
                 <View style={styles.locTextBlock}>
@@ -1312,7 +1353,7 @@ export default function CustomerHome() {
             {/* Find Driver — shows when destination selected OR when a name has been typed */}
             {destination && (
               <View style={styles.rideInfoRow}>
-                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
                   <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Est. Time</Text>
@@ -1321,7 +1362,7 @@ export default function CustomerHome() {
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
                   <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Distance</Text>
@@ -2031,7 +2072,7 @@ const darkMapStyle = [
 const styles = StyleSheet.create({
   container: { flex: 1 },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, gap: 10, zIndex: 10 },
-  topCard: { flex: 1, minHeight: 44, borderRadius: 15, paddingHorizontal: 12, paddingVertical: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
+  topCard: { flex: 1, minHeight: BUTTON_HEIGHT.sm, borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm), paddingHorizontal: 12, paddingVertical: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
   locationRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   locationIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   locationCopy: { flex: 1, alignItems: 'center', minWidth: 0 },
@@ -2045,26 +2086,60 @@ const styles = StyleSheet.create({
   youAreHereBubble: { backgroundColor: '#00C853', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
   youAreHereText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#fff' },
   youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#00C853' },
-  // Home bottom panel
-  bottomPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 24, paddingHorizontal: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 16 },
-  greeting: { fontSize: 22, fontFamily: 'Inter_700Bold' },
-  selectRide: { fontSize: 14, fontFamily: 'Inter_500Medium', marginTop: -6 },
-  vehicleRow: { flexDirection: 'row', gap: 8 },
-  vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 10, borderRadius: 14, gap: 6 },
+  // Home bottom panel — iOS-style floating card (~94% width, lifted margin on all sides)
+  bottomPanel: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: FLOATING_PANEL_MARGIN_H,
+    ...floatingPanelSurface,
+    paddingTop: 22,
+    paddingHorizontal: 22,
+    gap: 10,
+  },
+  greeting: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'left', marginLeft: GREETING_LEFT_INSET },
+  selectRide: { fontSize: 14, fontFamily: 'Inter_500Medium', textAlign: 'left', marginTop: -4, marginLeft: GREETING_LEFT_INSET },
+  vehicleRow: { flexDirection: 'row', gap: 8, marginTop: 2, marginHorizontal: GREETING_LEFT_INSET },
+  vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 8, borderRadius: 14, gap: 4 },
   vehicleLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: buttonCornerRadius(52), gap: 8 },
+  continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: buttonCornerRadius(50), gap: 8, marginTop: 4, marginHorizontal: GREETING_LEFT_INSET },
   continueBtnText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   // Booking sheet
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 20 },
-  bookingSheetWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 30 },
-  bookingSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 19, paddingTop: 8, paddingBottom: 13, gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 24 },
+  bookingSheetWrapper: {
+    position: 'absolute',
+    bottom: FLOATING_PANEL_MARGIN_H,
+    left: FLOATING_PANEL_MARGIN_H,
+    width: SCREEN_WIDTH - FLOATING_PANEL_MARGIN_H * 2,
+    zIndex: 30,
+  },
+  bookingSheet: {
+    ...floatingPanelSurface,
+    paddingTop: 0,
+    paddingHorizontal: 22,
+    gap: 10,
+  },
   sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
+  bookingSheetDragZone: { paddingTop: 0, paddingBottom: 0, marginTop: 0 },
   sheetHandleTouch: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: -2 },
+  bookingSheetHandleTouch: { paddingTop: 6, paddingBottom: 4, marginBottom: 0 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sheetTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
-  locationCard: { borderRadius: 14, padding: 9 },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
+  bookingSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: GREETING_LEFT_INSET,
+    paddingRight: FLOATING_PANEL_CORNER_INSET,
+    minHeight: 44,
+  },
+  bookingCloseButton: {
+    marginRight: -4,
+  },
+  sheetTitle: { flex: 1, fontSize: 16, fontFamily: 'Inter_600SemiBold', marginRight: 8 },
+  locationCard: {
+    borderRadius: 15,
+    padding: 10,
+    marginHorizontal: GREETING_LEFT_INSET,
+  },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   locDot: { width: 12, height: 12, borderRadius: 6 },
   locLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', marginBottom: 2 },
   locInlineLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
@@ -2073,10 +2148,10 @@ const styles = StyleSheet.create({
   locDivider: { height: 1, marginLeft: 24 },
   currentLocBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 1, flexShrink: 1, maxWidth: '52%' },
   currentLocText: { fontSize: 12, fontFamily: 'Inter_500Medium', flexShrink: 1 },
-  locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  rideInfoRow: { flexDirection: 'row', gap: 6 },
+  locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginHorizontal: GREETING_LEFT_INSET },
+  rideInfoRow: { flexDirection: 'row', gap: 6, marginHorizontal: GREETING_LEFT_INSET },
   rideInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 14, gap: 5 },
-  findDriverAction: { marginTop: 'auto', width: '100%', paddingTop: 4, paddingBottom: 2 },
+  findDriverAction: { marginTop: 'auto', paddingTop: 4, paddingBottom: 2, marginHorizontal: GREETING_LEFT_INSET },
   rideInfoText: { flex: 1, gap: 2 },
   rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   rideInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
