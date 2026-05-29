@@ -391,7 +391,7 @@ export default function RideScreen() {
       </View>
 
       {isInProgress && (
-        <View style={[styles.tbtCard, { backgroundColor: colors.card, borderColor: colors.border, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 70 }]}>
+        <View style={[styles.tbtCard, { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 70 }]}>
           <MaterialCommunityIcons name="navigation" size={24} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.tbtText, { color: colors.foreground }]}>
@@ -439,7 +439,7 @@ export default function RideScreen() {
         </View>
 
         {/* Fare */}
-        <View style={[styles.fareRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.fareRow, { backgroundColor: colors.muted }]}>
           <View style={styles.fareItem}>
             <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Agreed Fare</Text>
             <Text style={[styles.fareValue, { color: colors.primary }]}>
@@ -465,37 +465,37 @@ export default function RideScreen() {
         {/* Actions */}
         <View style={styles.actions}>
           {(isArriving || isArrived) && (
-            <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                isArriving && styles.wideActionBtn,
-                { backgroundColor: colors.muted },
-              ]}
+            <KandaButton
+              title={isArriving ? 'Call driver' : 'Call'}
+              icon="phone"
+              variant="secondary"
+              size="sm"
               onPress={handleCallDriver}
-            >
-              <Feather name="phone" size={20} color={colors.foreground} />
-              {isArriving && (
-                <Text style={[styles.callBtnText, { color: colors.foreground }]}>Call driver</Text>
-              )}
-            </TouchableOpacity>
+              iconOnly={!isArriving}
+              style={isArriving ? styles.wideActionBtn : undefined}
+            />
           )}
           {isArriving && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive }]}
+            <KandaButton
+              title="Cancel"
+              icon="x"
+              variant="dangerPlain"
+              size="sm"
+              iconOnly
               onPress={handleCancelArriving}
-            >
-              <Feather name="x" size={18} color={colors.destructive} />
-            </TouchableOpacity>
+              accessibilityLabel="Cancel ride"
+            />
           )}
           {isArrived && (
             <>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive, flex: 1 }]}
+              <KandaButton
+                title="Cancel Ride"
+                icon="x"
+                variant="dangerPlain"
+                size="sm"
                 onPress={handleCancelArrived}
-              >
-                <Feather name="x" size={18} color={colors.destructive} />
-                <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>Cancel Ride</Text>
-              </TouchableOpacity>
+                style={{ flex: 1 }}
+              />
               <KandaButton
                 title="Start Journey"
                 onPress={startJourney}
@@ -513,12 +513,15 @@ export default function RideScreen() {
               >
                 <Text style={styles.sosBtnText}>SOS</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.destructive + '20', borderWidth: 1, borderColor: colors.destructive }]}
+              <KandaButton
+                title="Emergency"
+                icon="alert-octagon"
+                variant="dangerPlain"
+                size="sm"
+                iconOnly
                 onPress={handleEmergencyEnd}
-              >
-                <Feather name="alert-octagon" size={20} color={colors.destructive} />
-              </TouchableOpacity>
+                accessibilityLabel="Report emergency"
+              />
               <KandaButton
                 title="Complete Ride"
                 onPress={handleComplete}
@@ -537,30 +540,24 @@ export default function RideScreen() {
         onRequestClose={() => setCancelModalVisible(false)}
       >
         <View style={styles.cancelOverlay}>
-          <View style={[styles.cancelCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={[styles.cancelCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.cancelTitle, { color: colors.foreground }]}>Why are you cancelling?</Text>
 
-            {/* "Keep" button — primary/blue, selected by default */}
-            <TouchableOpacity
-              style={[styles.cancelOption, { backgroundColor: colors.primary }]}
+            <KandaButton
+              title={cancelModalKeepLabel}
+              variant="primary"
+              fullWidth
               onPress={() => setCancelModalVisible(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.cancelOptionText, { color: colors.primaryForeground }]}>
-                {cancelModalKeepLabel}
-              </Text>
-            </TouchableOpacity>
+            />
 
-            {/* Reason options */}
             {cancelModalReasons.map(reason => (
-              <TouchableOpacity
+              <KandaButton
                 key={reason}
-                style={[styles.cancelOption, { backgroundColor: colors.muted, borderColor: colors.border, borderWidth: 1 }]}
+                title={reason}
+                variant="secondary"
+                fullWidth
                 onPress={() => { setCancelModalVisible(false); doCancelRide(); }}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.cancelOptionText, { color: colors.foreground }]}>{reason}</Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         </View>
@@ -573,7 +570,7 @@ export default function RideScreen() {
         onRequestClose={() => setCompleteModalVisible(false)}
       >
         <View style={styles.completeOverlay}>
-          <View style={[styles.completeCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={[styles.completeCard, { backgroundColor: colors.background }]}>
             <View style={[styles.completeIconWrap, { backgroundColor: colors.primary + '18' }]}>
               <Feather name="check-circle" size={30} color={colors.primary} />
             </View>
@@ -582,20 +579,18 @@ export default function RideScreen() {
               Confirm only when you have reached your destination.
             </Text>
             <View style={styles.completeActions}>
-              <TouchableOpacity
-                style={[styles.completeSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.muted }]}
+              <KandaButton
+                title="Not yet"
+                variant="secondary"
                 onPress={() => setCompleteModalVisible(false)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.completeSecondaryText, { color: colors.foreground }]}>Not yet</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.completePrimaryBtn, { backgroundColor: colors.primary }]}
+                style={styles.completeActionBtn}
+              />
+              <KandaButton
+                title="Complete"
+                variant="primary"
                 onPress={confirmCompleteRide}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.completePrimaryText, { color: colors.primaryForeground }]}>Complete</Text>
-              </TouchableOpacity>
+                style={styles.completeActionBtn}
+              />
             </View>
           </View>
         </View>
@@ -691,7 +686,6 @@ const styles = StyleSheet.create({
   fareRow: {
     flexDirection: 'row',
     borderRadius: 14,
-    borderWidth: 1,
     overflow: 'hidden',
   },
   fareItem: { flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 },
@@ -699,10 +693,7 @@ const styles = StyleSheet.create({
   fareLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   fareValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  actionBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  wideActionBtn: { flex: 1, width: undefined, flexDirection: 'row', gap: 8 },
-  callBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  cancelBtnText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  wideActionBtn: { flex: 1 },
   tbtCard: {
     position: 'absolute',
     left: 16,
@@ -711,7 +702,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderRadius: 14,
-    borderWidth: 1,
     padding: 14,
   },
   tbtText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
@@ -727,19 +717,10 @@ const styles = StyleSheet.create({
   cancelCard: {
     width: '100%',
     borderRadius: 20,
-    borderWidth: 1,
     padding: 16,
     gap: 10,
   },
   cancelTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center', marginBottom: 4 },
-  cancelOption: {
-    height: 50,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  cancelOptionText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   completeOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -751,7 +732,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     borderRadius: 20,
-    borderWidth: 1,
     padding: 20,
     alignItems: 'center',
   },
@@ -772,25 +752,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   completeActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 20 },
-  completeSecondaryBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  completePrimaryBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  completeSecondaryText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  completePrimaryText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  completeActionBtn: { flex: 1 },
   sosBtn: {
     width: 52,
     height: 52,

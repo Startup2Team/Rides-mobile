@@ -59,7 +59,7 @@ export default function WelcomeScreen() {
         <KandaButton
           title="Already have an account? Log in"
           onPress={() => router.push('/(auth)/login')}
-          variant="outline"
+          variant="plain"
           fullWidth
           size="lg"
         />

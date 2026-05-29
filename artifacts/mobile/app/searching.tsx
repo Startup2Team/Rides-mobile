@@ -143,7 +143,7 @@ export default function SearchingScreen() {
         </Text>
 
         {currentRide && (
-          <View style={[styles.routeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.routeCard, { backgroundColor: colors.card }]}>
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
               <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
@@ -224,7 +224,6 @@ const styles = StyleSheet.create({
   },
   routeCard: {
     borderRadius: 16,
-    borderWidth: 1,
     padding: 14,
     gap: 8,
     marginTop: 8,

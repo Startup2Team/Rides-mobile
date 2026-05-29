@@ -114,7 +114,7 @@ export default function RideDetailScreen() {
           },
         ]}
       >
-        <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.summaryCard, { backgroundColor: colors.card }]}>
           <View style={styles.summaryTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Total paid</Text>
@@ -150,7 +150,7 @@ export default function RideDetailScreen() {
         </View>
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ROUTE</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
           <View style={styles.routeRow}>
             <View style={styles.routeIcons}>
               <View style={[styles.dot, { backgroundColor: colors.primary }]} />
@@ -176,7 +176,7 @@ export default function RideDetailScreen() {
         </View>
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>TRIP SUMMARY</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
           <DetailRow icon="map" label="Distance" value={`${ride.distance} km`} color={colors.primary} />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
           <DetailRow icon="clock" label="Duration" value={formatDuration(ride.duration)} color={colors.primary} />
@@ -195,7 +195,7 @@ export default function RideDetailScreen() {
         {ride.driver && (
           <>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>DRIVER</Text>
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.card, { backgroundColor: colors.card }]}>
               <View style={styles.driverRow}>
                 {driverImage ? (
                   <Image source={{ uri: driverImage }} style={styles.driverAvatarImage} />
@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 20 },
   summaryCard: {
     borderRadius: 18,
-    borderWidth: 1,
     padding: 18,
     gap: 16,
   },
@@ -249,7 +248,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginTop: 10,
   },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16 },
+  card: { borderRadius: 16, padding: 16 },
   routeRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
   routeIcons: { alignItems: 'center', gap: 4, paddingVertical: 2 },
   dot: { width: 10, height: 10, borderRadius: 5 },

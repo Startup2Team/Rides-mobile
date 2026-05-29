@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   languageOption: {
     minHeight: 64,
-    borderRadius: 14,
+    borderRadius: 32,
     borderWidth: 1.5,
     paddingHorizontal: 14,
     flexDirection: 'row',
