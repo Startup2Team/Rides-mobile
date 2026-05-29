@@ -59,6 +59,8 @@ const FLOATING_PANEL_RADIUS = Platform.OS === 'ios' ? 47 : 28;
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 const GREETING_LEFT_INSET = 14;
+/** ~0.2cm inset for controls tucked into the floating panel corner radius. */
+const FLOATING_PANEL_CORNER_INSET = 6;
 const floatingPanelSurface = {
   borderRadius: FLOATING_PANEL_RADIUS,
   ...Platform.select({
@@ -1253,13 +1255,14 @@ export default function CustomerHome() {
               <View style={[styles.sheetHandleTouch, styles.bookingSheetHandleTouch]} {...bookingSheetPanResponder.panHandlers}>
                 <View style={styles.sheetHandle} />
               </View>
-              <View style={styles.sheetHeader}>
+              <View style={styles.bookingSheetHeader}>
                 <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
                 <CloseButton
                   ref={bookingCloseRef}
                   shutOnPress={false}
                   onPress={closeBooking}
                   accessibilityLabel="Close booking"
+                  style={styles.bookingCloseButton}
                 />
               </View>
             </View>
@@ -1350,7 +1353,7 @@ export default function CustomerHome() {
             {/* Find Driver — shows when destination selected OR when a name has been typed */}
             {destination && (
               <View style={styles.rideInfoRow}>
-                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
                   <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Est. Time</Text>
@@ -1359,7 +1362,7 @@ export default function CustomerHome() {
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
                   <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Distance</Text>
@@ -2110,19 +2113,33 @@ const styles = StyleSheet.create({
   },
   bookingSheet: {
     ...floatingPanelSurface,
-    paddingTop: 10,
+    paddingTop: 0,
     paddingHorizontal: 22,
     gap: 10,
   },
   sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
-  bookingSheetDragZone: { paddingTop: 0, paddingBottom: 0 },
+  bookingSheetDragZone: { paddingTop: 0, paddingBottom: 0, marginTop: 0 },
   sheetHandleTouch: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: -2 },
-  bookingSheetHandleTouch: { paddingVertical: 6, marginBottom: 0 },
+  bookingSheetHandleTouch: { paddingTop: 6, paddingBottom: 4, marginBottom: 0 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: GREETING_LEFT_INSET },
-  sheetTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
-  locationCard: { borderRadius: 14, padding: 9, marginHorizontal: GREETING_LEFT_INSET },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
+  bookingSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: GREETING_LEFT_INSET,
+    paddingRight: FLOATING_PANEL_CORNER_INSET,
+    minHeight: 44,
+  },
+  bookingCloseButton: {
+    marginRight: -4,
+  },
+  sheetTitle: { flex: 1, fontSize: 16, fontFamily: 'Inter_600SemiBold', marginRight: 8 },
+  locationCard: {
+    borderRadius: 15,
+    padding: 10,
+    marginHorizontal: GREETING_LEFT_INSET,
+  },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   locDot: { width: 12, height: 12, borderRadius: 6 },
   locLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', marginBottom: 2 },
   locInlineLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
