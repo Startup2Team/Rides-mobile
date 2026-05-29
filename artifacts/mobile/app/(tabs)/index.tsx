@@ -552,8 +552,11 @@ export default function CustomerHome() {
     if (routePreviewCoords.length > 1) {
       centerRouteInVisibleMap(routePreviewCoords);
     }
-    if (!destination) setRouteCoords([]);
-  }, [routePreviewCoords, centerRouteInVisibleMap]);
+    if (!showBooking || !destination) {
+      setRouteCoords([]);
+      setRouteAnimProgress(0);
+    }
+  }, [routePreviewCoords, centerRouteInVisibleMap, showBooking, destination]);
 
   useEffect(() => {
     if (!routeRecenterRequest || !showBooking || !destination || routeCenterCoords.length < 2) return;
@@ -597,8 +600,17 @@ export default function CustomerHome() {
       setDestText('');
       setDestination(null);
       setSuggestions([]);
+      setRouteCoords([]);
+      setRouteAnimProgress(0);
+      setPickup({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        address: 'Current Location',
+        locationType: 'precise',
+      });
+      requestAnimationFrame(() => centerMapOnUser(400, COMPACT_PANEL_HEIGHT));
     });
-  }, [activePanelHeight, sheetAnim]);
+  }, [activePanelHeight, sheetAnim, userLocation.latitude, userLocation.longitude]);
 
   const snapBookingSheetOpen = () => {
     bookingCloseRef.current?.spinOpen();
@@ -968,11 +980,11 @@ export default function CustomerHome() {
 
   const visibleDrivers = useMemo(() => {
     return DRIVER_OFFSETS.map((offset, i) => ({
-      id: `${selectedVehicle}-${i}`,
+      id: `nearby-driver-${i}`,
       latitude: userLocation.latitude + offset.lat,
       longitude: userLocation.longitude + offset.lng,
     }));
-  }, [selectedVehicle, userLocation]);
+  }, [userLocation.latitude, userLocation.longitude]);
 
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
 
@@ -1060,23 +1072,13 @@ export default function CustomerHome() {
           </Marker>
         )}
 
-        {!locLoading && !hasPreciseRouteLocations && (
-          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.youAreHereContainer}>
-              <View style={styles.youAreHereBubble}>
-                <Text style={styles.youAreHereText}>You're Here</Text>
-              </View>
-              <View style={styles.youAreHereTail} />
-            </View>
-          </Marker>
-        )}
-
         {visibleDrivers.map(driver => (
           <Marker
             key={driver.id}
             coordinate={{ latitude: driver.latitude, longitude: driver.longitude }}
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
+            zIndex={1}
           >
             <View style={styles.vehicleMarkerWrap}>
               <Image
@@ -1090,6 +1092,17 @@ export default function CustomerHome() {
             </View>
           </Marker>
         ))}
+
+        {!locLoading && !hasPreciseRouteLocations && (
+          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
+            <View style={styles.youAreHereContainer}>
+              <View style={styles.youAreHereBubble}>
+                <Text style={styles.youAreHereText}>You're Here</Text>
+              </View>
+              <View style={styles.youAreHereTail} />
+            </View>
+          </Marker>
+        )}
       </MapView>
 
       {/* Top bar */}
