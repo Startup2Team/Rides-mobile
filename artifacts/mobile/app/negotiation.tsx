@@ -178,7 +178,7 @@ function OfferTimelineItem({ msg }: { msg: NegotiationMessage }) {
         )}
         <View style={styles.bubbleFooter}>
           {msg.isFinal && (
-            <View style={[styles.lockedBadge, { backgroundColor: isCustomer ? 'rgba(255,255,255,0.16)' : colors.primary + '18' }]}>
+            <View style={[styles.lockedBadge, { backgroundColor: isCustomer ? 'rgba(255,255,255,0.16)' : colors.primaryHex + '18' }]}>
               <Feather name="lock" size={10} color={isCustomer ? colors.primaryForeground : colors.primary} />
             </View>
           )}
@@ -554,7 +554,7 @@ export default function NegotiationScreen() {
           onLayout={event => setActionPanelHeight(event.nativeEvent.layout.height)}
         >
         {customerLimitReached && (
-          <View style={[styles.limitBanner, { backgroundColor: colors.primary + '14' }]}>
+          <View style={[styles.limitBanner, { backgroundColor: colors.primaryHex + '14' }]}>
             <Feather name="phone-call" size={15} color={colors.primary} />
             <Text style={[styles.limitText, { color: colors.foreground }]}>
               Offer limit reached. Call the driver to continue.
@@ -596,7 +596,7 @@ export default function NegotiationScreen() {
       </View>
 
       <ConfirmDialog visible={showAcceptModal} onClose={() => setShowAcceptModal(false)}>
-        <View style={[styles.modalIcon, { backgroundColor: colors.primary + '20' }]}>
+        <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="shield" size={24} color={colors.primary} />
         </View>
         <Text style={[styles.modalTitle, { color: colors.foreground }]}>Accept {formatFare(lastDriverOffer?.amount)}?</Text>

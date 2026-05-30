@@ -64,7 +64,7 @@ function OfferTimelineItem({
         <View style={styles.timelineHeader}>
           <Text style={[styles.timelineActor, { color: isSystem ? colors.mutedForeground : metaColor }]}>{label}</Text>
           {msg.isFinal && (
-            <View style={[styles.lockedBadge, { backgroundColor: isCustomer ? 'rgba(255,255,255,0.18)' : colors.primary + '20' }]}>
+            <View style={[styles.lockedBadge, { backgroundColor: isCustomer ? 'rgba(255,255,255,0.18)' : colors.primaryHex + '20' }]}>
               <Feather name="lock" size={11} color={isCustomer ? colors.primaryForeground : colors.primary} />
               <Text style={[styles.lockedText, { color: isCustomer ? colors.primaryForeground : colors.primary }]}>Locked</Text>
             </View>
@@ -302,7 +302,7 @@ export default function DriverNegotiationScreen() {
       </View>
 
       <ConfirmDialog visible={showAcceptModal} onClose={() => setShowAcceptModal(false)}>
-        <View style={[styles.modalIcon, { backgroundColor: colors.primary + '20' }]}>
+        <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="shield" size={24} color={colors.primary} />
         </View>
         <Text style={[styles.modalTitle, { color: colors.foreground }]}>Accept {formatFare(acceptAmount)}?</Text>

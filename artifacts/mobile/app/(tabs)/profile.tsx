@@ -138,7 +138,7 @@ export default function ProfileScreen() {
       {/* Join as Driver banner */}
       {!driverProfile && (
         <TouchableOpacity
-          style={[styles.driverBanner, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}
+          style={[styles.driverBanner, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primary }]}
           onPress={handleSwitchToDriver}
           activeOpacity={0.85}
         >

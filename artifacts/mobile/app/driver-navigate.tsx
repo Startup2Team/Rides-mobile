@@ -302,7 +302,7 @@ export default function DriverNavigateScreen() {
             <Feather name="map-pin" size={14} color="#fff" />
           </View>
         </Marker>
-        {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.primary} width={4} />}
+        {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
       </MapView>
 
       <View style={[styles.topBar, {
@@ -371,7 +371,7 @@ export default function DriverNavigateScreen() {
                 <Text style={[styles.arrivingEyebrow, { color: colors.primary }]}>Pickup in progress</Text>
                 <Text style={[styles.arrivingTitle, { color: colors.foreground }]}>Navigate to the customer</Text>
               </View>
-              <View style={[styles.arrivingBadge, { backgroundColor: colors.primary + '18' }]}>
+              <View style={[styles.arrivingBadge, { backgroundColor: colors.primaryHex + '18' }]}>
                 <Feather name="navigation" size={14} color={colors.primary} />
                 <Text style={[styles.arrivingBadgeText, { color: colors.primary }]}>{pickupDistanceText}</Text>
               </View>
@@ -433,8 +433,8 @@ export default function DriverNavigateScreen() {
         {phase === 'waiting' && (
           <View style={styles.waitingBlock}>
             <View style={[styles.timerBox, {
-              backgroundColor: timerExpired ? colors.destructive + '15' : colors.primary + '15',
-              borderColor: timerExpired ? colors.destructive + '40' : colors.primary + '30',
+              backgroundColor: timerExpired ? colors.destructive + '15' : colors.primaryHex + '15',
+              borderColor: timerExpired ? colors.destructive + '40' : colors.primaryHex + '30',
             }]}>
               <Feather name="clock" size={18} color={timerExpired ? colors.destructive : colors.primary} />
               <Text style={[styles.timerLabel, { color: colors.mutedForeground }]}>Time remaining</Text>

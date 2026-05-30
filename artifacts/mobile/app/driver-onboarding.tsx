@@ -398,7 +398,7 @@ export default function DriverOnboarding() {
               <View style={styles.selfiePreviewRow}>
                 <Image source={{ uri: selfieUri }} style={styles.selfieImage} resizeMode="cover" />
                 <View style={{ flex: 1, gap: 8 }}>
-                  <View style={[styles.docUploaded, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                  <View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}>
                     <Feather name="check-circle" size={14} color={colors.primary} />
                     <Text style={[styles.docUploadedText, { color: colors.primary }]}>Photo taken</Text>
                   </View>
@@ -417,13 +417,13 @@ export default function DriverOnboarding() {
                   styles.selfieBtn,
                   {
                     borderColor: errors.selfie ? colors.destructive : colors.primary,
-                    backgroundColor: colors.primary + '08',
+                    backgroundColor: colors.primaryHex + '08',
                   },
                 ]}
                 onPress={takeSelfie}
                 activeOpacity={0.75}
               >
-                <View style={[styles.selfieIconCircle, { backgroundColor: colors.primary + '20' }]}>
+                <View style={[styles.selfieIconCircle, { backgroundColor: colors.primaryHex + '20' }]}>
                   <Feather name="camera" size={24} color={colors.primary} />
                 </View>
                 <Text style={[styles.selfieLabel, { color: colors.primary }]}>Take Selfie</Text>
@@ -585,7 +585,7 @@ export default function DriverOnboarding() {
                   <View style={styles.docPreviewRow}>
                     <Image source={{ uri: docs[doc.key][0]! }} style={styles.docThumb} resizeMode="cover" />
                     <View style={{ flex: 1, gap: 6 }}>
-                      <View style={[styles.docUploaded, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                      <View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}>
                         <Feather name="check-circle" size={14} color={colors.primary} />
                         <Text style={[styles.docUploadedText, { color: colors.primary }]}>Uploaded</Text>
                       </View>
@@ -641,7 +641,7 @@ export default function DriverOnboarding() {
                       <View style={styles.docPreviewRow}>
                         <Image source={{ uri: docs[doc.key][1]! }} style={styles.docThumb} resizeMode="cover" />
                         <View style={{ flex: 1, gap: 6 }}>
-                          <View style={[styles.docUploaded, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                          <View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}>
                             <Feather name="check-circle" size={14} color={colors.primary} />
                             <Text style={[styles.docUploadedText, { color: colors.primary }]}>Uploaded</Text>
                           </View>
@@ -700,7 +700,7 @@ export default function DriverOnboarding() {
                 <TouchableOpacity
                   key={provider}
                   style={[styles.providerCard, {
-                    backgroundColor: form.momoProvider === provider ? colors.primary + '15' : colors.card,
+                    backgroundColor: form.momoProvider === provider ? colors.primaryHex + '15' : colors.card,
                     borderColor: form.momoProvider === provider ? colors.primary : colors.border,
                   }]}
                   onPress={() => update('momoProvider', provider)}

@@ -1,24 +1,53 @@
-import { useColorScheme } from "react-native";
+import { Platform, PlatformColor, useColorScheme } from 'react-native';
 
-import colors from "@/constants/colors";
+import colors from '@/constants/colors';
+import {
+  brandGreenHex,
+  systemBlueHex,
+  systemOrangeHex,
+  systemRedHex,
+} from '@/constants/systemColors';
 
 /**
- * Returns the design tokens for the current color scheme.
+ * Semantic colors for the active scheme.
  *
- * The returned object contains all color tokens for the active palette
- * plus scheme-independent values like `radius`.
- *
- * Falls back to the light palette when no dark key is defined in
- * constants/colors.ts (the scaffold ships light-only by default).
- * When a sibling web artifact's dark tokens are synced into a `dark`
- * key, this hook will automatically switch palettes based on the
- * device's appearance setting.
+ * iOS: primary / destructive / warning use native `PlatformColor` (systemBlue, systemRed, systemOrange).
+ * Brand green (`success`) keeps Taravelis #00C853 for map + live/success moments.
+ * Use `*Hex` siblings for alpha suffixes (`primaryHex + '18'`).
  */
 export function useColors() {
   const scheme = useColorScheme();
   const palette =
-    scheme === "dark" && "dark" in colors
+    scheme === 'dark' && 'dark' in colors
       ? (colors as unknown as Record<string, typeof colors.light>).dark
       : colors.light;
-  return { ...palette, radius: colors.radius };
+
+  const primaryHex = systemBlueHex(scheme);
+  const successHex = brandGreenHex(scheme);
+  const warningHex = systemOrangeHex(scheme);
+  const destructiveHex = systemRedHex(scheme);
+
+  const useNative = Platform.OS === 'ios';
+  const systemBlue = useNative ? PlatformColor('systemBlue') : primaryHex;
+  const systemRed = useNative ? PlatformColor('systemRed') : destructiveHex;
+  const systemOrange = useNative ? PlatformColor('systemOrange') : warningHex;
+
+  return {
+    ...palette,
+    radius: colors.radius,
+    primary: systemBlue,
+    primaryHex,
+    tint: systemBlue,
+    star: systemBlue,
+    accentForeground: systemBlue,
+    starMuted: `${primaryHex}55`,
+    success: successHex,
+    successHex,
+    successMuted: palette.successMuted,
+    warning: systemOrange,
+    warningHex,
+    warningMuted: palette.warningMuted,
+    destructive: systemRed,
+    destructiveHex,
+  };
 }

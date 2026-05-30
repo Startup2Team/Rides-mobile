@@ -49,7 +49,7 @@ export default function DriverProfileScreen() {
         </View>
         <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
         <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
-        <View style={[styles.driverBadge, { backgroundColor: colors.primary + '20' }]}>
+        <View style={[styles.driverBadge, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="zap" size={12} color={colors.primary} />
           <Text style={[styles.driverBadgeText, { color: colors.primary }]}>Verified Driver</Text>
         </View>
@@ -87,7 +87,7 @@ export default function DriverProfileScreen() {
         onPress={handleSwitchToCustomer}
         activeOpacity={0.75}
       >
-        <View style={[styles.switchModeIcon, { backgroundColor: colors.primary + '15' }]}>
+        <View style={[styles.switchModeIcon, { backgroundColor: colors.primaryHex + '15' }]}>
           <Feather name="user" size={16} color={colors.primary} />
         </View>
         <Text style={[styles.switchModeText, { color: colors.foreground }]}>Switch to Customer Mode</Text>

@@ -151,7 +151,7 @@ export default function DriverPolicyScreen() {
                   style={[
                     styles.acceptBtn,
                     {
-                      backgroundColor: accepted.has(policy.id) ? colors.primary + '20' : colors.primary,
+                      backgroundColor: accepted.has(policy.id) ? colors.primaryHex + '20' : colors.primary,
                     },
                   ]}
                   onPress={() => toggleAccept(policy.id)}
