@@ -18,21 +18,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
+import { VEHICLE_MAP_IMAGE_SIZE, VEHICLE_MAP_MARKER_IMAGES } from '@/constants/vehicles';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS } from '@/types';
-
-const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
-  moto: require('../../assets/vehicle-markers/moto.png'),
-  cab: require('../../assets/vehicle-markers/cab.png'),
-  hilux: require('../../assets/vehicle-markers/hilux.png'),
-  fuso: require('../../assets/vehicle-markers/fuso.png'),
-};
-
-const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 58, height: 44 },
-  cab: { width: 54, height: 40 },
-  hilux: { width: 64, height: 40 },
-  fuso: { width: 66, height: 44 },
-};
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 
@@ -268,8 +255,8 @@ export default function DriverDashboard() {
                 <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
                 <View style={styles.vehicleMarkerWrap}>
                   <Image
-                    source={VEHICLE_MARKER_IMAGES[activeVehicleType]}
-                    style={[styles.vehicleMarkerImage, VEHICLE_IMAGE_STYLES[activeVehicleType]]}
+                    source={VEHICLE_MAP_MARKER_IMAGES[activeVehicleType]}
+                    style={[styles.vehicleMarkerImage, VEHICLE_MAP_IMAGE_SIZE[activeVehicleType]]}
                     resizeMode="contain"
                   />
                 </View>

@@ -30,6 +30,7 @@ import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/Ba
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
+import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
@@ -39,7 +40,8 @@ import { useRide } from '@/context/RideContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
-import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_MCI, VEHICLE_LABELS } from '@/types';
+import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import { VEHICLE_MAP_IMAGE_SIZE, VEHICLE_MAP_MARKER_IMAGES } from '@/constants/vehicles';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -112,19 +114,7 @@ const DRIVER_OFFSETS = [
   { lat:  0.0062, lng:  0.0032 }, { lat: -0.0070, lng: -0.0025 },
 ];
 
-const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
-  moto: require('../../assets/vehicle-markers/moto.png'),
-  cab: require('../../assets/vehicle-markers/cab.png'),
-  hilux: require('../../assets/vehicle-markers/hilux.png'),
-  fuso: require('../../assets/vehicle-markers/fuso.png'),
-};
-
-const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 58, height: 44 },
-  cab: { width: 54, height: 40 },
-  hilux: { width: 64, height: 40 },
-  fuso: { width: 66, height: 44 },
-};
+const VEHICLE_IMAGE_STYLES = VEHICLE_MAP_IMAGE_SIZE;
 
 function calcEstFare(type: VehicleType, dist: number) {
   const base = VEHICLE_BASE_FARE[type];
@@ -1109,7 +1099,7 @@ export default function CustomerHome() {
           >
             <View style={styles.vehicleMarkerWrap}>
               <Image
-                source={VEHICLE_MARKER_IMAGES[selectedVehicle]}
+                source={VEHICLE_MAP_MARKER_IMAGES[selectedVehicle]}
                 style={[
                   styles.vehicleMarkerImage,
                   VEHICLE_IMAGE_STYLES[selectedVehicle],
@@ -1215,7 +1205,7 @@ export default function CustomerHome() {
                 onPress={() => setSelectedVehicle(v)}
                 activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name={VEHICLE_MCI[v] as any} size={22} color={selectedVehicle === v ? colors.primaryForeground : colors.foreground} />
+                <VehicleTypeIcon type={v} selected={selectedVehicle === v} />
                 <Text style={[styles.vehicleLabel, { color: selectedVehicle === v ? colors.primaryForeground : colors.foreground }]}>
                   {VEHICLE_LABELS[v]}
                 </Text>
@@ -1920,7 +1910,7 @@ export default function CustomerHome() {
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.savedLocationDelete, { backgroundColor: colors.destructive + '14', borderColor: colors.destructive + '40' }]}
+                  style={[styles.savedLocationDelete, { backgroundColor: colors.destructiveHex + '14', borderColor: colors.destructiveHex + '40' }]}
                   onPress={deleteSavedLocation}
                   activeOpacity={0.85}
                 >
@@ -2099,7 +2089,7 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'left', marginLeft: GREETING_LEFT_INSET },
   selectRide: { fontSize: 14, fontFamily: 'Inter_500Medium', textAlign: 'left', marginTop: -4, marginLeft: GREETING_LEFT_INSET },
   vehicleRow: { flexDirection: 'row', gap: 8, marginTop: 2, marginHorizontal: GREETING_LEFT_INSET },
-  vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 8, borderRadius: 14, gap: 4 },
+  vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 7, borderRadius: 14, gap: 4, minHeight: 56, justifyContent: 'center' },
   vehicleLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: buttonCornerRadius(50), gap: 8, marginTop: 4, marginHorizontal: GREETING_LEFT_INSET },
   continueBtnText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },

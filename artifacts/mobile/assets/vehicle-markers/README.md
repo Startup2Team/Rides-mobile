@@ -2,7 +2,8 @@ Paste transparent PNG vehicle marker images in this folder.
 
 Use these exact filenames so the app can reference them cleanly:
 
-- moto.png
+- moto.png (chips / selectors)
+- moto-map.png (live map markers)
 - cab.png
 - hilux.png
 - fuso.png
