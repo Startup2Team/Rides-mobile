@@ -18,25 +18,41 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
-import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS } from '@/types';
+import { setDriverAvailability, updateDriverLocation } from '@/services/driverRides';
+
+const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
+  moto: require('../../assets/vehicle-markers/moto.png'),
+  cab: require('../../assets/vehicle-markers/cab.png'),
+  hilux: require('../../assets/vehicle-markers/hilux.png'),
+  fuso: require('../../assets/vehicle-markers/fuso.png'),
+};
+
+const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
+  moto: { width: 58, height: 44 },
+  cab: { width: 54, height: 40 },
+  hilux: { width: 64, height: 40 },
+  fuso: { width: 66, height: 44 },
+};
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 
 export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, driverProfile, saveDriverProfile } = useAuth();
+  const { user, driverProfile, saveDriverProfile, loadDriverProfile, logout, switchMode } = useAuth();
   const { pendingRequest, currentRide, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
-  const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [, setLocLoading] = useState(true);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const mapRef = useRef<MapView | null>(null);
+
+  useEffect(() => {
+    loadDriverProfile();
+  }, [loadDriverProfile]);
 
   useEffect(() => {
     let mounted = true;
@@ -84,30 +100,27 @@ export default function DriverDashboard() {
   useEffect(() => {
     if (!isOnline) {
       setShowRequest(false);
-      setCountdown(15);
-      if (countdownRef.current) clearInterval(countdownRef.current);
       return;
     }
-
-    const t = setTimeout(() => {
-      simulateIncomingRideRequest();
-      setShowRequest(true);
-      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
-      setCountdown(15);
-      countdownRef.current = setInterval(() => {
-        setCountdown(c => {
-          if (c <= 1) {
-            clearInterval(countdownRef.current!);
-            handleDecline();
-            return 0;
-          }
-          return c - 1;
-        });
-      }, 1000);
-    }, 5000);
-
-    return () => clearTimeout(t);
+    simulateIncomingRideRequest();
   }, [isOnline, simulateIncomingRideRequest]);
+
+  useEffect(() => {
+    if (!isOnline || !pendingRequest) return;
+    setShowRequest(true);
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
+  }, [isOnline, pendingRequest, slideAnim]);
+
+  useEffect(() => {
+    // Guard: stop posting location if user has logged out or gone offline.
+    // Without the user guard the interval fires with a revoked token after logout.
+    if (!user || !isOnline) return;
+    updateDriverLocation(driverLocation.latitude, driverLocation.longitude).catch(() => {});
+    const interval = setInterval(() => {
+      updateDriverLocation(driverLocation.latitude, driverLocation.longitude).catch(() => {});
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [user, driverLocation.latitude, driverLocation.longitude, isOnline]);
 
   useEffect(() => {
     if (currentRide?.status === 'negotiating') router.push('/driver-negotiation');
@@ -122,10 +135,8 @@ export default function DriverDashboard() {
   }, [driverLocation]);
 
   const handleDecline = () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
     Animated.timing(slideAnim, { toValue: 300, duration: 300, useNativeDriver: true }).start(() => {
       setShowRequest(false);
-      setCountdown(15);
     });
     if (driverProfile) {
       saveDriverProfile({
@@ -137,13 +148,13 @@ export default function DriverDashboard() {
   };
 
   const handleAccept = () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
     acceptRideRequest();
     router.push('/driver-negotiation');
   };
 
   const toggleOnline = (val: boolean) => {
     setIsOnline(val);
+    setDriverAvailability(val).catch(() => {});
     if (driverProfile) {
       saveDriverProfile({ ...driverProfile, isOnline: val });
     }
@@ -160,7 +171,15 @@ export default function DriverDashboard() {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
 
-  const driverName = user?.name?.split(' ')[0] ?? 'Driver';
+  const driverName = user?.name?.split(' ')[0] ?? '--';
+
+  const handleSwitchToCustomer = () => switchMode('customer').catch(() => {});
+
+  const handleLogout = () => {
+    // Go offline first if currently online, then logout
+    if (isOnline) toggleOnline(false);
+    logout().catch(() => {});
+  };
 
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
   const request = pendingRequest;
@@ -187,7 +206,23 @@ export default function DriverDashboard() {
               </View>
             </View>
             <View style={styles.heroRight}>
-              <View style={[styles.statusPill, { backgroundColor: isOnline ? colors.successHex + '18' : colors.muted }]}>
+              <TouchableOpacity
+                style={[styles.heroActionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                onPress={handleSwitchToCustomer}
+                accessibilityLabel="Switch to customer mode"
+                accessibilityRole="button"
+              >
+                <Feather name="user" size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.heroActionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                onPress={handleLogout}
+                accessibilityLabel="Log out"
+                accessibilityRole="button"
+              >
+                <Feather name="log-out" size={14} color={colors.destructive} />
+              </TouchableOpacity>
+              <View style={[styles.statusPill, { backgroundColor: isOnline ? colors.primary + '18' : colors.muted }]}>
                 <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.primary : colors.mutedForeground }]} />
                 <Text style={[styles.statusPillText, { color: isOnline ? colors.primary : colors.mutedForeground }]}>
                   {isOnline ? 'Online' : 'Offline'}
@@ -210,7 +245,7 @@ export default function DriverDashboard() {
             <Switch
               value={isOnline}
               onValueChange={toggleOnline}
-              trackColor={{ false: colors.border, true: colors.primaryHex + '80' }}
+              trackColor={{ false: colors.border, true: colors.primary + '80' }}
               thumbColor={isOnline ? colors.primary : colors.mutedForeground}
             />
           </View>
@@ -249,11 +284,17 @@ export default function DriverDashboard() {
           >
             <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
               <View style={styles.driverLocationMarker}>
-                <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
+                <View style={styles.youAreHereBubble}>
                   <Text style={styles.youAreHereText}>You're Here</Text>
                 </View>
-                <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
-                <VehicleMapMarker type={activeVehicleType} />
+                <View style={styles.youAreHereTail} />
+                <View style={styles.vehicleMarkerWrap}>
+                  <Image
+                    source={VEHICLE_MARKER_IMAGES[activeVehicleType]}
+                    style={[styles.vehicleMarkerImage, VEHICLE_IMAGE_STYLES[activeVehicleType]]}
+                    resizeMode="contain"
+                  />
+                </View>
               </View>
             </Marker>
             {request && (
@@ -265,7 +306,7 @@ export default function DriverDashboard() {
                 </Marker>
                 <Polyline
                   coordinates={[driverLocation, request.pickup]}
-                  strokeColor={colors.destructiveHex}
+                  strokeColor={colors.primary}
                   strokeWidth={3}
                   lineDashPattern={[8, 4]}
                 />
@@ -309,11 +350,11 @@ export default function DriverDashboard() {
             <View>
               <Text style={[styles.requestEyebrow, { color: colors.primary }]}>Incoming request</Text>
               <Text style={[styles.requestTitle, { color: colors.foreground }]}>
-                {request.customerName ?? 'Customer'}
+                {request.customerName ?? '--'}
               </Text>
             </View>
-            <View style={[styles.countdown, { backgroundColor: countdown <= 5 ? colors.destructive : colors.primary }]}>
-              <Text style={styles.countdownText}>{countdown}s</Text>
+            <View style={[styles.countdown, { backgroundColor: colors.primary }]}>
+              <Feather name="clock" size={18} color={colors.primaryForeground} />
             </View>
           </View>
 
@@ -398,7 +439,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroIdentity: { flex: 1, gap: 4 },
-  heroRight: { alignItems: 'flex-end', gap: 8 },
+  heroRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   greeting: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   vehicleText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
@@ -466,6 +515,7 @@ const styles = StyleSheet.create({
   },
   driverLocationMarker: { alignItems: 'center' },
   youAreHereBubble: {
+    backgroundColor: '#00C853',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
@@ -484,8 +534,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
+    borderTopColor: '#00C853',
     marginBottom: -2,
     zIndex: 3,
+  },
+  vehicleMarkerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 70,
+    height: 70,
+  },
+  vehicleMarkerImage: {
+    zIndex: 2,
   },
   pinMarker: {
     width: 28,

@@ -56,15 +56,23 @@ export async function verifyOtp(phoneNumber: string, otp: string) {
 // want a slow/dead backend to block the UX for more than a few seconds.
 const LOGOUT_TIMEOUT_MS = 3000;
 
-export async function logout() {
+/**
+ * @param isDriver  Pass true when the user has an active driver profile so we
+ *                  mark them offline in the backend before revoking the token.
+ *                  Skip for pure CUSTOMER_ONLY accounts — they have no driver
+ *                  profile and the endpoint would return 403/405.
+ */
+export async function logout(isDriver = false) {
   const token = await SecureStore.getItemAsync('access_token');
   if (token) {
     // Best-effort: mark driver offline before revoking the token so the backend
-    // removes the driver from the Redis GEO pool immediately rather than waiting
-    // for the inactivity cooldown. Non-driver accounts receive a 403 — that's fine.
-    try {
-      await api.patch('/driver/availability', { is_online: false }, { timeout: LOGOUT_TIMEOUT_MS });
-    } catch {}
+    // removes the driver from the Redis GEO pool immediately. Only call this
+    // for accounts that actually have a driver profile (POST, not PATCH).
+    if (isDriver) {
+      try {
+        await api.post('/driver/availability', { is_online: false }, { timeout: LOGOUT_TIMEOUT_MS });
+      } catch {}
+    }
 
     // Best-effort server-side session revocation. A 401 means the session
     // was already invalidated (e.g. double-tap or expired token) — ignore it.

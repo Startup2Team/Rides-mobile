@@ -133,14 +133,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (logoutInFlight.current) return;
     logoutInFlight.current = true;
     try {
-      await authService.logout();
+      // Pass isDriver so auth.ts only calls POST /driver/availability for
+      // accounts that actually have a driver profile (avoids 403/405 for
+      // pure CUSTOMER_ONLY accounts).
+      await authService.logout(user?.isDriver ?? false);
       setUser(null);
       setDriverProfile(null);
       await clearSnapshot();
     } finally {
       logoutInFlight.current = false;
     }
-  }, []);
+  }, [user?.isDriver]);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {
     if (!user) return;
@@ -155,6 +158,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const switchMode = useCallback(async (mode: AppMode) => {
     if (!user) return;
+
+    // Switching to customer is always safe — everyone can be a customer.
+    // Do it locally without a network round-trip so it never fails.
+    if (mode === 'customer') {
+      const updated = { ...user, mode };
+      setUser(updated);
+      await persistSnapshot(updated);
+      return;
+    }
+
+    // Switching to driver requires backend validation (checks approval status,
+    // policy acceptance, etc.).
     try {
       await api.patch('/users/mode', { mode });
       const updated = { ...user, mode };
