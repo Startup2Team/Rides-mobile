@@ -40,7 +40,7 @@ type AppMapType = typeof MAP_TYPES[number];
 export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, driverProfile, saveDriverProfile, loadDriverProfile, logout, switchMode } = useAuth();
+  const { user, driverProfile, saveDriverProfile, loadDriverProfile } = useAuth();
   const { pendingRequest, currentRide, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
@@ -173,14 +173,6 @@ export default function DriverDashboard() {
 
   const driverName = user?.name?.split(' ')[0] ?? '--';
 
-  const handleSwitchToCustomer = () => switchMode('customer').catch(() => {});
-
-  const handleLogout = () => {
-    // Go offline first if currently online, then logout
-    if (isOnline) toggleOnline(false);
-    logout().catch(() => {});
-  };
-
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
@@ -206,22 +198,6 @@ export default function DriverDashboard() {
               </View>
             </View>
             <View style={styles.heroRight}>
-              <TouchableOpacity
-                style={[styles.heroActionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
-                onPress={handleSwitchToCustomer}
-                accessibilityLabel="Switch to customer mode"
-                accessibilityRole="button"
-              >
-                <Feather name="user" size={14} color={colors.mutedForeground} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.heroActionBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
-                onPress={handleLogout}
-                accessibilityLabel="Log out"
-                accessibilityRole="button"
-              >
-                <Feather name="log-out" size={14} color={colors.destructive} />
-              </TouchableOpacity>
               <View style={[styles.statusPill, { backgroundColor: isOnline ? colors.primary + '18' : colors.muted }]}>
                 <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.primary : colors.mutedForeground }]} />
                 <Text style={[styles.statusPillText, { color: isOnline ? colors.primary : colors.mutedForeground }]}>
@@ -439,15 +415,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroIdentity: { flex: 1, gap: 4 },
-  heroRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroActionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  heroRight: { alignItems: 'flex-end', gap: 8 },
   greeting: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   vehicleText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
