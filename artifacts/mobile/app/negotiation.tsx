@@ -25,6 +25,7 @@ import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
+const GOLD = '#F5A623';
 const INPUT_DOCK_HEIGHT = 64;
 const DRIVER_TYPING_DELAY_MS = 450;
 
