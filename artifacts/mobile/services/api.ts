@@ -53,22 +53,46 @@ api.interceptors.response.use(
     return response;
   },
   async (err: AxiosError) => {
+    const status = err.response?.status ?? 'NO_RESPONSE';
+    const url    = err.config?.url ?? '';
+    const method = err.config?.method?.toUpperCase() ?? '';
+
+    // ── Endpoints that must never trigger auto-refresh ────────────────────
+    //  • /auth/logout        — any error here is intentional (already logged out)
+    //  • /driver/rides/active — 404 = idle driver, handled by the service layer
+    //  • /driver/availability — best-effort before logout; errors are expected
+    const skipRefresh =
+      url.includes('/auth/logout') ||
+      url.includes('/driver/rides/active') ||
+      url.includes('/driver/availability');
+
+    // ── Post-logout 401 detection ─────────────────────────────────────────
+    // After logout the tokens are deleted, but in-flight or queued effects
+    // (rides list, saved locations, fare estimate) still fire before navigation
+    // completes. They all get 401 responses. Rather than logging noise or
+    // creating "no refresh token" unhandled rejections, detect this situation
+    // early: a 401 on a non-exempt endpoint with no stored refresh token means
+    // we are already logged out.
+    const isPostLogout401 =
+      status === 401 &&
+      !skipRefresh &&
+      !isRefreshing &&
+      !(await SecureStore.getItemAsync('refresh_token'));
+
     if (__DEV__) {
-      const status = err.response?.status ?? 'NO_RESPONSE';
-      const url = err.config?.url ?? '';
-      const method = err.config?.method?.toUpperCase() ?? '';
       // Suppress known "expected empty" responses that are not real errors:
-      //  • 401 on /auth/logout        — session already revoked server-side
-      //  • 404 on /driver/rides/active — idle driver has no active ride
-      //  • 403 on /driver/availability — customer accounts don't have a driver profile
-      //  • NO_RESPONSE on /auth/logout or /driver/availability — best-effort calls
-      //    during logout fire with a 3 s timeout; timeout ≠ actual problem
+      //  • 401 on /auth/logout          — session already revoked server-side
+      //  • 404 on /driver/rides/active  — idle driver has no active ride
+      //  • 403 on /driver/availability  — customer accounts lack a driver profile
+      //  • NO_RESPONSE on logout/avail  — best-effort calls with short timeout
+      //  • post-logout 401 on any route — tokens already gone, redirect is pending
       const isExpectedEmpty =
         (url.includes('/auth/logout') && status === 401) ||
         (url.includes('/driver/rides/active') && status === 404) ||
         (url.includes('/driver/availability') && status === 403) ||
         (url.includes('/auth/logout') && status === 'NO_RESPONSE') ||
-        (url.includes('/driver/availability') && status === 'NO_RESPONSE');
+        (url.includes('/driver/availability') && status === 'NO_RESPONSE') ||
+        isPostLogout401;
       if (!isExpectedEmpty) {
         const body = err.response?.data ?? err.message;
         console.error(
@@ -78,23 +102,32 @@ api.interceptors.response.use(
       }
     }
 
-    // Never attempt auto-refresh on these endpoints:
-    //  • /auth/logout        — 401 means already logged out, that's fine
-    //  • /driver/rides/active — 404 means idle, handled by the service layer
-    //  • /driver/availability — called as best-effort before logout; any error is intentional
-    const url = err.config?.url ?? '';
-    if (
-      url.includes('/auth/logout') ||
-      url.includes('/driver/rides/active') ||
-      url.includes('/driver/availability')
-    ) throw err;
+    // Exempt endpoints: reject immediately, never refresh.
+    if (skipRefresh) return Promise.reject(err);
 
-    if (err.response?.status !== 401 || isRefreshing) throw err;
+    // Post-logout 401: silently redirect and reject with the original 401.
+    // No new errors thrown — the caller receives a clean 401 AxiosError.
+    if (isPostLogout401) {
+      router.replace('/(auth)/welcome');
+      return Promise.reject(err);
+    }
 
+    // Non-401 or a concurrent request while a refresh is already in flight:
+    // reject silently — the primary refresh attempt will handle navigation.
+    if (status !== 401 || isRefreshing) return Promise.reject(err);
+
+    // ── Token refresh ─────────────────────────────────────────────────────
+    // We only reach here when: status === 401, !isRefreshing, refresh token
+    // exists (checked above via isPostLogout401 gate).
     isRefreshing = true;
     try {
       const refresh = await SecureStore.getItemAsync('refresh_token');
-      if (!refresh) throw new Error('no refresh token');
+      // refresh is guaranteed non-null (isPostLogout401 would have caught the
+      // empty-token case above), but guard defensively.
+      if (!refresh) {
+        router.replace('/(auth)/welcome');
+        return Promise.reject(err);
+      }
       const { data: raw } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refresh });
       // Backend wraps responses in { "data": { ... } }. Raw axios doesn't
       // run our interceptor, so we have to unwrap the envelope manually.
@@ -106,15 +139,17 @@ api.interceptors.response.use(
         err.config.headers.Authorization = `Bearer ${data.access_token}`;
         return api.request(err.config);
       }
-    } catch (refreshErr) {
+    } catch {
+      // Refresh failed (token expired, revoked, network error).
+      // Clean up and redirect — return the original 401 AxiosError, not a new
+      // "refresh failed" error, so callers get a consistent error shape.
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
       router.replace('/(auth)/welcome');
-      throw refreshErr;
     } finally {
       isRefreshing = false;
     }
 
-    throw err;
+    return Promise.reject(err);
   },
 );

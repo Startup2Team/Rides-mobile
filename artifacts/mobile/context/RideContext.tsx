@@ -21,7 +21,7 @@ interface RideContextType {
   pauseDriverMatching: () => void;
   resumeDriverMatching: () => void;
   isMatchingPaused: boolean;
-  counterOffer: (amount: number) => void;
+  counterOffer: (amount: number) => Promise<void>;
   sendDriverOffer: (amount: number) => void;
   acceptDriverOffer: () => void;
   acceptCustomerOffer: () => void;
@@ -216,6 +216,33 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (payload?.ride_id && currentRide?.id === payload.ride_id) {
         setCurrentRide(prev => prev ? { ...prev, status: 'cancelled' } : null);
       }
+    }).on('negotiation_message', payload => {
+      // Backend sends this when the CUSTOMER proposes a counter-offer.
+      // The driver's own offers are added optimistically by sendDriverOffer, so
+      // we only add incoming messages where proposed_by === 'CUSTOMER'.
+      if (payload?.proposed_by !== 'CUSTOMER') return;
+      const amount = Number(payload?.amount ?? 0);
+      if (!amount) return;
+      setCurrentRide(prev => prev ? {
+        ...prev,
+        negotiation: [...prev.negotiation, {
+          id: `${Date.now()}-${Math.random()}`,
+          sender: 'customer',
+          type: 'offer',
+          amount,
+          timestamp: new Date().toISOString(),
+        } as NegotiationMessage],
+      } : null);
+    }).on('ride_confirmed', payload => {
+      // Fired when the CUSTOMER accepts the driver's offer. The driver's own
+      // accept (acceptCustomerOffer) updates state via HTTP refresh, so this
+      // handler is primarily for the case where the customer accepts first.
+      const agreedFare = Number(payload?.agreed_fare ?? 0);
+      setCurrentRide(prev => prev ? {
+        ...prev,
+        status: 'confirmed',
+        ...(agreedFare > 0 ? { agreedFare } : {}),
+      } : null);
     });
   }, [currentRide?.id]);
 
@@ -269,14 +296,33 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setDriverLocation(null);
   }, [currentRide?.id, currentRide?.status, disconnectWS]);
 
-  const counterOffer = useCallback((amount: number) => {
-    if (!currentRide?.id) return;
-    rideService.proposeNegotiation(currentRide.id, amount).catch(() => {});
+  const counterOffer = useCallback((amount: number): Promise<void> => {
+    if (!currentRide?.id) return Promise.resolve();
+    // Optimistic update — add the customer's offer to the local negotiation list
+    // immediately (same pattern as sendDriverOffer). This flips lastMsg.sender to
+    // 'customer', hiding the input dock right away so the UI correctly shows a
+    // "waiting for driver" state without any loading spinner.
+    setCurrentRide(prev => prev ? {
+      ...prev,
+      negotiation: [...prev.negotiation, {
+        id: `${Date.now()}-${Math.random()}`,
+        sender: 'customer',
+        type: 'offer',
+        amount,
+        timestamp: new Date().toISOString(),
+      } as NegotiationMessage],
+    } : null);
+    return rideService.proposeNegotiation(currentRide.id, amount);
   }, [currentRide?.id]);
 
-  const acceptDriverOffer = useCallback(() => {
+  const acceptDriverOffer = useCallback(async () => {
     if (!currentRide?.id) return;
-    rideService.acceptNegotiation(currentRide.id).catch(() => {});
+    await rideService.acceptNegotiation(currentRide.id);
+    // Set status locally immediately so navigation fires without waiting for the
+    // socket echo. The ride_confirmed socket event will arrive shortly after and
+    // update agreed_fare; this local update is belt-and-suspenders for cases
+    // where the socket delivery is slightly delayed.
+    setCurrentRide(prev => prev ? { ...prev, status: 'confirmed' } : null);
   }, [currentRide?.id]);
 
   const sendDriverOffer = useCallback((amount: number) => {

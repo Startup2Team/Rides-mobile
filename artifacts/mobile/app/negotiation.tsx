@@ -261,7 +261,9 @@ export default function NegotiationScreen() {
     return {
       tone: 'neutral' as const,
       title: 'Fare negotiation',
-      hint: 'Send an offer below when the driver responds',
+      hint: negotiation.length === 0
+        ? 'Send your fare offer below, or wait for the driver to go first'
+        : 'Send an offer below when the driver responds',
     };
   }, [customerLimitReached, showDriverTyping, lastDriverOffer?.amount]);
   const offerPlaceholder = customerOffers.length === 0
@@ -270,7 +272,12 @@ export default function NegotiationScreen() {
       ? 'Final offer'
       : 'Counter offer';
 
-  const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
+  // Customer can send the first offer (negotiation not started) OR reply to the
+  // driver's most recent offer. Blocked only when: they just counter-offered and
+  // are waiting for the driver to respond, OR they hit the 3-offer limit.
+  const canCounter =
+    !customerLimitReached &&
+    (negotiation.length === 0 || lastMsg?.sender === 'driver');
 
   useEffect(() => {
     if (isRideAccepted) {
@@ -326,7 +333,11 @@ export default function NegotiationScreen() {
     setPendingOfferAmount(amount);
     setOfferText('');
     setCounterLoading(true);
-    counterOffer(amount);
+    // Clear loading as soon as the API call settles (success or error). The
+    // optimistic update already hides the input dock at this point, so the
+    // spinner is only visible for the brief round-trip to the server — never
+    // permanently stuck waiting for a socket event that may never arrive.
+    counterOffer(amount).finally(() => setCounterLoading(false));
   };
 
   const handleSendCounter = () => {
@@ -583,13 +594,13 @@ export default function NegotiationScreen() {
             style={customerLimitReached ? styles.actionFlexWide : styles.actionFlexNarrow}
           />
           <KandaButton
-            title={lastDriverOffer ? 'Accept fare' : 'Waiting'}
+            title={lastDriverOffer && lastMsg?.sender === 'driver' ? 'Accept fare' : 'Waiting'}
             icon="check"
             variant="primary"
             size="sm"
             compact
             onPress={() => setShowAcceptModal(true)}
-            disabled={!lastDriverOffer}
+            disabled={!lastDriverOffer || lastMsg?.sender !== 'driver'}
             style={styles.actionFlexPrimary}
           />
         </View>
