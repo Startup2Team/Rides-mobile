@@ -177,19 +177,19 @@ export default function RideDetailScreen() {
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>TRIP SUMMARY</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <DetailRow icon="map" label="Distance" value={`${ride.distance} km`} color={colors.primary} />
+          <DetailRow icon="map" label="Distance" value={`${ride.distance} km`} color={colors.primaryHex} />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-          <DetailRow icon="clock" label="Duration" value={formatDuration(ride.duration)} color={colors.primary} />
+          <DetailRow icon="clock" label="Duration" value={formatDuration(ride.duration)} color={colors.primaryHex} />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
           <DetailRow
             icon="credit-card"
             label={ride.agreedFare ? 'Agreed fare' : 'Estimated fare'}
             value={`${fare.toLocaleString()} RWF`}
-            color={colors.primary}
-            valueColor={colors.primary}
+            color={colors.primaryHex}
+            valueColor={colors.primaryHex}
           />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-          <DetailRow icon="hash" label="Ride ID" value={ride.id.slice(-8).toUpperCase()} color={colors.primary} />
+          <DetailRow icon="hash" label="Ride ID" value={ride.id.slice(-8).toUpperCase()} color={colors.primaryHex} />
         </View>
 
         {ride.driver && (
@@ -201,7 +201,7 @@ export default function RideDetailScreen() {
                   <Image source={{ uri: driverImage }} style={styles.driverAvatarImage} />
                 ) : (
                   <View style={styles.driverAvatar}>
-                    <Feather name="user" size={24} color={colors.primary} />
+                    <Feather name="user" size={24} color={colors.primaryHex} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>

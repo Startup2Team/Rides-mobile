@@ -121,9 +121,9 @@ export default function RatingScreen() {
       </TouchableOpacity>
 
       <View style={styles.centerContent}>
-        <View style={[styles.completeBadge, { backgroundColor: colors.primary + '18' }]}>
-          <Feather name="check-circle" size={20} color={colors.primary} />
-          <Text style={[styles.completeBadgeText, { color: colors.primary }]}>Ride Completed</Text>
+        <View style={[styles.completeBadge, { backgroundColor: colors.successHex + '18' }]}>
+          <Feather name="check-circle" size={20} color={colors.success} />
+          <Text style={[styles.completeBadgeText, { color: colors.success }]}>Ride Completed</Text>
         </View>
 
         {/* Driver avatar */}
@@ -173,7 +173,7 @@ export default function RatingScreen() {
                     style={[
                       styles.tag,
                       {
-                        backgroundColor: active ? colors.primary + '18' : colors.muted,
+                        backgroundColor: active ? colors.primaryHex + '18' : colors.muted,
                         borderColor: active ? colors.primary : colors.border,
                         borderWidth: active ? 1.5 : 1,
                       },

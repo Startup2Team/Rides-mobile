@@ -15,6 +15,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
+import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 
 type NotifType = 'ride' | 'promo' | 'system' | 'safety';
@@ -31,7 +32,7 @@ interface AppNotification {
 }
 
 const TYPE_ICON_COLOR: Record<NotifType, string> = {
-  ride: '#00C853',
+  ride: APPLE_SYSTEM_BLUE_HEX.light,
   promo: '#FFB800',
   system: '#007AFF',
   safety: '#FF3B30',
@@ -305,8 +306,8 @@ export default function NotificationsScreen() {
           style={[
             styles.row,
             {
-              backgroundColor: item.read ? colors.card : colors.primary + '08',
-              borderColor: item.read ? colors.border : colors.primary + '30',
+              backgroundColor: item.read ? colors.card : colors.primaryHex + '08',
+              borderColor: item.read ? colors.border : colors.primaryHex + '30',
             },
           ]}
           onPress={() => {
@@ -384,7 +385,7 @@ export default function NotificationsScreen() {
         ]}
       >
         {notifications.length === 0 ? (
-          <EmptyState color={colors.primary} mutedColor={colors.mutedForeground} />
+          <EmptyState color={colors.primaryHex} mutedColor={colors.mutedForeground} />
         ) : (
           <>
             {renderSection('Today', todayNotifications)}

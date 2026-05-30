@@ -32,7 +32,7 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
         style={[
           styles.compactCard,
           {
-            backgroundColor: selected ? colors.primary + '15' : colors.card,
+            backgroundColor: selected ? colors.primaryHex + '15' : colors.card,
             borderColor: selected ? colors.primary : colors.border,
           },
         ]}
@@ -54,7 +54,7 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
       style={[
         styles.card,
         {
-          backgroundColor: selected ? colors.primary + '15' : colors.card,
+          backgroundColor: selected ? colors.primaryHex + '15' : colors.card,
           borderColor: selected ? colors.primary : colors.border,
         },
       ]}

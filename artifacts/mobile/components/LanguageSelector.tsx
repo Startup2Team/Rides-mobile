@@ -124,7 +124,7 @@ export function LanguageSelector() {
                   style={[
                     styles.languageOption,
                     {
-                      backgroundColor: selected ? colors.primary + '18' : colors.card,
+                      backgroundColor: selected ? colors.primaryHex + '18' : colors.card,
                       borderColor: selected ? colors.primary : colors.border,
                     },
                   ]}

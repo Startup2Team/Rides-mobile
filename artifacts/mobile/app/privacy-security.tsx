@@ -68,7 +68,7 @@ export default function PrivacySecurityScreen() {
         contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
       >
         {/* Shield banner */}
-        <View style={[styles.banner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
+        <View style={[styles.banner, { backgroundColor: colors.primaryHex + '12', borderColor: colors.primaryHex + '30' }]}>
           <Feather name="shield" size={28} color={colors.primary} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.primary }]}>Your data is protected</Text>

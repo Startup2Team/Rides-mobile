@@ -25,15 +25,15 @@ export function StatusChip({ status }: StatusChipProps) {
 
   const chipColors: Record<RideStatus, { bg: string; text: string }> = {
     idle: { bg: colors.muted, text: colors.mutedForeground },
-    searching: { bg: '#FFF3E0', text: '#E65100' },
-    driver_assigned: { bg: '#E8F5E9', text: '#2E7D32' },
-    negotiating: { bg: '#E3F2FD', text: '#1565C0' },
-    confirmed: { bg: colors.primary + '20', text: colors.primary },
-    arriving: { bg: colors.primary + '20', text: colors.primary },
-    arrived: { bg: colors.primary + '30', text: colors.primary },
-    in_progress: { bg: colors.primary + '30', text: colors.primary },
-    completed: { bg: '#E8F5E9', text: '#2E7D32' },
-    cancelled: { bg: '#FFEBEE', text: '#C62828' },
+    searching: { bg: colors.warningHex + '18', text: colors.warningHex },
+    driver_assigned: { bg: colors.successHex + '20', text: colors.successHex },
+    negotiating: { bg: colors.primaryHex + '18', text: colors.primaryHex },
+    confirmed: { bg: colors.primaryHex + '20', text: colors.primaryHex },
+    arriving: { bg: colors.primaryHex + '20', text: colors.primaryHex },
+    arrived: { bg: colors.primaryHex + '30', text: colors.primaryHex },
+    in_progress: { bg: colors.primaryHex + '30', text: colors.primaryHex },
+    completed: { bg: colors.successHex + '20', text: colors.successHex },
+    cancelled: { bg: colors.destructiveHex + '14', text: colors.destructiveHex },
   };
 
   const chip = chipColors[status];

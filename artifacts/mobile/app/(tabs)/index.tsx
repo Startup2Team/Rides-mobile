@@ -1074,7 +1074,7 @@ export default function CustomerHome() {
         {animatedRouteCoords.length > 1 && (
           <Polyline
             coordinates={animatedRouteCoords}
-            strokeColor="#FF3B30"
+            strokeColor={colors.destructiveHex}
             strokeWidth={4}
             lineCap="round"
             lineJoin="round"
@@ -1085,7 +1085,7 @@ export default function CustomerHome() {
         {shouldShowPickupMarker && (
           <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} anchor={{ x: 0.5, y: 1 }}>
             <View style={styles.routeMarker}>
-              <View style={[styles.routeMarkerDot, { backgroundColor: '#00C853' }]} />
+              <View style={[styles.routeMarkerDot, { backgroundColor: colors.primary }]} />
             </View>
           </Marker>
         )}
@@ -1094,7 +1094,7 @@ export default function CustomerHome() {
         {showBooking && destination && (
           <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} anchor={{ x: 0.5, y: 1 }}>
             <View style={styles.routeMarker}>
-              <View style={[styles.routeMarkerDot, { backgroundColor: '#FF3B30' }]} />
+              <View style={[styles.routeMarkerDot, { backgroundColor: colors.destructive }]} />
             </View>
           </Marker>
         )}
@@ -1123,10 +1123,10 @@ export default function CustomerHome() {
         {!locLoading && !hasPreciseRouteLocations && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
             <View style={styles.youAreHereContainer}>
-              <View style={styles.youAreHereBubble}>
+              <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
                 <Text style={styles.youAreHereText}>You're Here</Text>
               </View>
-              <View style={styles.youAreHereTail} />
+              <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
             </View>
           </Marker>
         )}
@@ -1449,7 +1449,7 @@ export default function CustomerHome() {
                 onPress={() => applyLocation(locationSearchTarget, { ...userLocation, address: 'Current Location', locationType: 'precise' })}
                 activeOpacity={0.85}
               >
-                <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
+                <View style={[styles.locationQuickIcon, { backgroundColor: colors.primaryHex + '18' }]}>
                   <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
                 </View>
                 <View style={styles.locationQuickText}>
@@ -1463,7 +1463,7 @@ export default function CustomerHome() {
                 onPress={handleChooseOnMap}
                 activeOpacity={0.85}
               >
-                <View style={[styles.locationQuickIcon, { backgroundColor: colors.primary + '18' }]}>
+                <View style={[styles.locationQuickIcon, { backgroundColor: colors.primaryHex + '18' }]}>
                   <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
                 </View>
                 <View style={styles.locationQuickText}>
@@ -1954,7 +1954,7 @@ export default function CustomerHome() {
             <MaterialCommunityIcons
               name="map-marker"
               size={48}
-              color={mapPicker === 'pickup' ? '#00C853' : mapPicker === 'savedLocation' ? colors.primary : '#FF4444'}
+              color={colors.destructiveHex}
             />
           </View>
 
@@ -2083,9 +2083,9 @@ const styles = StyleSheet.create({
   recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   youAreHereContainer: { alignItems: 'center' },
-  youAreHereBubble: { backgroundColor: '#00C853', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
+  youAreHereBubble: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
   youAreHereText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#fff' },
-  youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#00C853' },
+  youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   // Home bottom panel — iOS-style floating card (~94% width, lifted margin on all sides)
   bottomPanel: {
     position: 'absolute',

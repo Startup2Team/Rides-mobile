@@ -7,10 +7,11 @@ import { useAuth } from '@/context/AuthContext';
 
 function StatRow({ label, value, icon, color }: { label: string; value: string; icon: keyof typeof Feather.glyphMap; color?: string }) {
   const colors = useColors();
+  const iconColor = color ?? colors.primaryHex;
   return (
     <View style={[styles.statRow, { borderBottomColor: colors.border }]}>
-      <View style={[styles.statIcon, { backgroundColor: (color ?? colors.primary) + '20' }]}>
-        <Feather name={icon} size={18} color={color ?? colors.primary} />
+      <View style={[styles.statIcon, { backgroundColor: iconColor + '20' }]}>
+        <Feather name={icon} size={18} color={iconColor} />
       </View>
       <Text style={[styles.statLabel, { color: colors.foreground }]}>{label}</Text>
       <Text style={[styles.statValue, { color: color ?? colors.foreground }]}>{value}</Text>
@@ -52,9 +53,9 @@ export default function DriverStats() {
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
         <StatRow label="Rides Completed" value={String(dp.dailyRides)} icon="navigation" />
         <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructive} />
-        <StatRow label="Gross Earnings" value={`${todayGross.toLocaleString()} RWF`} icon="dollar-sign" color={colors.primary} />
+        <StatRow label="Gross Earnings" value={`${todayGross.toLocaleString()} RWF`} icon="dollar-sign" color={colors.primaryHex} />
         <StatRow label="Platform Fee" value={`-${platformFee.toLocaleString()} RWF`} icon="percent" />
-        <StatRow label="Today's Payout" value={`${todayPayout.toLocaleString()} RWF`} icon="credit-card" color={colors.primary} />
+        <StatRow label="Today's Payout" value={`${todayPayout.toLocaleString()} RWF`} icon="credit-card" color={colors.primaryHex} />
         <StatRow label="Payment Target" value={paymentTarget} icon="smartphone" />
       </View>
 
@@ -62,8 +63,8 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>ALL TIME</Text>
         <StatRow label="Total Rides" value={String(dp.completedRides)} icon="award" />
-        <StatRow label="Acceptance Rate" value={`${dp.acceptanceRate}%`} icon="check-circle" color={colors.primary} />
-        <StatRow label="Total Earnings" value={`${(dp.earningsTotal ?? 0).toLocaleString()} RWF`} icon="trending-up" color={colors.primary} />
+        <StatRow label="Acceptance Rate" value={`${dp.acceptanceRate}%`} icon="check-circle" color={colors.primaryHex} />
+        <StatRow label="Total Earnings" value={`${(dp.earningsTotal ?? 0).toLocaleString()} RWF`} icon="trending-up" color={colors.primaryHex} />
       </View>
 
       {/* Priority system */}

@@ -18,6 +18,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
+import { TARAVELIS_BRAND_GREEN_HEX } from '@/constants/systemColors';
 
 const PAYMENT_STORAGE_KEY = '@taravelis_payment_methods';
 
@@ -34,7 +35,7 @@ interface PaymentMethod {
 const PROVIDER_META: Record<PaymentProvider, { name: string; color: string; icon: string }> = {
   mtn: { name: 'MTN Mobile Money', color: '#FFCC00', icon: 'smartphone' },
   airtel: { name: 'Airtel Money', color: '#FF0000', icon: 'smartphone' },
-  cash: { name: 'Cash', color: '#00C853', icon: 'pocket' },
+  cash: { name: 'Cash', color: TARAVELIS_BRAND_GREEN_HEX.light, icon: 'pocket' },
 };
 
 const DEFAULT_METHODS: PaymentMethod[] = [

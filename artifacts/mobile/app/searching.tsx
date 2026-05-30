@@ -127,7 +127,7 @@ export default function SearchingScreen() {
           />
         ))}
 
-        <View style={[styles.centerDot, { backgroundColor: colors.primary }]}>
+        <View style={[styles.centerDot, { backgroundColor: colors.primary, shadowColor: colors.primaryHex }]}>
           <Image
             source={VEHICLE_IMAGES[vehicleType]}
             style={[styles.vehicleImage, VEHICLE_IMAGE_STYLES[vehicleType]]}
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: 41,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#00C853',
+    shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 20,

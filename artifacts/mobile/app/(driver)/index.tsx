@@ -200,7 +200,7 @@ export default function DriverDashboard() {
               </View>
             </View>
             <View style={styles.heroRight}>
-              <View style={[styles.statusPill, { backgroundColor: isOnline ? colors.primary + '18' : colors.muted }]}>
+              <View style={[styles.statusPill, { backgroundColor: isOnline ? colors.successHex + '18' : colors.muted }]}>
                 <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.primary : colors.mutedForeground }]} />
                 <Text style={[styles.statusPillText, { color: isOnline ? colors.primary : colors.mutedForeground }]}>
                   {isOnline ? 'Online' : 'Offline'}
@@ -223,7 +223,7 @@ export default function DriverDashboard() {
             <Switch
               value={isOnline}
               onValueChange={toggleOnline}
-              trackColor={{ false: colors.border, true: colors.primary + '80' }}
+              trackColor={{ false: colors.border, true: colors.primaryHex + '80' }}
               thumbColor={isOnline ? colors.primary : colors.mutedForeground}
             />
           </View>
@@ -262,10 +262,10 @@ export default function DriverDashboard() {
           >
             <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
               <View style={styles.driverLocationMarker}>
-                <View style={styles.youAreHereBubble}>
+                <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
                   <Text style={styles.youAreHereText}>You're Here</Text>
                 </View>
-                <View style={styles.youAreHereTail} />
+                <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
                 <View style={styles.vehicleMarkerWrap}>
                   <Image
                     source={VEHICLE_MARKER_IMAGES[activeVehicleType]}
@@ -284,7 +284,7 @@ export default function DriverDashboard() {
                 </Marker>
                 <Polyline
                   coordinates={[driverLocation, request.pickup]}
-                  strokeColor={colors.primary}
+                  strokeColor={colors.destructiveHex}
                   strokeWidth={3}
                   lineDashPattern={[8, 4]}
                 />
@@ -485,7 +485,6 @@ const styles = StyleSheet.create({
   },
   driverLocationMarker: { alignItems: 'center' },
   youAreHereBubble: {
-    backgroundColor: '#00C853',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
@@ -504,7 +503,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#00C853',
     marginBottom: -2,
     zIndex: 3,
   },

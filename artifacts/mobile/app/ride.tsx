@@ -33,7 +33,6 @@ const STATUS_MESSAGES: Record<string, string> = {
 };
 
 const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
-const ARRIVING_ROUTE_COLOR = '#FF3B30';
 
 const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
   moto: require('../assets/vehicle-markers/moto.png'),
@@ -354,14 +353,14 @@ export default function RideScreen() {
         {/* Real road route */}
         {isArriving ? (
           remainingDriverToPickupRoute && (
-            <RoutePolyline coordinates={remainingDriverToPickupRoute} color={ARRIVING_ROUTE_COLOR} width={4} />
+            <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
           )
         ) : isInProgress ? (
           remainingPickupToDestinationRoute && (
-            <RoutePolyline coordinates={remainingPickupToDestinationRoute} color={ARRIVING_ROUTE_COLOR} width={4} />
+            <RoutePolyline coordinates={remainingPickupToDestinationRoute} color={colors.destructiveHex} width={4} />
           )
         ) : (
-          rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color={ARRIVING_ROUTE_COLOR} width={4} />
+          rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color={colors.destructiveHex} width={4} />
         )}
       </MapView>
 
@@ -571,7 +570,7 @@ export default function RideScreen() {
       >
         <View style={styles.completeOverlay}>
           <View style={[styles.completeCard, { backgroundColor: colors.background }]}>
-            <View style={[styles.completeIconWrap, { backgroundColor: colors.primary + '18' }]}>
+            <View style={[styles.completeIconWrap, { backgroundColor: colors.primaryHex + '18' }]}>
               <Feather name="check-circle" size={30} color={colors.primary} />
             </View>
             <Text style={[styles.completeTitle, { color: colors.foreground }]}>Complete ride?</Text>

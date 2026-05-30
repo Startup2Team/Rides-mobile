@@ -1,5 +1,6 @@
 import React from 'react';
 import { Polyline } from 'react-native-maps';
+import { APPLE_SYSTEM_RED_HEX } from '@/constants/systemColors';
 import { Coords } from '@/types';
 
 interface RoutePolylineProps {
@@ -14,7 +15,7 @@ interface RoutePolylineProps {
  */
 export function RoutePolyline({
   coordinates,
-  color = '#FF3B30',
+  color = APPLE_SYSTEM_RED_HEX.light,
   width = 4,
 }: RoutePolylineProps) {
   if (coordinates.length < 2) return null;
