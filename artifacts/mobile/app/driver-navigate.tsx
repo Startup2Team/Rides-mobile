@@ -11,24 +11,11 @@ import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { formatDuration } from '@/utils/mapUtils';
+import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
 
 const WAIT_LIMIT_SECONDS = 180;
 const ARRIVAL_UNLOCK_KM = 1;
-
-const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
-  moto: require('../assets/vehicle-markers/moto.png'),
-  cab: require('../assets/vehicle-markers/cab.png'),
-  hilux: require('../assets/vehicle-markers/hilux.png'),
-  fuso: require('../assets/vehicle-markers/fuso.png'),
-};
-
-const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 58, height: 44 },
-  cab: { width: 54, height: 40 },
-  hilux: { width: 64, height: 40 },
-  fuso: { width: 66, height: 44 },
-};
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
@@ -280,17 +267,10 @@ export default function DriverNavigateScreen() {
         customMapStyle={darkMapStyle}
       >
         <Marker coordinate={driverPos} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.vehicleMarkerWrap}>
-            <Image
-              source={VEHICLE_MARKER_IMAGES[currentRide.vehicleType]}
-              style={[
-                styles.vehicleMarkerImage,
-                VEHICLE_IMAGE_STYLES[currentRide.vehicleType],
-                { transform: [{ rotate: `${vehicleRotationDeg}deg` }] },
-              ]}
-              resizeMode="contain"
-            />
-          </View>
+          <VehicleMapMarker
+            type={currentRide.vehicleType}
+            rotationDeg={vehicleRotationDeg}
+          />
         </Marker>
         <Marker coordinate={currentRide.pickup}>
           <View style={[styles.pinMarker, { backgroundColor: colors.primary }]}>
@@ -529,15 +509,6 @@ const styles = StyleSheet.create({
   rerouteText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   rerouteBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  vehicleMarkerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 70,
-    height: 70,
-  },
-  vehicleMarkerImage: {
-    zIndex: 2,
-  },
   pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   bottomCard: {
     position: 'absolute',

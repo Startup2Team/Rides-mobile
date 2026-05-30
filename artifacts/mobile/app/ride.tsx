@@ -22,6 +22,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
+import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -33,20 +34,6 @@ const STATUS_MESSAGES: Record<string, string> = {
 };
 
 const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
-
-const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
-  moto: require('../assets/vehicle-markers/moto.png'),
-  cab: require('../assets/vehicle-markers/cab.png'),
-  hilux: require('../assets/vehicle-markers/hilux.png'),
-  fuso: require('../assets/vehicle-markers/fuso.png'),
-};
-
-const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 58, height: 44 },
-  cab: { width: 54, height: 40 },
-  hilux: { width: 64, height: 40 },
-  fuso: { width: 66, height: 44 },
-};
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
@@ -320,17 +307,10 @@ export default function RideScreen() {
       >
         {activeDriverLocation && (
           <Marker coordinate={activeDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={styles.vehicleMarkerWrap}>
-              <Image
-                source={VEHICLE_MARKER_IMAGES[currentRide.vehicleType]}
-                style={[
-                  styles.vehicleMarkerImage,
-                  VEHICLE_IMAGE_STYLES[currentRide.vehicleType],
-                  { transform: [{ rotate: `${vehicleRotationDeg}deg` }] },
-                ]}
-                resizeMode="contain"
-              />
-            </View>
+            <VehicleMapMarker
+              type={currentRide.vehicleType}
+              rotationDeg={vehicleRotationDeg}
+            />
           </Marker>
         )}
         {!isInProgress && (
@@ -647,15 +627,6 @@ const styles = StyleSheet.create({
   },
   pickupMarkerDot: { width: 6, height: 6, borderRadius: 3 },
   pickupMarkerStem: { width: 2, height: 10, borderRadius: 1, marginTop: -1 },
-  vehicleMarkerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 70,
-    height: 70,
-  },
-  vehicleMarkerImage: {
-    zIndex: 2,
-  },
   driverCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,

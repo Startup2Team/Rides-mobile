@@ -18,21 +18,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
+import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS } from '@/types';
-
-const VEHICLE_MARKER_IMAGES: Record<VehicleType, any> = {
-  moto: require('../../assets/vehicle-markers/moto.png'),
-  cab: require('../../assets/vehicle-markers/cab.png'),
-  hilux: require('../../assets/vehicle-markers/hilux.png'),
-  fuso: require('../../assets/vehicle-markers/fuso.png'),
-};
-
-const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 58, height: 44 },
-  cab: { width: 54, height: 40 },
-  hilux: { width: 64, height: 40 },
-  fuso: { width: 66, height: 44 },
-};
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 
@@ -266,13 +253,7 @@ export default function DriverDashboard() {
                   <Text style={styles.youAreHereText}>You're Here</Text>
                 </View>
                 <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
-                <View style={styles.vehicleMarkerWrap}>
-                  <Image
-                    source={VEHICLE_MARKER_IMAGES[activeVehicleType]}
-                    style={[styles.vehicleMarkerImage, VEHICLE_IMAGE_STYLES[activeVehicleType]]}
-                    resizeMode="contain"
-                  />
-                </View>
+                <VehicleMapMarker type={activeVehicleType} />
               </View>
             </Marker>
             {request && (
@@ -505,15 +486,6 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     marginBottom: -2,
     zIndex: 3,
-  },
-  vehicleMarkerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 70,
-    height: 70,
-  },
-  vehicleMarkerImage: {
-    zIndex: 2,
   },
   pinMarker: {
     width: 28,

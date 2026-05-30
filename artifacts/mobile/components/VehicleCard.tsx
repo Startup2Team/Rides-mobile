@@ -1,9 +1,8 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS, VEHICLE_MCI } from '@/types';
+import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { useColors } from '@/hooks/useColors';
+import { VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 
 interface VehicleCardProps {
   type: VehicleType;
@@ -13,11 +12,11 @@ interface VehicleCardProps {
   compact?: boolean;
 }
 
-const VEHICLE_DATA: Record<VehicleType, { icon: keyof typeof Feather.glyphMap; seats: string; desc: string }> = {
-  moto: { icon: 'zap', seats: '1 seat', desc: 'Fast & affordable' },
-  cab: { icon: 'navigation', seats: '4 seats', desc: 'Comfortable ride' },
-  fuso: { icon: 'truck', seats: '10+ seats', desc: 'Heavy cargo & groups' },
-  hilux: { icon: 'truck', seats: '5 seats', desc: 'Light cargo & family' },
+const VEHICLE_DATA: Record<VehicleType, { seats: string; desc: string }> = {
+  moto: { seats: '1 seat', desc: 'Fast & affordable' },
+  cab: { seats: '4 seats', desc: 'Comfortable ride' },
+  fuso: { seats: '10+ seats', desc: 'Heavy cargo & groups' },
+  hilux: { seats: '5 seats', desc: 'Light cargo & family' },
 };
 
 export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }: VehicleCardProps) {
@@ -37,8 +36,8 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
           },
         ]}
       >
-        <View style={[styles.compactIconBox, { backgroundColor: selected ? colors.primary : colors.muted }]}>
-          <MaterialCommunityIcons name={VEHICLE_MCI[type] as any} size={28} color={selected ? colors.primaryForeground : colors.foreground} />
+        <View style={styles.compactIconBox}>
+          <VehicleTypeIcon type={type} selected={selected} />
         </View>
         <Text style={[styles.compactName, { color: selected ? colors.primary : colors.foreground }]}>
           {VEHICLE_LABELS[type]}
@@ -59,8 +58,8 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
         },
       ]}
     >
-      <View style={[styles.iconBox, { backgroundColor: selected ? colors.primary : colors.muted }]}>
-        <Feather name={data.icon} size={20} color={selected ? colors.primaryForeground : colors.foreground} />
+      <View style={styles.iconBox}>
+        <VehicleTypeIcon type={type} selected={selected} />
       </View>
       <View style={styles.info}>
         <Text style={[styles.name, { color: colors.foreground }]}>{VEHICLE_LABELS[type]}</Text>
@@ -96,16 +95,14 @@ const styles = StyleSheet.create({
   },
   compactIconBox: {
     width: 56,
-    height: 56,
-    borderRadius: 16,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   compactName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 52,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },

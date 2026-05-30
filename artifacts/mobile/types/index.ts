@@ -105,10 +105,10 @@ export interface Ride {
 }
 
 export const VEHICLE_MCI: Record<VehicleType, string> = {
-  moto: 'motorbike',
-  cab: 'taxi',
-  hilux: 'car-pickup',
-  fuso: 'truck',
+  moto: 'moped',
+  cab: 'car-side',
+  hilux: 'pickup-truck',
+  fuso: 'truck-trailer',
 };
 
 export const VEHICLE_LABELS: Record<VehicleType, string> = {
