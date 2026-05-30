@@ -22,7 +22,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
-import { VEHICLE_MAP_IMAGE_SIZE, VEHICLE_MAP_MARKER_IMAGES } from '@/constants/vehicles';
+import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -307,17 +307,10 @@ export default function RideScreen() {
       >
         {activeDriverLocation && (
           <Marker coordinate={activeDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={styles.vehicleMarkerWrap}>
-              <Image
-                source={VEHICLE_MAP_MARKER_IMAGES[currentRide.vehicleType]}
-                style={[
-                  styles.vehicleMarkerImage,
-                  VEHICLE_MAP_IMAGE_SIZE[currentRide.vehicleType],
-                  { transform: [{ rotate: `${vehicleRotationDeg}deg` }] },
-                ]}
-                resizeMode="contain"
-              />
-            </View>
+            <VehicleMapMarker
+              type={currentRide.vehicleType}
+              rotationDeg={vehicleRotationDeg}
+            />
           </Marker>
         )}
         {!isInProgress && (
@@ -634,15 +627,6 @@ const styles = StyleSheet.create({
   },
   pickupMarkerDot: { width: 6, height: 6, borderRadius: 3 },
   pickupMarkerStem: { width: 2, height: 10, borderRadius: 1, marginTop: -1 },
-  vehicleMarkerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 70,
-    height: 70,
-  },
-  vehicleMarkerImage: {
-    zIndex: 2,
-  },
   driverCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,

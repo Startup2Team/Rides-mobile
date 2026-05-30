@@ -15,3 +15,4 @@ Best format:
 - Side-view image like the examples
 - Around 256px wide is enough
 - No text, watermark, or white background
+- If the source PNG already has transparency (e.g. moto5), trim and resize only — do not run black background removal (it eats dark bike pixels)

@@ -26,7 +26,7 @@ export const VEHICLE_CHIP_IMAGE_SIZE: Record<VehicleType, { width: number; heigh
 
 /** Larger markers on the live map. */
 export const VEHICLE_MAP_IMAGE_SIZE: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 58, height: 46 },
+  moto: { width: 48, height: 36 },
   cab: { width: 54, height: 40 },
   hilux: { width: 64, height: 40 },
   fuso: { width: 66, height: 44 },

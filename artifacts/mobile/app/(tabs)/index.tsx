@@ -41,7 +41,7 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
-import { VEHICLE_MAP_IMAGE_SIZE, VEHICLE_MAP_MARKER_IMAGES } from '@/constants/vehicles';
+import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -114,7 +114,6 @@ const DRIVER_OFFSETS = [
   { lat:  0.0062, lng:  0.0032 }, { lat: -0.0070, lng: -0.0025 },
 ];
 
-const VEHICLE_IMAGE_STYLES = VEHICLE_MAP_IMAGE_SIZE;
 
 function calcEstFare(type: VehicleType, dist: number) {
   const base = VEHICLE_BASE_FARE[type];
@@ -1097,16 +1096,7 @@ export default function CustomerHome() {
             tracksViewChanges={false}
             zIndex={1}
           >
-            <View style={styles.vehicleMarkerWrap}>
-              <Image
-                source={VEHICLE_MAP_MARKER_IMAGES[selectedVehicle]}
-                style={[
-                  styles.vehicleMarkerImage,
-                  VEHICLE_IMAGE_STYLES[selectedVehicle],
-                ]}
-                resizeMode="contain"
-              />
-            </View>
+            <VehicleMapMarker type={selectedVehicle} />
           </Marker>
         ))}
 
@@ -2150,15 +2140,6 @@ const styles = StyleSheet.create({
   suggestionText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
   routeMarker: { alignItems: 'center' },
   routeMarkerDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
-  vehicleMarkerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 70,
-    height: 70,
-  },
-  vehicleMarkerImage: {
-    zIndex: 2,
-  },
   vehicleMarkerShadow: {
     position: 'absolute',
     width: 52,
