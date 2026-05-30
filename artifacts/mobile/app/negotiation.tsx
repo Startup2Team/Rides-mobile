@@ -261,9 +261,7 @@ export default function NegotiationScreen() {
     return {
       tone: 'neutral' as const,
       title: 'Fare negotiation',
-      hint: negotiation.length === 0
-        ? 'Send your fare offer below, or wait for the driver to go first'
-        : 'Send an offer below when the driver responds',
+      hint: 'Waiting for the driver to send their fare offer',
     };
   }, [customerLimitReached, showDriverTyping, lastDriverOffer?.amount]);
   const offerPlaceholder = customerOffers.length === 0
@@ -272,12 +270,11 @@ export default function NegotiationScreen() {
       ? 'Final offer'
       : 'Counter offer';
 
-  // Customer can send the first offer (negotiation not started) OR reply to the
-  // driver's most recent offer. Blocked only when: they just counter-offered and
-  // are waiting for the driver to respond, OR they hit the 3-offer limit.
-  const canCounter =
-    !customerLimitReached &&
-    (negotiation.length === 0 || lastMsg?.sender === 'driver');
+  // Customer can only counter after the driver has proposed. The driver always
+  // sets the first price — customers don't know the market rates. Counter is
+  // blocked when: no driver offer exists yet, customer just replied (waiting for
+  // driver's next move), or the 3-offer limit is reached.
+  const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
 
   useEffect(() => {
     if (isRideAccepted) {
