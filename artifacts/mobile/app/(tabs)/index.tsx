@@ -79,7 +79,7 @@ const floatingPanelSurface = {
 };
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
 const SAVE_LABEL_GAP = 8;
-const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = 20;
+const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = BOOKING_SHEET_PADDING_H;
 const SAVE_LABEL_AVAILABLE_WIDTH =
   SCREEN_WIDTH - SAVE_LABEL_SHEET_HORIZONTAL_PADDING * 2 - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
 const SAVE_LABEL_WIDTHS: Record<string, number> = {
@@ -818,9 +818,13 @@ export default function CustomerHome() {
       onSnapOpen?: () => void,
     ) =>
       PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, gestureState) =>
-          gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+          gestureState.dy > 6 && gestureState.dy > Math.abs(gestureState.dx),
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          gestureState.dy > 8 && gestureState.dy > Math.abs(gestureState.dx) * 1.2,
         onPanResponderGrant: () => {
+          Keyboard.dismiss();
           formSheetDragAnim.stopAnimation(value => {
             formSheetDragStart.current = value;
           });
@@ -1233,7 +1237,7 @@ export default function CustomerHome() {
             ]}
             {...bookingSheetPanResponder.panHandlers}
           >
-            <View style={styles.bookingCloseAnchor} pointerEvents="box-none">
+            <View style={styles.formSheetCloseAnchor} pointerEvents="box-none">
               <CloseButton
                 ref={bookingCloseRef}
                 shutOnPress={false}
@@ -1241,13 +1245,13 @@ export default function CustomerHome() {
                 accessibilityLabel="Close booking"
               />
             </View>
-            <View style={styles.bookingSheetBody}>
+            <View style={styles.formSheetBody}>
             {/* Handle + header */}
-            <View style={[styles.sheetDragZone, styles.bookingSheetDragZone]}>
-              <View style={[styles.sheetHandleTouch, styles.bookingSheetHandleTouch]}>
+            <View style={[styles.sheetDragZone, styles.formSheetDragZone]}>
+              <View style={[styles.sheetHandleTouch, styles.formSheetHandleTouch]}>
                 <View style={styles.sheetHandle} />
               </View>
-              <View style={styles.bookingSheetHeader}>
+              <View style={styles.formSheetHeader}>
                 <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
               </View>
             </View>
@@ -1692,9 +1696,9 @@ export default function CustomerHome() {
                   setFormSheetMeasuredHeight(height);
                 }}
                 style={[
-                  styles.saveLocationSheet,
-                  styles.saveAsLocationSheet,
-                  styles.saveLocationSheetRaised,
+                  styles.overlayFormSheet,
+                  styles.formSheetSurface,
+                  styles.overlayFormSheetRaised,
                   formSheetSurface,
                   {
                     paddingBottom: insets.bottom + (Platform.OS === 'web' ? 88 : 72),
@@ -1708,29 +1712,33 @@ export default function CustomerHome() {
                     ],
                   },
                 ]}
+                {...saveFormSheetPanResponder.panHandlers}
               >
-                <View style={styles.sheetDragZone}>
-                  <View style={styles.sheetHandleTouch} {...saveFormSheetPanResponder.panHandlers}>
-                    <View style={styles.sheetHandle} />
-                  </View>
-                  <View style={styles.saveLocationHeader}>
-                    <View style={styles.saveAsLocationHeaderText}>
-                      <Text style={[styles.saveAsLocationTitle, { color: colors.foreground }]}>Save location as</Text>
-                      <Text style={[styles.saveAsLocationAddress, { color: colors.mutedForeground }]} numberOfLines={2}>
+                <View style={styles.formSheetCloseAnchor} pointerEvents="box-none">
+                  <CloseButton
+                    ref={saveFormCloseRef}
+                    shutOnPress={false}
+                    onPress={dismissSaveFormSheet}
+                    accessibilityLabel="Close save location"
+                  />
+                </View>
+                <View style={styles.formSheetBody}>
+                  <View style={[styles.sheetDragZone, styles.formSheetDragZone]}>
+                    <View style={[styles.sheetHandleTouch, styles.formSheetHandleTouch]}>
+                      <View style={styles.sheetHandle} />
+                    </View>
+                    <View style={styles.formSheetHeader}>
+                      <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Save location as</Text>
+                    </View>
+                    <View style={styles.formSheetSubheader}>
+                      <Text style={[styles.formSheetSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
                         {pendingSaveLocation.address ?? 'Selected location'}
                       </Text>
-                      <Text style={[styles.saveAsLocationPrompt, { color: colors.mutedForeground }]}>
+                      <Text style={[styles.formSheetHint, { color: colors.mutedForeground }]}>
                         {isCustomSaveLabel ? 'Type a custom label to finish saving.' : 'Choose one label to finish saving.'}
                       </Text>
                     </View>
-                    <CloseButton
-                      ref={saveFormCloseRef}
-                      shutOnPress={false}
-                      onPress={dismissSaveFormSheet}
-                      accessibilityLabel="Close save location"
-                    />
                   </View>
-                </View>
                 <View style={styles.saveAsLocationLabels}>
                   {SAVE_LOCATION_LABELS.map(label => (
                     <TouchableOpacity
@@ -1791,6 +1799,7 @@ export default function CustomerHome() {
                     </TouchableOpacity>
                   </View>
                 )}
+                </View>
               </Animated.View>
             </>
           )}
@@ -1806,8 +1815,9 @@ export default function CustomerHome() {
                   setFormSheetMeasuredHeight(height);
                 }}
                 style={[
-                  styles.saveLocationSheet,
-                  styles.saveLocationSheetRaised,
+                  styles.overlayFormSheet,
+                  styles.formSheetSurface,
+                  styles.overlayFormSheetRaised,
                   formSheetSurface,
                   {
                     paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
@@ -1822,29 +1832,33 @@ export default function CustomerHome() {
                     ],
                   },
                 ]}
+                {...editFormSheetPanResponder.panHandlers}
               >
-                <View style={styles.sheetDragZone}>
-                  <View style={styles.sheetHandleTouch} {...editFormSheetPanResponder.panHandlers}>
-                    <View style={styles.sheetHandle} />
-                  </View>
-                  <View style={styles.saveLocationHeader}>
-                    <View style={styles.saveLocationHeaderText}>
-                      <Text style={[styles.saveLocationTitle, { color: colors.foreground }]}>Edit saved location</Text>
-                      <Text style={[styles.saveLocationAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
+                <View style={styles.formSheetCloseAnchor} pointerEvents="box-none">
+                  <CloseButton
+                    ref={editFormCloseRef}
+                    shutOnPress={false}
+                    onPress={dismissEditFormSheet}
+                    accessibilityLabel="Close edit location"
+                  />
+                </View>
+                <View style={styles.formSheetBody}>
+                  <View style={[styles.sheetDragZone, styles.formSheetDragZone]}>
+                    <View style={[styles.sheetHandleTouch, styles.formSheetHandleTouch]}>
+                      <View style={styles.sheetHandle} />
+                    </View>
+                    <View style={styles.formSheetHeader}>
+                      <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Edit saved location</Text>
+                    </View>
+                    <View style={styles.formSheetSubheader}>
+                      <Text style={[styles.formSheetSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
                         {editingSavedLocation.address ?? 'Saved location'}
                       </Text>
-                      <Text style={[styles.saveLocationPrompt, { color: colors.mutedForeground }]}>
+                      <Text style={[styles.formSheetHint, { color: colors.mutedForeground }]}>
                         Rename, update, or delete this saved place.
                       </Text>
                     </View>
-                    <CloseButton
-                      ref={editFormCloseRef}
-                      shutOnPress={false}
-                      onPress={dismissEditFormSheet}
-                      accessibilityLabel="Close edit location"
-                    />
                   </View>
-                </View>
 
                 <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                   <Feather name="edit-3" size={16} color={colors.mutedForeground} />
@@ -1913,6 +1927,7 @@ export default function CustomerHome() {
                   <Feather name="trash-2" size={16} color={colors.destructive} />
                   <Text style={[styles.savedLocationDeleteText, { color: colors.destructive }]}>Delete saved location</Text>
                 </TouchableOpacity>
+                </View>
               </Animated.View>
             </>
           )}
@@ -2109,23 +2124,46 @@ const styles = StyleSheet.create({
     gap: 0,
     overflow: 'visible',
   },
-  bookingSheetBody: {
+  overlayFormSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: SCREEN_WIDTH,
+  },
+  overlayFormSheetRaised: {
+    zIndex: 90,
+  },
+  formSheetSurface: {
+    ...floatingPanelSurface,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingTop: 0,
+    gap: 0,
+    overflow: 'visible',
+  },
+  formSheetBody: {
     paddingHorizontal: BOOKING_SHEET_PADDING_H,
     gap: 10,
   },
-  sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
-  bookingSheetDragZone: { paddingTop: 0, paddingBottom: 0, marginTop: 0 },
-  sheetHandleTouch: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: -2 },
-  bookingSheetHandleTouch: { paddingTop: 6, paddingBottom: 4, marginBottom: 0 },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' },
-  bookingSheetHeader: {
+  formSheetDragZone: { paddingTop: 0, paddingBottom: 0, marginTop: 0 },
+  formSheetHandleTouch: { paddingTop: 6, paddingBottom: 4, marginBottom: 0 },
+  formSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: GREETING_LEFT_INSET,
     paddingRight: 52,
     minHeight: 44,
   },
-  bookingCloseAnchor: {
+  formSheetSubheader: {
+    paddingLeft: GREETING_LEFT_INSET,
+    paddingRight: 52,
+    gap: 4,
+    paddingBottom: 2,
+  },
+  formSheetSubtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  formSheetHint: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  formSheetCloseAnchor: {
     position: 'absolute',
     top: BOOKING_CLOSE_EDGE_INSET - BOOKING_CLOSE_ROTATION_PAD,
     right: BOOKING_CLOSE_EDGE_INSET - BOOKING_CLOSE_ROTATION_PAD,
@@ -2135,6 +2173,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
   },
+  sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
+  sheetHandleTouch: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: -2 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' },
   sheetTitle: { flex: 1, fontSize: 16, fontFamily: 'Inter_600SemiBold', marginRight: 8 },
   locationCard: {
     borderRadius: 15,
@@ -2451,35 +2492,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     textAlign: 'center',
   },
-  saveLocationSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingTop: 8,
-    paddingHorizontal: 19,
-    gap: 8,
-  },
-  saveLocationSheetRaised: {
-    zIndex: 90,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowRadius: 24,
-    elevation: 28,
-  },
-  saveAsLocationSheet: {
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    gap: 16,
-    minHeight: 220,
-  },
-  saveAsLocationHeaderText: { flex: 1, gap: 4 },
-  saveAsLocationTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  saveAsLocationAddress: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  saveAsLocationPrompt: { fontSize: 13, fontFamily: 'Inter_500Medium', marginTop: 2 },
   saveAsLocationLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2527,16 +2539,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_700Bold',
   },
-  saveLocationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  saveLocationHeaderText: { flex: 1, gap: 2 },
-  saveLocationTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
-  saveLocationAddress: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  saveLocationPrompt: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   saveLocationLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
