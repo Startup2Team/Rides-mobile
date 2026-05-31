@@ -56,19 +56,21 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile, logout, switchMode } = useAuth();
+  const { user, driverProfile, logout, switchMode, loadCustomerProfile } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      // Refresh profile data from GET /customer/profile every time the tab is opened.
+      loadCustomerProfile();
       AsyncStorage.getItem(PROFILE_IMAGE_KEY).then(uri => {
         if (active) setProfileImage(uri);
       });
       return () => {
         active = false;
       };
-    }, []),
+    }, [loadCustomerProfile]),
   );
 
   const handleSwitchToDriver = () => {

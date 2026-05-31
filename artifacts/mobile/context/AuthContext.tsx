@@ -18,6 +18,8 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
   loadDriverProfile: () => Promise<void>;
+  /** Refresh the customer profile from GET /customer/profile and update in-memory state. */
+  loadCustomerProfile: () => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   /** Call after driver registration to swap the stale JWT for one with DRIVER_ACTIVE role. */
   refreshSession: () => Promise<void>;
@@ -121,6 +123,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } as DriverProfile);
     } catch {
       // user has no driver profile — that's fine
+    }
+  }, []);
+
+  const loadCustomerProfile = useCallback(async () => {
+    try {
+      const { data: p } = await api.get('/customer/profile');
+      const fresh = mapApiUserToUser(p);
+      setUser(fresh);
+      await persistSnapshot(fresh);
+    } catch {
+      // Network unavailable — keep showing cached data
     }
   }, []);
 
@@ -236,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateUser,
       saveDriverProfile,
       loadDriverProfile,
+      loadCustomerProfile,
       switchMode,
       refreshSession,
     }}>
