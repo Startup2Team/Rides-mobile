@@ -24,6 +24,11 @@ export interface RideLocation extends Coords {
   locationType?: LocationType;
 }
 
+export interface SavedLocation extends RideLocation {
+  id: string;
+  label: string;
+}
+
 export interface User {
   id: string;
   name: string;

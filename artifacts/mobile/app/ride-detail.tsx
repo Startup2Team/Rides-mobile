@@ -1,7 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Image,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -10,10 +11,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { SaveLocationSheet } from '@/components/SaveLocationSheet';
 import { StatusChip } from '@/components/StatusChip';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
-import { VEHICLE_LABELS } from '@/types';
+import { RideLocation, VEHICLE_LABELS } from '@/types';
 
 function formatRideDate(value: string) {
   return new Date(value).toLocaleDateString('en-RW', {
@@ -64,12 +66,48 @@ function DetailRow({
   );
 }
 
+function RouteLocationRow({
+  label,
+  address,
+  location,
+  onSave,
+}: {
+  label: string;
+  address: string;
+  location: RideLocation;
+  onSave: (location: RideLocation) => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <View style={styles.routeItem}>
+      <View style={styles.routeItemText}>
+        <Text style={[styles.routeItemLabel, { color: colors.mutedForeground }]}>{label}</Text>
+        <Text style={[styles.routeItemValue, { color: colors.foreground }]}>{address}</Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Save ${label.toLowerCase()} location`}
+        accessibilityHint="Opens options to save this place for future rides"
+        onPress={() => onSave(location)}
+        style={({ pressed }) => [
+          styles.saveLocationButton,
+          { borderColor: colors.border, opacity: pressed ? 0.72 : 1 },
+        ]}
+      >
+        <Text style={[styles.saveLocationButtonText, { color: colors.primary }]}>Save</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function RideDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { rideId } = useLocalSearchParams<{ rideId: string }>();
   const { rideHistory, loadHistory } = useRide();
+  const [pendingSaveLocation, setPendingSaveLocation] = useState<RideLocation | null>(null);
 
   React.useEffect(() => {
     loadHistory();
@@ -158,19 +196,19 @@ export default function RideDetailScreen() {
               <View style={[styles.dot, styles.destinationDot, { backgroundColor: colors.destructive }]} />
             </View>
             <View style={styles.routeLabels}>
-              <View style={styles.routeItem}>
-                <Text style={[styles.routeItemLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                <Text style={[styles.routeItemValue, { color: colors.foreground }]}>
-                  {ride.pickup.address ?? 'Pickup location'}
-                </Text>
-              </View>
+              <RouteLocationRow
+                label="Pickup"
+                address={ride.pickup.address ?? 'Pickup location'}
+                location={ride.pickup}
+                onSave={setPendingSaveLocation}
+              />
               <View style={[styles.routeDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.routeItem}>
-                <Text style={[styles.routeItemLabel, { color: colors.mutedForeground }]}>Drop off</Text>
-                <Text style={[styles.routeItemValue, { color: colors.foreground }]}>
-                  {ride.destination.address ?? 'Destination'}
-                </Text>
-              </View>
+              <RouteLocationRow
+                label="Drop off"
+                address={ride.destination.address ?? 'Destination'}
+                location={ride.destination}
+                onSave={setPendingSaveLocation}
+              />
             </View>
           </View>
         </View>
@@ -218,6 +256,11 @@ export default function RideDetailScreen() {
           </>
         )}
       </GlassScrollView>
+
+      <SaveLocationSheet
+        location={pendingSaveLocation}
+        onClose={() => setPendingSaveLocation(null)}
+      />
     </View>
   );
 }
@@ -255,9 +298,29 @@ const styles = StyleSheet.create({
   destinationDot: { borderRadius: 3 },
   routeLine: { width: 1.5, height: 34 },
   routeLabels: { flex: 1, gap: 10 },
-  routeItem: { gap: 3 },
+  routeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
+  },
+  routeItemText: { flex: 1, gap: 3, minWidth: 0 },
   routeItemLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
   routeItemValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
+  saveLocationButton: {
+    minWidth: 54,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    flexShrink: 0,
+  },
+  saveLocationButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+  },
   routeDivider: { height: StyleSheet.hairlineWidth },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 34 },
   detailLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular' },

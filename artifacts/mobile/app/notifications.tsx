@@ -15,6 +15,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
+import { useToast } from '@/context/ToastContext';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 
@@ -142,6 +143,7 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { rideHistory } = useRide();
+  const { showToast } = useToast();
   const screenWidth = Dimensions.get('window').width;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -166,8 +168,11 @@ export default function NotificationsScreen() {
   const previousNotifications = notifications.filter(n => getDayBucket(n.time) === 'previous');
 
   const markAllRead = () => {
+    const hadUnread = notifications.some(n => !n.read);
+    if (!hadUnread) return;
     Haptics.selectionAsync();
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    showToast('All notifications marked as read');
   };
 
   const markRead = (id: string) => {
@@ -175,13 +180,18 @@ export default function NotificationsScreen() {
   };
 
   const toggleReadState = (id: string) => {
+    const item = notifications.find(n => n.id === id);
+    if (!item) return;
+    const nextRead = !item.read;
     Haptics.selectionAsync();
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n));
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: nextRead } : n));
+    showToast(nextRead ? 'Marked as read' : 'Marked as unread', nextRead ? 'success' : 'info');
   };
 
   const deleteNotification = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setNotifications(prev => prev.filter(n => n.id !== id));
+    showToast('Notification deleted', 'error');
   };
 
   const confirmDeleteNotification = (id: string) => {

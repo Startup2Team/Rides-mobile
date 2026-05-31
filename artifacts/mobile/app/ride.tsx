@@ -14,10 +14,11 @@ import {
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useToast } from '@/context/ToastContext';
+import { useRide } from '@/context/RideContext';
+import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { useDriverTracking } from '@/hooks/useDriverTracking';
-import { useRide } from '@/context/RideContext';
 import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
@@ -84,6 +85,7 @@ export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
+  const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
   const previousRideStatusRef = useRef<string | null>(null);
@@ -247,6 +249,7 @@ export default function RideScreen() {
 
   const doCancelRide = () => {
     cancelRide();
+    showToast('Ride cancelled', 'info');
     router.replace('/(tabs)');
   };
 
