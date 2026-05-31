@@ -301,8 +301,8 @@ export default function DriverNavigateScreen() {
             </Text>
           )}
         </View>
-        <TouchableOpacity style={[styles.callBtn, { backgroundColor: colors.muted }]} onPress={handleCall}>
-          <Feather name="phone" size={20} color={colors.foreground} />
+        <TouchableOpacity style={[styles.callBtn, { backgroundColor: colors.call }]} onPress={handleCall}>
+          <Feather name="phone" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -396,8 +396,8 @@ export default function DriverNavigateScreen() {
             <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.muted }]} onPress={handleMessage}>
               <Feather name="message-circle" size={18} color={colors.foreground} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.primary }]} onPress={handleCall}>
-              <Feather name="phone" size={18} color={colors.primaryForeground} />
+            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.call }]} onPress={handleCall}>
+              <Feather name="phone" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
