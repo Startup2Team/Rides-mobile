@@ -55,6 +55,10 @@ export const iosSystemGreen = iosPlatformColor('systemGreen', APPLE_SYSTEM_GREEN
 export const iosSystemOrange = iosPlatformColor('systemOrange', APPLE_SYSTEM_ORANGE_HEX.light);
 export const iosSystemRed = iosPlatformColor('systemRed', APPLE_SYSTEM_RED_HEX.light);
 
+export function systemGreenHex(scheme: 'light' | 'dark' | null | undefined): string {
+  return scheme === 'dark' ? APPLE_SYSTEM_GREEN_HEX.dark : APPLE_SYSTEM_GREEN_HEX.light;
+}
+
 export function systemBlueHex(scheme: 'light' | 'dark' | null | undefined): string {
   return scheme === 'dark' ? APPLE_SYSTEM_BLUE_HEX.dark : APPLE_SYSTEM_BLUE_HEX.light;
 }

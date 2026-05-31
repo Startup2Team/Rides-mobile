@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React, { forwardRef, useImperativeHandle } from 'react';
 import {
   Animated,
@@ -7,6 +8,7 @@ import {
   TouchableOpacity,
   ViewStyle,
 } from 'react-native';
+import { useBackButtonEntrance } from '@/hooks/useBackButtonEntrance';
 import { useCloseButtonSpin } from '@/hooks/useCloseButtonSpin';
 import { useColors } from '@/hooks/useColors';
 
@@ -52,21 +54,64 @@ interface NavButtonProps {
   accessibilityLabel?: string;
 }
 
-export function BackButton({
-  onPress,
-  style,
-  accessibilityLabel = 'Go back',
-}: NavButtonProps) {
-  return (
-    <CircleNavButton
-      icon="chevron-left"
-      onPress={onPress}
-      style={style}
-      accessibilityLabel={accessibilityLabel}
-      iconSize={24}
-    />
-  );
+export type BackButtonHandle = {
+  playEntrance: () => void;
+  playExit: (onComplete?: () => void) => void;
+};
+
+interface BackButtonProps extends NavButtonProps {
+  /** Nudge left before calling onPress. Default true. */
+  exitOnPress?: boolean;
+  /** Slide in from the left when mounted. Default true. */
+  autoPlayOnMount?: boolean;
+  wrapperStyle?: StyleProp<ViewStyle>;
 }
+
+export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(function BackButton(
+  {
+    onPress,
+    style,
+    wrapperStyle,
+    accessibilityLabel = 'Go back',
+    exitOnPress = true,
+    autoPlayOnMount = true,
+  },
+  ref,
+) {
+  const { translateX, opacity, scale, playEntrance, playExit } = useBackButtonEntrance(autoPlayOnMount);
+
+  useImperativeHandle(ref, () => ({ playEntrance, playExit }), [playEntrance, playExit]);
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (exitOnPress) {
+      playExit(onPress);
+      return;
+    }
+    onPress();
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.backEntranceWrap,
+        wrapperStyle,
+        {
+          opacity,
+          transform: [{ translateX }, { scale }],
+        },
+      ]}
+    >
+      <CircleNavButton
+        icon="chevron-left"
+        onPress={handlePress}
+        style={style}
+        accessibilityLabel={accessibilityLabel}
+        iconSize={24}
+      />
+    </Animated.View>
+  );
+});
 
 export type CloseButtonHandle = {
   spinOpen: () => void;
@@ -80,12 +125,15 @@ interface CloseButtonProps extends NavButtonProps {
   shutOnPress?: boolean;
   /** Play open spin when the button mounts. Default true. */
   autoSpinOnMount?: boolean;
+  /** Applied to the rotation wrapper (use for layout / hit area). */
+  wrapperStyle?: StyleProp<ViewStyle>;
 }
 
 export const CloseButton = forwardRef<CloseButtonHandle, CloseButtonProps>(function CloseButton(
   {
     onPress,
     style,
+    wrapperStyle,
     accessibilityLabel = 'Close',
     shutOnPress = true,
     autoSpinOnMount = true,
@@ -108,7 +156,9 @@ export const CloseButton = forwardRef<CloseButtonHandle, CloseButtonProps>(funct
   };
 
   return (
-    <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+    <Animated.View
+      style={[styles.closeSpinWrap, wrapperStyle, { transform: [{ rotate: rotation }] }]}
+    >
       <CircleNavButton
         icon="x"
         onPress={handlePress}
@@ -121,6 +171,18 @@ export const CloseButton = forwardRef<CloseButtonHandle, CloseButtonProps>(funct
 });
 
 const styles = StyleSheet.create({
+  backEntranceWrap: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeSpinWrap: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   button: {
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,

@@ -4,6 +4,7 @@ import colors from '@/constants/colors';
 import {
   brandGreenHex,
   systemBlueHex,
+  systemGreenHex,
   systemOrangeHex,
   systemRedHex,
 } from '@/constants/systemColors';
@@ -23,12 +24,14 @@ export function useColors() {
       : colors.light;
 
   const primaryHex = systemBlueHex(scheme);
+  const callHex = systemGreenHex(scheme);
   const successHex = brandGreenHex(scheme);
   const warningHex = systemOrangeHex(scheme);
   const destructiveHex = systemRedHex(scheme);
 
   const useNative = Platform.OS === 'ios';
   const systemBlue = useNative ? PlatformColor('systemBlue') : primaryHex;
+  const systemGreen = useNative ? PlatformColor('systemGreen') : callHex;
   const systemRed = useNative ? PlatformColor('systemRed') : destructiveHex;
   const systemOrange = useNative ? PlatformColor('systemOrange') : warningHex;
 
@@ -37,6 +40,8 @@ export function useColors() {
     radius: colors.radius,
     primary: systemBlue,
     primaryHex,
+    call: systemGreen,
+    callHex,
     tint: systemBlue,
     star: systemBlue,
     accentForeground: systemBlue,
