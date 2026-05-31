@@ -657,9 +657,13 @@ export default function CustomerHome() {
   const bookingSheetPanResponder = useMemo(
     () =>
       PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, gestureState) =>
-          gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+          gestureState.dy > 6 && gestureState.dy > Math.abs(gestureState.dx),
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          gestureState.dy > 8 && gestureState.dy > Math.abs(gestureState.dx) * 1.2,
         onPanResponderGrant: () => {
+          Keyboard.dismiss();
           sheetAnim.stopAnimation(value => {
             sheetDragStart.current = value;
           });
@@ -1227,6 +1231,7 @@ export default function CustomerHome() {
                 transform: [{ translateY: sheetAnim }],
               },
             ]}
+            {...bookingSheetPanResponder.panHandlers}
           >
             <View style={styles.bookingCloseAnchor} pointerEvents="box-none">
               <CloseButton
@@ -1237,9 +1242,9 @@ export default function CustomerHome() {
               />
             </View>
             <View style={styles.bookingSheetBody}>
-            {/* Handle + header — swipe down on handle only (close is not in pan zone) */}
+            {/* Handle + header */}
             <View style={[styles.sheetDragZone, styles.bookingSheetDragZone]}>
-              <View style={[styles.sheetHandleTouch, styles.bookingSheetHandleTouch]} {...bookingSheetPanResponder.panHandlers}>
+              <View style={[styles.sheetHandleTouch, styles.bookingSheetHandleTouch]}>
                 <View style={styles.sheetHandle} />
               </View>
               <View style={styles.bookingSheetHeader}>
