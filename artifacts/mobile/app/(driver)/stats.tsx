@@ -5,14 +5,8 @@ import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import {
-  getDailyEarnings,
-  getWeeklyEarnings,
-  getDriverStats,
-  DailyEarnings,
-  WeeklyEarnings,
-  DriverStats,
-} from '@/services/driverRides';
+import { getDailyEarnings, getWeeklyEarnings, getDriverStats } from '@/services/driverRides';
+import type { DailyEarnings, WeeklyEarnings, DriverStats as DriverStatsData } from '@/services/driverRides';
 
 function StatRow({
   label,
@@ -67,7 +61,7 @@ export default function DriverStats() {
   const [loading, setLoading] = useState(true);
   const [daily, setDaily] = useState<DailyEarnings | null>(null);
   const [weekly, setWeekly] = useState<WeeklyEarnings | null>(null);
-  const [stats, setStats] = useState<DriverStats | null>(null);
+  const [stats, setStats] = useState<DriverStatsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
