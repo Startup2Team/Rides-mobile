@@ -49,10 +49,24 @@ export default function DriverDashboard() {
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const slideAnim = useRef(new Animated.Value(300)).current;
   const mapRef = useRef<MapView | null>(null);
+  // Guard: only auto-restore online state once per mount so the user's manual
+  // toggle isn't overridden if they navigate away and come back mid-session.
+  const autoOnlineDoneRef = useRef(false);
 
   useEffect(() => {
     loadDriverProfile();
   }, [loadDriverProfile]);
+
+  // Auto-set online when profile first loads. "The normal state should be available."
+  // Always call setDriverAvailability(true) so the backend clears stale location
+  // history and resets the GPS grace period for this session. The backend now
+  // preserves ON_TRIP state if the driver has an active ride (app restart mid-trip).
+  useEffect(() => {
+    if (!driverProfile || autoOnlineDoneRef.current) return;
+    autoOnlineDoneRef.current = true;
+    setIsOnline(true);
+    setDriverAvailability(true).catch(() => {});
+  }, [driverProfile]);
 
   useEffect(() => {
     let mounted = true;

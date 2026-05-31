@@ -28,6 +28,10 @@ export async function cancelRideAsDriver(rideId: string) {
   await api.post(`/driver/rides/${rideId}/cancel`);
 }
 
+export async function markEnRoute(rideId: string) {
+  await api.post(`/driver/rides/${rideId}/en-route`);
+}
+
 export async function markArrived(rideId: string) {
   await api.post(`/driver/rides/${rideId}/arrive`);
 }
@@ -58,4 +62,38 @@ export async function acceptCustomerFare(rideId: string) {
 
 export async function lockManualFare(rideId: string, amount: number) {
   await api.post(`/driver/rides/${rideId}/negotiation/lock-fare`, { amount });
+}
+
+// ─── Earnings & Stats ────────────────────────────────────────────────────────
+
+export interface DailyEarnings {
+  total_rwf: number;
+  period: string;
+}
+
+export interface WeeklyEarnings {
+  total_rwf: number;
+  period: string;
+}
+
+export interface DriverStats {
+  total_rides: number;
+  acceptance_rate: number;
+  completion_rate: number;
+  priority_tier: string;
+}
+
+export async function getDailyEarnings(): Promise<DailyEarnings> {
+  const { data } = await api.get('/driver/earnings/daily');
+  return data;
+}
+
+export async function getWeeklyEarnings(): Promise<WeeklyEarnings> {
+  const { data } = await api.get('/driver/earnings/weekly');
+  return data;
+}
+
+export async function getDriverStats(): Promise<DriverStats> {
+  const { data } = await api.get('/driver/stats');
+  return data;
 }

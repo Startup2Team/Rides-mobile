@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Coords,
   NegotiationMessage,
@@ -11,6 +12,21 @@ import * as rideService from '@/services/rides';
 import * as driverRideService from '@/services/driverRides';
 import { RideWebSocket } from '@/services/websocket';
 
+// ─── AsyncStorage keys ────────────────────────────────────────────────────────
+const CUSTOMER_RIDE_KEY = '@taravelis_customer_ride';
+const DRIVER_RIDE_KEY   = '@taravelis_driver_ride';
+
+// Statuses where a ride is still "in flight" — these are persisted.
+// Terminal states (completed, cancelled) and idle are not.
+const CUSTOMER_ACTIVE_STATUSES = new Set<Ride['status']>([
+  'searching', 'driver_assigned', 'negotiating', 'confirmed',
+  'arriving', 'arrived', 'in_progress',
+]);
+const DRIVER_ACTIVE_STATUSES = new Set<Ride['status']>([
+  'confirmed', 'arriving', 'arrived', 'in_progress',
+]);
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface RideContextType {
   currentRide: Ride | null;
   rideHistory: Ride[];
@@ -32,34 +48,30 @@ interface RideContextType {
   acceptRideRequest: () => void;
   declineRideRequest: () => void;
   initDriverSession: () => void;
+  /** Call on the customer home screen mount to recover in-progress rides after restart. */
+  initCustomerSession: () => Promise<void>;
   riderAcceptWithFare: (amount: number) => void;
   loadHistory: () => Promise<void>;
+  /** Send a real-time GPS position through the driver WS connection. */
+  sendWsLocationUpdate: (lat: number, lng: number) => void;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
+// ─── Mappers ──────────────────────────────────────────────────────────────────
+
 const toRideStatus = (status?: string): Ride['status'] => {
   switch (status) {
-    case 'SEARCHING':
-      return 'searching';
-    case 'MATCHED':
-      return 'driver_assigned';
-    case 'NEGOTIATING':
-      return 'negotiating';
-    case 'CONFIRMED':
-      return 'confirmed';
-    case 'DRIVER_EN_ROUTE':
-      return 'arriving';
-    case 'DRIVER_ARRIVED':
-      return 'arrived';
-    case 'IN_PROGRESS':
-      return 'in_progress';
-    case 'COMPLETED':
-      return 'completed';
-    case 'CANCELLED':
-      return 'cancelled';
-    default:
-      return 'idle';
+    case 'SEARCHING':      return 'searching';
+    case 'MATCHED':        return 'driver_assigned';
+    case 'NEGOTIATING':    return 'negotiating';
+    case 'CONFIRMED':      return 'confirmed';
+    case 'DRIVER_EN_ROUTE':return 'arriving';
+    case 'DRIVER_ARRIVED': return 'arrived';
+    case 'IN_PROGRESS':    return 'in_progress';
+    case 'COMPLETED':      return 'completed';
+    case 'CANCELLED':      return 'cancelled';
+    default:               return 'idle';
   }
 };
 
@@ -128,6 +140,8 @@ const mapDriverRequestToRide = (payload: any): Ride => {
   };
 };
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [rideHistory, setRideHistory] = useState<Ride[]>([]);
@@ -135,6 +149,30 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const [pendingRequest, setPendingRequest] = useState<Ride | null>(null);
   const [isMatchingPaused, setIsMatchingPaused] = useState(false);
   const wsRef = useRef<RideWebSocket | null>(null);
+
+  // ── Persistence ─────────────────────────────────────────────────────────────
+  // Whenever the ride changes, snapshot it to AsyncStorage keyed by role.
+  // Terminal states and null clear the snapshot so the next app launch starts
+  // clean.  The driver-side snapshot is lighter — drivers already have
+  // initDriverSession pulling from the backend, so we only need it to survive
+  // the WS reconnect window.
+  useEffect(() => {
+    if (currentRide && CUSTOMER_ACTIVE_STATUSES.has(currentRide.status)) {
+      AsyncStorage.setItem(CUSTOMER_RIDE_KEY, JSON.stringify(currentRide)).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(CUSTOMER_RIDE_KEY).catch(() => {});
+    }
+  }, [currentRide]);
+
+  useEffect(() => {
+    if (currentRide && DRIVER_ACTIVE_STATUSES.has(currentRide.status)) {
+      AsyncStorage.setItem(DRIVER_RIDE_KEY, JSON.stringify({ id: currentRide.id })).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(DRIVER_RIDE_KEY).catch(() => {});
+    }
+  }, [currentRide]);
+
+  // ── WS helpers ───────────────────────────────────────────────────────────────
 
   const disconnectWS = useCallback(() => {
     wsRef.current?.disconnect();
@@ -147,23 +185,34 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     wsRef.current = ws;
     await ws.connect('/ws/customer', { ride_id: rideId });
 
-    ws.on('driver_matched', payload => {
-      setCurrentRide(prev => prev ? {
-        ...prev,
-        status: 'negotiating',
-        driverId: payload?.driver_id ?? prev.driverId,
-        driver: payload ? {
-          id: payload.driver_id ?? '',
-          name: payload.driver_name ?? 'Driver',
-          phone: payload.driver_phone ?? '',
-          vehicleType: prev.vehicleType,
-          plateNumber: payload.vehicle_plate ?? '',
-          location: { latitude: payload.lat ?? prev.pickup.latitude, longitude: payload.lng ?? prev.pickup.longitude },
-          rating: Number(payload.rating ?? 5),
-          eta: Number(payload.eta_minutes ?? 0),
-        } : prev.driver,
-      } : null);
-    })
+    ws
+      // ── State replay (server pushes current status on every connect) ────────
+      .on('ride_state', payload => {
+        const status = toRideStatus(payload?.status);
+        if (!status || status === 'idle') return;
+        setCurrentRide(prev => prev ? { ...prev, status } : null);
+        if (typeof payload?.driver_lat === 'number' && typeof payload?.driver_lng === 'number') {
+          setDriverLocation({ latitude: payload.driver_lat, longitude: payload.driver_lng });
+        }
+      })
+      // ── Live events ─────────────────────────────────────────────────────────
+      .on('driver_matched', payload => {
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          status: 'negotiating',
+          driverId: payload?.driver_id ?? prev.driverId,
+          driver: payload ? {
+            id: payload.driver_id ?? '',
+            name: payload.driver_name ?? 'Driver',
+            phone: payload.driver_phone ?? '',
+            vehicleType: prev.vehicleType,
+            plateNumber: payload.vehicle_plate ?? '',
+            location: { latitude: payload.lat ?? prev.pickup.latitude, longitude: payload.lng ?? prev.pickup.longitude },
+            rating: Number(payload.rating ?? 5),
+            eta: Number(payload.eta_minutes ?? 0),
+          } : prev.driver,
+        } : null);
+      })
       .on('negotiation_message', payload => {
         const amount = Number(payload?.amount ?? 0);
         if (!amount) return;
@@ -189,8 +238,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           agreedFare: Number(payload?.agreed_fare ?? prev.agreedFare ?? 0),
         } : null);
       })
+      .on('driver_en_route', () => {
+        setCurrentRide(prev => prev ? { ...prev, status: 'arriving' } : null);
+      })
       .on('driver_arrived', () => {
-        setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: new Date().toISOString(), waitStartedAt: new Date().toISOString() } : null);
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          status: 'arrived',
+          arrivedAt: new Date().toISOString(),
+          waitStartedAt: new Date().toISOString(),
+        } : null);
       })
       .on('driver_location', payload => {
         if (typeof payload?.lat === 'number' && typeof payload?.lng === 'number') {
@@ -198,7 +255,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .on('ride_completed', payload => {
-        setCurrentRide(prev => prev ? { ...prev, status: 'completed', completedAt: new Date().toISOString(), agreedFare: Number(payload?.final_fare ?? prev.agreedFare ?? 0) } : null);
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          agreedFare: Number(payload?.final_fare ?? prev.agreedFare ?? 0),
+        } : null);
       })
       .on('ride_cancelled', () => {
         setCurrentRide(prev => prev ? { ...prev, status: 'cancelled' } : null);
@@ -210,50 +272,111 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const ws = new RideWebSocket();
     wsRef.current = ws;
     await ws.connect('/ws/driver');
-    ws.on('ride_request', payload => {
-      setPendingRequest(mapDriverRequestToRide(payload));
-    }).on('ride_cancelled', payload => {
-      if (payload?.ride_id && currentRide?.id === payload.ride_id) {
-        setCurrentRide(prev => prev ? { ...prev, status: 'cancelled' } : null);
-      }
-    }).on('negotiation_message', payload => {
-      // Backend sends this when the CUSTOMER proposes a counter-offer.
-      // The driver's own offers are added optimistically by sendDriverOffer, so
-      // we only add incoming messages where proposed_by === 'CUSTOMER'.
-      if (payload?.proposed_by !== 'CUSTOMER') return;
-      const amount = Number(payload?.amount ?? 0);
-      if (!amount) return;
-      setCurrentRide(prev => prev ? {
-        ...prev,
-        negotiation: [...prev.negotiation, {
-          id: `${Date.now()}-${Math.random()}`,
-          sender: 'customer',
-          type: 'offer',
-          amount,
-          timestamp: new Date().toISOString(),
-        } as NegotiationMessage],
-      } : null);
-    }).on('ride_confirmed', payload => {
-      // Fired when the CUSTOMER accepts the driver's offer. The driver's own
-      // accept (acceptCustomerOffer) updates state via HTTP refresh, so this
-      // handler is primarily for the case where the customer accepts first.
-      const agreedFare = Number(payload?.agreed_fare ?? 0);
-      setCurrentRide(prev => prev ? {
-        ...prev,
-        status: 'confirmed',
-        ...(agreedFare > 0 ? { agreedFare } : {}),
-      } : null);
-    });
+    ws
+      // ── State replay ─────────────────────────────────────────────────────────
+      .on('ride_state', payload => {
+        // Only update status — don't overwrite the full ride object which may
+        // have richer local data (customer name, negotiation messages, etc.)
+        const status = toRideStatus(payload?.status);
+        if (!status || status === 'idle') return;
+        setCurrentRide(prev => prev ? { ...prev, status } : null);
+      })
+      // ── Live events ─────────────────────────────────────────────────────────
+      .on('ride_request', payload => {
+        setPendingRequest(mapDriverRequestToRide(payload));
+      })
+      .on('ride_cancelled', payload => {
+        if (payload?.ride_id && currentRide?.id === payload.ride_id) {
+          setCurrentRide(prev => prev ? { ...prev, status: 'cancelled' } : null);
+        }
+      })
+      .on('negotiation_message', payload => {
+        if (payload?.proposed_by !== 'CUSTOMER') return;
+        const amount = Number(payload?.amount ?? 0);
+        if (!amount) return;
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          negotiation: [...prev.negotiation, {
+            id: `${Date.now()}-${Math.random()}`,
+            sender: 'customer',
+            type: 'offer',
+            amount,
+            timestamp: new Date().toISOString(),
+          } as NegotiationMessage],
+        } : null);
+      })
+      .on('ride_confirmed', payload => {
+        const agreedFare = Number(payload?.agreed_fare ?? 0);
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          status: 'confirmed',
+          ...(agreedFare > 0 ? { agreedFare } : {}),
+        } : null);
+      });
   }, [currentRide?.id]);
+
+  // ── Session recovery ─────────────────────────────────────────────────────────
+  //
+  // Customer — called from the customer home screen on mount.
+  // Flow:
+  //   1. Hit GET /customer/rides/active to get the live ride from the server
+  //   2. If none, check AsyncStorage for a snapshot (catches the window between
+  //      server clears the ride and the snapshot is deleted)
+  //   3. Verify the ride is still in an active status
+  //   4. Restore currentRide + reconnect customer WS
+  //   5. WS immediately sends ride_state to sync the exact status
+  const initCustomerSession = useCallback(async () => {
+    try {
+      // ① Try the live backend first — most authoritative.
+      let liveRide = await rideService.getActiveCustomerRide();
+
+      // ② Fall back to snapshot if backend returns nothing.
+      if (!liveRide) {
+        const raw = await AsyncStorage.getItem(CUSTOMER_RIDE_KEY);
+        if (!raw) return;
+        const snapshot = JSON.parse(raw) as Ride;
+        if (!snapshot?.id) { await AsyncStorage.removeItem(CUSTOMER_RIDE_KEY); return; }
+        // Re-verify the snapshot ride with the backend.
+        liveRide = await rideService.getRide(snapshot.id).catch(() => null);
+      }
+
+      if (!liveRide) { await AsyncStorage.removeItem(CUSTOMER_RIDE_KEY); return; }
+
+      const ride = mapBackendRideToUiRide(liveRide);
+      if (!CUSTOMER_ACTIVE_STATUSES.has(ride.status)) {
+        await AsyncStorage.removeItem(CUSTOMER_RIDE_KEY);
+        return;
+      }
+
+      setCurrentRide(ride);
+      // Reconnect WS — server will push ride_state immediately on connect.
+      await connectCustomerWS(ride.id);
+    } catch {
+      // Non-fatal: customer just sees the home screen without an in-progress ride.
+    }
+  }, [connectCustomerWS]);
+
+  // Driver — mirrors what the existing initDriverSession did, now also handles
+  // WS reconnect for a ride that was active before the app was killed.
+  const initDriverSession = useCallback(() => {
+    connectDriverWS().catch(() => {});
+    // Fetch active ride from backend (Redis → DB fallback).
+    driverRideService.getActiveRideForDriver()
+      .then(data => {
+        if (data) setCurrentRide(mapBackendRideToUiRide(data));
+      })
+      .catch(() => {});
+  }, [connectDriverWS]);
+
+  // ── Ride actions ─────────────────────────────────────────────────────────────
 
   const createRide = useCallback(async (
     pickup: RideLocation,
     destination: RideLocation,
     vehicleType: VehicleType,
   ) => {
-    if (currentRide && ['searching', 'driver_assigned', 'negotiating', 'confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
-      return;
-    }
+    if (currentRide && CUSTOMER_ACTIVE_STATUSES.has(currentRide.status)) return;
+
     const payload = {
       pickup_lat: pickup.latitude,
       pickup_lng: pickup.longitude,
@@ -298,10 +421,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const counterOffer = useCallback((amount: number): Promise<void> => {
     if (!currentRide?.id) return Promise.resolve();
-    // Optimistic update — add the customer's offer to the local negotiation list
-    // immediately (same pattern as sendDriverOffer). This flips lastMsg.sender to
-    // 'customer', hiding the input dock right away so the UI correctly shows a
-    // "waiting for driver" state without any loading spinner.
     setCurrentRide(prev => prev ? {
       ...prev,
       negotiation: [...prev.negotiation, {
@@ -318,10 +437,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const acceptDriverOffer = useCallback(async () => {
     if (!currentRide?.id) return;
     await rideService.acceptNegotiation(currentRide.id);
-    // Set status locally immediately so navigation fires without waiting for the
-    // socket echo. The ride_confirmed socket event will arrive shortly after and
-    // update agreed_fare; this local update is belt-and-suspenders for cases
-    // where the socket delivery is slightly delayed.
     setCurrentRide(prev => prev ? { ...prev, status: 'confirmed' } : null);
   }, [currentRide?.id]);
 
@@ -357,6 +472,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const refreshed = await driverRideService.getRideForDriver(currentRide.id);
     setCurrentRide(mapBackendRideToUiRide(refreshed));
   }, [currentRide?.id]);
+
   const startJourney = useCallback(async () => {
     if (!currentRide?.id) return;
     await driverRideService.startRide(currentRide.id);
@@ -374,7 +490,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }
     const data = await rideService.getRide(currentRide.id);
     setCurrentRide(mapBackendRideToUiRide(data));
-  }, [currentRide?.id]);
+  }, [currentRide?.id, currentRide?.status]);
 
   const acceptRideRequest = useCallback(async () => {
     if (!pendingRequest?.id) return;
@@ -395,21 +511,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setPendingRequest(null);
   }, [pendingRequest]);
 
-  const initDriverSession = useCallback(() => {
-    connectDriverWS().catch(() => {});
-    // Resume any in-progress ride from before the app was backgrounded/restarted.
-    // Returns null when idle — don't update state in that case.
-    driverRideService.getActiveRideForDriver()
-      .then(data => { if (data) setCurrentRide(mapBackendRideToUiRide(data)); })
-      .catch(() => {});
-  }, [connectDriverWS]);
-
   const riderAcceptWithFare = useCallback(async (amount: number) => {
     if (!currentRide?.id) return;
     await driverRideService.lockManualFare(currentRide.id, amount);
     const refreshed = await driverRideService.getRideForDriver(currentRide.id);
     setCurrentRide(mapBackendRideToUiRide(refreshed));
   }, [currentRide?.id]);
+
+  const sendWsLocationUpdate = useCallback((lat: number, lng: number) => {
+    wsRef.current?.send({ type: 'location_update', lat, lng });
+  }, []);
 
   const pauseDriverMatching = useCallback(() => setIsMatchingPaused(true), []);
   const resumeDriverMatching = useCallback(() => setIsMatchingPaused(false), []);
@@ -442,8 +553,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       acceptRideRequest,
       declineRideRequest,
       initDriverSession,
+      initCustomerSession,
       riderAcceptWithFare,
       loadHistory,
+      sendWsLocationUpdate,
     }),
     [
       acceptCustomerOffer,
@@ -463,9 +576,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       riderAcceptWithFare,
       sendDriverOffer,
       initDriverSession,
+      initCustomerSession,
       startJourney,
       currentRide,
       isMatchingPaused,
+      sendWsLocationUpdate,
     ],
   );
 

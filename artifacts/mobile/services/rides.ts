@@ -6,16 +6,39 @@ export interface NearbyDriverPin {
   distance_m: number;
   approx_lat: number;
   approx_lng: number;
+  /** Estimated arrival time in minutes (city-speed estimate, no routing call). */
+  eta_minutes: number;
 }
 
-/** POST /api/v1/customer/location — returns anonymised nearby drivers. */
+/**
+ * POST /api/v1/customer/location — returns anonymised nearby drivers.
+ *
+ * `transport_type` is optional. Omit it to receive all vehicle types in one
+ * call (the backend fans out the Redis GEO query per type and merges results).
+ */
 export async function getNearbyDrivers(
   lat: number,
   lng: number,
-  transport_type: VehicleTypeCode,
+  transport_type?: VehicleTypeCode,
 ): Promise<NearbyDriverPin[]> {
-  const { data } = await api.post('/customer/location', { lat, lng, transport_type });
+  const body: Record<string, unknown> = { lat, lng };
+  if (transport_type) body.transport_type = transport_type;
+  const { data } = await api.post('/customer/location', body);
   return Array.isArray(data?.drivers) ? data.drivers : [];
+}
+
+/**
+ * GET /api/v1/customer/rides/active
+ * Returns the customer's current non-terminal ride.
+ * 404 when idle — catch and treat as null.
+ */
+export async function getActiveCustomerRide(): Promise<ReturnType<typeof createRide> | null> {
+  try {
+    const { data } = await api.get('/customer/rides/active');
+    return data ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function createRide(params: {

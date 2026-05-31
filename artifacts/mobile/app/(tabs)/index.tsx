@@ -43,7 +43,7 @@ import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils
 import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { getNearbyDrivers, NearbyDriverPin } from '@/services/rides';
-import { LEGACY_TO_API_VEHICLE } from '@/services/vehicleTypes';
+import { API_TO_LEGACY_VEHICLE, LEGACY_TO_API_VEHICLE } from '@/services/vehicleTypes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -184,7 +184,7 @@ export default function CustomerHome() {
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
-  const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
+  const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused, initCustomerSession } = useRide();
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
@@ -328,6 +328,14 @@ export default function CustomerHome() {
     loadHistory();
   }, [loadHistory]);
 
+  // Restore any in-progress customer ride after an app restart or background kill.
+  // Hits GET /customer/rides/active, restores currentRide, reconnects the WS.
+  // The WS server immediately sends ride_state so navigation fires into the correct screen.
+  useEffect(() => {
+    initCustomerSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount
+
   useEffect(() => {
     if (locLoading || hasCenteredOnUserRef.current || hasPreciseRouteLocations) return;
     hasCenteredOnUserRef.current = true;
@@ -469,29 +477,76 @@ export default function CustomerHome() {
     };
   }, []);
 
-  // Nearby drivers — real API, polled every 15s on the home screen only.
-  // Hidden while the booking sheet is open (drivers aren't relevant mid-booking).
+  // Nearby drivers — real-time pins on the home screen.
+  //
+  // Strategy (keeps API usage low):
+  //   • Query ALL vehicle types in one backend call — the backend fans out via
+  //     Redis GEO and returns a merged list, so zero extra round-trips per type.
+  //   • Base poll interval: 12 s.
+  //   • Zero-result backoff: after 2 consecutive empty fetches, slow to 30 s.
+  //   • Movement gate: skip fetch if user hasn't moved ≥ 40 m and we already
+  //     have pins — standing still means the same result.
+  //   • Pauses when the booking sheet is open (pins irrelevant mid-booking).
+  const nearbyPollRef = useRef<{
+    lastFetchLat: number;
+    lastFetchLng: number;
+    zeroResultStreak: number;
+  }>({ lastFetchLat: 0, lastFetchLng: 0, zeroResultStreak: 0 });
+
   useEffect(() => {
     if (locLoading || showBooking) {
       setNearbyDrivers([]);
       return;
     }
-    const transport_type = LEGACY_TO_API_VEHICLE[selectedVehicle];
-    let cancelled = false;
 
-    const fetchNearby = () => {
-      getNearbyDrivers(userLocation.latitude, userLocation.longitude, transport_type)
-        .then(drivers => { if (!cancelled) setNearbyDrivers(drivers); })
-        .catch(() => {}); // non-critical — stale pins are fine
+    let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNext = (delayMs: number) => {
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(runFetch, delayMs);
     };
 
-    fetchNearby();
-    const interval = setInterval(fetchNearby, 15_000);
+    const runFetch = () => {
+      const { lastFetchLat, lastFetchLng } = nearbyPollRef.current;
+      const isFirstFetch = lastFetchLat === 0 && lastFetchLng === 0;
+      const movedM = isFirstFetch ? Infinity : getCoordDistance(
+        { latitude: userLocation.latitude, longitude: userLocation.longitude },
+        { latitude: lastFetchLat, longitude: lastFetchLng },
+      );
+
+      // Skip network call if user hasn't moved ≥ 40 m and we already have pins.
+      if (movedM < 40 && nearbyDrivers.length > 0) {
+        scheduleNext(12_000);
+        return;
+      }
+
+      // Omit transport_type → backend returns all vehicle types in one call.
+      getNearbyDrivers(userLocation.latitude, userLocation.longitude)
+        .then(drivers => {
+          if (cancelled) return;
+          setNearbyDrivers(drivers);
+          nearbyPollRef.current.lastFetchLat = userLocation.latitude;
+          nearbyPollRef.current.lastFetchLng = userLocation.longitude;
+          nearbyPollRef.current.zeroResultStreak =
+            drivers.length === 0 ? nearbyPollRef.current.zeroResultStreak + 1 : 0;
+          // Back off to 30 s after 2 consecutive empty fetches.
+          scheduleNext(nearbyPollRef.current.zeroResultStreak >= 2 ? 30_000 : 12_000);
+        })
+        .catch(() => {
+          if (!cancelled) scheduleNext(20_000); // retry after network error
+        });
+    };
+
+    runFetch();
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timerId) clearTimeout(timerId);
     };
-  }, [locLoading, showBooking, selectedVehicle, userLocation.latitude, userLocation.longitude]);
+    // nearbyDrivers.length intentionally omitted from deps — we only want to
+    // re-bootstrap the loop when location or visibility changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locLoading, showBooking, userLocation.latitude, userLocation.longitude]);
 
   // Real road route via Mapbox Directions API
   const { route, loading: routeLoading } = useRoute(
@@ -1107,17 +1162,30 @@ export default function CustomerHome() {
           </Marker>
         )}
 
-        {!showBooking && nearbyDrivers.map((driver, i) => (
-          <Marker
-            key={`nearby-${i}`}
-            coordinate={{ latitude: driver.approx_lat, longitude: driver.approx_lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-            zIndex={1}
-          >
-            <VehicleMapMarker type={selectedVehicle} />
-          </Marker>
-        ))}
+        {!showBooking && nearbyDrivers.map((driver, i) => {
+          const legacyType = API_TO_LEGACY_VEHICLE[driver.transport_type as keyof typeof API_TO_LEGACY_VEHICLE] ?? 'moto';
+          const isSelected = legacyType === selectedVehicle;
+          return (
+            <Marker
+              key={`nearby-${driver.transport_type}-${i}`}
+              coordinate={{ latitude: driver.approx_lat, longitude: driver.approx_lng }}
+              anchor={{ x: 0.5, y: 1 }}
+              tracksViewChanges={false}
+              zIndex={isSelected ? 3 : 1}
+            >
+              <View style={styles.driverPinContainer}>
+                <VehicleMapMarker type={legacyType} dimmed={!isSelected} />
+                {isSelected && driver.eta_minutes > 0 && (
+                  <View style={[styles.driverEtaBadge, { backgroundColor: colors.primary }]}>
+                    <Text style={[styles.driverEtaText, { color: colors.primaryForeground }]}>
+                      {driver.eta_minutes} min
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Marker>
+          );
+        })}
 
         {!locLoading && !hasPreciseRouteLocations && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
@@ -2102,6 +2170,10 @@ const styles = StyleSheet.create({
   youAreHereBubble: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
   youAreHereText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#fff' },
   youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
+  // Nearby driver pins
+  driverPinContainer: { alignItems: 'center' },
+  driverEtaBadge: { marginTop: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 3, elevation: 3 },
+  driverEtaText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   // Home bottom panel — edge-to-edge bottom sheet (top corners rounded)
   bottomPanel: {
     position: 'absolute',

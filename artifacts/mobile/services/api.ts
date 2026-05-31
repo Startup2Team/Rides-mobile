@@ -5,14 +5,102 @@ import { router } from 'expo-router';
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const __DEV__ = process.env.NODE_ENV !== 'production';
 
+/** Proactively refresh the access token this many seconds before it expires. */
+const PROACTIVE_REFRESH_S = 90;
+
 export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 15000,
 });
 
-// ─── Request interceptor: attach JWT + dev logging ──────────────────────────
+// ── JWT expiry helpers ────────────────────────────────────────────────────────
+
+/** Decode the exp claim from a JWT without a library (base64 payload). */
+function tokenExpiresAt(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns true if the token expires within `seconds` from now. */
+function expiresWithin(token: string, seconds: number): boolean {
+  const exp = tokenExpiresAt(token);
+  if (exp === null) return false;
+  return exp - Math.floor(Date.now() / 1000) < seconds;
+}
+
+// ── Serialised refresh: all concurrent callers share one in-flight attempt ───
+//
+// Without this, multiple requests that all get 401 simultaneously each try to
+// refresh on their own, causing race conditions and redundant /auth/refresh calls.
+// With this, the first caller does the refresh; all others queue and receive the
+// new token when it resolves (or the error if it fails).
+
+let isRefreshing = false;
+let refreshQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (err: unknown) => void;
+}> = [];
+
+async function doRefresh(): Promise<string> {
+  const refresh = await SecureStore.getItemAsync('refresh_token');
+  if (!refresh) throw new Error('no_refresh_token');
+  // Bypass our intercepted `api` instance to avoid infinite retry loops.
+  const { data: raw } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refresh });
+  const data = (raw && typeof raw === 'object' && 'data' in raw) ? raw.data : raw;
+  await SecureStore.setItemAsync('access_token', data.access_token);
+  await SecureStore.setItemAsync('refresh_token', data.refresh_token);
+  return data.access_token as string;
+}
+
+/**
+ * Refresh the access token exactly once, even if called concurrently.
+ * All concurrent callers queue on the same in-flight promise.
+ */
+async function refreshOnce(): Promise<string> {
+  if (isRefreshing) {
+    return new Promise<string>((resolve, reject) => {
+      refreshQueue.push({ resolve, reject });
+    });
+  }
+
+  isRefreshing = true;
+  try {
+    const newToken = await doRefresh();
+    refreshQueue.forEach(q => q.resolve(newToken));
+    return newToken;
+  } catch (err) {
+    refreshQueue.forEach(q => q.reject(err));
+    throw err;
+  } finally {
+    refreshQueue = [];
+    isRefreshing = false;
+  }
+}
+
+// ─── Request interceptor: attach JWT + proactive refresh + dev logging ────────
+//
+// Proactive refresh: if the token expires within PROACTIVE_REFRESH_S seconds we
+// refresh before sending so the request goes out with a fresh token and the user
+// never sees a 401 mid-flow. This covers app-resume after 14+ minutes in the
+// background — the single most common "token expired" scenario.
+
 api.interceptors.request.use(async config => {
-  const token = await SecureStore.getItemAsync('access_token');
+  let token = await SecureStore.getItemAsync('access_token');
+
+  if (token && expiresWithin(token, PROACTIVE_REFRESH_S)) {
+    try {
+      token = await refreshOnce();
+    } catch {
+      // Refresh failed here (no network, revoked token). Let the request
+      // proceed with the stale token; the 401 response interceptor will
+      // attempt the refresh again and handle navigation if it still fails.
+    }
+  }
+
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -29,13 +117,15 @@ api.interceptors.request.use(async config => {
   return config;
 });
 
-// ─── Response interceptor: dev logging + 401 auto-refresh ───────────────────
-let isRefreshing = false;
+// ─── Response interceptor: unwrap envelope + 401 reactive refresh ─────────────
+//
+// Reactive refresh: if the proactive path missed (e.g. token expired between
+// the request interceptor and the actual response), catch 401 here, refresh
+// once, and replay the original request transparently.
 
 api.interceptors.response.use(
   response => {
-    // Unwrap the backend's { "data": { ... } } envelope so every caller
-    // receives the inner payload directly via response.data.
+    // Unwrap the backend's { "data": { ... } } envelope.
     if (
       response.data !== null &&
       typeof response.data === 'object' &&
@@ -43,7 +133,6 @@ api.interceptors.response.use(
     ) {
       response.data = response.data.data;
     }
-
     if (__DEV__) {
       console.log(
         `[API ←] ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`,
@@ -58,34 +147,21 @@ api.interceptors.response.use(
     const method = err.config?.method?.toUpperCase() ?? '';
 
     // ── Endpoints that must never trigger auto-refresh ────────────────────
-    //  • /auth/logout        — any error here is intentional (already logged out)
-    //  • /driver/rides/active — 404 = idle driver, handled by the service layer
-    //  • /driver/availability — best-effort before logout; errors are expected
     const skipRefresh =
       url.includes('/auth/logout') ||
       url.includes('/driver/rides/active') ||
       url.includes('/driver/availability');
 
-    // ── Post-logout 401 detection ─────────────────────────────────────────
-    // After logout the tokens are deleted, but in-flight or queued effects
-    // (rides list, saved locations, fare estimate) still fire before navigation
-    // completes. They all get 401 responses. Rather than logging noise or
-    // creating "no refresh token" unhandled rejections, detect this situation
-    // early: a 401 on a non-exempt endpoint with no stored refresh token means
-    // we are already logged out.
+    // ── Post-logout stale-request detection ──────────────────────────────
+    // After logout the tokens are deleted but in-flight effects still fire
+    // and receive 401s. Detect this early to avoid a spurious "no refresh
+    // token" error flood.
     const isPostLogout401 =
       status === 401 &&
       !skipRefresh &&
-      !isRefreshing &&
       !(await SecureStore.getItemAsync('refresh_token'));
 
     if (__DEV__) {
-      // Suppress known "expected empty" responses that are not real errors:
-      //  • 401 on /auth/logout          — session already revoked server-side
-      //  • 404 on /driver/rides/active  — idle driver has no active ride
-      //  • 403 on /driver/availability  — customer accounts lack a driver profile
-      //  • NO_RESPONSE on logout/avail  — best-effort calls with short timeout
-      //  • post-logout 401 on any route — tokens already gone, redirect is pending
       const isExpectedEmpty =
         (url.includes('/auth/logout') && status === 401) ||
         (url.includes('/driver/rides/active') && status === 404) ||
@@ -102,52 +178,30 @@ api.interceptors.response.use(
       }
     }
 
-    // Exempt endpoints: reject immediately, never refresh.
     if (skipRefresh) return Promise.reject(err);
 
-    // Post-logout 401: silently redirect and reject with the original 401.
-    // No new errors thrown — the caller receives a clean 401 AxiosError.
     if (isPostLogout401) {
       router.replace('/(auth)/welcome');
       return Promise.reject(err);
     }
 
-    // Non-401 or a concurrent request while a refresh is already in flight:
-    // reject silently — the primary refresh attempt will handle navigation.
-    if (status !== 401 || isRefreshing) return Promise.reject(err);
+    if (status !== 401) return Promise.reject(err);
 
-    // ── Token refresh ─────────────────────────────────────────────────────
-    // We only reach here when: status === 401, !isRefreshing, refresh token
-    // exists (checked above via isPostLogout401 gate).
-    isRefreshing = true;
+    // ── 401 with a refresh token: refresh once and replay ─────────────────
     try {
-      const refresh = await SecureStore.getItemAsync('refresh_token');
-      // refresh is guaranteed non-null (isPostLogout401 would have caught the
-      // empty-token case above), but guard defensively.
-      if (!refresh) {
-        router.replace('/(auth)/welcome');
-        return Promise.reject(err);
-      }
-      const { data: raw } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refresh });
-      // Backend wraps responses in { "data": { ... } }. Raw axios doesn't
-      // run our interceptor, so we have to unwrap the envelope manually.
-      const data = (raw && typeof raw === 'object' && 'data' in raw) ? raw.data : raw;
-      await SecureStore.setItemAsync('access_token', data.access_token);
-      await SecureStore.setItemAsync('refresh_token', data.refresh_token);
+      const newToken = await refreshOnce();
       if (err.config) {
         err.config.headers = err.config.headers ?? {};
-        err.config.headers.Authorization = `Bearer ${data.access_token}`;
+        err.config.headers.Authorization = `Bearer ${newToken}`;
         return api.request(err.config);
       }
     } catch {
-      // Refresh failed (token expired, revoked, network error).
-      // Clean up and redirect — return the original 401 AxiosError, not a new
-      // "refresh failed" error, so callers get a consistent error shape.
+      // Refresh token itself is expired or revoked. Clear everything and
+      // send the user back to the welcome screen. They'll re-authenticate
+      // with OTP — for a 30-day refresh token this should be very rare.
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
       router.replace('/(auth)/welcome');
-    } finally {
-      isRefreshing = false;
     }
 
     return Promise.reject(err);

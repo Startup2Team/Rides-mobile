@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
@@ -13,9 +14,14 @@ import { useRoute } from '@/hooks/useRoute';
 import { formatDuration } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
+import * as driverRideService from '@/services/driverRides';
 
 const WAIT_LIMIT_SECONDS = 180;
 const ARRIVAL_UNLOCK_KM = 1;
+/** Distance from destination at which to proactively re-enter the matching pool. */
+const PRE_COMPLETE_KM = 0.5;
+/** How often to send GPS updates to the backend while navigating (ms). */
+const GPS_SEND_INTERVAL_MS = 5000;
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
@@ -70,13 +76,14 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 export default function DriverNavigateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
-  const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
+  const { currentRide, markArrived, startJourney, completeRide, cancelRide, sendWsLocationUpdate } = useRide();
+  const [driverPos, setDriverPos] = useState(KIGALI_CENTER);
   const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
-  const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waitRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const enRouteSentRef = useRef(false);
+  const preCompleteSentRef = useRef(false);
 
   const phase = currentRide?.status === 'in_progress'
     ? 'inprogress'
@@ -84,52 +91,87 @@ export default function DriverNavigateScreen() {
       ? 'waiting'
       : 'pickup';
   const target = phase === 'inprogress' ? currentRide?.destination : currentRide?.pickup;
-  const [navigationOrigin, setNavigationOrigin] = useState(driverLocation ?? KIGALI_CENTER);
+  const [navigationOrigin, setNavigationOrigin] = useState(KIGALI_CENTER);
 
   const { route, loading: routeLoading } = useRoute(
     currentRide ? navigationOrigin : null,
     target ? { latitude: target.latitude, longitude: target.longitude } : null,
   );
 
+  // ── Guard: redirect if ride is gone ───────────────────────────────────────
   useEffect(() => {
     if (!currentRide) router.replace('/(driver)');
   }, [currentRide]);
 
+  // ── Real-device GPS tracking ───────────────────────────────────────────────
   useEffect(() => {
-    if (!currentRide && driverLocation) {
-      setDriverPos(driverLocation);
-      setNavigationOrigin(driverLocation);
-    }
-  }, [currentRide, driverLocation]);
+    let subscription: Location.LocationSubscription | null = null;
+    let sendTimer: ReturnType<typeof setInterval> | null = null;
+    let latestCoords: { latitude: number; longitude: number } | null = null;
 
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+
+      subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 5 },
+        loc => {
+          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          latestCoords = coords;
+          setDriverPos(coords);
+        },
+      );
+
+      // Throttle WS sends to once every GPS_SEND_INTERVAL_MS to avoid flooding.
+      sendTimer = setInterval(() => {
+        if (latestCoords) {
+          sendWsLocationUpdate(latestCoords.latitude, latestCoords.longitude);
+        }
+      }, GPS_SEND_INTERVAL_MS);
+    })();
+
+    return () => {
+      subscription?.remove();
+      if (sendTimer) clearInterval(sendTimer);
+    };
+  }, [sendWsLocationUpdate]);
+
+  // ── Trigger CONFIRMED → DRIVER_EN_ROUTE once on mount ─────────────────────
+  useEffect(() => {
+    if (!currentRide?.id || enRouteSentRef.current) return;
+    if (currentRide.status === 'confirmed' || currentRide.status === 'arriving') {
+      enRouteSentRef.current = true;
+      driverRideService.markEnRoute(currentRide.id).catch(() => {
+        // If the transition already happened (e.g. app restart mid-ride), that's fine.
+        enRouteSentRef.current = false;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRide?.id]);
+
+  // ── Reset navigationOrigin when phase changes ──────────────────────────────
   useEffect(() => {
     if (!target || !currentRide) return;
-
     const origin = phase === 'inprogress' ? currentRide.pickup : driverPos;
     setNavigationOrigin(origin);
     fittedMapPhaseRef.current = null;
+    preCompleteSentRef.current = false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
+  // ── Pre-complete: re-enter matching pool when nearly at destination ─────────
+  // When the driver is within PRE_COMPLETE_KM of the destination during an
+  // active trip, call SetAvailability so they can receive the next ride request
+  // before tapping "Complete". This prevents dead time between rides.
+  const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
   useEffect(() => {
-    if (moveRef.current) clearInterval(moveRef.current);
-    if (!route || route.coordinates.length === 0 || phase === 'waiting') return;
-
-    let step = 0;
-    setDriverPos(route.coordinates[0]);
-
-    moveRef.current = setInterval(() => {
-      step = Math.min(step + 1, route.coordinates.length - 1);
-      setDriverPos(route.coordinates[step]);
-
-      if (step >= route.coordinates.length - 1 && moveRef.current) {
-        clearInterval(moveRef.current);
-      }
-    }, 1500);
-
-    return () => {
-      if (moveRef.current) clearInterval(moveRef.current);
-    };
-  }, [phase, route]);
+    if (phase !== 'inprogress' || preCompleteSentRef.current) return;
+    if (distanceToTargetKm > 0 && distanceToTargetKm <= PRE_COMPLETE_KM && currentRide?.id) {
+      preCompleteSentRef.current = true;
+      // Fire-and-forget — don't block the UI if this fails.
+      driverRideService.setDriverAvailability(true).catch(() => {});
+    }
+  }, [phase, distanceToTargetKm, currentRide?.id]);
 
   useEffect(() => {
     if (phase !== 'waiting') {
@@ -167,7 +209,6 @@ export default function DriverNavigateScreen() {
 
   if (!currentRide) return null;
 
-  const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
   const canMarkArrived = phase !== 'pickup' || distanceToTargetKm <= ARRIVAL_UNLOCK_KM;
   const pickupDistanceText = formatDistance(distanceToTargetKm);
   const routeEtaText = route && !routeLoading ? formatDuration(route.durationSeconds) : '--';
