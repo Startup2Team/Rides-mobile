@@ -566,7 +566,7 @@ export default function NegotiationScreen() {
           <KandaButton
             title="Decline"
             icon="x"
-            variant="dangerPlain"
+            variant="decline"
             size="sm"
             compact
             onPress={handleDecline}

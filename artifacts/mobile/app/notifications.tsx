@@ -306,8 +306,9 @@ export default function NotificationsScreen() {
           style={[
             styles.row,
             {
-              backgroundColor: item.read ? colors.card : colors.primaryHex + '08',
-              borderColor: item.read ? colors.border : colors.primaryHex + '30',
+              backgroundColor: item.read ? colors.card : colors.primaryHex + '16',
+              borderColor: item.read ? colors.border : colors.primaryHex + '45',
+              borderWidth: item.read ? StyleSheet.hairlineWidth : 1,
             },
           ]}
           onPress={() => {
@@ -323,7 +324,13 @@ export default function NotificationsScreen() {
           </View>
           <View style={styles.textWrap}>
             <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.title,
+                  { color: item.read ? colors.foreground : colors.primary },
+                ]}
+                numberOfLines={1}
+              >
                 {item.title}
               </Text>
               <Text style={[styles.time, { color: colors.mutedForeground }]}>
@@ -451,5 +458,5 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold' },
   time: { fontSize: 11, fontFamily: 'Inter_500Medium', flexShrink: 0 },
   message: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  dot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
 });
