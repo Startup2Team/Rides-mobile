@@ -208,16 +208,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const updated = { ...user, mode };
           setUser(updated);
           await persistSnapshot(updated);
-        } catch (retryErr: any) {
-          throw retryErr;
+        } catch {
+          Alert.alert('Something went wrong', 'Could not accept policy or switch mode. Please try again.');
         }
       } else if (code === 'DRIVER_NOT_ACTIVE') {
         Alert.alert(
           'Application pending',
           'Your driver application is still under review. You will be notified once approved.',
         );
+      } else if (code === 'DRIVER_OFFLINE_COOLDOWN') {
+        Alert.alert(
+          'Cooldown active',
+          'You are in an offline penalty window. Please wait a few minutes before going online again.',
+        );
+      } else if (code === 'FORBIDDEN') {
+        Alert.alert(
+          'Access denied',
+          'You do not have permission to switch to driver mode.',
+        );
       } else {
-        throw err;
+        // Unexpected error — show a generic message rather than letting
+        // the rejection propagate uncaught to the Alert onPress handler.
+        Alert.alert('Something went wrong', 'Could not switch mode. Please try again.');
       }
     }
   }, [user]);

@@ -82,8 +82,13 @@ export default function ProfileScreen() {
         {
           text: 'Switch',
           onPress: async () => {
-            await switchMode('driver');
-            router.replace('/(driver)');
+            try {
+              await switchMode('driver');
+              router.replace('/(driver)');
+            } catch {
+              // switchMode already shows an Alert for all known error codes.
+              // This catch prevents any residual rejection from becoming unhandled.
+            }
           },
         },
       ]);
@@ -96,7 +101,7 @@ export default function ProfileScreen() {
       {
         text: 'Log Out',
         onPress: async () => {
-          await logout();
+          try { await logout(); } catch {}
           router.replace('/(auth)/welcome');
         },
       },

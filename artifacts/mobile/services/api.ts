@@ -165,6 +165,8 @@ api.interceptors.response.use(
       const isExpectedEmpty =
         (url.includes('/auth/logout') && status === 401) ||
         (url.includes('/driver/rides/active') && status === 404) ||
+        // customer/rides/active returns 404 when the customer has no active ride
+        (url.includes('/customer/rides/active') && status === 404) ||
         (url.includes('/driver/availability') && status === 403) ||
         (url.includes('/auth/logout') && status === 'NO_RESPONSE') ||
         (url.includes('/driver/availability') && status === 'NO_RESPONSE') ||

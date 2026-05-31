@@ -18,8 +18,13 @@ export default function DriverProfileScreen() {
       {
         text: 'Switch',
         onPress: async () => {
-          await switchMode('customer');
-          router.replace('/(tabs)');
+          try {
+            await switchMode('customer');
+            router.replace('/(tabs)');
+          } catch {
+            // switchMode('customer') is local-only and should never throw,
+            // but guard anyway to prevent unhandled rejections.
+          }
         },
       },
     ]);
