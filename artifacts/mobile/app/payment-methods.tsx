@@ -17,6 +17,7 @@ import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
+import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { TARAVELIS_BRAND_GREEN_HEX } from '@/constants/systemColors';
 
@@ -68,6 +69,7 @@ function isValidProviderNumber(provider: PaymentProvider, phoneNumber: string) {
 
 export default function PaymentMethodsScreen() {
   const colors = useColors();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
 
@@ -100,9 +102,10 @@ export default function PaymentMethodsScreen() {
   };
 
   const handleSetDefault = async (id: string) => {
-    Haptics.selectionAsync();
+    if (methods.find(m => m.id === id)?.isDefault) return;
     const updated = methods.map(m => ({ ...m, isDefault: m.id === id }));
     await persist(updated);
+    showToast('Default payment updated', 'info');
   };
 
   const handleRemove = (id: string) => {
@@ -116,8 +119,8 @@ export default function PaymentMethodsScreen() {
       {
         text: 'Remove',
         onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           await persist(methods.filter(m => m.id !== id));
+          showToast('Payment method removed', 'error');
         },
       },
     ]);
@@ -145,7 +148,7 @@ export default function PaymentMethodsScreen() {
     setSaving(false);
     setAdding(null);
     setPhoneInput('');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showToast('Payment method added');
   };
 
   return (

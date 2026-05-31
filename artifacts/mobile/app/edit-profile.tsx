@@ -19,8 +19,9 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { KandaButton } from '@/components/KandaButton';
 import { KandaInput } from '@/components/KandaInput';
-import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { useColors } from '@/hooks/useColors';
 
 const PROFILE_IMAGE_KEY = '@taravelis_profile_image';
 
@@ -29,6 +30,7 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user, updateUser } = useAuth();
+  const { showToast } = useToast();
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -73,6 +75,7 @@ export default function EditProfileScreen() {
       const asset = result.assets[0];
       setProfileImage(asset.uri);
       await AsyncStorage.setItem(PROFILE_IMAGE_KEY, asset.uri);
+      showToast('Photo updated', 'info');
     }
   };
 
@@ -128,8 +131,8 @@ export default function EditProfileScreen() {
     setSaving(true);
     await new Promise(r => setTimeout(r, 500));
     await updateUser({ name: name.trim(), email: email.trim() || undefined });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaving(false);
+    showToast('Profile updated', 'info');
     router.back();
   };
 
