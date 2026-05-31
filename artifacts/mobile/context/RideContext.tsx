@@ -31,7 +31,7 @@ interface RideContextType {
   startJourney: () => void;
   acceptRideRequest: () => void;
   declineRideRequest: () => void;
-  simulateIncomingRideRequest: () => void;
+  initDriverSession: () => void;
   riderAcceptWithFare: (amount: number) => void;
   loadHistory: () => Promise<void>;
 }
@@ -395,7 +395,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setPendingRequest(null);
   }, [pendingRequest]);
 
-  const simulateIncomingRideRequest = useCallback(() => {
+  const initDriverSession = useCallback(() => {
     connectDriverWS().catch(() => {});
     // Resume any in-progress ride from before the app was backgrounded/restarted.
     // Returns null when idle — don't update state in that case.
@@ -441,7 +441,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       startJourney,
       acceptRideRequest,
       declineRideRequest,
-      simulateIncomingRideRequest,
+      initDriverSession,
       riderAcceptWithFare,
       loadHistory,
     }),
@@ -462,7 +462,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       rideHistory,
       riderAcceptWithFare,
       sendDriverOffer,
-      simulateIncomingRideRequest,
+      initDriverSession,
       startJourney,
       currentRide,
       isMatchingPaused,

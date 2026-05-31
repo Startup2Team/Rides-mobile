@@ -1,6 +1,23 @@
 import { api } from './api';
 import { VehicleTypeCode } from './vehicleTypes';
 
+export interface NearbyDriverPin {
+  transport_type: VehicleTypeCode;
+  distance_m: number;
+  approx_lat: number;
+  approx_lng: number;
+}
+
+/** POST /api/v1/customer/location — returns anonymised nearby drivers. */
+export async function getNearbyDrivers(
+  lat: number,
+  lng: number,
+  transport_type: VehicleTypeCode,
+): Promise<NearbyDriverPin[]> {
+  const { data } = await api.post('/customer/location', { lat, lng, transport_type });
+  return Array.isArray(data?.drivers) ? data.drivers : [];
+}
+
 export async function createRide(params: {
   pickup_lat: number;
   pickup_lng: number;

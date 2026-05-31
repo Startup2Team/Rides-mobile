@@ -41,7 +41,7 @@ export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, driverProfile, saveDriverProfile, loadDriverProfile } = useAuth();
-  const { pendingRequest, currentRide, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
+  const { pendingRequest, currentRide, initDriverSession, acceptRideRequest, declineRideRequest } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
@@ -102,8 +102,8 @@ export default function DriverDashboard() {
       setShowRequest(false);
       return;
     }
-    simulateIncomingRideRequest();
-  }, [isOnline, simulateIncomingRideRequest]);
+    initDriverSession();
+  }, [isOnline, initDriverSession]);
 
   useEffect(() => {
     if (!isOnline || !pendingRequest) return;

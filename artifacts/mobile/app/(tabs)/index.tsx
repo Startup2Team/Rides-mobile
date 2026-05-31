@@ -42,6 +42,8 @@ import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
+import { getNearbyDrivers, NearbyDriverPin } from '@/services/rides';
+import { LEGACY_TO_API_VEHICLE } from '@/services/vehicleTypes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -105,18 +107,6 @@ interface SavedLocation extends RideLocation {
   label: string;
 }
 
-const DRIVER_OFFSETS = [
-  { lat:  0.0018, lng:  0.0022 }, { lat: -0.0025, lng:  0.0015 },
-  { lat:  0.0031, lng: -0.0018 }, { lat: -0.0012, lng: -0.0030 },
-  { lat:  0.0008, lng:  0.0038 }, { lat: -0.0040, lng:  0.0008 },
-  { lat:  0.0022, lng: -0.0035 }, { lat: -0.0035, lng: -0.0020 },
-  { lat:  0.0045, lng:  0.0012 }, { lat: -0.0018, lng:  0.0042 },
-  { lat:  0.0010, lng: -0.0048 }, { lat: -0.0050, lng:  0.0030 },
-  { lat:  0.0038, lng:  0.0040 }, { lat: -0.0028, lng: -0.0045 },
-  { lat:  0.0055, lng: -0.0010 }, { lat: -0.0060, lng:  0.0018 },
-  { lat:  0.0015, lng:  0.0055 }, { lat: -0.0042, lng: -0.0055 },
-  { lat:  0.0062, lng:  0.0032 }, { lat: -0.0070, lng: -0.0025 },
-];
 
 
 function calcEstFare(type: VehicleType, dist: number) {
@@ -230,6 +220,7 @@ export default function CustomerHome() {
   const [editingSavedAddress, setEditingSavedAddress] = useState('');
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
+  const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriverPin[]>([]);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const sheetDragStart = useRef(0);
@@ -477,6 +468,30 @@ export default function CustomerHome() {
       mounted = false;
     };
   }, []);
+
+  // Nearby drivers — real API, polled every 15s on the home screen only.
+  // Hidden while the booking sheet is open (drivers aren't relevant mid-booking).
+  useEffect(() => {
+    if (locLoading || showBooking) {
+      setNearbyDrivers([]);
+      return;
+    }
+    const transport_type = LEGACY_TO_API_VEHICLE[selectedVehicle];
+    let cancelled = false;
+
+    const fetchNearby = () => {
+      getNearbyDrivers(userLocation.latitude, userLocation.longitude, transport_type)
+        .then(drivers => { if (!cancelled) setNearbyDrivers(drivers); })
+        .catch(() => {}); // non-critical — stale pins are fine
+    };
+
+    fetchNearby();
+    const interval = setInterval(fetchNearby, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [locLoading, showBooking, selectedVehicle, userLocation.latitude, userLocation.longitude]);
 
   // Real road route via Mapbox Directions API
   const { route, loading: routeLoading } = useRoute(
@@ -1006,14 +1021,6 @@ export default function CustomerHome() {
       )
     : 0;
 
-  const visibleDrivers = useMemo(() => {
-    return DRIVER_OFFSETS.map((offset, i) => ({
-      id: `nearby-driver-${i}`,
-      latitude: userLocation.latitude + offset.lat,
-      longitude: userLocation.longitude + offset.lng,
-    }));
-  }, [userLocation.latitude, userLocation.longitude]);
-
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
 
   const recentLocations = useMemo<RideLocation[]>(() => {
@@ -1100,10 +1107,10 @@ export default function CustomerHome() {
           </Marker>
         )}
 
-        {visibleDrivers.map(driver => (
+        {!showBooking && nearbyDrivers.map((driver, i) => (
           <Marker
-            key={driver.id}
-            coordinate={{ latitude: driver.latitude, longitude: driver.longitude }}
+            key={`nearby-${i}`}
+            coordinate={{ latitude: driver.approx_lat, longitude: driver.approx_lng }}
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
             zIndex={1}

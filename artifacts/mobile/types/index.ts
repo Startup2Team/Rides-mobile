@@ -144,39 +144,3 @@ export const KIGALI_CENTER: Coords = {
   longitude: 30.0619,
 };
 
-export const MOCK_DRIVERS: MockDriver[] = [
-  // Motos
-  { id: 'd1', name: 'Jean Pierre', phone: '+250788111001', vehicleType: 'moto', plateNumber: 'RAD 001 A', location: { latitude: -1.9421, longitude: 30.0599 }, rating: 4.8, eta: 3 },
-  { id: 'd2', name: 'Eric Nshimiye', phone: '+250788111002', vehicleType: 'moto', plateNumber: 'RAD 002 A', location: { latitude: -1.9380, longitude: 30.0560 }, rating: 4.7, eta: 4 },
-  { id: 'd3', name: 'David Nkurunziza', phone: '+250788111003', vehicleType: 'moto', plateNumber: 'RAD 003 C', location: { latitude: -1.9431, longitude: 30.0649 }, rating: 4.7, eta: 4 },
-  { id: 'd4', name: 'Patrick Uwimana', phone: '+250788111004', vehicleType: 'moto', plateNumber: 'RAD 004 D', location: { latitude: -1.9510, longitude: 30.0580 }, rating: 4.6, eta: 5 },
-  { id: 'd5', name: 'Claude Bizimana', phone: '+250788111005', vehicleType: 'moto', plateNumber: 'RAD 005 E', location: { latitude: -1.9360, longitude: 30.0700 }, rating: 4.9, eta: 3 },
-  { id: 'd6', name: 'Innocent Habimana', phone: '+250788111006', vehicleType: 'moto', plateNumber: 'RAD 006 F', location: { latitude: -1.9480, longitude: 30.0720 }, rating: 4.5, eta: 6 },
-  { id: 'd7', name: 'Thierry Mugisha', phone: '+250788111007', vehicleType: 'moto', plateNumber: 'RAD 007 G', location: { latitude: -1.9550, longitude: 30.0650 }, rating: 4.8, eta: 4 },
-  { id: 'd8', name: 'Olivier Niyonzima', phone: '+250788111008', vehicleType: 'moto', plateNumber: 'RAD 008 H', location: { latitude: -1.9400, longitude: 30.0530 }, rating: 4.6, eta: 5 },
-  { id: 'd9', name: 'Alexis Rutaganda', phone: '+250788111009', vehicleType: 'moto', plateNumber: 'RAD 009 I', location: { latitude: -1.9320, longitude: 30.0610 }, rating: 4.7, eta: 7 },
-  { id: 'd10', name: 'Fiston Nzeyimana', phone: '+250788111010', vehicleType: 'moto', plateNumber: 'RAD 010 J', location: { latitude: -1.9600, longitude: 30.0590 }, rating: 4.9, eta: 3 },
-
-  { id: 'd11', name: 'Marie Uwimana', phone: '+250788111011', vehicleType: 'cab', plateNumber: 'RAC 001 B', location: { latitude: -1.9461, longitude: 30.0639 }, rating: 4.9, eta: 5 },
-  { id: 'd12', name: 'Alice Mukamana', phone: '+250788111012', vehicleType: 'cab', plateNumber: 'RAC 002 B', location: { latitude: -1.9451, longitude: 30.0590 }, rating: 4.6, eta: 7 },
-  { id: 'd13', name: 'Solange Ingabire', phone: '+250788111013', vehicleType: 'cab', plateNumber: 'RAC 003 C', location: { latitude: -1.9390, longitude: 30.0680 }, rating: 4.8, eta: 5 },
-  { id: 'd14', name: 'Diane Umubyeyi', phone: '+250788111014', vehicleType: 'cab', plateNumber: 'RAC 004 D', location: { latitude: -1.9530, longitude: 30.0700 }, rating: 4.7, eta: 6 },
-  { id: 'd15', name: 'Gentil Nkusi', phone: '+250788111015', vehicleType: 'cab', plateNumber: 'RAC 005 E', location: { latitude: -1.9340, longitude: 30.0550 }, rating: 4.5, eta: 8 },
-  { id: 'd16', name: 'Valens Hakizimana', phone: '+250788111016', vehicleType: 'cab', plateNumber: 'RAC 006 F', location: { latitude: -1.9580, longitude: 30.0620 }, rating: 4.9, eta: 4 },
-  { id: 'd17', name: 'Josiane Mutesi', phone: '+250788111017', vehicleType: 'cab', plateNumber: 'RAC 007 G', location: { latitude: -1.9470, longitude: 30.0750 }, rating: 4.6, eta: 6 },
-  { id: 'd18', name: 'Cedric Niyomugabo', phone: '+250788111018', vehicleType: 'cab', plateNumber: 'RAC 008 H', location: { latitude: -1.9300, longitude: 30.0640 }, rating: 4.8, eta: 5 },
-
-  { id: 'd19', name: 'Robert Habimana', phone: '+250788111019', vehicleType: 'hilux', plateNumber: 'RAA 001 E', location: { latitude: -1.9411, longitude: 30.0629 }, rating: 4.9, eta: 6 },
-  { id: 'd20', name: 'Samuel Ntwari', phone: '+250788111020', vehicleType: 'hilux', plateNumber: 'RAA 002 F', location: { latitude: -1.9500, longitude: 30.0560 }, rating: 4.7, eta: 7 },
-  { id: 'd21', name: 'Bosco Tuyishime', phone: '+250788111021', vehicleType: 'hilux', plateNumber: 'RAA 003 G', location: { latitude: -1.9350, longitude: 30.0720 }, rating: 4.8, eta: 5 },
-  { id: 'd22', name: 'Fidele Uwimana', phone: '+250788111022', vehicleType: 'hilux', plateNumber: 'RAA 004 H', location: { latitude: -1.9560, longitude: 30.0680 }, rating: 4.6, eta: 8 },
-  { id: 'd23', name: 'Gaspard Nzabonimpa', phone: '+250788111023', vehicleType: 'hilux', plateNumber: 'RAA 005 I', location: { latitude: -1.9290, longitude: 30.0590 }, rating: 4.9, eta: 6 },
-  { id: 'd24', name: 'Leonidas Murenzi', phone: '+250788111024', vehicleType: 'hilux', plateNumber: 'RAA 006 J', location: { latitude: -1.9620, longitude: 30.0640 }, rating: 4.7, eta: 7 },
-
-  { id: 'd25', name: 'Augustin Nkurunziza', phone: '+250788111025', vehicleType: 'fuso', plateNumber: 'RAB 001 K', location: { latitude: -1.9440, longitude: 30.0570 }, rating: 4.8, eta: 10 },
-  { id: 'd26', name: 'Theogene Bizumuremyi', phone: '+250788111026', vehicleType: 'fuso', plateNumber: 'RAB 002 L', location: { latitude: -1.9370, longitude: 30.0660 }, rating: 4.6, eta: 12 },
-  { id: 'd27', name: 'Protais Habiyaremye', phone: '+250788111027', vehicleType: 'fuso', plateNumber: 'RAB 003 M', location: { latitude: -1.9540, longitude: 30.0730 }, rating: 4.7, eta: 11 },
-  { id: 'd28', name: 'Sylvestre Nzeyimana', phone: '+250788111028', vehicleType: 'fuso', plateNumber: 'RAB 004 N', location: { latitude: -1.9310, longitude: 30.0580 }, rating: 4.9, eta: 9 },
-  { id: 'd29', name: 'Modeste Uwimana', phone: '+250788111029', vehicleType: 'fuso', plateNumber: 'RAB 005 O', location: { latitude: -1.9590, longitude: 30.0610 }, rating: 4.5, eta: 13 },
-  { id: 'd30', name: 'Celestin Nkusi', phone: '+250788111030', vehicleType: 'fuso', plateNumber: 'RAB 006 P', location: { latitude: -1.9420, longitude: 30.0760 }, rating: 4.8, eta: 10 },
-];
