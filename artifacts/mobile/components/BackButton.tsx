@@ -80,12 +80,15 @@ interface CloseButtonProps extends NavButtonProps {
   shutOnPress?: boolean;
   /** Play open spin when the button mounts. Default true. */
   autoSpinOnMount?: boolean;
+  /** Applied to the rotation wrapper (use for layout / hit area). */
+  wrapperStyle?: StyleProp<ViewStyle>;
 }
 
 export const CloseButton = forwardRef<CloseButtonHandle, CloseButtonProps>(function CloseButton(
   {
     onPress,
     style,
+    wrapperStyle,
     accessibilityLabel = 'Close',
     shutOnPress = true,
     autoSpinOnMount = true,
@@ -108,7 +111,9 @@ export const CloseButton = forwardRef<CloseButtonHandle, CloseButtonProps>(funct
   };
 
   return (
-    <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+    <Animated.View
+      style={[styles.closeSpinWrap, wrapperStyle, { transform: [{ rotate: rotation }] }]}
+    >
       <CircleNavButton
         icon="x"
         onPress={handlePress}
@@ -121,6 +126,12 @@ export const CloseButton = forwardRef<CloseButtonHandle, CloseButtonProps>(funct
 });
 
 const styles = StyleSheet.create({
+  closeSpinWrap: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   button: {
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,

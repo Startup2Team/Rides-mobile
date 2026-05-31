@@ -53,16 +53,16 @@ const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
 const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
-/** ~94% card width and bottom gap — matches iOS system sheets (AirPods-style). */
-/** Minimal side inset (~0.001cm) — card nearly full width with a hairline gap for corners/shadow. */
-const FLOATING_PANEL_MARGIN_H = 2;
 /** iOS system sheets (AirPods-style) use ~44–47pt continuous corners. */
 const FLOATING_PANEL_RADIUS = Platform.OS === 'ios' ? 47 : 28;
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 const GREETING_LEFT_INSET = 14;
-/** ~0.2cm inset for controls tucked into the floating panel corner radius. */
-const FLOATING_PANEL_CORNER_INSET = 6;
+const BOOKING_SHEET_PADDING_H = 22;
+/** Equal inset from top + right form edges for the booking close control. */
+const BOOKING_CLOSE_EDGE_INSET = 16;
+/** Extra room so the close icon can spin during sheet drag without clipping. */
+const BOOKING_CLOSE_ROTATION_PAD = 10;
 const floatingPanelSurface = {
   borderRadius: FLOATING_PANEL_RADIUS,
   ...Platform.select({
@@ -256,11 +256,11 @@ export default function CustomerHome() {
   );
   const hasRideActions = destination !== null || destText.trim().length > 0;
   const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
-  const bookingPanelMapInset = activePanelHeight + FLOATING_PANEL_MARGIN_H;
+  const bookingPanelMapInset = activePanelHeight;
   const homePanelNavPadding = Platform.OS === 'web'
     ? HOME_TAB_BAR_HEIGHT + 20
     : HOME_TAB_BAR_HEIGHT + insets.bottom;
-  const homePanelBottomInset = FLOATING_PANEL_MARGIN_H;
+  const homePanelBottomInset = 0;
   const homePanelMapInset = homePanelHeight + homePanelBottomInset;
   const recenterBottomOffset = showBooking ? bookingPanelMapInset + 16 : homePanelMapInset + 16;
   const hasPreciseRouteLocations =
@@ -579,7 +579,7 @@ export default function CustomerHome() {
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        centerRouteInVisibleMap(routeCenterCoords, EXPANDED_PANEL_HEIGHT + FLOATING_PANEL_MARGIN_H);
+        centerRouteInVisibleMap(routeCenterCoords, EXPANDED_PANEL_HEIGHT);
         setRouteRecenterRequest(0);
       });
     });
@@ -1175,8 +1175,6 @@ export default function CustomerHome() {
             {
               backgroundColor: colors.card,
               borderColor: colors.border,
-              bottom: homePanelBottomInset,
-              width: SCREEN_WIDTH - FLOATING_PANEL_MARGIN_H * 2,
               paddingBottom: homePanelNavPadding,
             },
           ]}
@@ -1230,6 +1228,15 @@ export default function CustomerHome() {
               },
             ]}
           >
+            <View style={styles.bookingCloseAnchor} pointerEvents="box-none">
+              <CloseButton
+                ref={bookingCloseRef}
+                shutOnPress={false}
+                onPress={closeBooking}
+                accessibilityLabel="Close booking"
+              />
+            </View>
+            <View style={styles.bookingSheetBody}>
             {/* Handle + header — swipe down on handle only (close is not in pan zone) */}
             <View style={[styles.sheetDragZone, styles.bookingSheetDragZone]}>
               <View style={[styles.sheetHandleTouch, styles.bookingSheetHandleTouch]} {...bookingSheetPanResponder.panHandlers}>
@@ -1237,13 +1244,6 @@ export default function CustomerHome() {
               </View>
               <View style={styles.bookingSheetHeader}>
                 <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Book a Ride</Text>
-                <CloseButton
-                  ref={bookingCloseRef}
-                  shutOnPress={false}
-                  onPress={closeBooking}
-                  accessibilityLabel="Close booking"
-                  style={styles.bookingCloseButton}
-                />
               </View>
             </View>
 
@@ -1365,6 +1365,7 @@ export default function CustomerHome() {
                 />
               </View>
             )}
+            </View>
           </Animated.View>
           </KeyboardAvoidingView>
         </>
@@ -2066,12 +2067,15 @@ const styles = StyleSheet.create({
   youAreHereBubble: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
   youAreHereText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#fff' },
   youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
-  // Home bottom panel — iOS-style floating card (~94% width, lifted margin on all sides)
+  // Home bottom panel — edge-to-edge bottom sheet (top corners rounded)
   bottomPanel: {
     position: 'absolute',
-    alignSelf: 'center',
-    left: FLOATING_PANEL_MARGIN_H,
+    bottom: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
     ...floatingPanelSurface,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     paddingTop: 22,
     paddingHorizontal: 22,
     gap: 10,
@@ -2086,15 +2090,22 @@ const styles = StyleSheet.create({
   // Booking sheet
   bookingSheetWrapper: {
     position: 'absolute',
-    bottom: FLOATING_PANEL_MARGIN_H,
-    left: FLOATING_PANEL_MARGIN_H,
-    width: SCREEN_WIDTH - FLOATING_PANEL_MARGIN_H * 2,
+    bottom: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
     zIndex: 30,
+    overflow: 'visible',
   },
   bookingSheet: {
     ...floatingPanelSurface,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     paddingTop: 0,
-    paddingHorizontal: 22,
+    gap: 0,
+    overflow: 'visible',
+  },
+  bookingSheetBody: {
+    paddingHorizontal: BOOKING_SHEET_PADDING_H,
     gap: 10,
   },
   sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
@@ -2105,13 +2116,19 @@ const styles = StyleSheet.create({
   bookingSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingLeft: GREETING_LEFT_INSET,
-    paddingRight: FLOATING_PANEL_CORNER_INSET,
+    paddingRight: 52,
     minHeight: 44,
   },
-  bookingCloseButton: {
-    marginRight: -4,
+  bookingCloseAnchor: {
+    position: 'absolute',
+    top: BOOKING_CLOSE_EDGE_INSET - BOOKING_CLOSE_ROTATION_PAD,
+    right: BOOKING_CLOSE_EDGE_INSET - BOOKING_CLOSE_ROTATION_PAD,
+    width: 44 + BOOKING_CLOSE_ROTATION_PAD * 2,
+    height: 44 + BOOKING_CLOSE_ROTATION_PAD * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   sheetTitle: { flex: 1, fontSize: 16, fontFamily: 'Inter_600SemiBold', marginRight: 8 },
   locationCard: {
