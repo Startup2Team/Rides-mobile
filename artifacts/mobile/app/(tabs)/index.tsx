@@ -1,7 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,10 +36,12 @@ import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
+import { useSavedLocations } from '@/hooks/useSavedLocations';
+import { useToast } from '@/context/ToastContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
-import { KIGALI_CENTER, RideLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { getNearbyDrivers, NearbyDriverPin } from '@/services/rides';
 import { API_TO_LEGACY_VEHICLE, LEGACY_TO_API_VEHICLE } from '@/services/vehicleTypes';
@@ -97,15 +98,9 @@ const SAVE_LABEL_WIDTHS: Record<string, number> = {
 };
 
 const VEHICLE_TYPES: VehicleType[] = ['moto', 'cab', 'hilux', 'fuso'];
-const SAVED_LOCATIONS_KEY = '@taravelis_saved_locations';
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 type MapPickerTarget = 'pickup' | 'dropoff' | 'savedLocation';
-
-interface SavedLocation extends RideLocation {
-  id: string;
-  label: string;
-}
 
 
 
@@ -173,6 +168,8 @@ function sliceRouteByProgress(
 export default function CustomerHome() {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
+  const { savedPlaces, saveLocation, persistSavedPlaces, reload: reloadSavedPlaces } = useSavedLocations();
+  const { showToast } = useToast();
   const formSheetSurface = useMemo(
     () => ({
       backgroundColor: colors.card,
@@ -211,7 +208,6 @@ export default function CustomerHome() {
   const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   const [locationListTab, setLocationListTab] = useState<'saved' | 'previous'>('saved');
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
-  const [savedPlaces, setSavedPlaces] = useState<SavedLocation[]>([]);
   const [pendingSaveLocation, setPendingSaveLocation] = useState<RideLocation | null>(null);
   const [isCustomSaveLabel, setIsCustomSaveLabel] = useState(false);
   const [customSaveLabel, setCustomSaveLabel] = useState('');
@@ -342,13 +338,11 @@ export default function CustomerHome() {
     requestAnimationFrame(() => centerMapOnUser());
   }, [locLoading, hasPreciseRouteLocations, userLocation.latitude, userLocation.longitude]);
 
-  useEffect(() => {
-    AsyncStorage.getItem(SAVED_LOCATIONS_KEY)
-      .then(value => {
-        if (value) setSavedPlaces(JSON.parse(value));
-      })
-      .catch(() => {});
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void reloadSavedPlaces();
+    }, [reloadSavedPlaces]),
+  );
 
   useEffect(() => {
     const liftEditSheet = (height: number) => {
@@ -825,19 +819,12 @@ export default function CustomerHome() {
     if (!pendingSaveLocation) return;
     const cleanLabel = label.trim();
     if (!cleanLabel) return;
-
-    const saved: SavedLocation = {
-      ...pendingSaveLocation,
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      label: cleanLabel,
-    };
-    const next = [saved, ...savedPlaces.filter(place => place.label !== cleanLabel)].slice(0, 20);
-    setSavedPlaces(next);
+    await saveLocation(pendingSaveLocation, cleanLabel);
+    showToast(`Saved as ${cleanLabel}`);
     setPendingSaveLocation(null);
     setIsCustomSaveLabel(false);
     setCustomSaveLabel('');
     setLocationListTab('saved');
-    await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
   };
 
   const closePendingSaveLocation = () => {
@@ -983,11 +970,6 @@ export default function CustomerHome() {
     Keyboard.dismiss();
   };
 
-  const persistSavedPlaces = async (next: SavedLocation[]) => {
-    setSavedPlaces(next);
-    await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
-  };
-
   const renameSavedLocation = async () => {
     const label = editingSavedLabel.trim();
     const address = editingSavedAddress.trim();
@@ -999,6 +981,7 @@ export default function CustomerHome() {
         : place
     );
     await persistSavedPlaces(next);
+    showToast('Location updated', 'info');
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
@@ -1016,6 +999,7 @@ export default function CustomerHome() {
 
     const next = savedPlaces.filter(place => place.id !== editingSavedLocation.id);
     await persistSavedPlaces(next);
+    showToast('Location removed', 'error');
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
@@ -1691,8 +1675,8 @@ export default function CustomerHome() {
                         text: 'Delete',
                         onPress: async () => {
                           const next = savedPlaces.filter(p => p.id !== location.id);
-                          setSavedPlaces(next);
-                          await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
+                          await persistSavedPlaces(next);
+                          showToast('Location removed', 'error');
                         },
                       },
                       { text: 'Cancel', style: 'cancel' },
@@ -2132,6 +2116,7 @@ export default function CustomerHome() {
                   await persistSavedPlaces(next);
                   setEditingSavedLocation(updated);
                   setEditingSavedAddress(address);
+                  showToast('Location updated', 'info');
                 }
                 setMapPicker(null);
               }}

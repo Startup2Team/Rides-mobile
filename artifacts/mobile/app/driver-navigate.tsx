@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { BackButton } from '@/components/BackButton';
 import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
+import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
@@ -250,6 +251,7 @@ export default function DriverNavigateScreen() {
           text: 'Cancel Ride',
           onPress: () => {
             cancelRide();
+            showToast('Ride cancelled', 'info');
             router.replace('/(driver)');
           },
         },

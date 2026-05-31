@@ -14,14 +14,16 @@ import {
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useToast } from '@/context/ToastContext';
+import { useRide } from '@/context/RideContext';
+import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { useDriverTracking } from '@/hooks/useDriverTracking';
-import { useRide } from '@/context/RideContext';
 import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
+import { showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
@@ -84,6 +86,7 @@ export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
+  const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
   const previousRideStatusRef = useRef<string | null>(null);
@@ -239,14 +242,12 @@ export default function RideScreen() {
   };
 
   const handleCancelArriving = () => {
-    openCancelModal(
-      ['Driver too far', 'Changed plans', 'Booked by mistake'],
-      'Keep searching',
-    );
+    showCancelArrivingRideAlert(doCancelRide);
   };
 
   const doCancelRide = () => {
     cancelRide();
+    showToast('Ride cancelled', 'info');
     router.replace('/(tabs)');
   };
 

@@ -15,8 +15,9 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS } from '@/types';
 import { setDriverAvailability, updateDriverLocation } from '@/services/driverRides';
@@ -41,6 +42,7 @@ export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, driverProfile, saveDriverProfile, loadDriverProfile } = useAuth();
+  const { showToast } = useToast();
   const { pendingRequest, currentRide, initDriverSession, acceptRideRequest, declineRideRequest } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
@@ -172,6 +174,7 @@ export default function DriverDashboard() {
     if (driverProfile) {
       saveDriverProfile({ ...driverProfile, isOnline: val });
     }
+    showToast(val ? "You're online" : "You're offline", val ? 'success' : 'info');
   };
 
   const recenterMap = () => {

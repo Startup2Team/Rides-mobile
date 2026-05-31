@@ -3,8 +3,9 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KandaButton } from '@/components/KandaButton';
-import { useColors } from '@/hooks/useColors';
+import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
+import { useColors } from '@/hooks/useColors';
 import { showCancelSearchAlert } from '@/utils/cancelSearchAlert';
 import { VEHICLE_LABELS, VehicleType } from '@/types';
 
@@ -26,6 +27,7 @@ export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching, isMatchingPaused } = useRide();
+  const { showToast } = useToast();
   const isCancellingRef = useRef(false);
 
   const pulseA = useRef(new Animated.Value(0)).current;
@@ -70,6 +72,7 @@ export default function SearchingScreen() {
   const finishCancelSearch = () => {
     isCancellingRef.current = true;
     cancelRide();
+    showToast('Search cancelled', 'info');
     router.replace('/(tabs)');
   };
 

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
@@ -56,13 +56,12 @@ export default function WelcomeScreen() {
           fullWidth
           size="lg"
         />
-        <KandaButton
-          title="Already have an account? Log in"
-          onPress={() => router.push('/(auth)/login')}
-          variant="plain"
-          fullWidth
-          size="lg"
-        />
+        <View style={styles.row}>
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
+          <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+            <Text style={[styles.hint, { color: colors.primary }]}>Log in</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </View>
   );
@@ -102,5 +101,13 @@ const styles = StyleSheet.create({
   bottom: {
     paddingHorizontal: 25,
     gap: 14,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  hint: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
   },
 });
