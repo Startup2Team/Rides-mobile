@@ -80,7 +80,8 @@ export interface DriverStats {
   total_rides: number;
   acceptance_rate: number;
   completion_rate: number;
-  priority_tier: string;
+  /** Numeric tier — lower is better: 1 = Gold, 2 = Silver, 3 = Bronze */
+  priority_tier: number;
 }
 
 export async function getDailyEarnings(): Promise<DailyEarnings> {

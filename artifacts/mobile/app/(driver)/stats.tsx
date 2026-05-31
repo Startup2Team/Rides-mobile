@@ -40,16 +40,13 @@ function pct(n: number) {
   return `${Math.round(n)}%`;
 }
 
-function priorityLabel(tier: string): string {
-  switch (tier?.toUpperCase()) {
-    case 'GOLD':
-      return '🥇 Gold Priority';
-    case 'SILVER':
-      return '🥈 Silver Priority';
-    case 'BRONZE':
-      return '🥉 Bronze Priority';
-    default:
-      return '⭐ Standard Priority';
+/** priority_tier is a numeric rank — lower is better: 1 = Gold, 2 = Silver, 3 = Bronze. */
+function priorityLabel(tier: number | undefined): string {
+  switch (tier) {
+    case 1: return '🥇 Gold Priority';
+    case 2: return '🥈 Silver Priority';
+    case 3: return '🥉 Bronze Priority';
+    default: return '⭐ Standard Priority';
   }
 }
 
@@ -83,8 +80,13 @@ export default function DriverStats() {
     }
   }, []);
 
-  // Refresh every time this tab comes into focus
-  useFocusEffect(load);
+  // Refresh every time this tab comes into focus.
+  // useFocusEffect requires a non-async callback (must not return a Promise).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const paymentTarget = driverProfile?.momoCode || 'Not set';
 
