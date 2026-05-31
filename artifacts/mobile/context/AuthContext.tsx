@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { AppMode, DriverProfile, User } from '@/types';
 import * as SecureStore from 'expo-secure-store';
 import { api } from '@/services/api';
@@ -140,6 +141,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setDriverProfile(null);
       await clearSnapshot();
+      // Navigate unconditionally — the user could be on any screen (driver
+      // dashboard, negotiation, ride, etc.) and index.tsx's redirect only
+      // fires when '/' is the active route.
+      router.replace('/(auth)/welcome');
     } finally {
       logoutInFlight.current = false;
     }
