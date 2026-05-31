@@ -526,9 +526,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const resumeDriverMatching = useCallback(() => setIsMatchingPaused(false), []);
 
   const loadHistory = useCallback(async () => {
-    const data = await rideService.listRides(20, 0);
-    const rides = Array.isArray(data?.rides) ? data.rides.map(mapBackendRideToUiRide) : [];
-    setRideHistory(rides);
+    try {
+      const data = await rideService.listRides(20, 0);
+      const rides = Array.isArray(data?.rides) ? data.rides.map(mapBackendRideToUiRide) : [];
+      setRideHistory(rides);
+    } catch {
+      // Non-fatal — history is a read-only view, stale data is preferable to a crash.
+    }
   }, []);
 
   const contextValue = useMemo(
