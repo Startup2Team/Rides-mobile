@@ -48,7 +48,8 @@
           "locationWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you.",
           "locationAlwaysAndWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
