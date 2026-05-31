@@ -23,7 +23,7 @@ interface KandaButtonProps {
   title: string;
   onPress: () => void;
   /** @default primary — filled accent (iOS borderedProminent) */
-  variant?: 'primary' | 'secondary' | 'outline' | 'plain' | 'danger' | 'dangerPlain' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'outline' | 'plain' | 'danger' | 'dangerPlain' | 'ghost' | 'call';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
@@ -63,7 +63,8 @@ export function KandaButton({
     resolvedVariant === 'primary'
     || resolvedVariant === 'secondary'
     || resolvedVariant === 'danger'
-    || resolvedVariant === 'dangerPlain';
+    || resolvedVariant === 'dangerPlain'
+    || resolvedVariant === 'call';
 
   const bgColor = {
     primary: colors.primary,
@@ -72,6 +73,7 @@ export function KandaButton({
     danger: colors.destructive,
     dangerPlain: colors.destructive + '14',
     ghost: 'transparent',
+    call: colors.call,
   }[resolvedVariant];
 
   const textColor = {
@@ -81,6 +83,7 @@ export function KandaButton({
     danger: colors.destructiveForeground,
     dangerPlain: colors.destructive,
     ghost: colors.foreground,
+    call: '#FFFFFF',
   }[resolvedVariant];
 
   const height = BUTTON_HEIGHT[size];

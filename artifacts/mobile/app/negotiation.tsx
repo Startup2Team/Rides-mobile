@@ -575,7 +575,7 @@ export default function NegotiationScreen() {
           <KandaButton
             title="Call"
             icon="phone"
-            variant={customerLimitReached ? 'primary' : 'secondary'}
+            variant="call"
             size="sm"
             compact
             onPress={handleCall}
