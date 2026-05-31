@@ -17,11 +17,22 @@ import { Ride, VEHICLE_LABELS } from '@/types';
 import { StatusChip } from '@/components/StatusChip';
 import { OfflineBanner } from '@/components/OfflineBanner';
 
+/** Matches card horizontal padding — space before calendar / after RWF. */
+const CARD_CONTENT_INSET = 16;
+const INSET_CARD_MARGIN_H = 16;
+const CHEVRON_SIZE = 18;
+/** Trailing fare slot — keeps large amounts right-aligned without shrinking the status chip row. */
+const FARE_COLUMN_WIDTH = 102;
+const INSET_CARD_RADIUS = Platform.OS === 'ios' ? 10 : 12;
+const CARD_GAP = 12;
+
 function RideHistoryCard({ ride }: { ride: Ride }) {
   const colors = useColors();
   const date = new Date(ride.createdAt);
   const dateStr = date.toLocaleDateString('en-RW', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = date.toLocaleTimeString('en-RW', { hour: '2-digit', minute: '2-digit' });
+  const fareLabel =
+    ride.agreedFare != null ? `${ride.agreedFare.toLocaleString('en-RW')} RWF` : null;
 
   return (
     <Pressable
@@ -30,55 +41,83 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
       onPress={() => router.push(`/ride-detail?rideId=${ride.id}` as any)}
       style={({ pressed }) => [
         styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.78 : 1,
-          transform: [{ scale: pressed ? 0.99 : 1 }],
-        },
+        { backgroundColor: colors.card },
+        Platform.OS === 'ios' && styles.cardIos,
+        pressed && styles.cardPressed,
       ]}
     >
-      <View style={styles.cardTop}>
-        <View style={styles.vehicleBadge}>
-          <Text style={[styles.vehicleLabel, { color: colors.foreground }]}>
+      <View style={styles.cardBody}>
+        <View style={styles.cardTop}>
+          <Text
+            style={[styles.vehicleLabel, { color: colors.foreground }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {VEHICLE_LABELS[ride.vehicleType]}
           </Text>
+          <StatusChip status={ride.status} />
         </View>
-        <StatusChip status={ride.status} />
+
+        <View style={styles.routeRow}>
+          <View style={styles.routeIcons}>
+            <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+            <View style={[styles.line, { backgroundColor: colors.border }]} />
+            <View style={[styles.dot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
+          </View>
+          <View style={styles.routeLabels}>
+            <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
+              {ride.pickup.address ?? 'Pickup location'}
+            </Text>
+            <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
+              {ride.destination.address ?? 'Destination'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.cardBottom}>
+          <View
+            style={[
+              styles.metaCluster,
+              fareLabel != null && { paddingRight: FARE_COLUMN_WIDTH + 8 },
+            ]}
+          >
+            <View style={[styles.metaItem, styles.metaItemDate]}>
+              <Feather name="calendar" size={13} color={colors.mutedForeground} />
+              <Text
+                style={[styles.metaText, { color: colors.mutedForeground }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {dateStr} · {timeStr}
+              </Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
+              <Text style={[styles.metaText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                {ride.distance} km
+              </Text>
+            </View>
+          </View>
+          {fareLabel != null && (
+            <View style={styles.fareColumn} pointerEvents="none">
+              <Text style={[styles.fare, { color: colors.primary }]} numberOfLines={1}>
+                {fareLabel}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      <View style={styles.routeRow}>
-        <View style={styles.routeIcons}>
-          <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-          <View style={[styles.line, { backgroundColor: colors.border }]} />
-          <View style={[styles.dot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
-        </View>
-        <View style={styles.routeLabels}>
-          <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-            {ride.pickup.address ?? 'Pickup location'}
-          </Text>
-          <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-            {ride.destination.address ?? 'Destination'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-      <View style={styles.cardBottom}>
-        <View style={styles.metaItem}>
-          <Feather name="calendar" size={13} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{dateStr} · {timeStr}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{ride.distance} km</Text>
-        </View>
-        {ride.agreedFare && (
-          <Text style={[styles.fare, { color: colors.primary }]}>
-            {ride.agreedFare.toLocaleString()} RWF
-          </Text>
-        )}
+      <View style={styles.chevronAnchor} pointerEvents="none">
+        <Feather
+          name="chevron-right"
+          size={CHEVRON_SIZE}
+          color={colors.mutedForeground}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
       </View>
     </Pressable>
   );
@@ -117,12 +156,11 @@ export default function HistoryScreen() {
             </Text>
           </View>
         ) : (
-          rideHistory.map((ride, index) => (
-            <React.Fragment key={ride.id}>
-              {index > 0 && <View style={{ height: 12 }} />}
-              <RideHistoryCard ride={ride} />
-            </React.Fragment>
-          ))
+          <View style={styles.cardList}>
+            {rideHistory.map((ride) => (
+              <RideHistoryCard key={ride.id} ride={ride} />
+            ))}
+          </View>
         )}
       </GlassScrollView>
     </View>
@@ -131,27 +169,110 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 20 },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    gap: 14,
+  list: {
+    paddingHorizontal: INSET_CARD_MARGIN_H,
+    paddingBottom: 8,
   },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  vehicleBadge: {},
-  vehicleLabel: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  cardList: {
+    gap: CARD_GAP,
+  },
+  card: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: INSET_CARD_RADIUS,
+    paddingHorizontal: CARD_CONTENT_INSET,
+    paddingVertical: 14,
+    overflow: 'hidden',
+  },
+  cardIos: {
+    borderCurve: 'continuous',
+  },
+  cardPressed: {
+    opacity: 0.55,
+  },
+  cardBody: {
+    flex: 1,
+    gap: 12,
+    minWidth: 0,
+  },
+  chevronAnchor: {
+    position: 'absolute',
+    right: CARD_CONTENT_INSET,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minWidth: 0,
+  },
+  vehicleLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    minWidth: 0,
+  },
   routeRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   routeIcons: { alignItems: 'center', gap: 4, paddingVertical: 4 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   line: { width: 1.5, height: 20 },
   routeLabels: { flex: 1, gap: 10 },
   routeText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  divider: { height: 1 },
-  cardBottom: { flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  fare: { marginLeft: 'auto', fontSize: 15, fontFamily: 'Inter_700Bold' },
+  cardBottom: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  metaCluster: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    columnGap: 14,
+    minWidth: 0,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  metaItemDate: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  metaText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    flexShrink: 1,
+  },
+  fareColumn: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: FARE_COLUMN_WIDTH,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  fare: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    textAlign: 'right',
+    ...Platform.select({
+      ios: { fontVariant: ['tabular-nums'] },
+      default: {},
+    }),
+  },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
   emptyTitle: { fontSize: 20, fontFamily: 'Inter_600SemiBold' },
   emptyDesc: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
