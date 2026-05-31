@@ -176,8 +176,8 @@ export default function DriverNegotiationScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleCall}>
-            <Feather name="phone" size={19} color={colors.foreground} />
+          <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.call }]} onPress={handleCall}>
+            <Feather name="phone" size={19} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
@@ -272,7 +272,7 @@ export default function DriverNegotiationScreen() {
           <KandaButton
             title="Call"
             icon="phone"
-            variant="secondary"
+            variant="call"
             size="sm"
             onPress={handleCall}
             style={styles.actionFlexNarrow}
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   identityText: { flex: 1, minWidth: 0 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
-  iconButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   statusBanner: { minHeight: 46, borderRadius: 14, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusText: { flex: 1, fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   summaryCard: { borderRadius: 16, padding: 14, gap: 8 },

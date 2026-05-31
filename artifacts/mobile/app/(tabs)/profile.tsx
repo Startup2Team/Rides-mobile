@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,38 +27,54 @@ function MenuItem({
   onPress,
   destructive = false,
   value,
+  showSeparator = true,
+  separatorColor,
 }: {
   icon: keyof typeof Feather.glyphMap;
   label: string;
   onPress: () => void;
   destructive?: boolean;
   value?: string;
+  showSeparator?: boolean;
+  separatorColor: string;
 }) {
   const colors = useColors();
   return (
-    <TouchableOpacity
-      style={[styles.menuItem, { borderBottomColor: colors.border }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.menuIcon}>
-        <Feather name={icon} size={18} color={destructive ? colors.destructive : colors.foreground} />
-      </View>
-      <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>
-        {label}
-      </Text>
-      {value && <Text style={[styles.menuValue, { color: colors.mutedForeground }]}>{value}</Text>}
-      {!destructive && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
-    </TouchableOpacity>
+    <>
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={onPress}
+        activeOpacity={0.6}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+      >
+        <View style={styles.menuIcon}>
+          <Feather name={icon} size={20} color={destructive ? colors.destructive : colors.foreground} />
+        </View>
+        <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>
+          {label}
+        </Text>
+        {value && <Text style={[styles.menuValue, { color: colors.mutedForeground }]}>{value}</Text>}
+        {!destructive && <Feather name="chevron-right" size={18} color={colors.mutedForeground} />}
+      </TouchableOpacity>
+      {showSeparator && <View style={[styles.separator, { backgroundColor: separatorColor }]} />}
+    </>
   );
 }
 
 export default function ProfileScreen() {
   const colors = useColors();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile, logout, switchMode } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  /** iOS grouped inset list — elevated fill, no card outline */
+  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const separatorColor = isDark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)';
+  const pageBackground = isDark ? '#000000' : '#F2F2F7';
 
   useFocusEffect(
     useCallback(() => {
@@ -101,15 +118,8 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const initials = user?.name
-    ?.split(' ')
-    .map(n => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() ?? 'KR';
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: pageBackground }]}>
       <OfflineBanner />
       <GlassHeader title="Profile" showBack={false} />
       <GlassScrollView
@@ -119,8 +129,13 @@ export default function ProfileScreen() {
           paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 20,
         }}
       >
-      {/* Avatar */}
-      <View style={styles.avatarSection}>
+      <TouchableOpacity
+        style={styles.avatarSection}
+        onPress={() => router.push('/edit-profile')}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Edit profile"
+      >
         {profileImage ? (
           <Image source={{ uri: profileImage }} style={styles.avatarImage} />
         ) : (
@@ -130,60 +145,85 @@ export default function ProfileScreen() {
         )}
         <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
         <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
-        {user?.email && (
+        {user?.email ? (
           <Text style={[styles.email, { color: colors.mutedForeground }]}>{user.email}</Text>
-        )}
-      </View>
+        ) : null}
+      </TouchableOpacity>
 
-      {/* Join as Driver banner */}
       {!driverProfile && (
         <TouchableOpacity
-          style={[styles.driverBanner, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primary }]}
+          style={[styles.driverBanner, { backgroundColor: cardFill }]}
           onPress={handleSwitchToDriver}
-          activeOpacity={0.85}
+          activeOpacity={0.6}
         >
-          <Feather name="zap" size={20} color={colors.primary} />
+          <View style={[styles.driverBannerIcon, { backgroundColor: colors.primaryHex + '22' }]}>
+            <Feather name="zap" size={20} color={colors.primary} />
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.bannerTitle, { color: colors.primary }]}>Join as Driver</Text>
+            <Text style={[styles.bannerTitle, { color: colors.foreground }]}>Join as Driver</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
               Earn money driving on Taravelis
             </Text>
           </View>
-          <Feather name="arrow-right" size={18} color={colors.primary} />
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
         </TouchableOpacity>
       )}
 
-      {/* Switch mode if already a driver */}
       {driverProfile && (
-        <TouchableOpacity
-          style={[styles.switchDriverButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={handleSwitchToDriver}
-          activeOpacity={0.75}
-        >
-          <View style={styles.switchDriverIcon}>
-            <Feather name="navigation" size={16} color={colors.primary} />
-          </View>
-          <Text style={[styles.switchDriverText, { color: colors.foreground }]}>Switch to Driver Mode</Text>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+          <MenuItem
+            icon="navigation"
+            label="Switch to Driver Mode"
+            onPress={handleSwitchToDriver}
+            showSeparator={false}
+            separatorColor={separatorColor}
+          />
+        </View>
       )}
 
-      {/* Menu */}
-      <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <MenuItem icon="user" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
-        <MenuItem icon="credit-card" label="Payment Methods" onPress={() => router.push('/payment-methods')} />
-        <MenuItem icon="phone" label="Phone" onPress={() => {}} value={user?.phone} />
-        <MenuItem icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
-        <MenuItem icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
-        <MenuItem icon="info" label="About Taravelis" onPress={() => router.push('/about')} />
+      <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+        <MenuItem
+          icon="user"
+          label="Edit Profile"
+          onPress={() => router.push('/edit-profile')}
+          separatorColor={separatorColor}
+        />
+        <MenuItem
+          icon="credit-card"
+          label="Payment Methods"
+          onPress={() => router.push('/payment-methods')}
+          separatorColor={separatorColor}
+        />
+        <MenuItem icon="phone" label="Phone" onPress={() => {}} value={user?.phone} separatorColor={separatorColor} />
+        <MenuItem
+          icon="shield"
+          label="Privacy & Security"
+          onPress={() => router.push('/privacy-security')}
+          separatorColor={separatorColor}
+        />
+        <MenuItem
+          icon="help-circle"
+          label="Help & Support"
+          onPress={() => router.push('/help-support')}
+          separatorColor={separatorColor}
+        />
+        <MenuItem
+          icon="info"
+          label="About Taravelis"
+          onPress={() => router.push('/about')}
+          showSeparator={false}
+          separatorColor={separatorColor}
+        />
       </View>
 
-      <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
         <MenuItem
           icon="log-out"
           label="Log Out"
           onPress={handleLogout}
           destructive
+          showSeparator={false}
+          separatorColor={separatorColor}
         />
       </View>
 
@@ -195,7 +235,12 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  avatarSection: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24, gap: 6 },
+  avatarSection: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    gap: 6,
+  },
   avatar: {
     width: 88,
     height: 88,
@@ -216,50 +261,48 @@ const styles = StyleSheet.create({
   driverBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 20,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 14,
+    gap: 14,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
   },
-  bannerTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  bannerDesc: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  switchDriverButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 14,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 10,
-  },
-  switchDriverIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+  driverBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  switchDriverText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  bannerTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  bannerDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
   menuSection: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 16,
-    borderWidth: 1,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    borderRadius: 14,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    borderBottomWidth: 1,
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    minHeight: 52,
   },
-  menuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular' },
-  menuValue: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 66,
+  },
+  menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
+  menuLabel: { flex: 1, fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 22 },
+  menuValue: { fontSize: 16, fontFamily: 'Inter_400Regular', marginRight: 6, lineHeight: 22 },
   version: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', paddingVertical: 8 },
 });

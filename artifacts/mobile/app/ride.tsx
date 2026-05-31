@@ -154,6 +154,11 @@ export default function RideScreen() {
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
   }, [activeRemainingRoute, activeVehicleType]);
 
+  const driverPhotoUri = useMemo(() => {
+    const driver = currentRide?.driver;
+    if (!driver) return undefined;
+    return driver.profileImage ?? `https://i.pravatar.cc/160?u=${encodeURIComponent(driver.id)}`;
+  }, [currentRide?.driver]);
 
   useEffect(() => {
     if (currentRide?.status !== 'arrived') return;
@@ -400,11 +405,19 @@ export default function RideScreen() {
 
         {/* Driver info */}
         <View style={styles.driverRow}>
-          <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
-              {currentRide.driver?.name?.[0] ?? 'D'}
-            </Text>
-          </View>
+          {driverPhotoUri ? (
+            <Image
+              source={{ uri: driverPhotoUri }}
+              style={styles.driverAvatarImage}
+              accessibilityLabel={`${currentRide.driver?.name ?? 'Driver'} profile photo`}
+            />
+          ) : (
+            <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
+                {currentRide.driver?.name?.[0] ?? 'D'}
+              </Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.driverName, { color: colors.foreground }]}>
               {currentRide.driver?.name ?? 'Driver'}
@@ -448,7 +461,7 @@ export default function RideScreen() {
             <KandaButton
               title={isArriving ? 'Call driver' : 'Call'}
               icon="phone"
-              variant="secondary"
+              variant="call"
               size="sm"
               onPress={handleCallDriver}
               iconOnly={!isArriving}
@@ -645,6 +658,7 @@ const styles = StyleSheet.create({
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center' },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   driverAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  driverAvatarImage: { width: 40, height: 40, borderRadius: 20 },
   driverInitial: { fontSize: 19, fontFamily: 'Inter_700Bold' },
   driverName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   driverVehicle: { fontSize: 11, fontFamily: 'Inter_400Regular' },
