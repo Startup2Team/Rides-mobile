@@ -23,6 +23,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
+import { showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
@@ -241,10 +242,7 @@ export default function RideScreen() {
   };
 
   const handleCancelArriving = () => {
-    openCancelModal(
-      ['Driver too far', 'Changed plans', 'Booked by mistake'],
-      'Keep searching',
-    );
+    showCancelArrivingRideAlert(doCancelRide);
   };
 
   const doCancelRide = () => {
