@@ -80,8 +80,12 @@ const floatingPanelSurface = {
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
 const SAVE_LABEL_GAP = 8;
 const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = BOOKING_SHEET_PADDING_H;
+const SAVE_LABEL_CONTENT_INSET = GREETING_LEFT_INSET;
 const SAVE_LABEL_AVAILABLE_WIDTH =
-  SCREEN_WIDTH - SAVE_LABEL_SHEET_HORIZONTAL_PADDING * 2 - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
+  SCREEN_WIDTH
+  - SAVE_LABEL_SHEET_HORIZONTAL_PADDING * 2
+  - SAVE_LABEL_CONTENT_INSET * 2
+  - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
 const SAVE_LABEL_WIDTHS: Record<string, number> = {
   Home: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
   Work: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
@@ -1739,6 +1743,7 @@ export default function CustomerHome() {
                       </Text>
                     </View>
                   </View>
+                <View style={styles.formSheetContent}>
                 <View style={styles.saveAsLocationLabels}>
                   {SAVE_LOCATION_LABELS.map(label => (
                     <TouchableOpacity
@@ -1800,6 +1805,7 @@ export default function CustomerHome() {
                   </View>
                 )}
                 </View>
+                </View>
               </Animated.View>
             </>
           )}
@@ -1860,6 +1866,7 @@ export default function CustomerHome() {
                     </View>
                   </View>
 
+                <View style={styles.formSheetContent}>
                 <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                   <Feather name="edit-3" size={16} color={colors.mutedForeground} />
                   <TextInput
@@ -1927,6 +1934,7 @@ export default function CustomerHome() {
                   <Feather name="trash-2" size={16} color={colors.destructive} />
                   <Text style={[styles.savedLocationDeleteText, { color: colors.destructive }]}>Delete saved location</Text>
                 </TouchableOpacity>
+                </View>
                 </View>
               </Animated.View>
             </>
@@ -2161,6 +2169,10 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingBottom: 2,
   },
+  formSheetContent: {
+    marginHorizontal: GREETING_LEFT_INSET,
+    gap: 10,
+  },
   formSheetSubtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   formSheetHint: { fontSize: 13, fontFamily: 'Inter_500Medium' },
   formSheetCloseAnchor: {
@@ -2363,7 +2375,7 @@ const styles = StyleSheet.create({
   locationSearchScroll: { flex: 1 },
   locationSearchInputWrap: {
     height: 52,
-    borderRadius: 14,
+    borderRadius: buttonCornerRadius(52),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2495,7 +2507,6 @@ const styles = StyleSheet.create({
   saveAsLocationLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
   },
   saveAsLocationLabel: {
     minHeight: 44,
@@ -2511,11 +2522,10 @@ const styles = StyleSheet.create({
   },
   saveAsCustomLabelSection: {
     gap: 12,
-    marginTop: 4,
   },
   saveAsLocationInputWrap: {
     height: 52,
-    borderRadius: 14,
+    borderRadius: buttonCornerRadius(52),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2572,7 +2582,7 @@ const styles = StyleSheet.create({
   },
   savedLocationEditInputWrap: {
     height: 48,
-    borderRadius: 14,
+    borderRadius: buttonCornerRadius(48),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
