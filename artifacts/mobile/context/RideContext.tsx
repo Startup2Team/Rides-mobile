@@ -256,6 +256,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           waitStartedAt: new Date().toISOString(),
         } : null);
       })
+      // Driver tapped "Start Journey" — transition customer to in_progress immediately.
+      // Without this handler the customer stays on "arrived" until the 30s poll fires.
+      .on('ride_started', () => {
+        setCurrentRide(prev => prev ? { ...prev, status: 'in_progress' } : null);
+      })
       .on('driver_location', payload => {
         if (typeof payload?.lat === 'number' && typeof payload?.lng === 'number') {
           setDriverLocation({ latitude: payload.lat, longitude: payload.lng });
@@ -350,6 +355,15 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (!liveRide) { await AsyncStorage.removeItem(CUSTOMER_RIDE_KEY); return; }
 
       const ride = mapBackendRideToUiRide(liveRide);
+
+      // If the app was killed between ride completion and the rating screen,
+      // restore the completed ride so ride.tsx can auto-navigate to rating.
+      if (ride.status === 'completed') {
+        await AsyncStorage.removeItem(CUSTOMER_RIDE_KEY);
+        setCurrentRide(ride); // ride.tsx effect detects 'completed' → navigates to /rating
+        return;
+      }
+
       if (!CUSTOMER_ACTIVE_STATUSES.has(ride.status)) {
         await AsyncStorage.removeItem(CUSTOMER_RIDE_KEY);
         return;
@@ -506,17 +520,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentRide?.id]);
 
+  // Only ever called by the driver (from driver-navigate.tsx).
+  // The customer reaches the rating screen solely via WS `ride_completed` event
+  // or the 30s polling fallback — they have no "Complete Ride" button.
   const completeRide = useCallback(async () => {
     if (!currentRide?.id) return;
-    const isDriverFlow = ['arrived', 'in_progress', 'arriving', 'confirmed'].includes(currentRide.status);
-    if (isDriverFlow) {
-      await driverRideService.completeRide(currentRide.id);
-      setCurrentRide(null);
-      return;
-    }
-    const data = await rideService.getRide(currentRide.id);
-    setCurrentRide(mapBackendRideToUiRide(data));
-  }, [currentRide?.id, currentRide?.status]);
+    await driverRideService.completeRide(currentRide.id);
+    setCurrentRide(null);
+  }, [currentRide?.id]);
 
   const acceptRideRequest = useCallback(async () => {
     if (!pendingRequest?.id) return;

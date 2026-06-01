@@ -101,7 +101,6 @@ export default function RideScreen() {
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelModalReasons, setCancelModalReasons] = useState<string[]>([]);
   const [cancelModalKeepLabel, setCancelModalKeepLabel] = useState('Keep ride');
-  const [completeModalVisible, setCompleteModalVisible] = useState(false);
 
   const { route: rideRoute } = useRoute(
     currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
@@ -235,24 +234,6 @@ export default function RideScreen() {
     });
   };
 
-  const handleComplete = () => {
-    setCompleteModalVisible(true);
-  };
-
-  const confirmCompleteRide = () => {
-    setCompleteModalVisible(false);
-    navigateToRating();
-  };
-
-  const handleEmergencyEnd = () => {
-    Alert.alert('End Journey', 'End this journey early?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'End Journey',
-        onPress: navigateToRating,
-      },
-    ]);
-  };
 
   const openCancelModal = (reasons: string[], keepLabel: string) => {
     setCancelModalReasons(reasons);
@@ -514,30 +495,18 @@ export default function RideScreen() {
             />
           )}
           {isInProgress && (
-            <>
-              <TouchableOpacity
-                style={[styles.sosBtn, { backgroundColor: colors.destructive }]}
-                onPress={handleSOS}
-                accessibilityLabel="Emergency SOS"
-                accessibilityRole="button"
-              >
-                <Text style={styles.sosBtnText}>SOS</Text>
-              </TouchableOpacity>
-              <KandaButton
-                title="Emergency"
-                icon="alert-octagon"
-                variant="dangerPlain"
-                size="sm"
-                iconOnly
-                onPress={handleEmergencyEnd}
-                accessibilityLabel="Report emergency"
-              />
-              <KandaButton
-                title="Complete Ride"
-                onPress={handleComplete}
-                style={{ flex: 1 }}
-              />
-            </>
+            // While in-progress, only the driver can end the ride.
+            // Show an SOS button for genuine emergencies (calls 112).
+            // The customer will be auto-navigated to rating when the driver
+            // completes the ride via the WS ride_completed event.
+            <TouchableOpacity
+              style={[styles.sosBtn, { backgroundColor: colors.destructive, flex: 1, borderRadius: 14, height: 48 }]}
+              onPress={handleSOS}
+              accessibilityLabel="Emergency SOS — calls police 112"
+              accessibilityRole="button"
+            >
+              <Text style={styles.sosBtnText}>🆘 SOS — Emergency</Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>
@@ -573,38 +542,6 @@ export default function RideScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={completeModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCompleteModalVisible(false)}
-      >
-        <View style={styles.completeOverlay}>
-          <View style={[styles.completeCard, { backgroundColor: colors.background }]}>
-            <View style={[styles.completeIconWrap, { backgroundColor: colors.primaryHex + '18' }]}>
-              <Feather name="check-circle" size={30} color={colors.primary} />
-            </View>
-            <Text style={[styles.completeTitle, { color: colors.foreground }]}>Complete ride?</Text>
-            <Text style={[styles.completeMessage, { color: colors.mutedForeground }]}>
-              Confirm only when you have reached your destination.
-            </Text>
-            <View style={styles.completeActions}>
-              <KandaButton
-                title="Not yet"
-                variant="secondary"
-                onPress={() => setCompleteModalVisible(false)}
-                style={styles.completeActionBtn}
-              />
-              <KandaButton
-                title="Complete"
-                variant="primary"
-                onPress={confirmCompleteRide}
-                style={styles.completeActionBtn}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -723,38 +660,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cancelTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center', marginBottom: 4 },
-  completeOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  completeCard: {
-    width: '100%',
-    maxWidth: 420,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-  },
-  completeIconWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  completeTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  completeMessage: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  completeActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 20 },
-  completeActionBtn: { flex: 1 },
   sosBtn: {
     width: 52,
     height: 52,

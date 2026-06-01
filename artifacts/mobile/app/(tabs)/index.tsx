@@ -302,7 +302,10 @@ export default function CustomerHome() {
     if (!currentRide) return;
     if (currentRide.status === 'negotiating' && !isMatchingPaused) {
       router.push('/negotiation');
-    } else if (['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
+    } else if (['confirmed', 'arriving', 'arrived', 'in_progress', 'completed'].includes(currentRide.status)) {
+      // 'completed' is included so that if the app was killed between ride
+      // completion and the rating screen, the customer is taken there on restart.
+      // ride.tsx detects 'completed' immediately and replaces itself with /rating.
       router.push('/ride');
     }
   }, [currentRide?.status, isMatchingPaused]);
