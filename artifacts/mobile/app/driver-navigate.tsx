@@ -251,7 +251,7 @@ export default function DriverNavigateScreen() {
         {
           text: 'Cancel Ride',
           onPress: () => {
-            cancelRide();
+            cancelRide(true);
             showToast('Ride cancelled', 'info');
             router.replace('/(driver)');
           },

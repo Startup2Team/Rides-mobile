@@ -173,6 +173,10 @@ api.interceptors.response.use(
         // Simulator/testing GPS can teleport between locations, triggering the
         // backend's speed-plausibility guard. Not a real error in dev.
         (url.includes('/driver/location') && status === 422) ||
+        // en-route 409 = INVALID_TRANSITION: driver-navigate screen remounted
+        // during confirmed→arriving transition, causing a duplicate call. The
+        // first call already succeeded; the second is harmless noise.
+        (url.includes('/en-route') && status === 409) ||
         isPostLogout401;
       if (!isExpectedEmpty) {
         const body = err.response?.data ?? err.message;

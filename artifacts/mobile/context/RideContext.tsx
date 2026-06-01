@@ -33,7 +33,8 @@ interface RideContextType {
   driverLocation: Coords | null;
   pendingRequest: Ride | null;
   createRide: (pickup: RideLocation, destination: RideLocation, vehicleType: VehicleType) => Promise<void>;
-  cancelRide: () => void;
+  /** Pass `isDriver=true` from driver screens so the driver-side cancel endpoint is used. */
+  cancelRide: (isDriver?: boolean) => void;
   pauseDriverMatching: () => void;
   resumeDriverMatching: () => void;
   isMatchingPaused: boolean;
@@ -421,11 +422,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     await connectCustomerWS(data.ride_id);
   }, [connectCustomerWS, currentRide]);
 
-  const cancelRide = useCallback(() => {
+  const cancelRide = useCallback((isDriver?: boolean) => {
     const activeRideId = currentRide?.id;
     if (!activeRideId) return;
-    const isDriverFlow = ['arriving', 'arrived', 'in_progress'].includes(currentRide?.status ?? '');
-    if (isDriverFlow) {
+    // Use the driver cancel endpoint ONLY when explicitly called from a driver
+    // screen (isDriver=true).  Checking ride status alone is insufficient because
+    // customers share the same statuses (arriving/arrived/in_progress) and their
+    // JWT would get a 403 on the driver-only cancel endpoint.
+    if (isDriver) {
       driverRideService.cancelRideAsDriver(activeRideId).catch(() => {});
     } else {
       rideService.cancelRide(activeRideId, 'customer cancelled').catch(() => {});
@@ -433,7 +437,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     disconnectWS();
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled' } : null);
     setDriverLocation(null);
-  }, [currentRide?.id, currentRide?.status, disconnectWS]);
+  }, [currentRide?.id, disconnectWS]);
 
   const counterOffer = useCallback((amount: number): Promise<void> => {
     if (!currentRide?.id) return Promise.resolve();

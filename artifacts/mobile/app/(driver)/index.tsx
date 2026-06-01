@@ -138,10 +138,19 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [user, driverLocation.latitude, driverLocation.longitude, isOnline]);
 
+  // Track which ride we've already navigated to driver-navigate for so we
+  // don't push a second copy when markEnRoute transitions confirmed→arriving.
+  const navigatedToNavigateForRideRef = useRef<string | null>(null);
   useEffect(() => {
     if (currentRide?.status === 'negotiating') router.push('/driver-negotiation');
-    if (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') router.push('/driver-navigate');
-  }, [currentRide?.status]);
+    if (
+      (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') &&
+      navigatedToNavigateForRideRef.current !== currentRide.id
+    ) {
+      navigatedToNavigateForRideRef.current = currentRide.id;
+      router.push('/driver-navigate');
+    }
+  }, [currentRide?.status, currentRide?.id]);
 
   useEffect(() => {
     mapRef.current?.animateToRegion(
