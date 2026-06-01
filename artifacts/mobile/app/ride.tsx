@@ -27,6 +27,9 @@ import { showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
+/** Statuses where the driver can still complete the ride — we poll while in these. */
+const POLL_STATUSES = new Set(['arriving', 'arrived', 'in_progress']);
+
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
   arriving: 'Driver is on the way',
@@ -85,7 +88,7 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
+  const { currentRide, driverLocation, cancelRide, refreshCurrentRide } = useRide();
   const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
@@ -154,6 +157,11 @@ export default function RideScreen() {
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
   }, [activeRemainingRoute, activeVehicleType]);
 
+  const driverPhotoUri = useMemo(() => {
+    const driver = currentRide?.driver;
+    if (!driver) return undefined;
+    return driver.profileImage ?? `https://i.pravatar.cc/160?u=${encodeURIComponent(driver.id)}`;
+  }, [currentRide?.driver]);
 
   useEffect(() => {
     if (currentRide?.status !== 'arrived') return;
@@ -172,7 +180,25 @@ export default function RideScreen() {
   useEffect(() => {
     if (!currentRide && !navigatingToRatingRef.current) router.replace('/(tabs)');
     if (currentRide?.status === 'negotiating') router.replace('/negotiation');
+    // When the driver completes the ride (via WS event or polling fallback),
+    // automatically send the customer to the rating screen.
+    if (currentRide?.status === 'completed' && !navigatingToRatingRef.current) {
+      navigateToRating();
+    }
   }, [currentRide?.status]);
+
+  // ── WS-miss safety net polling ───────────────────────────────────────────────
+  // If the customer WS was disconnected when the driver completed the ride, the
+  // `ride_completed` event is lost and the Redis key is deleted so reconnect
+  // can't replay it either.  Poll every 30 s while the ride is in a live active
+  // state so the stale UI resolves within one poll cycle at most.
+  useEffect(() => {
+    if (!currentRide || !POLL_STATUSES.has(currentRide.status)) return;
+    const interval = setInterval(() => {
+      refreshCurrentRide().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [currentRide?.status, refreshCurrentRide]);
 
   useEffect(() => {
     if (!mapRef.current || !currentRide) return;
@@ -400,11 +426,19 @@ export default function RideScreen() {
 
         {/* Driver info */}
         <View style={styles.driverRow}>
-          <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
-              {currentRide.driver?.name?.[0] ?? 'D'}
-            </Text>
-          </View>
+          {driverPhotoUri ? (
+            <Image
+              source={{ uri: driverPhotoUri }}
+              style={styles.driverAvatarImage}
+              accessibilityLabel={`${currentRide.driver?.name ?? 'Driver'} profile photo`}
+            />
+          ) : (
+            <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
+                {currentRide.driver?.name?.[0] ?? 'D'}
+              </Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.driverName, { color: colors.foreground }]}>
               {currentRide.driver?.name ?? '--'}
@@ -448,7 +482,7 @@ export default function RideScreen() {
             <KandaButton
               title={isArriving ? 'Call driver' : 'Call'}
               icon="phone"
-              variant="secondary"
+              variant="call"
               size="sm"
               onPress={handleCallDriver}
               iconOnly={!isArriving}
@@ -467,21 +501,17 @@ export default function RideScreen() {
             />
           )}
           {isArrived && (
-            <>
-              <KandaButton
-                title="Cancel Ride"
-                icon="x"
-                variant="dangerPlain"
-                size="sm"
-                onPress={handleCancelArrived}
-                style={{ flex: 1 }}
-              />
-              <KandaButton
-                title="Start Journey"
-                onPress={startJourney}
-                style={{ flex: 1 }}
-              />
-            </>
+            // The driver starts the journey from their own screen.
+            // Calling startJourney here would hit a driver-only endpoint with
+            // the customer JWT and return 403. Show only the cancel option.
+            <KandaButton
+              title="Cancel Ride"
+              icon="x"
+              variant="dangerPlain"
+              size="sm"
+              onPress={handleCancelArrived}
+              style={{ flex: 1 }}
+            />
           )}
           {isInProgress && (
             <>
@@ -645,6 +675,7 @@ const styles = StyleSheet.create({
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center' },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   driverAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  driverAvatarImage: { width: 40, height: 40, borderRadius: 20 },
   driverInitial: { fontSize: 19, fontFamily: 'Inter_700Bold' },
   driverName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   driverVehicle: { fontSize: 11, fontFamily: 'Inter_400Regular' },

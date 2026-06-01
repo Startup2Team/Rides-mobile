@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { KandaButton } from '@/components/KandaButton';
+import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 
@@ -30,6 +31,7 @@ export default function RatingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, rideHistory, completeRide } = useRide();
+  const { showToast } = useToast();
   const params = useLocalSearchParams<{ rideId?: string; driverName?: string; fare?: string; vehicleType?: string }>();
 
   const [step, setStep] = useState<'rating' | 'feedback'>('rating');
@@ -82,7 +84,6 @@ export default function RatingScreen() {
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await new Promise(r => setTimeout(r, 600));
 
     // Trigger in-app review after 3+ completed rides
@@ -92,6 +93,7 @@ export default function RatingScreen() {
     }
 
     finalizeRide();
+    showToast('Thanks for your feedback');
     router.replace('/(tabs)');
   };
 

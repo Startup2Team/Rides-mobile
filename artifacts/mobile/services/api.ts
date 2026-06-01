@@ -170,6 +170,9 @@ api.interceptors.response.use(
         (url.includes('/driver/availability') && status === 403) ||
         (url.includes('/auth/logout') && status === 'NO_RESPONSE') ||
         (url.includes('/driver/availability') && status === 'NO_RESPONSE') ||
+        // Simulator/testing GPS can teleport between locations, triggering the
+        // backend's speed-plausibility guard. Not a real error in dev.
+        (url.includes('/driver/location') && status === 422) ||
         isPostLogout401;
       if (!isExpectedEmpty) {
         const body = err.response?.data ?? err.message;

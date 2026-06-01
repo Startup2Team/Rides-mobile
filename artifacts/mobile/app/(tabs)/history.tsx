@@ -15,6 +15,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { Ride, VEHICLE_LABELS } from '@/types';
 import { StatusChip } from '@/components/StatusChip';
+import { RouteTimeline } from '@/components/RouteTimeline';
 import { OfflineBanner } from '@/components/OfflineBanner';
 
 /** Matches card horizontal padding — space before calendar / after RWF. */
@@ -55,15 +56,11 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
           >
             {VEHICLE_LABELS[ride.vehicleType]}
           </Text>
-          <StatusChip status={ride.status} />
+          <StatusChip status={ride.status} variant="history" />
         </View>
 
         <View style={styles.routeRow}>
-          <View style={styles.routeIcons}>
-            <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-            <View style={[styles.line, { backgroundColor: colors.border }]} />
-            <View style={[styles.dot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
-          </View>
+          <RouteTimeline compact />
           <View style={styles.routeLabels}>
             <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
               {ride.pickup.address ?? 'Pickup location'}
@@ -102,7 +99,7 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
           </View>
           {fareLabel != null && (
             <View style={styles.fareColumn} pointerEvents="none">
-              <Text style={[styles.fare, { color: colors.primary }]} numberOfLines={1}>
+              <Text style={[styles.fare, { color: colors.foreground }]} numberOfLines={1}>
                 {fareLabel}
               </Text>
             </View>
@@ -220,9 +217,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   routeRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  routeIcons: { alignItems: 'center', gap: 4, paddingVertical: 4 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  line: { width: 1.5, height: 20 },
   routeLabels: { flex: 1, gap: 10 },
   routeText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   cardBottom: {

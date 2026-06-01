@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",
+    "@react-native-community/datetimepicker": "8.4.4",
     "axios": "^1.16.1",
     "expo-crypto": "~15.0.9",
     "expo-secure-store": "~15.0.8",

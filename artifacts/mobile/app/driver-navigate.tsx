@@ -78,6 +78,7 @@ export default function DriverNavigateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, markArrived, startJourney, completeRide, cancelRide, sendWsLocationUpdate } = useRide();
+  const { showToast } = useToast();
   const [driverPos, setDriverPos] = useState(KIGALI_CENTER);
   const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
   const mapRef = useRef<MapView>(null);
@@ -264,8 +265,13 @@ export default function DriverNavigateScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Complete',
-        onPress: () => {
-          completeRide();
+        onPress: async () => {
+          try {
+            await completeRide();
+          } catch {
+            // Logged by the API interceptor — safe to swallow here.
+            // The useEffect below will navigate when currentRide clears.
+          }
           router.replace('/(driver)');
         },
       },
@@ -332,8 +338,8 @@ export default function DriverNavigateScreen() {
             </Text>
           )}
         </View>
-        <TouchableOpacity style={[styles.callBtn, { backgroundColor: colors.muted }]} onPress={handleCall}>
-          <Feather name="phone" size={20} color={colors.foreground} />
+        <TouchableOpacity style={[styles.callBtn, { backgroundColor: colors.call }]} onPress={handleCall}>
+          <Feather name="phone" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -418,8 +424,8 @@ export default function DriverNavigateScreen() {
             <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.muted }]} onPress={handleMessage}>
               <Feather name="message-circle" size={18} color={colors.foreground} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.primary }]} onPress={handleCall}>
-              <Feather name="phone" size={18} color={colors.primaryForeground} />
+            <TouchableOpacity style={[styles.contactBtn, { backgroundColor: colors.call }]} onPress={handleCall}>
+              <Feather name="phone" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>

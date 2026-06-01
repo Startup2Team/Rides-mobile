@@ -54,6 +54,12 @@ interface RideContextType {
   loadHistory: () => Promise<void>;
   /** Send a real-time GPS position through the driver WS connection. */
   sendWsLocationUpdate: (lat: number, lng: number) => void;
+  /**
+   * Re-fetch the current ride from `GET /customer/rides/:id` and sync local
+   * state.  Used as a WS-miss safety net: if `ride_completed` was lost while
+   * the customer WS was disconnected, the next poll will catch it.
+   */
+  refreshCurrentRide: () => Promise<void>;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
@@ -363,7 +369,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     // Fetch active ride from backend (Redis → DB fallback).
     driverRideService.getActiveRideForDriver()
       .then(data => {
-        if (data) setCurrentRide(mapBackendRideToUiRide(data));
+        if (!data) return;
+        // Guard against stale ghost rides from previous sessions.
+        // A ride that has been IN_PROGRESS for more than 4 hours is almost
+        // certainly a testing artifact or an orphaned DB record — auto-restoring
+        // it would block the driver from accepting new rides.
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        const startedAt = data.started_at ? new Date(data.started_at).getTime() : 0;
+        if (startedAt > 0 && data.status === 'IN_PROGRESS' && Date.now() - startedAt > FOUR_HOURS_MS) {
+          return;
+        }
+        setCurrentRide(mapBackendRideToUiRide(data));
       })
       .catch(() => {});
   }, [connectDriverWS]);
@@ -475,9 +491,15 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const startJourney = useCallback(async () => {
     if (!currentRide?.id) return;
-    await driverRideService.startRide(currentRide.id);
-    const refreshed = await driverRideService.getRideForDriver(currentRide.id);
-    setCurrentRide(mapBackendRideToUiRide(refreshed));
+    try {
+      await driverRideService.startRide(currentRide.id);
+      const refreshed = await driverRideService.getRideForDriver(currentRide.id);
+      setCurrentRide(mapBackendRideToUiRide(refreshed));
+    } catch {
+      // Logged by the API interceptor. The most common cause is a non-driver
+      // JWT calling this endpoint — which should no longer happen after
+      // removing the "Start Journey" button from the customer ride screen.
+    }
   }, [currentRide?.id]);
 
   const completeRide = useCallback(async () => {
@@ -522,6 +544,31 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     wsRef.current?.send({ type: 'location_update', lat, lng });
   }, []);
 
+  // ── WS-miss safety net ───────────────────────────────────────────────────────
+  // If the customer WS is disconnected at the moment the driver completes the
+  // ride, the `ride_completed` event is lost.  Because `CompleteRide` on the
+  // backend also deletes the Redis RideState key, a WS reconnect cannot replay
+  // the completion either.  Callers (the active ride screen) poll this every
+  // 30 s to close that gap without requiring an app restart.
+
+  const refreshCurrentRide = useCallback(async () => {
+    const rideId = currentRide?.id;
+    if (!rideId) return;
+    try {
+      const data = await rideService.getRide(rideId);
+      const updated = mapBackendRideToUiRide(data);
+      setCurrentRide(prev => {
+        if (!prev) return prev;
+        // Don't overwrite a terminal status that already arrived via WS while
+        // the HTTP fetch was in-flight.
+        if (prev.status === 'completed' || prev.status === 'cancelled') return prev;
+        return updated;
+      });
+    } catch {
+      // Network unavailable — keep showing cached state; next poll will retry.
+    }
+  }, [currentRide?.id]);
+
   const pauseDriverMatching = useCallback(() => setIsMatchingPaused(true), []);
   const resumeDriverMatching = useCallback(() => setIsMatchingPaused(false), []);
 
@@ -561,6 +608,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       riderAcceptWithFare,
       loadHistory,
       sendWsLocationUpdate,
+      refreshCurrentRide,
     }),
     [
       acceptCustomerOffer,
@@ -585,6 +633,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       currentRide,
       isMatchingPaused,
       sendWsLocationUpdate,
+      refreshCurrentRide,
     ],
   );
 

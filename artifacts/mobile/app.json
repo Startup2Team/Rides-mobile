@@ -4,12 +4,12 @@
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/app-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0A0A0A"
     },
@@ -30,7 +30,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/app-icon.png"
     },
     "plugins": [
       [
@@ -48,7 +48,8 @@
           "locationWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you.",
           "locationAlwaysAndWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
