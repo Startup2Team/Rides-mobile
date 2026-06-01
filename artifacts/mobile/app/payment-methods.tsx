@@ -16,12 +16,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
-import { TARAVELIS_BRAND_GREEN_HEX } from '@/constants/systemColors';
+import { BRAND_GREEN_HEX } from '@/constants/systemColors';
 
-const PAYMENT_STORAGE_KEY = '@taravelis_payment_methods';
+import { STORAGE_KEYS } from '@/constants/storage';
+
+const PAYMENT_STORAGE_KEY = STORAGE_KEYS.paymentMethods;
 
 type PaymentProvider = 'mtn' | 'airtel' | 'cash';
 
@@ -36,7 +38,7 @@ interface PaymentMethod {
 const PROVIDER_META: Record<PaymentProvider, { name: string; color: string; icon: string }> = {
   mtn: { name: 'MTN Mobile Money', color: '#FFCC00', icon: 'smartphone' },
   airtel: { name: 'Airtel Money', color: '#FF0000', icon: 'smartphone' },
-  cash: { name: 'Cash', color: TARAVELIS_BRAND_GREEN_HEX.light, icon: 'pocket' },
+  cash: { name: 'Cash', color: BRAND_GREEN_HEX.light, icon: 'pocket' },
 };
 
 const DEFAULT_METHODS: PaymentMethod[] = [
@@ -285,7 +287,7 @@ export default function PaymentMethodsScreen() {
                       onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
                     />
                   </View>
-                  <KandaButton
+                  <AppButton
                     title={saving ? 'Adding…' : 'Add ' + meta.name}
                     onPress={() => handleAddMoMo(provider)}
                     loading={saving}

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Taravelis",
-    "slug": "mobile",
+    "name": "Rides",
+    "slug": "rides",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
-    "scheme": "mobile",
+    "scheme": "rides",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.taravelis.app",
+      "bundleIdentifier": "rw.rides.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Taravelis needs your location to find the closest vehicles to you.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Taravelis needs your location to find the closest vehicles to you."
+        "NSLocationWhenInUseUsageDescription": "Rides needs your location to find the closest vehicles to you.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Rides needs your location to find the closest vehicles to you."
       }
     },
     "android": {
-      "package": "com.taravelis.app",
+      "package": "rw.rides.app",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -36,7 +36,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://rides.rw"
         }
       ],
       "expo-font",
@@ -45,8 +45,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you.",
-          "locationAlwaysAndWhenInUsePermission": "Taravelis needs your location to find the closest vehicles to you."
+          "locationWhenInUsePermission": "Rides needs your location to find the closest vehicles to you.",
+          "locationAlwaysAndWhenInUsePermission": "Rides needs your location to find the closest vehicles to you."
         }
       ],
       "@react-native-community/datetimepicker"

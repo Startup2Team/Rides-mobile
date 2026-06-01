@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useColors } from '@/hooks/useColors';
 import { register, toE164 } from '@/services/auth';
@@ -151,7 +151,7 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <KandaButton
+          <AppButton
             title="Send OTP Code"
             onPress={handleContinue}
             fullWidth

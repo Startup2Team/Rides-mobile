@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { BackButton } from '@/components/BackButton';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -101,8 +101,11 @@ export default function DriverNavigateScreen() {
   );
 
   // ── Guard: redirect if ride is gone ───────────────────────────────────────
+  // router.navigate (not replace) pops everything above the existing '(driver)'
+  // base route and returns to it. router.replace fails with "not handled" when
+  // the target is already below the current route in the root Stack.
   useEffect(() => {
-    if (!currentRide) router.replace('/(driver)');
+    if (!currentRide) router.navigate('/(driver)');
   }, [currentRide]);
 
   // ── Real-device GPS tracking ───────────────────────────────────────────────
@@ -253,7 +256,7 @@ export default function DriverNavigateScreen() {
           onPress: () => {
             cancelRide(true);
             showToast('Ride cancelled', 'info');
-            router.replace('/(driver)');
+            router.navigate('/(driver)');
           },
         },
       ]
@@ -270,9 +273,10 @@ export default function DriverNavigateScreen() {
             await completeRide();
           } catch {
             // Logged by the API interceptor — safe to swallow here.
-            // The useEffect below will navigate when currentRide clears.
           }
-          router.replace('/(driver)');
+          // Navigation is deferred to the !currentRide useEffect guard above —
+          // avoids a double router.navigate race when setCurrentRide(null) and
+          // the explicit call both fire in the same render cycle.
         },
       },
     ]);
@@ -431,9 +435,19 @@ export default function DriverNavigateScreen() {
         </View>
 
         {phase === 'pickup' && (
-          <KandaButton
+          <AppButton
             title={canMarkArrived ? 'I Have Arrived' : `Arrive closer (${pickupDistanceText})`}
-            onPress={markArrived}
+            onPress={async () => {
+              try {
+                await markArrived();
+              } catch (err: any) {
+                const msg =
+                  err?.response?.data?.message ??
+                  err?.message ??
+                  'Could not mark arrival. Please try again.';
+                showToast(msg, 'error');
+              }
+            }}
             disabled={!canMarkArrived}
             fullWidth
             size="lg"
@@ -456,7 +470,7 @@ export default function DriverNavigateScreen() {
               </Text>
             )}
             <View style={styles.waitingActions}>
-              <KandaButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
+              <AppButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
               <TouchableOpacity
                 style={[
                   styles.cancelRideBtn,
@@ -483,7 +497,7 @@ export default function DriverNavigateScreen() {
               <Feather name="alert-octagon" size={16} color={colors.destructive} />
               <Text style={[styles.cancelRideBtnText, { color: colors.destructive }]}>End Journey</Text>
             </TouchableOpacity>
-            <KandaButton title="Complete Ride" onPress={handleCompleteRide} style={{ flex: 1 }} size="lg" />
+            <AppButton title="Complete Ride" onPress={handleCompleteRide} style={{ flex: 1 }} size="lg" />
           </View>
         )}
       </View>

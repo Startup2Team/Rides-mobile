@@ -10,12 +10,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import {
+  APP_NAME,
+  OSS_URL,
+  PRIVACY_URL,
+  TERMS_URL,
+} from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 
 const LINKS = [
-  { label: 'Terms of Service', icon: 'file-text' as const, url: 'https://taravelis.rw/terms' },
-  { label: 'Privacy Policy', icon: 'shield' as const, url: 'https://taravelis.rw/privacy' },
-  { label: 'Open Source Licences', icon: 'code' as const, url: 'https://taravelis.rw/oss' },
+  { label: 'Terms of Service', icon: 'file-text' as const, url: TERMS_URL },
+  { label: 'Privacy Policy', icon: 'shield' as const, url: PRIVACY_URL },
+  { label: 'Open Source Licences', icon: 'code' as const, url: OSS_URL },
 ];
 
 const STATS = [
@@ -31,18 +37,17 @@ export default function AboutScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="About Taravelis" />
+      <GlassHeader title={`About ${APP_NAME}`} />
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 40 }]}
       >
-        {/* Brand hero */}
         <View style={styles.hero}>
           <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
             <Feather name="navigation" size={32} color={colors.primaryForeground} />
           </View>
-          <Text style={[styles.appName, { color: colors.foreground }]}>Taravelis</Text>
+          <Text style={[styles.appName, { color: colors.foreground }]}>{APP_NAME}</Text>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
             Rwanda's ride platform — Moto to Fuso
           </Text>
@@ -51,7 +56,6 @@ export default function AboutScreen() {
           </View>
         </View>
 
-        {/* Stats */}
         <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {STATS.map((stat, i) => (
             <React.Fragment key={stat.label}>
@@ -65,7 +69,6 @@ export default function AboutScreen() {
           ))}
         </View>
 
-        {/* Mission */}
         <View style={[styles.missionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.missionTitle, { color: colors.foreground }]}>Our Mission</Text>
           <Text style={[styles.missionText, { color: colors.mutedForeground }]}>
@@ -73,7 +76,6 @@ export default function AboutScreen() {
           </Text>
         </View>
 
-        {/* Links */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>LEGAL</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {LINKS.map((link, i) => (
@@ -95,7 +97,7 @@ export default function AboutScreen() {
         </View>
 
         <Text style={[styles.copyright, { color: colors.mutedForeground }]}>
-          © 2026 Taravelis Ltd. · Kigali, Rwanda
+          © 2026 {APP_NAME} · Kigali, Rwanda
         </Text>
       </GlassScrollView>
     </View>

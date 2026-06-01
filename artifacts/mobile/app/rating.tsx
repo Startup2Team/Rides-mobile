@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
@@ -218,7 +218,7 @@ export default function RatingScreen() {
 
       <View style={[styles.bottomActions, { paddingBottom: insets.bottom + 20 }]}>
         {step === 'rating' ? (
-          <KandaButton
+          <AppButton
             title="Continue"
             onPress={handleContinue}
             disabled={stars === 0}
@@ -227,7 +227,7 @@ export default function RatingScreen() {
             style={styles.submitBtn}
           />
         ) : (
-          <KandaButton
+          <AppButton
           title={submitting ? 'Submitting…' : 'Submit Rating'}
           onPress={handleSubmit}
           loading={submitting}

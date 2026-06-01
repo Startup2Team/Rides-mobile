@@ -2,7 +2,7 @@ import {
   APPLE_SYSTEM_BLUE_HEX,
   APPLE_SYSTEM_ORANGE_HEX,
   APPLE_SYSTEM_RED_HEX,
-  TARAVELIS_BRAND_GREEN_HEX,
+  BRAND_GREEN_HEX,
 } from '@/constants/systemColors';
 
 /**
@@ -25,10 +25,10 @@ const colors = {
     star: APPLE_SYSTEM_BLUE_HEX.light,
     starMuted: `${APPLE_SYSTEM_BLUE_HEX.light}55`,
 
-    /** Live / completed / on-map presence — Taravelis green */
-    success: TARAVELIS_BRAND_GREEN_HEX.light,
+    /** Live / completed / on-map presence — brand green */
+    success: BRAND_GREEN_HEX.light,
     successForeground: '#000000',
-    successMuted: `${TARAVELIS_BRAND_GREEN_HEX.light}18`,
+    successMuted: `${BRAND_GREEN_HEX.light}18`,
 
     /** Searching, limits, generic locations */
     warning: APPLE_SYSTEM_ORANGE_HEX.light,
@@ -69,9 +69,9 @@ const colors = {
     star: APPLE_SYSTEM_BLUE_HEX.dark,
     starMuted: `${APPLE_SYSTEM_BLUE_HEX.dark}55`,
 
-    success: TARAVELIS_BRAND_GREEN_HEX.dark,
+    success: BRAND_GREEN_HEX.dark,
     successForeground: '#000000',
-    successMuted: `${TARAVELIS_BRAND_GREEN_HEX.dark}22`,
+    successMuted: `${BRAND_GREEN_HEX.dark}22`,
 
     warning: APPLE_SYSTEM_ORANGE_HEX.dark,
     warningForeground: '#000000',
@@ -102,4 +102,4 @@ const colors = {
 export default colors;
 
 export { APPLE_SYSTEM_BLUE_HEX as IOS_SYSTEM_BLUE } from '@/constants/systemColors';
-export { TARAVELIS_BRAND_GREEN_HEX } from '@/constants/systemColors';
+export { BRAND_GREEN_HEX } from '@/constants/systemColors';

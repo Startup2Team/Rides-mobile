@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useColors } from '@/hooks/useColors';
 
 const { width } = Dimensions.get('window');
@@ -50,7 +50,7 @@ export default function WelcomeScreen() {
           },
         ]}
       >
-        <KandaButton
+        <AppButton
           title="Register"
           onPress={() => router.push('/(auth)/register')}
           fullWidth

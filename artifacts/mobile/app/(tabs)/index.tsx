@@ -28,7 +28,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
@@ -1431,7 +1431,7 @@ export default function CustomerHome() {
 
             {(destination || destText.trim().length > 0) && (
               <View style={styles.findDriverAction}>
-                <KandaButton
+                <AppButton
                   title="Find Driver"
                   onPress={handleBook}
                   fullWidth
@@ -2080,7 +2080,7 @@ export default function CustomerHome() {
             styles.mapPickerFooter,
             { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 16 },
           ]}>
-            <KandaButton
+            <AppButton
               title={
                 mapPicker === 'pickup'
                   ? 'Confirm Pickup Location'

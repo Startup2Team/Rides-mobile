@@ -18,8 +18,10 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { APP_NAME } from '@/constants/branding';
+import { STORAGE_KEYS } from '@/constants/storage';
 
-const PROFILE_IMAGE_KEY = '@taravelis_profile_image';
+const PROFILE_IMAGE_KEY = STORAGE_KEYS.profileImage;
 
 function MenuItem({
   icon,
@@ -169,7 +171,7 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.foreground }]}>Join as Driver</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
-              Earn money driving on Taravelis
+              Earn money driving on {APP_NAME}
             </Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -216,7 +218,7 @@ export default function ProfileScreen() {
         />
         <MenuItem
           icon="info"
-          label="About Taravelis"
+          label={`About ${APP_NAME}`}
           onPress={() => router.push('/about')}
           showSeparator={false}
           separatorColor={separatorColor}
@@ -234,7 +236,7 @@ export default function ProfileScreen() {
         />
       </View>
 
-      <Text style={[styles.version, { color: colors.mutedForeground }]}>Taravelis v1.0.0</Text>
+      <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
       </GlassScrollView>
     </View>
   );

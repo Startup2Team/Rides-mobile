@@ -19,7 +19,7 @@ import { useColors } from '@/hooks/useColors';
 
 type FeatherIcon = React.ComponentProps<typeof Feather>['name'];
 
-interface KandaButtonProps {
+interface AppButtonProps {
   title: string;
   onPress: () => void;
   /** @default primary — filled accent (iOS borderedProminent) */
@@ -36,7 +36,7 @@ interface KandaButtonProps {
   accessibilityLabel?: string;
 }
 
-export function KandaButton({
+export function AppButton({
   title,
   onPress,
   variant = 'primary',
@@ -49,7 +49,7 @@ export function KandaButton({
   iconOnly = false,
   compact = false,
   accessibilityLabel,
-}: KandaButtonProps) {
+}: AppButtonProps) {
   const colors = useColors();
   const resolvedVariant = variant === 'outline' ? 'secondary' : variant;
 

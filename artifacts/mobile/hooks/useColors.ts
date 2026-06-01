@@ -13,7 +13,7 @@ import {
  * Semantic colors for the active scheme.
  *
  * iOS: primary / destructive / warning use native `PlatformColor` (systemBlue, systemRed, systemOrange).
- * Brand green (`success`) keeps Taravelis #00C853 for map + live/success moments.
+ * Brand green (`success`) keeps Rides #00C853 for map + live/success moments.
  * Use `*Hex` siblings for alpha suffixes (`primaryHex + '18'`).
  */
 export function useColors() {

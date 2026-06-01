@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/BackButton';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { register, verifyOtp } from '@/services/auth';
@@ -254,7 +254,7 @@ export default function OTPScreen() {
 
       <View style={styles.bottomActions}>
         {!verifying && (
-          <KandaButton
+          <AppButton
             title="Verify code"
             onPress={() => handleVerifyCode(code.join(''))}
             fullWidth
