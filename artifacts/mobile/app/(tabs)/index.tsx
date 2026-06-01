@@ -31,6 +31,7 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
+import { floatingPanelSurface } from '@/constants/surfaces';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
@@ -54,8 +55,6 @@ const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
 const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
-/** iOS system sheets (AirPods-style) use ~44–47pt continuous corners. */
-const FLOATING_PANEL_RADIUS = Platform.OS === 'ios' ? 47 : 28;
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 const GREETING_LEFT_INSET = 14;
@@ -64,20 +63,6 @@ const BOOKING_SHEET_PADDING_H = 22;
 const BOOKING_CLOSE_EDGE_INSET = 16;
 /** Extra room so the close icon can spin during sheet drag without clipping. */
 const BOOKING_CLOSE_ROTATION_PAD = 10;
-const floatingPanelSurface = {
-  borderRadius: FLOATING_PANEL_RADIUS,
-  ...Platform.select({
-    ios: { borderCurve: 'continuous' as const },
-    default: {},
-  }),
-  borderWidth: StyleSheet.hairlineWidth,
-  overflow: 'hidden' as const,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.14,
-  shadowRadius: 24,
-  elevation: 14,
-};
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
 const SAVE_LABEL_GAP = 8;
 const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = BOOKING_SHEET_PADDING_H;
@@ -183,10 +168,9 @@ export default function CustomerHome() {
   const formSheetSurface = useMemo(
     () => ({
       backgroundColor: colors.card,
-      borderTopColor: isDark ? 'rgba(255,255,255,0.14)' : colors.border,
       shadowOpacity: isDark ? 0.55 : 0.25,
     }),
-    [colors.card, colors.border, isDark],
+    [colors.card, isDark],
   );
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
@@ -1960,31 +1944,31 @@ export default function CustomerHome() {
             onPress={() => setMapPicker(null)}
           />
 
-          <TouchableOpacity
-            style={[
-              styles.mapPickerControl,
-              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 },
-            ]}
-            onPress={cycleMapType}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
-              size={22}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
+          <View style={styles.mapPickerControlsRail} pointerEvents="box-none">
+            <TouchableOpacity
+              style={[styles.mapPickerControl, { backgroundColor: colors.card }]}
+              onPress={cycleMapType}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Change map view"
+            >
+              <MaterialCommunityIcons
+                name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
+                size={22}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.mapPickerControl,
-              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 68 },
-            ]}
-            onPress={centerPickerOnUser}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.mapPickerControl, { backgroundColor: colors.card }]}
+              onPress={centerPickerOnUser}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Recenter on your location"
+            >
+              <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
 
           {/* Instruction label */}
           <View style={[styles.mapPickerHint, { backgroundColor: colors.card }]}>
@@ -2131,6 +2115,7 @@ const styles = StyleSheet.create({
     ...floatingPanelSurface,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    borderTopWidth: 0,
     paddingTop: 0,
     gap: 0,
     overflow: 'visible',
@@ -2613,7 +2598,26 @@ const styles = StyleSheet.create({
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
   fixedPinContainer: { position: 'absolute', top: '50%', left: '50%', marginLeft: -24, marginTop: -48 },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
-  mapPickerControl: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
+  mapPickerControlsRail: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  mapPickerControl: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
   mapPickerHint: { position: 'absolute', top: '18%', alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
   mapPickerHintText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
   mapPickerFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20 },

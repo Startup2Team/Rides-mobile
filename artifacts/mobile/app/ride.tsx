@@ -25,6 +25,7 @@ import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
 import { showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
+import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -644,8 +645,8 @@ const styles = StyleSheet.create({
   driverCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: FLOATING_PANEL_TOP_RADIUS,
+    borderTopRightRadius: FLOATING_PANEL_TOP_RADIUS,
     paddingTop: 8,
     paddingHorizontal: 16,
     gap: 10,

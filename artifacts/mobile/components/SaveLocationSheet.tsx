@@ -15,7 +15,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +22,7 @@ import { Feather } from '@expo/vector-icons';
 import { CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import {
   SAVE_LABEL_WIDTHS,
   SAVE_LOCATION_LABELS,
@@ -33,7 +33,6 @@ import { useToast } from '@/context/ToastContext';
 import { RideLocation } from '@/types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const FLOATING_PANEL_RADIUS = Platform.OS === 'ios' ? 47 : 28;
 const GREETING_LEFT_INSET = 14;
 const BOOKING_SHEET_PADDING_H = 22;
 const BOOKING_CLOSE_EDGE_INSET = 16;
@@ -47,7 +46,6 @@ interface SaveLocationSheetProps {
 
 export function SaveLocationSheet({ location, onClose, onSaved }: SaveLocationSheetProps) {
   const colors = useColors();
-  const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { saveLocation } = useSavedLocations();
   const { showToast } = useToast();
@@ -65,9 +63,8 @@ export function SaveLocationSheet({ location, onClose, onSaved }: SaveLocationSh
   const sheetSurface = useMemo(
     () => ({
       backgroundColor: colors.card,
-      borderTopColor: isDark ? 'rgba(255,255,255,0.14)' : colors.border,
     }),
-    [colors.border, colors.card, isDark],
+    [colors.card],
   );
 
   const formSheetBackdropOpacity = useMemo(
@@ -381,10 +378,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: SCREEN_WIDTH,
     maxHeight: SCREEN_HEIGHT * 0.92,
-    borderRadius: FLOATING_PANEL_RADIUS,
+    borderRadius: FLOATING_PANEL_TOP_RADIUS,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     borderWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 0,
     overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
