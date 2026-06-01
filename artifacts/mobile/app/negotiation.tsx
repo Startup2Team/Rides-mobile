@@ -604,7 +604,11 @@ export default function NegotiationScreen() {
         </View>
       </View>
 
-      <ConfirmDialog visible={showAcceptModal} onClose={() => setShowAcceptModal(false)}>
+      <ConfirmDialog
+        visible={showAcceptModal}
+        onClose={() => setShowAcceptModal(false)}
+        cardStyle={styles.acceptFareDialogCard}
+      >
         <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="shield" size={24} color={colors.primary} />
         </View>
@@ -612,7 +616,7 @@ export default function NegotiationScreen() {
         <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
           This fare will be locked for the ride and visible to both you and the driver.
         </Text>
-        <View style={[styles.acceptSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.acceptSummary, { backgroundColor: colors.muted }]}>
           <View style={styles.acceptSummaryRow}>
             <Text style={[styles.acceptSummaryLabel, { color: colors.mutedForeground }]}>Driver</Text>
             <Text style={[styles.acceptSummaryValue, { color: colors.foreground }]} numberOfLines={1}>
@@ -898,7 +902,8 @@ const styles = StyleSheet.create({
   modalIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   modalSub: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, textAlign: 'center' },
-  acceptSummary: { width: '100%', borderRadius: 14, padding: 12, gap: 9, borderWidth: StyleSheet.hairlineWidth },
+  acceptFareDialogCard: { borderWidth: 0 },
+  acceptSummary: { width: '100%', borderRadius: 14, padding: 12, gap: 9 },
   acceptSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   acceptSummaryTotal: { paddingTop: 9, borderTopWidth: StyleSheet.hairlineWidth },
   acceptSummaryLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },

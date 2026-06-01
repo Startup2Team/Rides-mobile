@@ -33,6 +33,8 @@ interface AppButtonProps {
   iconOnly?: boolean;
   /** Tighter padding and label — for three-button action rows */
   compact?: boolean;
+  /** Override label size (e.g. slightly smaller text in dense action rows). */
+  labelFontSize?: number;
   accessibilityLabel?: string;
 }
 
@@ -48,6 +50,7 @@ export function AppButton({
   icon,
   iconOnly = false,
   compact = false,
+  labelFontSize,
   accessibilityLabel,
 }: AppButtonProps) {
   const colors = useColors();
@@ -91,7 +94,7 @@ export function AppButton({
 
   const height = BUTTON_HEIGHT[size];
   const cornerRadius = buttonCornerRadius(height);
-  const fontSize = compact && size === 'sm' ? 12 : BUTTON_FONT_SIZE[size];
+  const fontSize = labelFontSize ?? (compact && size === 'sm' ? 12 : BUTTON_FONT_SIZE[size]);
   const iconSize = compact ? 16 : size === 'sm' ? 18 : 20;
 
   return (

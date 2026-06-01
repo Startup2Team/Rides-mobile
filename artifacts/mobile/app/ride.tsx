@@ -37,6 +37,8 @@ const STATUS_MESSAGES: Record<string, string> = {
 };
 
 const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
+/** Free wait at pickup before late minutes accrue (matches driver navigate screen). */
+const PICKUP_WAIT_LIMIT_SECONDS = 180;
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
@@ -99,7 +101,7 @@ export default function RideScreen() {
 
   const navigatingToRatingRef = useRef(false);
 
-  const [waitTimer, setWaitTimer] = useState(180);
+  const [waitClockTick, setWaitClockTick] = useState(0);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [driverCardHeight, setDriverCardHeight] = useState(260);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
@@ -198,16 +200,39 @@ export default function RideScreen() {
   useEffect(() => {
     if (currentRide?.status !== 'arrived') return;
     const interval = setInterval(() => {
-      setWaitTimer(prev => (prev > 0 ? prev - 1 : 0));
+      setWaitClockTick(tick => tick + 1);
     }, 1000);
     return () => clearInterval(interval);
   }, [currentRide?.status]);
 
-  const formatTimer = (secs: number) => {
+  const waitElapsedSeconds = useMemo(() => {
+    if (!isArrived || !currentRide?.waitStartedAt) return 0;
+    const startedMs = new Date(currentRide.waitStartedAt).getTime();
+    if (Number.isNaN(startedMs)) return 0;
+    return Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+  }, [currentRide?.waitStartedAt, isArrived, waitClockTick]);
+
+  const waitRemainingSeconds = Math.max(PICKUP_WAIT_LIMIT_SECONDS - waitElapsedSeconds, 0);
+  const lateSeconds = Math.max(waitElapsedSeconds - PICKUP_WAIT_LIMIT_SECONDS, 0);
+  const isPickupLate = lateSeconds > 0;
+
+  const formatCountdown = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remainingSecs = secs % 60;
     return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
   };
+
+  const formatLateDuration = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    if (mins === 0) return `${remainingSecs} sec`;
+    if (remainingSecs === 0) return `${mins} min`;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+  };
+
+  const arrivedBannerMessage = isPickupLate
+    ? `Your driver is still waiting. You are ${formatLateDuration(lateSeconds)} late. Please come to the pickup point.`
+    : `Your driver has arrived. Please come to the pickup point. (Waiting: ${formatCountdown(waitRemainingSeconds)})`;
 
   useEffect(() => {
     if (!currentRide && !navigatingToRatingRef.current) router.replace('/(tabs)');
@@ -385,9 +410,10 @@ export default function RideScreen() {
     ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
     : null;
 
-  const mapControlsRailTop =
-    insets.top + (Platform.OS === 'web' ? 67 : 0) + (isArrived ? 88 : 56);
-  const mapControlsRailBottom = driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 16);
+  const mapControlsBottomInset =
+    driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 12) + 16;
+  const recenterBtnBottom = mapControlsBottomInset;
+  const mapLayerBtnBottom = mapControlsBottomInset + 46 + 12;
 
   return (
     <View style={styles.container}>
@@ -442,15 +468,12 @@ export default function RideScreen() {
       </MapView>
 
       {showMapControls && (
-        <View
-          style={[
-            styles.mapControlsRail,
-            { top: mapControlsRailTop, bottom: mapControlsRailBottom },
-          ]}
-          pointerEvents="box-none"
-        >
+        <>
           <TouchableOpacity
-            style={[styles.mapControlBtn, { backgroundColor: colors.card }]}
+            style={[
+              styles.mapLayerBtn,
+              { backgroundColor: colors.card, bottom: mapLayerBtnBottom },
+            ]}
             onPress={cycleMapType}
             activeOpacity={0.8}
             accessibilityRole="button"
@@ -469,7 +492,10 @@ export default function RideScreen() {
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.mapControlBtn, { backgroundColor: colors.card }]}
+            style={[
+              styles.recenterBtn,
+              { backgroundColor: colors.card, bottom: recenterBtnBottom },
+            ]}
             onPress={recenterRideMap}
             activeOpacity={0.8}
             accessibilityRole="button"
@@ -477,7 +503,7 @@ export default function RideScreen() {
           >
             <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
           </TouchableOpacity>
-        </View>
+        </>
       )}
 
       {/* Top status */}
@@ -506,10 +532,24 @@ export default function RideScreen() {
       </View>
 
       {isArrived && (
-        <View style={[styles.arrivedBanner, { backgroundColor: colors.primary }]}>
-          <Feather name="check-circle" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.arrivedBannerText, { color: colors.primaryForeground }]}>
-            Your rider has arrived. Please come to the pickup point. (Waiting timer: {formatTimer(waitTimer)})
+        <View
+          style={[
+            styles.arrivedBanner,
+            { backgroundColor: isPickupLate ? colors.destructive : colors.primary },
+          ]}
+        >
+          <Feather
+            name={isPickupLate ? 'alert-circle' : 'check-circle'}
+            size={18}
+            color={isPickupLate ? colors.destructiveForeground : colors.primaryForeground}
+          />
+          <Text
+            style={[
+              styles.arrivedBannerText,
+              { color: isPickupLate ? colors.destructiveForeground : colors.primaryForeground },
+            ]}
+          >
+            {arrivedBannerMessage}
           </Text>
         </View>
       )}
@@ -523,8 +563,6 @@ export default function RideScreen() {
           paddingBottom: insets.bottom + (Platform.OS === 'web' ? 24 : 12),
         }]}
       >
-        <View style={styles.handle} />
-
         {/* Driver info */}
         <View style={styles.driverRow}>
           {driverPhotoUri ? (
@@ -608,11 +646,14 @@ export default function RideScreen() {
                 icon="x"
                 variant="dangerPlain"
                 size="sm"
+                labelFontSize={14}
                 onPress={handleCancelArrived}
                 style={{ flex: 1 }}
               />
               <AppButton
                 title="Start Journey"
+                size="sm"
+                labelFontSize={14}
                 onPress={startJourney}
                 style={{ flex: 1 }}
               />
@@ -723,19 +764,30 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  mapControlsRail: {
+  mapLayerBtn: {
     position: 'absolute',
     right: 16,
-    justifyContent: 'center',
-    gap: 12,
-    zIndex: 5,
-  },
-  mapControlBtn: {
     width: 46,
     height: 46,
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  recenterBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -787,7 +839,7 @@ const styles = StyleSheet.create({
     bottom: 0, left: 0, right: 0,
     borderTopLeftRadius: FLOATING_PANEL_TOP_RADIUS,
     borderTopRightRadius: FLOATING_PANEL_TOP_RADIUS,
-    paddingTop: 8,
+    paddingTop: 14,
     paddingHorizontal: 16,
     gap: 10,
     shadowColor: '#000',
@@ -796,7 +848,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 16,
   },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center' },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   driverAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   driverAvatarImage: { width: 40, height: 40, borderRadius: 20 },
