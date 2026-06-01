@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, usePathname } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -176,6 +176,8 @@ export default function CustomerHome() {
   const locationHeaderMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
   const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
+  const pathname = usePathname();
+  const lastRideFlowStatusRef = useRef<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
@@ -292,13 +294,32 @@ export default function CustomerHome() {
   }, [currentRide?.status]);
 
   useEffect(() => {
-    if (!currentRide) return;
-    if (currentRide.status === 'negotiating' && !isMatchingPaused) {
-      router.push('/negotiation');
-    } else if (['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
-      router.push('/ride');
+    if (!currentRide) {
+      lastRideFlowStatusRef.current = null;
+      return;
     }
-  }, [currentRide?.status, isMatchingPaused]);
+    if (currentRide.status === 'negotiating' && !isMatchingPaused) {
+      lastRideFlowStatusRef.current = null;
+      if (pathname !== '/negotiation') {
+        router.push('/negotiation');
+      }
+      return;
+    }
+    const rideFlowStatuses = ['confirmed', 'arriving', 'arrived', 'in_progress'] as const;
+    if (!rideFlowStatuses.includes(currentRide.status as (typeof rideFlowStatuses)[number])) {
+      lastRideFlowStatusRef.current = null;
+      return;
+    }
+    const alreadyInRideFlow =
+      lastRideFlowStatusRef.current !== null &&
+      rideFlowStatuses.includes(
+        lastRideFlowStatusRef.current as (typeof rideFlowStatuses)[number],
+      );
+    if (!alreadyInRideFlow && pathname !== '/ride') {
+      router.replace('/ride');
+    }
+    lastRideFlowStatusRef.current = currentRide.status;
+  }, [currentRide?.status, isMatchingPaused, pathname]);
 
   useEffect(() => {
     if (currentRide?.status !== 'cancelled') return;

@@ -26,7 +26,7 @@ import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
 import { showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
-import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
+import { Coords, KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
 
 const STATUS_MESSAGES: Record<string, string> = {
   confirmed: 'Ride confirmed',
@@ -91,6 +91,8 @@ export default function RideScreen() {
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
   const previousRideStatusRef = useRef<string | null>(null);
+  /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
+  const [arrivedDriverCoords, setArrivedDriverCoords] = useState<Coords | null>(null);
 
   const navigatingToRatingRef = useRef(false);
 
@@ -107,13 +109,8 @@ export default function RideScreen() {
   );
 
   const isArriving = currentRide?.status === 'arriving';
-  useEffect(() => {
-    const status = currentRide?.status ?? null;
-    if (status === 'arriving' && previousRideStatusRef.current !== 'arriving') {
-      setArrivingRouteOrigin(driverLocation ?? KIGALI_CENTER);
-    }
-    previousRideStatusRef.current = status;
-  }, [currentRide?.status, driverLocation]);
+  const isArrived = currentRide?.status === 'arrived';
+  const isInProgress = currentRide?.status === 'in_progress';
 
   const { route: driverToPickupRoute } = useRoute(
     isArriving ? arrivingRouteOrigin : null,
@@ -130,8 +127,37 @@ export default function RideScreen() {
   });
 
   const activeDriverLocation = liveDriverCoords ?? driverLocation;
-  const isArrived = currentRide?.status === 'arrived';
-  const isInProgress = currentRide?.status === 'in_progress';
+
+  useEffect(() => {
+    const status = currentRide?.status ?? null;
+    const previousStatus = previousRideStatusRef.current;
+
+    if (status === 'arriving' && previousStatus !== 'arriving') {
+      setArrivingRouteOrigin(driverLocation ?? KIGALI_CENTER);
+    }
+
+    if (status === 'arrived' && previousStatus === 'arriving' && currentRide) {
+      const lockAt = liveDriverCoords ?? driverLocation ?? currentRide.pickup;
+      setArrivedDriverCoords(lockAt);
+    }
+
+    previousRideStatusRef.current = status;
+  }, [currentRide, currentRide?.status, driverLocation, liveDriverCoords]);
+
+  useEffect(() => {
+    if (isArriving && activeDriverLocation) {
+      setArrivedDriverCoords(activeDriverLocation);
+    }
+  }, [activeDriverLocation, isArriving]);
+
+  useEffect(() => {
+    if (!isInProgress) return;
+    setArrivedDriverCoords(null);
+  }, [isInProgress]);
+
+  const mapDriverLocation = isArrived
+    ? arrivedDriverCoords ?? currentRide?.pickup ?? null
+    : activeDriverLocation;
   const remainingDriverToPickupRoute = useMemo(
     () => {
       if (!isArriving || !activeDriverLocation || !currentRide) return null;
@@ -150,10 +176,13 @@ export default function RideScreen() {
   const activeRemainingRoute = isArriving ? remainingDriverToPickupRoute : remainingPickupToDestinationRoute;
   const activeVehicleType = currentRide?.vehicleType ?? 'moto';
   const vehicleRotationDeg = useMemo(() => {
-    if (!activeRemainingRoute || activeRemainingRoute.length < 2) return 0;
-    const bearing = getBearingDegrees(activeRemainingRoute[0], activeRemainingRoute[1]);
+    const routeForHeading = isArrived && rideRoute && rideRoute.coordinates.length >= 2
+      ? rideRoute.coordinates
+      : activeRemainingRoute;
+    if (!routeForHeading || routeForHeading.length < 2) return 0;
+    const bearing = getBearingDegrees(routeForHeading[0], routeForHeading[1]);
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
-  }, [activeRemainingRoute, activeVehicleType]);
+  }, [activeRemainingRoute, activeVehicleType, isArrived, rideRoute]);
 
   const driverPhotoUri = useMemo(() => {
     const driver = currentRide?.driver;
@@ -182,25 +211,31 @@ export default function RideScreen() {
 
   useEffect(() => {
     if (!mapRef.current || !currentRide) return;
-    if (fittedMapStateRef.current === currentRide.status) return;
+    const status = currentRide.status;
+    if (fittedMapStateRef.current === status) return;
 
-    if (isArriving && activeDriverLocation) {
+    if (status === 'arriving' && activeDriverLocation) {
       mapRef.current.fitToCoordinates(
         [activeDriverLocation, currentRide.pickup],
-        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
+        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true },
       );
-      fittedMapStateRef.current = currentRide.status;
+      fittedMapStateRef.current = status;
       return;
     }
 
-    if (isArrived || isInProgress) {
+    if (status === 'arrived') {
+      fittedMapStateRef.current = status;
+      return;
+    }
+
+    if (status === 'in_progress') {
       mapRef.current.fitToCoordinates(
         [currentRide.pickup, currentRide.destination],
-        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true }
+        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true },
       );
-      fittedMapStateRef.current = currentRide.status;
+      fittedMapStateRef.current = status;
     }
-  }, [activeDriverLocation, currentRide, isArrived, isArriving, isInProgress]);
+  }, [activeDriverLocation, currentRide]);
 
   const navigateToRating = () => {
     if (!currentRide) return;
@@ -312,8 +347,8 @@ export default function RideScreen() {
         }
         customMapStyle={darkMapStyle}
       >
-        {activeDriverLocation && (
-          <Marker coordinate={activeDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+        {mapDriverLocation && (
+          <Marker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <VehicleMapMarker
               type={currentRide.vehicleType}
               rotationDeg={vehicleRotationDeg}
@@ -330,7 +365,7 @@ export default function RideScreen() {
             </View>
           </Marker>
         )}
-        {!isArriving && (
+        {(isArrived || isInProgress) && (
           <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }}>
             <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
               <Feather name="map-pin" size={10} color="#fff" />
@@ -338,17 +373,15 @@ export default function RideScreen() {
           </Marker>
         )}
         {/* Real road route */}
-        {isArriving ? (
-          remainingDriverToPickupRoute && (
-            <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
-          )
-        ) : isInProgress ? (
-          remainingPickupToDestinationRoute && (
-            <RoutePolyline coordinates={remainingPickupToDestinationRoute} color={colors.destructiveHex} width={4} />
-          )
-        ) : (
-          rideRoute && <RoutePolyline coordinates={rideRoute.coordinates} color={colors.destructiveHex} width={4} />
-        )}
+        {isArriving && remainingDriverToPickupRoute ? (
+          <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
+        ) : null}
+        {isInProgress && remainingPickupToDestinationRoute ? (
+          <RoutePolyline coordinates={remainingPickupToDestinationRoute} color={colors.destructiveHex} width={4} />
+        ) : null}
+        {isArrived && rideRoute ? (
+          <RoutePolyline coordinates={rideRoute.coordinates} color={colors.destructiveHex} width={4} />
+        ) : null}
       </MapView>
 
       {/* Top status */}

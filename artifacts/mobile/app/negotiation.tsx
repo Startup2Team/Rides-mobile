@@ -21,7 +21,9 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
-import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
+import { NegotiationMessage, RideStatus, VEHICLE_LABELS } from '@/types';
+
+const RIDE_FLOW_STATUSES: RideStatus[] = ['confirmed', 'arriving', 'arrived', 'in_progress'];
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
@@ -211,9 +213,7 @@ export default function NegotiationScreen() {
   const lastDriverOffer = [...driverOffers].pop();
   const lastMsg = negotiation[negotiation.length - 1];
   const customerLimitReached = customerOffers.length >= MAX_OFFERS;
-  const isRideAccepted = currentRide
-    ? ['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)
-    : false;
+  const previousRideStatusRef = useRef<RideStatus | null>(null);
   const isAwaitingDriverReply =
     currentRide?.status === 'negotiating' &&
     lastMsg?.sender === 'customer' &&
@@ -272,14 +272,26 @@ export default function NegotiationScreen() {
   const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
 
   useEffect(() => {
-    if (isRideAccepted) {
-      router.replace('/ride');
+    const status = currentRide?.status ?? null;
+    const previous = previousRideStatusRef.current;
+
+    if (!currentRide || status === 'cancelled') {
+      router.replace('/(tabs)');
+      previousRideStatusRef.current = status;
       return;
     }
-    if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(tabs)');
+
+    const enteringRideFlow =
+      status !== null &&
+      RIDE_FLOW_STATUSES.includes(status) &&
+      previous === 'negotiating';
+
+    if (enteringRideFlow) {
+      router.replace('/ride');
     }
-  }, [currentRide?.status, isRideAccepted]);
+
+    previousRideStatusRef.current = status;
+  }, [currentRide?.status, currentRide]);
 
   useEffect(() => {
     if (lastMsg?.sender !== 'customer') {
