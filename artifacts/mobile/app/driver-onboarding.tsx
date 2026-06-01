@@ -355,7 +355,10 @@ export default function DriverOnboarding() {
         paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
         borderBottomColor: colors.border,
       }]}>
-        <BackButton onPress={() => step > 0 ? setStep(s => s - 1) : router.back()} />
+        <BackButton
+          exitOnPress={step === 0}
+          onPress={() => (step > 0 ? setStep(s => s - 1) : router.back())}
+        />
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Become a Driver</Text>
         <Text style={[styles.stepIndicator, { color: colors.mutedForeground }]}>{step + 1}/{steps.length}</Text>
       </View>
@@ -398,7 +401,7 @@ export default function DriverOnboarding() {
             {/* Identity Verification */}
             <Text style={[styles.sectionSubtitle, { color: colors.foreground }]}>Identity Verification</Text>
             <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
-              Take a clear selfie so we can verify your identity. Gallery upload is not allowed — use your front camera.
+              Take a clear selfie so we can verify your identity.
             </Text>
 
             {selfieUri ? (
@@ -434,7 +437,6 @@ export default function DriverOnboarding() {
                   <Feather name="camera" size={24} color={colors.primary} />
                 </View>
                 <Text style={[styles.selfieLabel, { color: colors.primary }]}>Take Selfie</Text>
-                <Text style={[styles.selfieSubLabel, { color: colors.mutedForeground }]}>Front camera only · No uploads</Text>
               </TouchableOpacity>
             )}
             {errors.selfie ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.selfie}</Text> : null}
@@ -890,7 +892,6 @@ const styles = StyleSheet.create({
   },
   selfieIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   selfieLabel: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
-  selfieSubLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   selfiePreviewRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   selfieImage: { width: 80, height: 80, borderRadius: 40 },
   selfieRetakeBtn: {
