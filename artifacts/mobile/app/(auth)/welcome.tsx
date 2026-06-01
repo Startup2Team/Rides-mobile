@@ -6,7 +6,7 @@ import { KandaButton } from '@/components/KandaButton';
 import { useColors } from '@/hooks/useColors';
 
 const { width } = Dimensions.get('window');
-const ONBOARDING_IMAGE = require('../../assets/images/onboarding.png');
+const ONBOARDING_IMAGE = require('../../assets/images/onboarding12.png');
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
