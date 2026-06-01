@@ -523,10 +523,7 @@ export default function NegotiationScreen() {
         {canCounter && (
           <KeyboardStickyView
             offset={{ closed: 0, opened: actionPanelOffset }}
-            style={[
-              styles.inputDock,
-              { backgroundColor: colors.background, borderTopColor: colors.border },
-            ]}
+            style={[styles.inputDock, { backgroundColor: colors.background }]}
           >
             <View style={styles.inputRow}>
               <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
@@ -894,7 +891,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   actionFlexNarrow: { flex: 0.9, minWidth: 0 },
   actionFlexWide: { flex: 1.25, minWidth: 0 },

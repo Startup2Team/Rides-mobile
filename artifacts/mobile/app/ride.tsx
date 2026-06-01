@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -37,6 +37,9 @@ const STATUS_MESSAGES: Record<string, string> = {
 };
 
 const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
+const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
+type AppMapType = (typeof MAP_TYPES)[number];
+const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
@@ -97,6 +100,8 @@ export default function RideScreen() {
   const navigatingToRatingRef = useRef(false);
 
   const [waitTimer, setWaitTimer] = useState(180);
+  const [mapType, setMapType] = useState<AppMapType>('standard');
+  const [driverCardHeight, setDriverCardHeight] = useState(260);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelModalReasons, setCancelModalReasons] = useState<string[]>([]);
@@ -244,7 +249,7 @@ export default function RideScreen() {
     const fare = currentRide.agreedFare ?? 0;
     const vehicleType = currentRide.vehicleType;
     navigatingToRatingRef.current = true;
-    router.replace({
+    router.push({
       pathname: '/rating',
       params: { rideId, driverName, fare: String(fare), vehicleType },
     });
@@ -317,6 +322,53 @@ export default function RideScreen() {
     });
   };
 
+  const showMapControls = isArriving || isArrived || isInProgress;
+
+  const cycleMapType = useCallback(() => {
+    setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
+  }, []);
+
+  const recenterRideMap = useCallback(() => {
+    if (!mapRef.current || !currentRide) return;
+
+    const edgePadding = {
+      ...MAP_EDGE_PADDING,
+      bottom: driverCardHeight + insets.bottom + 48,
+    };
+
+    const driverCoord = isArrived
+      ? arrivedDriverCoords ?? driverLocation ?? currentRide.pickup
+      : liveDriverCoords ?? driverLocation;
+
+    if (currentRide.status === 'arriving' && driverCoord) {
+      mapRef.current.fitToCoordinates(
+        [driverCoord, currentRide.pickup],
+        { edgePadding, animated: true },
+      );
+      return;
+    }
+
+    if (currentRide.status === 'in_progress' && driverCoord) {
+      mapRef.current.fitToCoordinates(
+        [driverCoord, currentRide.destination],
+        { edgePadding, animated: true },
+      );
+      return;
+    }
+
+    mapRef.current.fitToCoordinates(
+      [currentRide.pickup, currentRide.destination],
+      { edgePadding, animated: true },
+    );
+  }, [
+    arrivedDriverCoords,
+    currentRide,
+    driverCardHeight,
+    driverLocation,
+    insets.bottom,
+    liveDriverCoords,
+  ]);
+
   if (!currentRide) return null;
 
   const statusMsg = STATUS_MESSAGES[currentRide.status] ?? 'Ride confirmed';
@@ -333,6 +385,10 @@ export default function RideScreen() {
     ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
     : null;
 
+  const mapControlsRailTop =
+    insets.top + (Platform.OS === 'web' ? 67 : 0) + (isArrived ? 88 : 56);
+  const mapControlsRailBottom = driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 16);
+
   return (
     <View style={styles.container}>
       {/* Map */}
@@ -345,7 +401,8 @@ export default function RideScreen() {
             ? { ...driverLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }
             : { ...currentRide.pickup, latitudeDelta: 0.02, longitudeDelta: 0.02 }
         }
-        customMapStyle={darkMapStyle}
+        mapType={mapType}
+        customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
         {mapDriverLocation && (
           <Marker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
@@ -384,6 +441,45 @@ export default function RideScreen() {
         ) : null}
       </MapView>
 
+      {showMapControls && (
+        <View
+          style={[
+            styles.mapControlsRail,
+            { top: mapControlsRailTop, bottom: mapControlsRailBottom },
+          ]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            style={[styles.mapControlBtn, { backgroundColor: colors.card }]}
+            onPress={cycleMapType}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Change map view"
+          >
+            <MaterialCommunityIcons
+              name={
+                mapType === 'standard'
+                  ? 'layers-outline'
+                  : mapType === 'satellite'
+                    ? 'satellite-variant'
+                    : 'map'
+              }
+              size={22}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mapControlBtn, { backgroundColor: colors.card }]}
+            onPress={recenterRideMap}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Recenter map on route"
+          >
+            <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Top status */}
       <View
         style={[
@@ -409,20 +505,6 @@ export default function RideScreen() {
         )}
       </View>
 
-      {isInProgress && (
-        <View style={[styles.tbtCard, { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 70 }]}>
-          <MaterialCommunityIcons name="navigation" size={24} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.tbtText, { color: colors.foreground }]}>
-              In 400m, turn left onto Boulevard de l'OUA
-            </Text>
-            <Text style={[styles.tbtSubtext, { color: colors.mutedForeground }]}>
-              Continuing toward destination
-            </Text>
-          </View>
-        </View>
-      )}
-
       {isArrived && (
         <View style={[styles.arrivedBanner, { backgroundColor: colors.primary }]}>
           <Feather name="check-circle" size={18} color={colors.primaryForeground} />
@@ -431,10 +513,16 @@ export default function RideScreen() {
           </Text>
         </View>
       )}
-      <View style={[styles.driverCard, {
-        backgroundColor: colors.background,
-        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 24 : 12),
-      }]}>
+      <View
+        onLayout={event => {
+          const height = event.nativeEvent.layout.height;
+          if (height > 0) setDriverCardHeight(height);
+        }}
+        style={[styles.driverCard, {
+          backgroundColor: colors.background,
+          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 24 : 12),
+        }]}
+      >
         <View style={styles.handle} />
 
         {/* Driver info */}
@@ -635,6 +723,25 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  mapControlsRail: {
+    position: 'absolute',
+    right: 16,
+    justifyContent: 'center',
+    gap: 12,
+    zIndex: 5,
+  },
+  mapControlBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
   topStatus: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -713,18 +820,6 @@ const styles = StyleSheet.create({
   fareValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   wideActionBtn: { flex: 1 },
-  tbtCard: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
-    padding: 14,
-  },
-  tbtText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
-  tbtSubtext: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   cancelOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
