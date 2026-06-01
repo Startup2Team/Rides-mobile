@@ -17,13 +17,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { KandaButton } from '@/components/KandaButton';
-import { KandaInput } from '@/components/KandaInput';
+import { AppButton } from '@/components/AppButton';
+import { AppInput } from '@/components/AppInput';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 
-const PROFILE_IMAGE_KEY = '@taravelis_profile_image';
+import { STORAGE_KEYS } from '@/constants/storage';
+
+const PROFILE_IMAGE_KEY = STORAGE_KEYS.profileImage;
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -179,7 +181,7 @@ export default function EditProfileScreen() {
 
         {/* Form */}
         <View style={styles.form}>
-          <KandaInput
+          <AppInput
             label="Full Name"
             value={name}
             onChangeText={text => {
@@ -191,7 +193,7 @@ export default function EditProfileScreen() {
             returnKeyType="next"
           />
 
-          <KandaInput
+          <AppInput
             label="Email (optional)"
             value={email}
             onChangeText={text => {
@@ -230,7 +232,7 @@ export default function EditProfileScreen() {
           <Text style={[styles.dangerText, { color: colors.destructive }]}>Delete Account</Text>
         </TouchableOpacity>
 
-        <KandaButton
+        <AppButton
           title={saving ? 'Saving…' : 'Save Changes'}
           onPress={handleSave}
           loading={saving}

@@ -17,9 +17,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { DatePickerField } from '@/components/DatePickerField';
-import { KandaButton } from '@/components/KandaButton';
-import { KandaInput } from '@/components/KandaInput';
+import { AppButton } from '@/components/AppButton';
+import { AppInput } from '@/components/AppInput';
 import { VehicleCard } from '@/components/VehicleCard';
+import { PRIVACY_URL, TERMS_URL } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { DriverProfile, VehicleType } from '@/types';
@@ -521,7 +522,7 @@ export default function DriverOnboarding() {
             </View>
 
             {vehicleQuestions.map(q => (
-              <KandaInput
+              <AppInput
                 key={q.field}
                 label={q.label}
                 placeholder={q.placeholder}
@@ -534,7 +535,7 @@ export default function DriverOnboarding() {
             ))}
 
             <View>
-              <KandaInput
+              <AppInput
                 label="Plate Number"
                 placeholder="RAD 000 A"
                 value={form.plateNumber}
@@ -559,7 +560,7 @@ export default function DriverOnboarding() {
               ) : null}
             </View>
 
-            <KandaInput
+            <AppInput
               label="Driver Licence Number"
               placeholder="DL-0000000"
               value={form.licenseNumber}
@@ -731,7 +732,7 @@ export default function DriverOnboarding() {
               ))}
             </View>
 
-            <KandaInput
+            <AppInput
               label={form.momoProvider === 'mtn' ? 'MTN MoMo Phone Number' : 'Airtel Money Phone Number'}
               placeholder="250XXXXXXXXX"
               value={form.momoCode}
@@ -741,7 +742,7 @@ export default function DriverOnboarding() {
               keyboardType="phone-pad"
             />
 
-            <KandaInput
+            <AppInput
               label={form.momoProvider === 'mtn' ? 'MoMo Pay Code' : 'Airtel Merchant Code'}
               placeholder="e.g. 123456"
               value={form.merchantCode}
@@ -775,14 +776,14 @@ export default function DriverOnboarding() {
                 {'I agree to the '}
                 <Text
                   style={[styles.termsLink, { color: colors.primary }]}
-                  onPress={() => Linking.openURL('https://taravelis.rw/terms')}
+                  onPress={() => Linking.openURL(TERMS_URL)}
                 >
                   Terms of Service
                 </Text>
                 {' and '}
                 <Text
                   style={[styles.termsLink, { color: colors.primary }]}
-                  onPress={() => Linking.openURL('https://taravelis.rw/privacy')}
+                  onPress={() => Linking.openURL(PRIVACY_URL)}
                 >
                   Privacy Policy
                 </Text>
@@ -793,7 +794,7 @@ export default function DriverOnboarding() {
           </View>
         )}
 
-        <KandaButton
+        <AppButton
           title={step < 3 ? 'Continue' : 'Submit Registration'}
           onPress={handleNext}
           fullWidth

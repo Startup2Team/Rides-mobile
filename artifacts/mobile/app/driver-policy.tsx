@@ -11,7 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
+import { APP_NAME } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { DriverProfile } from '@/types';
@@ -20,7 +21,7 @@ const POLICIES = [
   {
     id: 'terms',
     title: 'Driver Terms & Conditions',
-    summary: 'You agree to provide safe, professional ride services on the Taravelis platform. You understand that Taravelis connects drivers with customers and maintains a 15% platform commission on all completed rides.',
+    summary: `You agree to provide safe, professional ride services on the ${APP_NAME} platform. You understand that ${APP_NAME} connects drivers with customers and maintains a 15% platform commission on all completed rides.`,
   },
   {
     id: 'safety',
@@ -30,7 +31,7 @@ const POLICIES = [
   {
     id: 'commission',
     title: 'Platform Commission Policy',
-    summary: 'Taravelis charges a 15% commission on all agreed fares. Payments are processed via Mobile Money (MoMo) within 24 hours of ride completion. Commission rates may be revised with 30 days notice.',
+    summary: `${APP_NAME} charges a 15% commission on all agreed fares. Payments are processed via Mobile Money (MoMo) within 24 hours of ride completion. Commission rates may be revised with 30 days notice.`,
   },
   {
     id: 'conduct',
@@ -40,7 +41,7 @@ const POLICIES = [
   {
     id: 'privacy',
     title: 'Privacy Policy',
-    summary: 'Taravelis collects location data to match drivers with customers and improve service. Your personal data is stored securely and not shared with third parties without consent, except as required by law.',
+    summary: `${APP_NAME} collects location data to match drivers with customers and improve service. Your personal data is stored securely and not shared with third parties without consent, except as required by law.`,
   },
 ];
 
@@ -186,7 +187,7 @@ export default function DriverPolicyScreen() {
           </Text>
         </View>
 
-        <KandaButton
+        <AppButton
           title="Activate Driver Account"
           onPress={handleActivate}
           fullWidth

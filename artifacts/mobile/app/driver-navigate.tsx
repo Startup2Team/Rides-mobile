@@ -5,7 +5,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -403,7 +403,7 @@ export default function DriverNavigateScreen() {
         </View>
 
         {phase === 'pickup' && (
-          <KandaButton
+          <AppButton
             title={canMarkArrived ? 'I Have Arrived' : `Arrive closer (${pickupDistanceText})`}
             onPress={markArrived}
             disabled={!canMarkArrived}
@@ -428,7 +428,7 @@ export default function DriverNavigateScreen() {
               </Text>
             )}
             <View style={styles.waitingActions}>
-              <KandaButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
+              <AppButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
               <TouchableOpacity
                 style={[
                   styles.cancelRideBtn,
@@ -455,7 +455,7 @@ export default function DriverNavigateScreen() {
               <Feather name="alert-octagon" size={16} color={colors.destructive} />
               <Text style={[styles.cancelRideBtnText, { color: colors.destructive }]}>End Journey</Text>
             </TouchableOpacity>
-            <KandaButton title="Complete Ride" onPress={handleCompleteRide} style={{ flex: 1 }} size="lg" />
+            <AppButton title="Complete Ride" onPress={handleCompleteRide} style={{ flex: 1 }} size="lg" />
           </View>
         )}
       </View>

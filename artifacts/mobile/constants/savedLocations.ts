@@ -1,6 +1,7 @@
 import { Dimensions } from 'react-native';
+import { STORAGE_KEYS } from '@/constants/storage';
 
-export const SAVED_LOCATIONS_KEY = '@taravelis_saved_locations';
+export const SAVED_LOCATIONS_KEY = STORAGE_KEYS.savedLocations;
 export const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'] as const;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

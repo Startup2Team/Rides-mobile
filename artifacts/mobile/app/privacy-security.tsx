@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { APP_NAME, PRIVACY_EMAIL, PRIVACY_URL } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 
 const SECTIONS = [
@@ -49,7 +50,7 @@ const SECTIONS = [
       'Request a copy of your data at any time',
       'Delete your account and all data from your profile',
       'Opt out of marketing communications',
-      'Contact us at privacy@taravelis.rw',
+      `Contact us at ${PRIVACY_EMAIL}`,
     ],
   },
 ];
@@ -73,7 +74,7 @@ export default function PrivacySecurityScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.primary }]}>Your data is protected</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
-              Taravelis is GDPR-aligned and complies with Rwanda's data protection law.
+              {APP_NAME} is GDPR-aligned and complies with Rwanda's data protection law.
             </Text>
           </View>
         </View>
@@ -100,7 +101,7 @@ export default function PrivacySecurityScreen() {
         {/* Links */}
         <TouchableOpacity
           style={[styles.linkRow, { borderColor: colors.border }]}
-          onPress={() => Linking.openURL('https://taravelis.rw/privacy')}
+          onPress={() => Linking.openURL(PRIVACY_URL)}
           activeOpacity={0.75}
         >
           <Feather name="external-link" size={16} color={colors.primary} />
