@@ -18,12 +18,17 @@ const STATUS_LABELS: Record<RideStatus, string> = {
 
 interface StatusChipProps {
   status: RideStatus;
+  /**
+   * `history` — My Rides / archives: only completed (green) and cancelled (red) use accent colors;
+   * other states stay neutral so the list does not read as a rainbow of statuses.
+   */
+  variant?: 'default' | 'history';
 }
 
-export function StatusChip({ status }: StatusChipProps) {
+export function StatusChip({ status, variant = 'default' }: StatusChipProps) {
   const colors = useColors();
 
-  const chipColors: Record<RideStatus, { bg: string; text: string }> = {
+  const defaultChipColors: Record<RideStatus, { bg: string; text: string }> = {
     idle: { bg: colors.muted, text: colors.mutedForeground },
     searching: { bg: colors.warningHex + '18', text: colors.warningHex },
     driver_assigned: { bg: colors.successHex + '20', text: colors.successHex },
@@ -36,7 +41,17 @@ export function StatusChip({ status }: StatusChipProps) {
     cancelled: { bg: colors.destructiveHex + '14', text: colors.destructiveHex },
   };
 
-  const chip = chipColors[status];
+  const historyAccent: Partial<Record<RideStatus, { bg: string; text: string }>> = {
+    completed: defaultChipColors.completed,
+    cancelled: defaultChipColors.cancelled,
+  };
+
+  const neutralHistory = { bg: colors.muted, text: colors.mutedForeground };
+
+  const chip =
+    variant === 'history'
+      ? (historyAccent[status] ?? neutralHistory)
+      : defaultChipColors[status];
 
   return (
     <View style={[styles.chip, { backgroundColor: chip.bg }]}>

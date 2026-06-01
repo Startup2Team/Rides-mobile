@@ -13,6 +13,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { SaveLocationSheet } from '@/components/SaveLocationSheet';
 import { StatusChip } from '@/components/StatusChip';
+import { RouteTimeline } from '@/components/RouteTimeline';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { RideLocation, VEHICLE_LABELS } from '@/types';
@@ -160,7 +161,7 @@ export default function RideDetailScreen() {
                 {fare.toLocaleString()} RWF
               </Text>
             </View>
-            <StatusChip status={ride.status} />
+            <StatusChip status={ride.status} variant="history" />
           </View>
 
           <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
@@ -190,11 +191,7 @@ export default function RideDetailScreen() {
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ROUTE</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <View style={styles.routeRow}>
-            <View style={styles.routeIcons}>
-              <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-              <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
-              <View style={[styles.dot, styles.destinationDot, { backgroundColor: colors.destructive }]} />
-            </View>
+            <RouteTimeline />
             <View style={styles.routeLabels}>
               <RouteLocationRow
                 label="Pickup"
@@ -215,19 +212,18 @@ export default function RideDetailScreen() {
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>TRIP SUMMARY</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <DetailRow icon="map" label="Distance" value={`${ride.distance} km`} color={colors.primaryHex} />
+          <DetailRow icon="map" label="Distance" value={`${ride.distance} km`} color={colors.mutedForeground} />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-          <DetailRow icon="clock" label="Duration" value={formatDuration(ride.duration)} color={colors.primaryHex} />
+          <DetailRow icon="clock" label="Duration" value={formatDuration(ride.duration)} color={colors.mutedForeground} />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
           <DetailRow
             icon="credit-card"
             label={ride.agreedFare ? 'Agreed fare' : 'Estimated fare'}
             value={`${fare.toLocaleString()} RWF`}
-            color={colors.primaryHex}
-            valueColor={colors.primaryHex}
+            color={colors.mutedForeground}
           />
           <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
-          <DetailRow icon="hash" label="Ride ID" value={ride.id.slice(-8).toUpperCase()} color={colors.primaryHex} />
+          <DetailRow icon="hash" label="Ride ID" value={ride.id.slice(-8).toUpperCase()} color={colors.mutedForeground} />
         </View>
 
         {ride.driver && (
@@ -293,10 +289,6 @@ const styles = StyleSheet.create({
   },
   card: { borderRadius: 16, padding: 16 },
   routeRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  routeIcons: { alignItems: 'center', gap: 4, paddingVertical: 2 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  destinationDot: { borderRadius: 3 },
-  routeLine: { width: 1.5, height: 34 },
   routeLabels: { flex: 1, gap: 10 },
   routeItem: {
     flexDirection: 'row',
