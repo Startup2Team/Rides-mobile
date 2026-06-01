@@ -20,10 +20,11 @@ import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { AppButton } from '@/components/AppButton';
+import { LocationMapPin } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
-import { showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
+import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { Coords, KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
@@ -105,9 +106,6 @@ export default function RideScreen() {
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [driverCardHeight, setDriverCardHeight] = useState(260);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
-  const [cancelModalVisible, setCancelModalVisible] = useState(false);
-  const [cancelModalReasons, setCancelModalReasons] = useState<string[]>([]);
-  const [cancelModalKeepLabel, setCancelModalKeepLabel] = useState('Keep ride');
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
 
   const { route: rideRoute } = useRoute(
@@ -181,6 +179,7 @@ export default function RideScreen() {
     [activeDriverLocation, isInProgress, rideRoute],
   );
   const activeRemainingRoute = isArriving ? remainingDriverToPickupRoute : remainingPickupToDestinationRoute;
+
   const activeVehicleType = currentRide?.vehicleType ?? 'moto';
   const vehicleRotationDeg = useMemo(() => {
     const routeForHeading = isArrived && rideRoute && rideRoute.coordinates.length >= 2
@@ -239,33 +238,69 @@ export default function RideScreen() {
     if (currentRide?.status === 'negotiating') router.replace('/negotiation');
   }, [currentRide?.status]);
 
+  const mapFitEdgePadding = useMemo(
+    () => ({
+      top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 108,
+      right: MAP_EDGE_PADDING.right,
+      bottom: driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 12) + 28,
+      left: MAP_EDGE_PADDING.left,
+    }),
+    [driverCardHeight, insets.bottom, insets.top],
+  );
+
   useEffect(() => {
     if (!mapRef.current || !currentRide) return;
     const status = currentRide.status;
-    if (fittedMapStateRef.current === status) return;
 
     if (status === 'arriving' && activeDriverLocation) {
+      if (fittedMapStateRef.current === 'arriving') return;
       mapRef.current.fitToCoordinates(
         [activeDriverLocation, currentRide.pickup],
-        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true },
+        { edgePadding: mapFitEdgePadding, animated: true },
       );
-      fittedMapStateRef.current = status;
+      fittedMapStateRef.current = 'arriving';
       return;
     }
 
     if (status === 'arrived') {
-      fittedMapStateRef.current = status;
+      const routeReady = Boolean(rideRoute && rideRoute.coordinates.length > 1);
+      const fitKey = routeReady ? 'arrived-route' : 'arrived-pickup-dest';
+      if (fittedMapStateRef.current === fitKey) return;
+
+      const coordinates = routeReady
+        ? rideRoute!.coordinates
+        : [currentRide.pickup, currentRide.destination];
+
+      mapRef.current.fitToCoordinates(coordinates, {
+        edgePadding: mapFitEdgePadding,
+        animated: true,
+      });
+      fittedMapStateRef.current = fitKey;
       return;
     }
 
     if (status === 'in_progress') {
-      mapRef.current.fitToCoordinates(
-        [currentRide.pickup, currentRide.destination],
-        { edgePadding: { top: 120, right: 40, bottom: 300, left: 40 }, animated: true },
-      );
-      fittedMapStateRef.current = status;
+      // Keep the arrived-screen framing when customer taps Start Journey (no second zoom).
+      const alreadyFramedForTrip =
+        fittedMapStateRef.current === 'arrived-route' ||
+        fittedMapStateRef.current === 'arrived-pickup-dest' ||
+        fittedMapStateRef.current === 'in_progress';
+      if (alreadyFramedForTrip) {
+        fittedMapStateRef.current = 'in_progress';
+        return;
+      }
+
+      const coordinates =
+        rideRoute && rideRoute.coordinates.length > 1
+          ? rideRoute.coordinates
+          : [currentRide.pickup, currentRide.destination];
+      mapRef.current.fitToCoordinates(coordinates, {
+        edgePadding: mapFitEdgePadding,
+        animated: true,
+      });
+      fittedMapStateRef.current = 'in_progress';
     }
-  }, [activeDriverLocation, currentRide]);
+  }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
 
   const navigateToRating = () => {
     if (!currentRide) return;
@@ -299,17 +334,8 @@ export default function RideScreen() {
     ]);
   };
 
-  const openCancelModal = (reasons: string[], keepLabel: string) => {
-    setCancelModalReasons(reasons);
-    setCancelModalKeepLabel(keepLabel);
-    setCancelModalVisible(true);
-  };
-
   const handleCancelArrived = () => {
-    openCancelModal(
-      ['Driver asked me to cancel', 'Waited too long', 'Changed plans'],
-      'Keep ride',
-    );
+    showCancelArrivedRideAlert(doCancelRide);
   };
 
   const handleCancelArriving = () => {
@@ -356,11 +382,6 @@ export default function RideScreen() {
   const recenterRideMap = useCallback(() => {
     if (!mapRef.current || !currentRide) return;
 
-    const edgePadding = {
-      ...MAP_EDGE_PADDING,
-      bottom: driverCardHeight + insets.bottom + 48,
-    };
-
     const driverCoord = isArrived
       ? arrivedDriverCoords ?? driverLocation ?? currentRide.pickup
       : liveDriverCoords ?? driverLocation;
@@ -368,30 +389,43 @@ export default function RideScreen() {
     if (currentRide.status === 'arriving' && driverCoord) {
       mapRef.current.fitToCoordinates(
         [driverCoord, currentRide.pickup],
-        { edgePadding, animated: true },
+        { edgePadding: mapFitEdgePadding, animated: true },
       );
+      return;
+    }
+
+    if (currentRide.status === 'arrived') {
+      const coordinates =
+        rideRoute && rideRoute.coordinates.length > 1
+          ? rideRoute.coordinates
+          : [currentRide.pickup, currentRide.destination];
+      mapRef.current.fitToCoordinates(coordinates, {
+        edgePadding: mapFitEdgePadding,
+        animated: true,
+      });
       return;
     }
 
     if (currentRide.status === 'in_progress' && driverCoord) {
       mapRef.current.fitToCoordinates(
         [driverCoord, currentRide.destination],
-        { edgePadding, animated: true },
+        { edgePadding: mapFitEdgePadding, animated: true },
       );
       return;
     }
 
     mapRef.current.fitToCoordinates(
       [currentRide.pickup, currentRide.destination],
-      { edgePadding, animated: true },
+      { edgePadding: mapFitEdgePadding, animated: true },
     );
   }, [
     arrivedDriverCoords,
     currentRide,
-    driverCardHeight,
     driverLocation,
-    insets.bottom,
+    isArrived,
     liveDriverCoords,
+    mapFitEdgePadding,
+    rideRoute,
   ]);
 
   if (!currentRide) return null;
@@ -439,23 +473,15 @@ export default function RideScreen() {
           </Marker>
         )}
         {!isInProgress && (
-          <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.pickupMarker}>
-              <View style={[styles.pickupMarkerRing, { borderColor: colors.primary }]}>
-                <View style={[styles.pickupMarkerDot, { backgroundColor: colors.primary }]} />
-              </View>
-              <View style={[styles.pickupMarkerStem, { backgroundColor: colors.primary }]} />
-            </View>
+          <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+            <LocationMapPin variant="pickup" />
           </Marker>
         )}
         {(isArrived || isInProgress) && (
-          <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }}>
-            <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
-              <Feather name="map-pin" size={10} color="#fff" />
-            </View>
+          <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+            <LocationMapPin variant="destination" />
           </Marker>
         )}
-        {/* Real road route */}
         {isArriving && remainingDriverToPickupRoute ? (
           <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
         ) : null}
@@ -516,19 +542,28 @@ export default function RideScreen() {
           },
         ]}
       >
-        <View style={styles.statusRow}>
-          <StatusChip status={currentRide.status} />
-          <View style={styles.statusTextWrap}>
-            <Text style={[styles.statusMsg, { color: colors.foreground }]} numberOfLines={1}>
+        <View style={styles.topStatusBar}>
+          <View style={styles.topStatusSlot}>
+            <StatusChip status={currentRide.status} variant="rideHeader" />
+          </View>
+          <View style={[styles.topStatusSlot, styles.topStatusSlotEnd]}>
+            {currentRide.driver && (
+              <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>
+                {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`)}
+              </Text>
+            )}
+          </View>
+          <View style={styles.topStatusTitleOverlay} pointerEvents="none">
+            <Text
+              style={[styles.statusMsg, { color: colors.foreground }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
               {statusMsg}
             </Text>
           </View>
         </View>
-        {currentRide.driver && (
-          <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>
-            {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`)}
-          </Text>
-        )}
       </View>
 
       {isArrived && (
@@ -688,37 +723,6 @@ export default function RideScreen() {
         </View>
       </View>
 
-      {/* Cancellation reason modal */}
-      <Modal
-        visible={cancelModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCancelModalVisible(false)}
-      >
-        <View style={styles.cancelOverlay}>
-          <View style={[styles.cancelCard, { backgroundColor: colors.background }]}>
-            <Text style={[styles.cancelTitle, { color: colors.foreground }]}>Why are you cancelling?</Text>
-
-            <AppButton
-              title={cancelModalKeepLabel}
-              variant="primary"
-              fullWidth
-              onPress={() => setCancelModalVisible(false)}
-            />
-
-            {cancelModalReasons.map(reason => (
-              <AppButton
-                key={reason}
-                title={reason}
-                variant="secondary"
-                fullWidth
-                onPress={() => { setCancelModalVisible(false); doCancelRide(); }}
-              />
-            ))}
-          </View>
-        </View>
-      </Modal>
-
       <Modal
         visible={completeModalVisible}
         transparent
@@ -796,19 +800,46 @@ const styles = StyleSheet.create({
   },
   topStatus: {
     position: 'absolute',
-    top: 0, left: 0, right: 0,
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
     paddingBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
   },
-  statusRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statusTextWrap: { flex: 1, minWidth: 0, alignItems: 'center' },
-  statusMsg: { fontSize: 13, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
-  statusEtaText: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 2 },
-  eta: { flexShrink: 0, fontSize: 13, fontFamily: 'Inter_700Bold' },
+  topStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 32,
+    position: 'relative',
+  },
+  topStatusSlot: {
+    flex: 1,
+    minWidth: 0,
+    zIndex: 1,
+    justifyContent: 'center',
+  },
+  topStatusSlotEnd: {
+    alignItems: 'flex-end',
+  },
+  topStatusTitleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 76,
+    zIndex: 0,
+  },
+  statusMsg: {
+    maxWidth: '100%',
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  eta: {
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    textAlign: 'right',
+  },
   arrivedBanner: {
     position: 'absolute',
     top: 110,
@@ -821,19 +852,6 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   arrivedBannerText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
-  pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  pickupMarker: { alignItems: 'center' },
-  pickupMarkerRing: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 3,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pickupMarkerDot: { width: 6, height: 6, borderRadius: 3 },
-  pickupMarkerStem: { width: 2, height: 10, borderRadius: 1, marginTop: -1 },
   driverCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
@@ -871,21 +889,6 @@ const styles = StyleSheet.create({
   fareValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   wideActionBtn: { flex: 1 },
-  cancelOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    padding: 20,
-    paddingBottom: 40,
-  },
-  cancelCard: {
-    width: '100%',
-    borderRadius: 20,
-    padding: 16,
-    gap: 10,
-  },
-  cancelTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center', marginBottom: 4 },
   completeOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

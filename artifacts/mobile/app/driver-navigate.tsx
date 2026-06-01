@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
+import { LocationMapPin } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -261,6 +262,7 @@ export default function DriverNavigateScreen() {
     () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
     [driverPos, route],
   );
+
   const vehicleRotationDeg = useMemo(() => {
     if (!remainingRoute || remainingRoute.length < 2) return 0;
     const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
@@ -282,15 +284,11 @@ export default function DriverNavigateScreen() {
             rotationDeg={vehicleRotationDeg}
           />
         </Marker>
-        <Marker coordinate={currentRide.pickup}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.primary }]}>
-            <Feather name="user" size={14} color="#fff" />
-          </View>
+        <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+          <LocationMapPin variant="pickup" />
         </Marker>
-        <Marker coordinate={currentRide.destination}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
-            <Feather name="map-pin" size={14} color="#fff" />
-          </View>
+        <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+          <LocationMapPin variant="destination" />
         </Marker>
         {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
       </MapView>
@@ -529,7 +527,6 @@ const styles = StyleSheet.create({
   rerouteText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   rerouteBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   bottomCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,

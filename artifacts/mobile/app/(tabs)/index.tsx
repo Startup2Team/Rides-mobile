@@ -43,6 +43,7 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import { LOCATION_MAP_PIN_SIZE, LocationMapPin } from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -534,6 +535,7 @@ export default function CustomerHome() {
     },
     [visibleRouteCoords, routeAnimProgress],
   );
+
   useEffect(() => {
     if (visibleRouteCoords.length < 2) {
       setRouteAnimProgress(0);
@@ -1071,21 +1073,15 @@ export default function CustomerHome() {
           />
         )}
 
-        {/* Pickup marker */}
         {shouldShowPickupMarker && (
-          <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.routeMarker}>
-              <View style={[styles.routeMarkerDot, { backgroundColor: colors.primary }]} />
-            </View>
+          <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+            <LocationMapPin variant="pickup" />
           </Marker>
         )}
 
-        {/* Dropoff marker */}
         {showBooking && destination && (
-          <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.routeMarker}>
-              <View style={[styles.routeMarkerDot, { backgroundColor: colors.destructive }]} />
-            </View>
+          <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+            <LocationMapPin variant="destination" />
           </Marker>
         )}
 
@@ -1401,7 +1397,11 @@ export default function CustomerHome() {
                 style={[styles.locationSearchInput, { color: colors.foreground }]}
                 value={locationSearchText}
                 onChangeText={handleLocationSearchText}
-                placeholder={locationSearchTarget === 'pickup' ? 'Search pickup location' : 'Search drop off location'}
+                placeholder={
+                  locationSearchTarget === 'pickup'
+                    ? 'Address, hotel, or 1 KG 185 ST'
+                    : 'Address, hotel, or 1 KG 185 ST'
+                }
                 placeholderTextColor={colors.mutedForeground}
                 returnKeyType="search"
               />
@@ -1534,6 +1534,14 @@ export default function CustomerHome() {
                 </TouchableOpacity>
               )}
 
+              {locationSearchText.trim().length >= 2 &&
+                !locationSearchLoading &&
+                suggestions.length === 0 && (
+                  <Text style={[styles.locationSearchEmpty, { color: colors.mutedForeground }]}>
+                    No matches yet. Try the full name (e.g. Serena Hotel) or a grid address with ST/AV, or pin on the map.
+                  </Text>
+                )}
+
               {suggestions.map(suggestion => (
                 <TouchableOpacity
                   key={suggestion.id}
@@ -1549,9 +1557,11 @@ export default function CustomerHome() {
                   </View>
                   <View style={styles.locationOptionText}>
                     <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
-                      {suggestion.place_name}
+                      {suggestion.title}
                     </Text>
-                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Precise location</Text>
+                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      {suggestion.subtitle ?? suggestion.place_name}
+                    </Text>
                   </View>
                   <TouchableOpacity
                     style={[styles.saveLocationButton, { borderColor: colors.border }]}
@@ -1949,10 +1959,8 @@ export default function CustomerHome() {
 
           {/* Fixed center pin */}
           <View style={styles.fixedPinContainer} pointerEvents="none">
-            <MaterialCommunityIcons
-              name="map-marker"
-              size={48}
-              color={colors.destructiveHex}
+            <LocationMapPin
+              variant={mapPicker === 'dropoff' ? 'destination' : 'pickup'}
             />
           </View>
 
@@ -2204,8 +2212,6 @@ const styles = StyleSheet.create({
   suggestionsBox: { borderRadius: 10, marginTop: 4, overflow: 'hidden' },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   suggestionText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
-  routeMarker: { alignItems: 'center' },
-  routeMarkerDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
   vehicleMarkerShadow: {
     position: 'absolute',
     width: 52,
@@ -2435,6 +2441,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
   },
+  locationSearchEmpty: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
   locationSectionTitle: {
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
@@ -2617,7 +2630,13 @@ const styles = StyleSheet.create({
   },
   // Map picker
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
-  fixedPinContainer: { position: 'absolute', top: '50%', left: '50%', marginLeft: -24, marginTop: -48 },
+  fixedPinContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -(LOCATION_MAP_PIN_SIZE / 2),
+    marginTop: -LOCATION_MAP_PIN_SIZE,
+  },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   mapPickerControlsRail: {
     position: 'absolute',

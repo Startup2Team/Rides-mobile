@@ -1,17 +1,29 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const makeResolver = require("@rnx-kit/metro-resolver-symlinks");
+const symlinkResolver = makeResolver();
 const path = require("path");
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, "../..");
 
-// Web shim for react-native-maps (uses native modules not available on web)
+const config = getDefaultConfig(projectRoot);
+
+config.watchFolders = [workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, "node_modules"),
+  path.resolve(workspaceRoot, "node_modules"),
+];
+config.resolver.unstable_enableSymlinks = true;
+config.resolver.unstable_enablePackageExports = true;
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (platform === "web" && moduleName === "react-native-maps") {
     return {
-      filePath: path.resolve(__dirname, "mocks/react-native-maps.js"),
+      filePath: path.resolve(projectRoot, "mocks/react-native-maps.js"),
       type: "sourceFile",
     };
   }
-  return context.resolveRequest(context, moduleName, platform);
+  return symlinkResolver(context, moduleName, platform);
 };
 
 module.exports = config;
