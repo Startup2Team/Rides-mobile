@@ -18,7 +18,7 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
@@ -563,7 +563,7 @@ export default function NegotiationScreen() {
         )}
 
         <View style={[styles.mainActions, { paddingBottom: footerBottomInset }]}>
-          <KandaButton
+          <AppButton
             title="Decline"
             icon="x"
             variant="decline"
@@ -572,7 +572,7 @@ export default function NegotiationScreen() {
             onPress={handleDecline}
             style={styles.actionFlexNarrow}
           />
-          <KandaButton
+          <AppButton
             title="Call"
             icon="phone"
             variant="call"
@@ -581,7 +581,7 @@ export default function NegotiationScreen() {
             onPress={handleCall}
             style={customerLimitReached ? styles.actionFlexWide : styles.actionFlexNarrow}
           />
-          <KandaButton
+          <AppButton
             title={lastDriverOffer ? 'Accept fare' : 'Waiting'}
             icon="check"
             variant="primary"
@@ -630,14 +630,14 @@ export default function NegotiationScreen() {
           </View>
         </View>
         <View style={styles.modalActions}>
-          <KandaButton
+          <AppButton
             title="Back"
             variant="secondary"
             size="md"
             onPress={() => setShowAcceptModal(false)}
             style={styles.modalActionBtn}
           />
-          <KandaButton
+          <AppButton
             title="Accept Fare"
             variant="primary"
             size="md"

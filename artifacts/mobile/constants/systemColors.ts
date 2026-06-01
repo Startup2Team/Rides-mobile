@@ -38,8 +38,8 @@ export const APPLE_SYSTEM_GRAY_HEX = {
   dark: '#8E8E93',
 } as const;
 
-/** Taravelis brand green (original accent) — use for success / live / on-map “you”. */
-export const TARAVELIS_BRAND_GREEN_HEX = {
+/** Rides brand green — success / live / on-map “you”. */
+export const BRAND_GREEN_HEX = {
   light: '#00C853',
   dark: '#32D74B',
 } as const;
@@ -64,7 +64,7 @@ export function systemBlueHex(scheme: 'light' | 'dark' | null | undefined): stri
 }
 
 export function brandGreenHex(scheme: 'light' | 'dark' | null | undefined): string {
-  return scheme === 'dark' ? TARAVELIS_BRAND_GREEN_HEX.dark : TARAVELIS_BRAND_GREEN_HEX.light;
+  return scheme === 'dark' ? BRAND_GREEN_HEX.dark : BRAND_GREEN_HEX.light;
 }
 
 export function systemOrangeHex(scheme: 'light' | 'dark' | null | undefined): string {

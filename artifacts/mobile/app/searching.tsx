@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
@@ -165,7 +165,7 @@ export default function SearchingScreen() {
       </View>
 
       <View style={styles.footer}>
-        <KandaButton
+        <AppButton
           title="Cancel Search"
           onPress={handleCancel}
           variant="outline"

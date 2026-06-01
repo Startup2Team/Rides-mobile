@@ -10,7 +10,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
-interface KandaInputProps extends TextInputProps {
+interface AppInputProps extends TextInputProps {
   label?: string;
   floatingLabel?: string;
   error?: string;
@@ -19,7 +19,7 @@ interface KandaInputProps extends TextInputProps {
   onRightIconPress?: () => void;
 }
 
-export function KandaInput({
+export function AppInput({
   label,
   floatingLabel,
   error,
@@ -28,7 +28,7 @@ export function KandaInput({
   onRightIconPress,
   style,
   ...props
-}: KandaInputProps) {
+}: AppInputProps) {
   const colors = useColors();
   const [focused, setFocused] = useState(false);
 

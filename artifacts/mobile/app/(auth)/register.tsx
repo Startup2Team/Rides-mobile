@@ -17,8 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 import { BackButton } from '@/components/BackButton';
-import { KandaButton } from '@/components/KandaButton';
-import { KandaInput } from '@/components/KandaInput';
+import { AppButton } from '@/components/AppButton';
+import { AppInput } from '@/components/AppInput';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useColors } from '@/hooks/useColors';
 
@@ -120,7 +120,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.form}>
-            <KandaInput
+            <AppInput
               placeholder="Full name"
               floatingLabel="Full name"
               value={form.name}
@@ -180,7 +180,7 @@ export default function RegisterScreen() {
 
             {editingForm && (
               <View style={styles.inlineContinue}>
-                <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+                <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
               </View>
             )}
           </View>
@@ -198,7 +198,7 @@ export default function RegisterScreen() {
             },
           ]}
         >
-          <KandaButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+          <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
           <View style={styles.row}>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
             <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>

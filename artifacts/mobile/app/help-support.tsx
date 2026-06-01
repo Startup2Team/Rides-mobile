@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 
 const FAQS = [
@@ -27,7 +28,7 @@ const FAQS = [
   },
   {
     q: 'How do I report a safety issue?',
-    a: 'Use the SOS button during an active ride to get emergency contacts. For non-emergency reports, email us at safety@taravelis.rw.',
+    a: `Use the SOS button during an active ride to get emergency contacts. For non-emergency reports, email us at ${SAFETY_EMAIL}.`,
   },
   {
     q: 'My driver did not show up — what do I do?',
@@ -51,8 +52,8 @@ const CONTACT_CHANNELS = [
     id: 'email',
     icon: 'mail' as const,
     label: 'Email Us',
-    detail: 'support@taravelis.rw',
-    onPress: () => Linking.openURL('mailto:support@taravelis.rw'),
+    detail: SUPPORT_EMAIL,
+    onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`),
   },
   {
     id: 'whatsapp',

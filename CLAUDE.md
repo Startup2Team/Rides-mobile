@@ -1,4 +1,4 @@
-# Taravelis — Claude Code Standing Instructions
+# Rides — Claude Code Standing Instructions
 
 These rules apply to **every single prompt** in this project, without exception. Before doing anything, Claude must mentally apply all skill domains below to the task at hand.
 

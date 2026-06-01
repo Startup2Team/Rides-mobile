@@ -11,6 +11,7 @@ import {
   VEHICLE_BASE_FARE,
   VehicleType,
 } from '@/types';
+import { STORAGE_KEYS } from '@/constants/storage';
 
 interface RideContextType {
   currentRide: Ride | null;
@@ -417,9 +418,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       setRideHistory(hist => [completed, ...hist]);
-      AsyncStorage.getItem('@taravelis_history').then(str => {
+      AsyncStorage.getItem(STORAGE_KEYS.rideHistory).then(str => {
         const hist: Ride[] = str ? JSON.parse(str) : [];
-        AsyncStorage.setItem('@taravelis_history', JSON.stringify([completed, ...hist].slice(0, 50)));
+        AsyncStorage.setItem(STORAGE_KEYS.rideHistory, JSON.stringify([completed, ...hist].slice(0, 50)));
       });
       return null;
     });
@@ -471,7 +472,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const str = await AsyncStorage.getItem('@taravelis_history');
+      const str = await AsyncStorage.getItem(STORAGE_KEYS.rideHistory);
       if (str) setRideHistory(JSON.parse(str));
     } catch {
     }

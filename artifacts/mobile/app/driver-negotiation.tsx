@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
@@ -261,7 +261,7 @@ export default function DriverNegotiationScreen() {
         )}
 
         <View style={styles.mainActions}>
-          <KandaButton
+          <AppButton
             title="Decline"
             icon="x"
             variant="dangerPlain"
@@ -269,7 +269,7 @@ export default function DriverNegotiationScreen() {
             onPress={handleDecline}
             style={styles.actionFlexNarrow}
           />
-          <KandaButton
+          <AppButton
             title="Call"
             icon="phone"
             variant="call"
@@ -277,7 +277,7 @@ export default function DriverNegotiationScreen() {
             onPress={handleCall}
             style={styles.actionFlexNarrow}
           />
-          <KandaButton
+          <AppButton
             title="Accept"
             icon="check"
             variant="primary"
@@ -287,7 +287,7 @@ export default function DriverNegotiationScreen() {
             style={styles.actionFlexPrimary}
           />
         </View>
-        <KandaButton
+        <AppButton
           title="Lock manually agreed fare"
           icon="lock"
           variant="plain"
@@ -310,14 +310,14 @@ export default function DriverNegotiationScreen() {
           This fare will be locked for the ride and visible to both you and the customer.
         </Text>
         <View style={styles.modalActions}>
-          <KandaButton
+          <AppButton
             title="Back"
             variant="secondary"
             size="md"
             onPress={() => setShowAcceptModal(false)}
             style={styles.modalActionBtn}
           />
-          <KandaButton
+          <AppButton
             title="Accept Fare"
             variant="primary"
             size="md"
@@ -349,14 +349,14 @@ export default function DriverNegotiationScreen() {
         </View>
         {manualError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{manualError}</Text> : null}
         <View style={styles.modalActions}>
-          <KandaButton
+          <AppButton
             title="Back"
             variant="secondary"
             size="md"
             onPress={() => setShowManualModal(false)}
             style={styles.modalActionBtn}
           />
-          <KandaButton
+          <AppButton
             title="Lock Fare"
             variant="primary"
             size="md"

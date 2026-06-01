@@ -19,7 +19,7 @@ import { useRide } from '@/context/RideContext';
 import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { KandaButton } from '@/components/KandaButton';
+import { AppButton } from '@/components/AppButton';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
@@ -458,7 +458,7 @@ export default function RideScreen() {
         {/* Actions */}
         <View style={styles.actions}>
           {(isArriving || isArrived) && (
-            <KandaButton
+            <AppButton
               title={isArriving ? 'Call driver' : 'Call'}
               icon="phone"
               variant="call"
@@ -469,7 +469,7 @@ export default function RideScreen() {
             />
           )}
           {isArriving && (
-            <KandaButton
+            <AppButton
               title="Cancel"
               icon="x"
               variant="dangerPlain"
@@ -481,7 +481,7 @@ export default function RideScreen() {
           )}
           {isArrived && (
             <>
-              <KandaButton
+              <AppButton
                 title="Cancel Ride"
                 icon="x"
                 variant="dangerPlain"
@@ -489,7 +489,7 @@ export default function RideScreen() {
                 onPress={handleCancelArrived}
                 style={{ flex: 1 }}
               />
-              <KandaButton
+              <AppButton
                 title="Start Journey"
                 onPress={startJourney}
                 style={{ flex: 1 }}
@@ -506,7 +506,7 @@ export default function RideScreen() {
               >
                 <Text style={styles.sosBtnText}>SOS</Text>
               </TouchableOpacity>
-              <KandaButton
+              <AppButton
                 title="Emergency"
                 icon="alert-octagon"
                 variant="dangerPlain"
@@ -515,7 +515,7 @@ export default function RideScreen() {
                 onPress={handleEmergencyEnd}
                 accessibilityLabel="Report emergency"
               />
-              <KandaButton
+              <AppButton
                 title="Complete Ride"
                 onPress={handleComplete}
                 style={{ flex: 1 }}
@@ -536,7 +536,7 @@ export default function RideScreen() {
           <View style={[styles.cancelCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.cancelTitle, { color: colors.foreground }]}>Why are you cancelling?</Text>
 
-            <KandaButton
+            <AppButton
               title={cancelModalKeepLabel}
               variant="primary"
               fullWidth
@@ -544,7 +544,7 @@ export default function RideScreen() {
             />
 
             {cancelModalReasons.map(reason => (
-              <KandaButton
+              <AppButton
                 key={reason}
                 title={reason}
                 variant="secondary"
@@ -572,13 +572,13 @@ export default function RideScreen() {
               Confirm only when you have reached your destination.
             </Text>
             <View style={styles.completeActions}>
-              <KandaButton
+              <AppButton
                 title="Not yet"
                 variant="secondary"
                 onPress={() => setCompleteModalVisible(false)}
                 style={styles.completeActionBtn}
               />
-              <KandaButton
+              <AppButton
                 title="Complete"
                 variant="primary"
                 onPress={confirmCompleteRide}
