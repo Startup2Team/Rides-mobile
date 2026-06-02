@@ -1,8 +1,9 @@
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 export type LocationMapPinVariant = 'pickup' | 'destination';
+export type LocationMapPinMapType = 'standard' | 'satellite' | 'hybrid';
 
 export const LOCATION_MAP_PIN_SIZE = 48;
 const LOCATION_MAP_PIN_HEAD_SIZE = Math.round(LOCATION_MAP_PIN_SIZE * 0.5);
@@ -24,16 +25,27 @@ export const LOCATION_MAP_PIN_CENTER_OFFSET = Platform.select({
 interface LocationMapPinProps {
   variant: LocationMapPinVariant;
   size?: number;
+  mapType?: LocationMapPinMapType;
 }
 
 /** Lollipop map pin: circle head + stem with pointed tip. */
-export function LocationMapPin({ variant, size = LOCATION_MAP_PIN_SIZE }: LocationMapPinProps) {
+export function LocationMapPin({
+  variant,
+  size = LOCATION_MAP_PIN_SIZE,
+  mapType = 'standard',
+}: LocationMapPinProps) {
   const colors = useColors();
-  const color = variant === 'pickup' ? colors.primaryHex : colors.destructiveHex;
-  const headSize = Math.round(size * 0.5);
-  const headInnerSize = Math.round(headSize * 0.48);
+  const scheme = useColorScheme();
+  const color = variant === 'pickup' ? colors.primaryHex : colors.successHex;
+  const isLightStandard = scheme !== 'dark' && mapType === 'standard';
+  const stemColor = isLightStandard ? '#6B7280' : '#FFFFFF';
+  const stemBorderColor = isLightStandard ? 'transparent' : 'rgba(0,0,0,0.65)';
+  const headSize = Math.round(size * 0.34);
+  const headRingWidth = Math.max(3, Math.round(headSize * 0.24));
+  const headInnerSize = Math.max(6, Math.round(headSize - headRingWidth * 2));
   const stemWidth = Math.max(3, Math.round(size * 0.06));
   const stemHeight = Math.round(size * 0.44);
+  const stemJoinOverlap = 1;
   const pinHeight = headSize + stemHeight;
 
   return (
@@ -45,7 +57,9 @@ export function LocationMapPin({ variant, size = LOCATION_MAP_PIN_SIZE }: Locati
             width: headSize,
             height: headSize,
             borderRadius: headSize / 2,
-            backgroundColor: color,
+            backgroundColor: 'transparent',
+            borderWidth: headRingWidth,
+            borderColor: color,
           },
         ]}
       >
@@ -56,12 +70,23 @@ export function LocationMapPin({ variant, size = LOCATION_MAP_PIN_SIZE }: Locati
               width: headInnerSize,
               height: headInnerSize,
               borderRadius: headInnerSize / 2,
-              backgroundColor: colors.card,
+              backgroundColor: 'transparent',
             },
           ]}
         />
       </View>
-      <View style={[styles.stem, { width: stemWidth, height: stemHeight }]} />
+      <View
+        style={[
+          styles.stem,
+          {
+            width: stemWidth,
+            height: stemHeight,
+            backgroundColor: stemColor,
+            borderColor: stemBorderColor,
+            marginTop: -stemJoinOverlap,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -74,13 +99,17 @@ const styles = StyleSheet.create({
   head: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   headInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.65)',
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   stem: {
     borderRadius: 999,
-    backgroundColor: '#000000',
+    borderWidth: 0.5,
   },
 });

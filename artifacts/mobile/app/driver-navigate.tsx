@@ -314,17 +314,17 @@ export default function DriverNavigateScreen() {
           coordinate={pickupPinCoordinate}
           anchor={LOCATION_MAP_PIN_ANCHOR}
           centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-          tracksViewChanges={false}
+          tracksViewChanges
         >
-          <LocationMapPin variant="pickup" />
+          <LocationMapPin variant="pickup" mapType="standard" />
         </Marker>
         <Marker
           coordinate={destinationPinCoordinate}
           anchor={LOCATION_MAP_PIN_ANCHOR}
           centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-          tracksViewChanges={false}
+          tracksViewChanges
         >
-          <LocationMapPin variant="destination" />
+          <LocationMapPin variant="destination" mapType="standard" />
         </Marker>
         {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
       </MapView>

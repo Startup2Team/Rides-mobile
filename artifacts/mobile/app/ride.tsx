@@ -502,9 +502,9 @@ export default function RideScreen() {
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
             centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges={false}
+            tracksViewChanges
           >
-            <LocationMapPin variant="pickup" />
+            <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
         )}
         {(isArrived || isInProgress) && destinationPinCoordinate && (
@@ -512,9 +512,9 @@ export default function RideScreen() {
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
             centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges={false}
+            tracksViewChanges
           >
-            <LocationMapPin variant="destination" />
+            <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
         )}
         {isArriving && remainingDriverToPickupRoute ? (
@@ -571,6 +571,7 @@ export default function RideScreen() {
       <View
         style={[
           styles.topStatus,
+          (isArriving || isArrived || isInProgress) && styles.topStatusShadow,
           {
             paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
             backgroundColor: colors.background,
@@ -840,6 +841,14 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingBottom: 14,
+    zIndex: 10,
+  },
+  topStatusShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 8,
   },
   topStatusBar: {
     flexDirection: 'row',
