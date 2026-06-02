@@ -302,7 +302,11 @@ export default function DriverNegotiationScreen() {
         />
       </View>
 
-      <ConfirmDialog visible={showAcceptModal} onClose={() => setShowAcceptModal(false)}>
+      <ConfirmDialog
+        visible={showAcceptModal}
+        onClose={() => setShowAcceptModal(false)}
+        cardStyle={styles.acceptFareDialogCard}
+      >
         <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="shield" size={24} color={colors.primary} />
         </View>
@@ -433,6 +437,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   modalSub: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, textAlign: 'center' },
   modalActions: { flexDirection: 'row', gap: 10, width: '100%' },
+  acceptFareDialogCard: { borderWidth: 0 },
   modalActionBtn: { flex: 1 },
   modalInputRow: { width: '100%', height: 54, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   modalInput: { flex: 1, fontSize: 20, fontFamily: 'Inter_700Bold' },

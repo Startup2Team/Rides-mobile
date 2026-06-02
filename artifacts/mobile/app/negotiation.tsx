@@ -21,7 +21,9 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
-import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
+import { NegotiationMessage, RideStatus, VEHICLE_LABELS } from '@/types';
+
+const RIDE_FLOW_STATUSES: RideStatus[] = ['confirmed', 'arriving', 'arrived', 'in_progress'];
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
@@ -212,9 +214,7 @@ export default function NegotiationScreen() {
   const lastDriverOffer = [...driverOffers].pop();
   const lastMsg = negotiation[negotiation.length - 1];
   const customerLimitReached = customerOffers.length >= MAX_OFFERS;
-  const isRideAccepted = currentRide
-    ? ['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)
-    : false;
+  const previousRideStatusRef = useRef<RideStatus | null>(null);
   const isAwaitingDriverReply =
     currentRide?.status === 'negotiating' &&
     lastMsg?.sender === 'customer' &&
@@ -277,14 +277,26 @@ export default function NegotiationScreen() {
   const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
 
   useEffect(() => {
-    if (isRideAccepted) {
-      router.replace('/ride');
+    const status = currentRide?.status ?? null;
+    const previous = previousRideStatusRef.current;
+
+    if (!currentRide || status === 'cancelled') {
+      router.replace('/(tabs)');
+      previousRideStatusRef.current = status;
       return;
     }
-    if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(tabs)');
+
+    const enteringRideFlow =
+      status !== null &&
+      RIDE_FLOW_STATUSES.includes(status) &&
+      previous === 'negotiating';
+
+    if (enteringRideFlow) {
+      router.replace('/ride');
     }
-  }, [currentRide?.status, isRideAccepted]);
+
+    previousRideStatusRef.current = status;
+  }, [currentRide?.status, currentRide]);
 
   useEffect(() => {
     if (lastMsg?.sender !== 'customer') {
@@ -520,10 +532,7 @@ export default function NegotiationScreen() {
         {canCounter && (
           <KeyboardStickyView
             offset={{ closed: 0, opened: actionPanelOffset }}
-            style={[
-              styles.inputDock,
-              { backgroundColor: colors.background, borderTopColor: colors.border },
-            ]}
+            style={[styles.inputDock, { backgroundColor: colors.background }]}
           >
             <View style={styles.inputRow}>
               <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
@@ -604,7 +613,11 @@ export default function NegotiationScreen() {
         </View>
       </View>
 
-      <ConfirmDialog visible={showAcceptModal} onClose={() => setShowAcceptModal(false)}>
+      <ConfirmDialog
+        visible={showAcceptModal}
+        onClose={() => setShowAcceptModal(false)}
+        cardStyle={styles.acceptFareDialogCard}
+      >
         <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="shield" size={24} color={colors.primary} />
         </View>
@@ -612,7 +625,7 @@ export default function NegotiationScreen() {
         <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
           This fare will be locked for the ride and visible to both you and the driver.
         </Text>
-        <View style={[styles.acceptSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.acceptSummary, { backgroundColor: colors.muted }]}>
           <View style={styles.acceptSummaryRow}>
             <Text style={[styles.acceptSummaryLabel, { color: colors.mutedForeground }]}>Driver</Text>
             <Text style={[styles.acceptSummaryValue, { color: colors.foreground }]} numberOfLines={1}>
@@ -892,7 +905,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   actionFlexNarrow: { flex: 0.9, minWidth: 0 },
   actionFlexWide: { flex: 1.25, minWidth: 0 },
@@ -900,7 +912,8 @@ const styles = StyleSheet.create({
   modalIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   modalTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   modalSub: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, textAlign: 'center' },
-  acceptSummary: { width: '100%', borderRadius: 14, padding: 12, gap: 9, borderWidth: StyleSheet.hairlineWidth },
+  acceptFareDialogCard: { borderWidth: 0 },
+  acceptSummary: { width: '100%', borderRadius: 14, padding: 12, gap: 9 },
   acceptSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   acceptSummaryTotal: { paddingTop: 9, borderTopWidth: StyleSheet.hairlineWidth },
   acceptSummaryLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
