@@ -51,7 +51,6 @@ import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_F
 import {
   LOCATION_MAP_PIN_ANCHOR,
   LOCATION_MAP_PIN_CENTER_OFFSET,
-  LOCATION_MAP_PIN_SIZE,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -208,6 +207,7 @@ export default function CustomerHome() {
   const [showBooking, setShowBooking] = useState(false);
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
+  const [isPickerDragging, setIsPickerDragging] = useState(false);
   const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: 'Current Location' });
   const [destText, setDestText] = useState('');
   const [destination, setDestination] = useState<RideLocation | null>(null);
@@ -1159,7 +1159,7 @@ export default function CustomerHome() {
           </Marker>
         ))}
 
-        {!locLoading && !hasPreciseRouteLocations && (
+        {!locLoading && !hasPreciseRouteLocations && mapPicker === null && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
             <View style={styles.youAreHereContainer}>
               <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
@@ -1442,7 +1442,7 @@ export default function CustomerHome() {
             style={[
               styles.locationSearchBody,
               {
-                paddingTop: locationHeaderMetrics.contentTop + 12,
+                paddingTop: locationHeaderMetrics.contentTop - 8,
                 paddingBottom: insets.bottom,
               },
             ]}
@@ -2014,17 +2014,25 @@ export default function CustomerHome() {
             showsMyLocationButton={false}
             mapType={mapType}
             customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
+            onPanDrag={() => setIsPickerDragging(true)}
             onRegionChangeComplete={region => {
               setPinCoords({ latitude: region.latitude, longitude: region.longitude });
+              setIsPickerDragging(false);
             }}
           />
 
           {/* Fixed center pin */}
-          <View style={styles.fixedPinContainer} pointerEvents="none">
-            <LocationMapPin
-              variant={mapPicker === 'dropoff' ? 'destination' : 'pickup'}
-              mapType={mapType}
-            />
+          <View
+            style={[styles.fixedPinContainer, isPickerDragging && styles.fixedPinContainerDragging]}
+            pointerEvents="none"
+          >
+            <View style={[styles.uberPin, isPickerDragging && styles.uberPinDragging]}>
+              <View style={styles.uberPinHead}>
+                <View style={styles.uberPinSquare} />
+              </View>
+              <View style={[styles.uberPinStem, isPickerDragging && styles.uberPinStemDragging]} />
+            </View>
+            {isPickerDragging && <View style={styles.uberPinGroundDot} />}
           </View>
 
           {/* Top back button */}
@@ -2697,8 +2705,57 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -(LOCATION_MAP_PIN_SIZE / 2),
-    marginTop: -LOCATION_MAP_PIN_SIZE,
+    width: 46,
+    height: 94,
+    marginLeft: -23,
+    marginTop: -42,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  fixedPinContainerDragging: {
+    marginTop: -60,
+  },
+  uberPin: {
+    width: 20,
+    height: 54,
+    alignItems: 'center',
+  },
+  uberPinDragging: {
+    transform: [{ translateY: -4 }],
+  },
+  uberPinHead: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  uberPinSquare: {
+    width: 4,
+    height: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  uberPinStem: {
+    width: 2,
+    height: 22,
+    backgroundColor: '#111111',
+  },
+  uberPinStemDragging: {
+    height: 32,
+  },
+  uberPinGroundDot: {
+    position: 'absolute',
+    top: 57,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#111111',
   },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   mapPickerControlsRail: {
