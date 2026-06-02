@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, usePathname } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -31,6 +31,7 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
+import { floatingPanelSurface } from '@/constants/surfaces';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
@@ -39,9 +40,14 @@ import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
 import { useToast } from '@/context/ToastContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
-import { formatDistance, formatDuration } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, routeLineEndpoints } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import {
+  LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_SIZE,
+  LocationMapPin,
+} from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -54,8 +60,6 @@ const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
 const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
-/** iOS system sheets (AirPods-style) use ~44–47pt continuous corners. */
-const FLOATING_PANEL_RADIUS = Platform.OS === 'ios' ? 47 : 28;
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 const GREETING_LEFT_INSET = 14;
@@ -64,20 +68,6 @@ const BOOKING_SHEET_PADDING_H = 22;
 const BOOKING_CLOSE_EDGE_INSET = 16;
 /** Extra room so the close icon can spin during sheet drag without clipping. */
 const BOOKING_CLOSE_ROTATION_PAD = 10;
-const floatingPanelSurface = {
-  borderRadius: FLOATING_PANEL_RADIUS,
-  ...Platform.select({
-    ios: { borderCurve: 'continuous' as const },
-    default: {},
-  }),
-  borderWidth: StyleSheet.hairlineWidth,
-  overflow: 'hidden' as const,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.14,
-  shadowRadius: 24,
-  elevation: 14,
-};
 const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
 const SAVE_LABEL_GAP = 8;
 const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = BOOKING_SHEET_PADDING_H;
@@ -183,15 +173,16 @@ export default function CustomerHome() {
   const formSheetSurface = useMemo(
     () => ({
       backgroundColor: colors.card,
-      borderTopColor: isDark ? 'rgba(255,255,255,0.14)' : colors.border,
       shadowOpacity: isDark ? 0.55 : 0.25,
     }),
-    [colors.card, colors.border, isDark],
+    [colors.card, isDark],
   );
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
   const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
+  const pathname = usePathname();
+  const lastRideFlowStatusRef = useRef<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
@@ -308,13 +299,32 @@ export default function CustomerHome() {
   }, [currentRide?.status]);
 
   useEffect(() => {
-    if (!currentRide) return;
-    if (currentRide.status === 'negotiating' && !isMatchingPaused) {
-      router.push('/negotiation');
-    } else if (['confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
-      router.push('/ride');
+    if (!currentRide) {
+      lastRideFlowStatusRef.current = null;
+      return;
     }
-  }, [currentRide?.status, isMatchingPaused]);
+    if (currentRide.status === 'negotiating' && !isMatchingPaused) {
+      lastRideFlowStatusRef.current = null;
+      if (pathname !== '/negotiation') {
+        router.push('/negotiation');
+      }
+      return;
+    }
+    const rideFlowStatuses = ['confirmed', 'arriving', 'arrived', 'in_progress'] as const;
+    if (!rideFlowStatuses.includes(currentRide.status as (typeof rideFlowStatuses)[number])) {
+      lastRideFlowStatusRef.current = null;
+      return;
+    }
+    const alreadyInRideFlow =
+      lastRideFlowStatusRef.current !== null &&
+      rideFlowStatuses.includes(
+        lastRideFlowStatusRef.current as (typeof rideFlowStatuses)[number],
+      );
+    if (!alreadyInRideFlow && pathname !== '/ride') {
+      router.replace('/ride');
+    }
+    lastRideFlowStatusRef.current = currentRide.status;
+  }, [currentRide?.status, isMatchingPaused, pathname]);
 
   useEffect(() => {
     if (currentRide?.status !== 'cancelled') return;
@@ -529,6 +539,32 @@ export default function CustomerHome() {
     },
     [visibleRouteCoords, routeAnimProgress],
   );
+
+  const routePinPositions = useMemo(() => {
+    const fallbackPickup = { latitude: pickup.latitude, longitude: pickup.longitude };
+    if (!destination) {
+      return { pickup: fallbackPickup, destination: null as { latitude: number; longitude: number } | null };
+    }
+    const fallbackDestination = {
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+    };
+    const routeGeometry =
+      visibleRouteCoords.length > 1
+        ? visibleRouteCoords
+        : routePreviewCoords.length > 1
+          ? routePreviewCoords
+          : null;
+    const { start, end } = routeLineEndpoints(routeGeometry, fallbackPickup, fallbackDestination);
+    return { pickup: start, destination: end };
+  }, [
+    destination,
+    pickup.latitude,
+    pickup.longitude,
+    routePreviewCoords,
+    visibleRouteCoords,
+  ]);
+
   useEffect(() => {
     if (visibleRouteCoords.length < 2) {
       setRouteAnimProgress(0);
@@ -1066,21 +1102,15 @@ export default function CustomerHome() {
           />
         )}
 
-        {/* Pickup marker */}
         {shouldShowPickupMarker && (
-          <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.routeMarker}>
-              <View style={[styles.routeMarkerDot, { backgroundColor: colors.primary }]} />
-            </View>
+          <Marker coordinate={routePinPositions.pickup} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+            <LocationMapPin variant="pickup" />
           </Marker>
         )}
 
-        {/* Dropoff marker */}
         {showBooking && destination && (
-          <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} anchor={{ x: 0.5, y: 1 }}>
-            <View style={styles.routeMarker}>
-              <View style={[styles.routeMarkerDot, { backgroundColor: colors.destructive }]} />
-            </View>
+          <Marker coordinate={routePinPositions.destination!} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+            <LocationMapPin variant="destination" />
           </Marker>
         )}
 
@@ -1396,7 +1426,11 @@ export default function CustomerHome() {
                 style={[styles.locationSearchInput, { color: colors.foreground }]}
                 value={locationSearchText}
                 onChangeText={handleLocationSearchText}
-                placeholder={locationSearchTarget === 'pickup' ? 'Search pickup location' : 'Search drop off location'}
+                placeholder={
+                  locationSearchTarget === 'pickup'
+                    ? 'Address, hotel, or 1 KG 185 ST'
+                    : 'Address, hotel, or 1 KG 185 ST'
+                }
                 placeholderTextColor={colors.mutedForeground}
                 returnKeyType="search"
               />
@@ -1529,6 +1563,14 @@ export default function CustomerHome() {
                 </TouchableOpacity>
               )}
 
+              {locationSearchText.trim().length >= 2 &&
+                !locationSearchLoading &&
+                suggestions.length === 0 && (
+                  <Text style={[styles.locationSearchEmpty, { color: colors.mutedForeground }]}>
+                    No matches yet. Try the full name (e.g. Serena Hotel) or a grid address with ST/AV, or pin on the map.
+                  </Text>
+                )}
+
               {suggestions.map(suggestion => (
                 <TouchableOpacity
                   key={suggestion.id}
@@ -1544,9 +1586,11 @@ export default function CustomerHome() {
                   </View>
                   <View style={styles.locationOptionText}>
                     <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
-                      {suggestion.place_name}
+                      {suggestion.title}
                     </Text>
-                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Precise location</Text>
+                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      {suggestion.subtitle ?? suggestion.place_name}
+                    </Text>
                   </View>
                   <TouchableOpacity
                     style={[styles.saveLocationButton, { borderColor: colors.border }]}
@@ -1944,10 +1988,8 @@ export default function CustomerHome() {
 
           {/* Fixed center pin */}
           <View style={styles.fixedPinContainer} pointerEvents="none">
-            <MaterialCommunityIcons
-              name="map-marker"
-              size={48}
-              color={colors.destructiveHex}
+            <LocationMapPin
+              variant={mapPicker === 'dropoff' ? 'destination' : 'pickup'}
             />
           </View>
 
@@ -1960,31 +2002,31 @@ export default function CustomerHome() {
             onPress={() => setMapPicker(null)}
           />
 
-          <TouchableOpacity
-            style={[
-              styles.mapPickerControl,
-              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 },
-            ]}
-            onPress={cycleMapType}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
-              size={22}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
+          <View style={styles.mapPickerControlsRail} pointerEvents="box-none">
+            <TouchableOpacity
+              style={[styles.mapPickerControl, { backgroundColor: colors.card }]}
+              onPress={cycleMapType}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Change map view"
+            >
+              <MaterialCommunityIcons
+                name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
+                size={22}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.mapPickerControl,
-              { backgroundColor: colors.card, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 68 },
-            ]}
-            onPress={centerPickerOnUser}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.mapPickerControl, { backgroundColor: colors.card }]}
+              onPress={centerPickerOnUser}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Recenter on your location"
+            >
+              <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
 
           {/* Instruction label */}
           <View style={[styles.mapPickerHint, { backgroundColor: colors.card }]}>
@@ -2131,6 +2173,7 @@ const styles = StyleSheet.create({
     ...floatingPanelSurface,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    borderTopWidth: 0,
     paddingTop: 0,
     gap: 0,
     overflow: 'visible',
@@ -2198,8 +2241,6 @@ const styles = StyleSheet.create({
   suggestionsBox: { borderRadius: 10, marginTop: 4, overflow: 'hidden' },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   suggestionText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
-  routeMarker: { alignItems: 'center' },
-  routeMarkerDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
   vehicleMarkerShadow: {
     position: 'absolute',
     width: 52,
@@ -2429,6 +2470,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
   },
+  locationSearchEmpty: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
   locationSectionTitle: {
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
@@ -2611,9 +2659,34 @@ const styles = StyleSheet.create({
   },
   // Map picker
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
-  fixedPinContainer: { position: 'absolute', top: '50%', left: '50%', marginLeft: -24, marginTop: -48 },
+  fixedPinContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -(LOCATION_MAP_PIN_SIZE / 2),
+    marginTop: -LOCATION_MAP_PIN_SIZE,
+  },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
-  mapPickerControl: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
+  mapPickerControlsRail: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  mapPickerControl: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
   mapPickerHint: { position: 'absolute', top: '18%', alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
   mapPickerHintText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
   mapPickerFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20 },

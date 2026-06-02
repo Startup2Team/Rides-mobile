@@ -16,16 +16,26 @@ const STATUS_LABELS: Record<RideStatus, string> = {
   cancelled: 'Cancelled',
 };
 
+/** Chip copy on the live ride map header (compact layout). */
+const RIDE_HEADER_LABELS: Partial<Record<RideStatus, string>> = {
+  arriving: 'Driver Arriving',
+  arrived: 'Driver Arrived',
+  in_progress: 'In Progress',
+};
+
 interface StatusChipProps {
   status: RideStatus;
   /**
    * `history` — My Rides / archives: only completed (green) and cancelled (red) use accent colors;
    * other states stay neutral so the list does not read as a rainbow of statuses.
+   * `rideHeader` — compact chip on the live ride map screen.
    */
-  variant?: 'default' | 'history';
+  variant?: 'default' | 'history' | 'rideHeader';
+  /** Smaller padding and type (used with `rideHeader`). */
+  compact?: boolean;
 }
 
-export function StatusChip({ status, variant = 'default' }: StatusChipProps) {
+export function StatusChip({ status, variant = 'default', compact = false }: StatusChipProps) {
   const colors = useColors();
 
   const defaultChipColors: Record<RideStatus, { bg: string; text: string }> = {
@@ -53,10 +63,22 @@ export function StatusChip({ status, variant = 'default' }: StatusChipProps) {
       ? (historyAccent[status] ?? neutralHistory)
       : defaultChipColors[status];
 
+  const label =
+    variant === 'rideHeader'
+      ? (RIDE_HEADER_LABELS[status] ?? STATUS_LABELS[status])
+      : STATUS_LABELS[status];
+
+  const isCompact = compact || variant === 'rideHeader';
+
   return (
-    <View style={[styles.chip, { backgroundColor: chip.bg }]}>
-      <Text style={[styles.text, { color: chip.text }]} numberOfLines={1}>
-        {STATUS_LABELS[status]}
+    <View style={[styles.chip, isCompact && styles.chipCompact, { backgroundColor: chip.bg }]}>
+      <Text
+        style={[styles.text, isCompact && styles.textCompact, { color: chip.text }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit={isCompact}
+        minimumFontScale={0.85}
+      >
+        {label}
       </Text>
     </View>
   );
@@ -72,5 +94,14 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
+  },
+  chipCompact: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    maxWidth: 108,
+  },
+  textCompact: {
+    fontSize: 11,
+    lineHeight: 14,
   },
 });

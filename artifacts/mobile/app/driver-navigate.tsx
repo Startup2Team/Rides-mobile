@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
+import { LOCATION_MAP_PIN_ANCHOR, LocationMapPin } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { formatDuration } from '@/utils/mapUtils';
+import { formatDuration, routeLineEndpoints } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
 
@@ -73,12 +74,11 @@ export default function DriverNavigateScreen() {
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
-  const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
+  const [waitClockTick, setWaitClockTick] = useState(0);
   const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
   const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const waitRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const phase = currentRide?.status === 'in_progress'
     ? 'inprogress'
@@ -134,23 +134,24 @@ export default function DriverNavigateScreen() {
   }, [phase, route]);
 
   useEffect(() => {
-    if (phase !== 'waiting') {
-      if (waitRef.current) clearInterval(waitRef.current);
-      return;
+    if (phase !== 'waiting') return;
+    const interval = setInterval(() => setWaitClockTick(tick => tick + 1), 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  const pickupWait = useMemo(() => {
+    if (phase !== 'waiting' || !currentRide?.waitStartedAt) {
+      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
     }
-
-    const elapsed = currentRide?.waitStartedAt
-      ? Math.floor((Date.now() - new Date(currentRide.waitStartedAt).getTime()) / 1000)
-      : 0;
-    setWaitSeconds(Math.max(WAIT_LIMIT_SECONDS - elapsed, 0));
-    waitRef.current = setInterval(() => {
-      setWaitSeconds(prev => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-
-    return () => {
-      if (waitRef.current) clearInterval(waitRef.current);
-    };
-  }, [phase, currentRide?.waitStartedAt]);
+    const startedMs = new Date(currentRide.waitStartedAt).getTime();
+    if (Number.isNaN(startedMs)) {
+      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
+    }
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+    const remainingSeconds = Math.max(WAIT_LIMIT_SECONDS - elapsed, 0);
+    const lateSeconds = Math.max(elapsed - WAIT_LIMIT_SECONDS, 0);
+    return { remainingSeconds, lateSeconds, isLate: lateSeconds > 0 };
+  }, [currentRide?.waitStartedAt, phase, waitClockTick]);
 
   useEffect(() => {
     if (phase !== 'inprogress') {
@@ -188,10 +189,18 @@ export default function DriverNavigateScreen() {
     phase === 'waiting' ? 'Waiting for customer' :
     'Heading to destination';
 
-  const formatWait = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+  const formatWaitCountdown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+  };
+
+  const formatWaitLate = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    if (mins === 0) return `${remainingSecs} sec`;
+    if (remainingSecs === 0) return `${mins} min`;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
   };
 
   const handleCall = () => {
@@ -211,8 +220,8 @@ export default function DriverNavigateScreen() {
   const handleCancelRide = () => {
     Alert.alert(
       'Cancel Ride',
-      waitSeconds === 0
-        ? 'Customer has not arrived. You may cancel this ride.'
+      pickupWait.isLate
+        ? `Customer is ${formatWaitLate(pickupWait.lateSeconds)} late. You may cancel this ride.`
         : 'Cancel this ride and return to the queue?',
       [
         { text: 'Back', style: 'cancel' },
@@ -248,11 +257,34 @@ export default function DriverNavigateScreen() {
     ]);
   };
 
-  const timerExpired = waitSeconds === 0;
+  const isCustomerLate = pickupWait.isLate;
   const remainingRoute = useMemo(
     () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
     [driverPos, route],
   );
+
+  const pickupPinCoordinate = useMemo(() => {
+    if (!currentRide) return KIGALI_CENTER;
+    const fallback = currentRide.pickup;
+    if (!route || route.coordinates.length < 2) return fallback;
+    if (phase === 'inprogress') {
+      return routeLineEndpoints(route.coordinates, fallback, currentRide.destination).start;
+    }
+    if (phase === 'pickup') {
+      return routeLineEndpoints(route.coordinates, driverPos, fallback).end;
+    }
+    return fallback;
+  }, [currentRide, driverPos, phase, route]);
+
+  const destinationPinCoordinate = useMemo(() => {
+    if (!currentRide) return KIGALI_CENTER;
+    const fallback = currentRide.destination;
+    if (phase === 'inprogress' && route && route.coordinates.length >= 2) {
+      return routeLineEndpoints(route.coordinates, currentRide.pickup, fallback).end;
+    }
+    return fallback;
+  }, [currentRide, phase, route]);
+
   const vehicleRotationDeg = useMemo(() => {
     if (!remainingRoute || remainingRoute.length < 2) return 0;
     const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
@@ -274,15 +306,11 @@ export default function DriverNavigateScreen() {
             rotationDeg={vehicleRotationDeg}
           />
         </Marker>
-        <Marker coordinate={currentRide.pickup}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.primary }]}>
-            <Feather name="user" size={14} color="#fff" />
-          </View>
+        <Marker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+          <LocationMapPin variant="pickup" />
         </Marker>
-        <Marker coordinate={currentRide.destination}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
-            <Feather name="map-pin" size={14} color="#fff" />
-          </View>
+        <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+          <LocationMapPin variant="destination" />
         </Marker>
         {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
       </MapView>
@@ -415,16 +443,26 @@ export default function DriverNavigateScreen() {
         {phase === 'waiting' && (
           <View style={styles.waitingBlock}>
             <View style={[styles.timerBox, {
-              backgroundColor: timerExpired ? colors.destructive + '15' : colors.primaryHex + '15',
-              borderColor: timerExpired ? colors.destructive + '40' : colors.primaryHex + '30',
+              backgroundColor: isCustomerLate ? colors.destructive : colors.primaryHex + '15',
+              borderColor: isCustomerLate ? colors.destructive : colors.primaryHex + '30',
             }]}>
-              <Feather name="clock" size={18} color={timerExpired ? colors.destructive : colors.primary} />
-              <Text style={[styles.timerLabel, { color: colors.mutedForeground }]}>Time remaining</Text>
-              <Text style={[styles.timerValue, { color: timerExpired ? colors.destructive : colors.primary }]}>{formatWait(waitSeconds)}</Text>
+              <Feather
+                name={isCustomerLate ? 'alert-circle' : 'clock'}
+                size={18}
+                color={isCustomerLate ? colors.destructiveForeground : colors.primary}
+              />
+              <Text style={[styles.timerLabel, { color: isCustomerLate ? colors.destructiveForeground + 'CC' : colors.mutedForeground }]}>
+                {isCustomerLate ? 'Customer late' : 'Time remaining'}
+              </Text>
+              <Text style={[styles.timerValue, { color: isCustomerLate ? colors.destructiveForeground : colors.primary }]}>
+                {isCustomerLate
+                  ? formatWaitLate(pickupWait.lateSeconds)
+                  : formatWaitCountdown(pickupWait.remainingSeconds)}
+              </Text>
             </View>
-            {timerExpired && (
+            {isCustomerLate && (
               <Text style={[styles.cancelPrompt, { color: colors.destructive }]}>
-                Customer has not arrived. You may cancel this ride.
+                Customer is {formatWaitLate(pickupWait.lateSeconds)} late. You may cancel this ride.
               </Text>
             )}
             <View style={styles.waitingActions}>
@@ -433,14 +471,14 @@ export default function DriverNavigateScreen() {
                 style={[
                   styles.cancelRideBtn,
                   {
-                    backgroundColor: timerExpired ? colors.destructive + '20' : colors.muted,
-                    borderColor: timerExpired ? colors.destructive : colors.border,
+                    backgroundColor: isCustomerLate ? colors.destructive + '20' : colors.muted,
+                    borderColor: isCustomerLate ? colors.destructive : colors.border,
                   },
                 ]}
                 onPress={handleCancelRide}
               >
-                <Feather name="x" size={16} color={timerExpired ? colors.destructive : colors.foreground} />
-                <Text style={[styles.cancelRideBtnText, { color: timerExpired ? colors.destructive : colors.foreground }]}>Cancel Ride</Text>
+                <Feather name="x" size={16} color={isCustomerLate ? colors.destructive : colors.foreground} />
+                <Text style={[styles.cancelRideBtnText, { color: isCustomerLate ? colors.destructive : colors.foreground }]}>Cancel Ride</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -511,7 +549,6 @@ const styles = StyleSheet.create({
   rerouteText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   rerouteBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   bottomCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,

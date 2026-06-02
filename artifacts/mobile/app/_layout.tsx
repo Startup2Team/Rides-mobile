@@ -33,12 +33,21 @@ function RootLayoutNav() {
       <Stack.Screen name="booking" options={{ presentation: 'modal' }} />
       <Stack.Screen name="searching" />
       <Stack.Screen name="negotiation" />
-      <Stack.Screen name="ride" />
+      <Stack.Screen name="ride" options={{ animation: 'none' }} />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="driver-onboarding" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />
-      <Stack.Screen name="rating" options={{ presentation: 'modal', gestureEnabled: false }} />
+      <Stack.Screen
+        name="rating"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'fade',
+          headerShown: false,
+          gestureEnabled: false,
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      />
       <Stack.Screen name="payment-methods" />
       <Stack.Screen name="edit-profile" />
       <Stack.Screen name="help-support" />

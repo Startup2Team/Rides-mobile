@@ -27,6 +27,21 @@ export function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
+/** Place pins on polyline endpoints when route geometry is available. */
+export function routeLineEndpoints(
+  coordinates: Coords[] | null | undefined,
+  fallbackStart: Coords,
+  fallbackEnd: Coords,
+): { start: Coords; end: Coords } {
+  if (!coordinates || coordinates.length < 2) {
+    return { start: fallbackStart, end: fallbackEnd };
+  }
+  return {
+    start: coordinates[0],
+    end: coordinates[coordinates.length - 1],
+  };
+}
+
 /**
  * Compute a bounding region that fits all given coordinates with padding.
  * Returns an object compatible with react-native-maps fitToCoordinates edgePadding.

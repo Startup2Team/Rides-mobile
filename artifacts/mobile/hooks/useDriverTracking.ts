@@ -29,6 +29,7 @@ export function useDriverTracking({
   useEffect(() => {
     if (!enabled || routeCoordinates.length === 0) {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      // Keep last position when disabled so status transitions do not snap the marker.
       return;
     }
 

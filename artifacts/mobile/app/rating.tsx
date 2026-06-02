@@ -1,47 +1,91 @@
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
+  Keyboard,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
+  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { AppButton } from '@/components/AppButton';
-import { useToast } from '@/context/ToastContext';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { APP_NAME } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 
-const QUICK_TAGS = [
-  { id: 'safe', label: 'Safe driver' },
-  { id: 'clean', label: 'Clean vehicle' },
-  { id: 'friendly', label: 'Friendly' },
-  { id: 'ontime', label: 'On time' },
-  { id: 'nav', label: 'Knew the way' },
-  { id: 'quiet', label: 'Quiet ride' },
-];
+const CARD_MAX_WIDTH = 320;
+const DRIVER_ICON_SIZE = 64;
+
+type RatingPhase = 'rate' | 'thanks' | 'review';
+
+function StarRow({
+  stars,
+  colors,
+  interactive,
+  onStarPress,
+  size = 'large',
+}: {
+  stars: number;
+  colors: ReturnType<typeof useColors>;
+  interactive: boolean;
+  onStarPress?: (n: number) => void;
+  size?: 'large' | 'medium';
+}) {
+  const starStyle = size === 'large' ? styles.starLarge : styles.starMedium;
+  return (
+    <View style={styles.starsRow} accessibilityRole="text" accessibilityLabel={`${stars} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map(n => {
+        const filled = n <= stars;
+        const star = (
+          <Text style={[starStyle, { color: filled ? colors.star : colors.starMuted }]}>★</Text>
+        );
+        if (!interactive || !onStarPress) {
+          return <View key={n}>{star}</View>;
+        }
+        return (
+          <Pressable
+            key={n}
+            onPress={() => onStarPress(n)}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`${n} star${n === 1 ? '' : 's'}`}
+            accessibilityState={{ selected: filled }}
+          >
+            {star}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function RatingScreen() {
   const colors = useColors();
+  const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { currentRide, rideHistory, completeRide } = useRide();
-  const { showToast } = useToast();
   const params = useLocalSearchParams<{ rideId?: string; driverName?: string; fare?: string; vehicleType?: string }>();
 
-  const [step, setStep] = useState<'rating' | 'feedback'>('rating');
+  const [phase, setPhase] = useState<RatingPhase>('rate');
   const [stars, setStars] = useState(0);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [review, setReview] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const driverName = params.driverName ?? 'Your Driver';
+  const driverName = params.driverName ?? 'your driver';
   const finalizedRideRef = useRef(false);
+  const reviewInputRef = useRef<TextInput>(null);
+  const glassTint = colorScheme === 'dark' ? 'dark' : 'light';
+  const scrimColor = colorScheme === 'dark' ? 'rgba(0,0,0,0.72)' : 'rgba(0,0,0,0.4)';
+  const cardBackground = colorScheme === 'dark' ? 'rgba(44,44,46,0.94)' : 'rgba(255,255,255,0.94)';
+  const cardBorder = colorScheme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)';
 
   const ratedRide = useMemo(() => {
     if (currentRide && (!params.rideId || currentRide.id === params.rideId)) {
@@ -65,11 +109,23 @@ export default function RatingScreen() {
     completeRide();
   };
 
-  const toggleTag = (id: string) => {
-    Haptics.selectionAsync();
-    setSelectedTags(prev =>
-      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id],
-    );
+  const finishAndExit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (rideHistory.length >= 3) {
+      const isAvailable = await StoreReview.isAvailableAsync();
+      if (isAvailable) await StoreReview.requestReview();
+    }
+
+    finalizeRide();
+    router.replace('/(tabs)');
+  };
+
+  const exitToHome = () => {
+    finalizeRide();
+    router.replace('/(tabs)');
   };
 
   const handleStarPress = (n: number) => {
@@ -77,30 +133,29 @@ export default function RatingScreen() {
     setStars(n);
   };
 
-  const handleContinue = () => {
-    if (stars === 0) return;
-    setStep('feedback');
+  const handleRateSubmit = () => {
+    if (stars === 0 || submitting) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setPhase('thanks');
   };
 
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    await new Promise(r => setTimeout(r, 600));
-
-    // Trigger in-app review after 3+ completed rides
-    if (rideHistory.length >= 3) {
-      const isAvailable = await StoreReview.isAvailableAsync();
-      if (isAvailable) StoreReview.requestReview();
-    }
-
-    finalizeRide();
-    showToast('Thanks for your feedback');
-    router.replace('/(tabs)');
+  const handleReviewSubmit = async () => {
+    Keyboard.dismiss();
+    await finishAndExit();
   };
 
-  const handleSkip = () => {
-    finalizeRide();
-    router.replace('/(tabs)');
+  const handleReviewBack = () => {
+    Keyboard.dismiss();
+    setPhase('thanks');
   };
+
+  useEffect(() => {
+    if (phase !== 'review') return;
+    const focusTimer = setTimeout(() => {
+      reviewInputRef.current?.focus();
+    }, 280);
+    return () => clearTimeout(focusTimer);
+  }, [phase]);
 
   const initials = driverName
     .split(' ')
@@ -109,221 +164,350 @@ export default function RatingScreen() {
     .join('')
     .toUpperCase();
 
+  const canRateSubmit = stars > 0 && !submitting;
+  const backdropDismiss = phase === 'rate' ? exitToHome : undefined;
+
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <TouchableOpacity
-        style={[
-          styles.skipBtn,
-          { top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16 },
-        ]}
-        onPress={handleSkip}
-        activeOpacity={0.7}
+    <View style={styles.root} accessibilityViewIsModal>
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={backdropDismiss}
+        disabled={!backdropDismiss}
+        accessibilityRole="button"
+        accessibilityLabel={backdropDismiss ? 'Not now' : undefined}
       >
-        <Text style={[styles.skipText, { color: colors.mutedForeground }]}>Skip</Text>
-      </TouchableOpacity>
+        <BlurView intensity={48} tint={glassTint} style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }]} />
+      </Pressable>
 
-      <View style={styles.centerContent}>
-        <View style={[styles.completeBadge, { backgroundColor: colors.successHex + '18' }]}>
-          <Feather name="check-circle" size={20} color={colors.success} />
-          <Text style={[styles.completeBadgeText, { color: colors.success }]}>Ride Completed</Text>
-        </View>
-
-        {/* Driver avatar */}
-        <View style={styles.avatarSection}>
-          {driverPhotoUri ? (
-            <Image
-              source={{ uri: driverPhotoUri }}
-              style={styles.driverAvatarImage}
-              accessibilityLabel={`${driverName} profile photo`}
-            />
-          ) : (
-            <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.driverInitials, { color: colors.primaryForeground }]}>{initials}</Text>
-            </View>
-          )}
-          <Text style={[styles.driverName, { color: colors.foreground }]}>{driverName}</Text>
-          <Text style={[styles.prompt, { color: colors.mutedForeground }]}>
-            {step === 'rating' ? 'How was your ride?' : 'Add a few details'}
-          </Text>
-        </View>
-
-        {/* Stars */}
-        <View style={styles.starsRow}>
-          {[1, 2, 3, 4, 5].map(n => (
-            <TouchableOpacity
-              key={n}
-              onPress={() => handleStarPress(n)}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+      {phase === 'review' ? (
+        <KeyboardAwareScrollViewCompat
+          style={styles.keyboardScroll}
+          contentContainerStyle={[
+            styles.keyboardScrollContent,
+            {
+              paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
+              paddingBottom: insets.bottom + 16,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          bottomOffset={insets.bottom + 12}
+          showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={Keyboard.dismiss}
+        >
+          <View style={styles.keyboardDismissArea}>
+            <View
+              style={[styles.card, styles.reviewCard, { backgroundColor: cardBackground, borderColor: cardBorder }]}
+              accessibilityRole="alert"
+              accessibilityLabel="Write a review"
             >
-              <Text style={[styles.star, { color: n <= stars ? colors.star : colors.starMuted }]}>★</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <Text style={[styles.title, { color: colors.foreground }]}>Write a Review</Text>
+              <Text style={[styles.subtitle, styles.thanksSubtitle, { color: colors.mutedForeground }]}>
+                {`Share more about your trip with ${driverName}.`}
+              </Text>
 
-        {step === 'feedback' && stars >= 4 && (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>What went well?</Text>
-            <View style={styles.tagsWrap}>
-              {QUICK_TAGS.map(tag => {
-                const active = selectedTags.includes(tag.id);
-                return (
-                  <TouchableOpacity
-                    key={tag.id}
-                    onPress={() => toggleTag(tag.id)}
-                    activeOpacity={0.75}
-                    style={[
-                      styles.tag,
-                      {
-                        backgroundColor: active ? colors.primaryHex + '18' : colors.muted,
-                        borderColor: active ? colors.primary : colors.border,
-                        borderWidth: active ? 1.5 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.tagLabel, { color: active ? colors.primary : colors.foreground }]}>
-                      {tag.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              <StarRow stars={stars} colors={colors} interactive={false} size="medium" />
+
+              <TextInput
+                ref={reviewInputRef}
+                value={review}
+                onChangeText={setReview}
+                placeholder="Tell us about your driver"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                maxLength={300}
+                textAlignVertical="top"
+                blurOnSubmit={false}
+                returnKeyType="default"
+                style={[
+                  styles.reviewInput,
+                  {
+                    backgroundColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : colors.muted,
+                    borderColor: colors.border,
+                    color: colors.foreground,
+                  },
+                ]}
+              />
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.actionsRow}>
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={handleReviewBack}
+                  disabled={submitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                >
+                  <Text style={[styles.actionText, { color: colors.primary }]}>Back</Text>
+                </Pressable>
+                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={handleReviewSubmit}
+                  disabled={submitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Submit review"
+                >
+                  {submitting ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={[styles.actionText, styles.actionTextBold, { color: colors.primary }]}>Submit</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </>
+          </View>
+        </KeyboardAwareScrollViewCompat>
+      ) : (
+      <View
+        style={[styles.centerWrap, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        pointerEvents="box-none"
+      >
+        {phase === 'rate' && (
+          <View
+            style={[styles.card, { backgroundColor: cardBackground, borderColor: cardBorder }]}
+            accessibilityRole="alert"
+            accessibilityLabel={`Rate ${driverName}`}
+          >
+            {driverPhotoUri ? (
+              <Image
+                source={{ uri: driverPhotoUri }}
+                style={styles.driverIcon}
+                accessibilityLabel={`${driverName} profile photo`}
+              />
+            ) : (
+              <View style={[styles.driverIcon, styles.driverIconFallback, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.driverIconInitials, { color: colors.primaryForeground }]}>{initials}</Text>
+              </View>
+            )}
+
+            <Text style={[styles.title, { color: colors.foreground }]}>Rate Your Driver</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+              {`How was your trip with ${driverName} on ${APP_NAME}?`}
+            </Text>
+
+            <StarRow stars={stars} colors={colors} interactive onStarPress={handleStarPress} />
+
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+            <View style={styles.actionsRow}>
+              <Pressable
+                style={styles.actionBtn}
+                onPress={exitToHome}
+                accessibilityRole="button"
+                accessibilityLabel="Not now"
+              >
+                <Text style={[styles.actionText, { color: colors.primary }]}>Not Now</Text>
+              </Pressable>
+              <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+              <Pressable
+                style={styles.actionBtn}
+                onPress={handleRateSubmit}
+                disabled={!canRateSubmit}
+                accessibilityRole="button"
+                accessibilityLabel="Submit rating"
+                accessibilityState={{ disabled: !canRateSubmit }}
+              >
+                <Text
+                  style={[
+                    styles.actionText,
+                    styles.actionTextBold,
+                    { color: canRateSubmit ? colors.primary : colors.mutedForeground },
+                  ]}
+                >
+                  Submit
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         )}
 
-        {step === 'feedback' && (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Write a review</Text>
-            <TextInput
-              value={review}
-              onChangeText={setReview}
-              placeholder="Tell us about your ride"
-              placeholderTextColor={colors.mutedForeground}
-              multiline
-              maxLength={300}
-              textAlignVertical="top"
-              style={[
-                styles.reviewInput,
-                {
-                  backgroundColor: colors.muted,
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                },
-              ]}
-            />
-          </>
-        )}
+        {phase === 'thanks' && (
+          <View
+            style={[styles.card, styles.thanksCard, { backgroundColor: cardBackground, borderColor: cardBorder }]}
+            accessibilityRole="alert"
+            accessibilityLabel="Thanks for your feedback"
+          >
+            <Text style={[styles.title, { color: colors.foreground }]}>Thanks for your feedback.</Text>
+            <Text style={[styles.subtitle, styles.thanksSubtitle, { color: colors.mutedForeground }]}>
+              You can also write a review.
+            </Text>
 
+            <StarRow stars={stars} colors={colors} interactive={false} size="medium" />
+
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+            <View style={styles.actionsRow}>
+              <Pressable
+                style={styles.actionBtn}
+                onPress={() => setPhase('review')}
+                accessibilityRole="button"
+                accessibilityLabel="Write a review"
+              >
+                <Text style={[styles.actionText, { color: colors.primary }]}>Write a Review</Text>
+              </Pressable>
+              <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+              <Pressable
+                style={styles.actionBtn}
+                onPress={finishAndExit}
+                disabled={submitting}
+                accessibilityRole="button"
+                accessibilityLabel="OK"
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={[styles.actionText, styles.actionTextBold, { color: colors.primary }]}>OK</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
-
-      <View style={[styles.bottomActions, { paddingBottom: insets.bottom + 20 }]}>
-        {step === 'rating' ? (
-          <AppButton
-            title="Continue"
-            onPress={handleContinue}
-            disabled={stars === 0}
-            fullWidth
-            size="lg"
-            style={styles.submitBtn}
-          />
-        ) : (
-          <AppButton
-          title={submitting ? 'Submitting…' : 'Submit Rating'}
-          onPress={handleSubmit}
-          loading={submitting}
-          fullWidth
-          size="lg"
-          style={styles.submitBtn}
-        />
-        )}
-      </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  centerContent: {
+  root: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  keyboardScroll: {
+    flex: 1,
+  },
+  keyboardScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  keyboardDismissArea: {
+    width: '100%',
+    maxWidth: CARD_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  centerWrap: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 92,
-  },
-  bottomActions: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 24,
-    paddingTop: 14,
-  },
-  skipBtn: {
-    position: 'absolute',
-    right: 24,
-    zIndex: 2,
-    paddingVertical: 4,
-    paddingLeft: 12,
-  },
-  skipText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  completeBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    marginBottom: 28,
+    paddingHorizontal: 28,
   },
-  completeBadgeText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  avatarSection: { alignItems: 'center', gap: 8, marginBottom: 28 },
-  driverAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  card: {
+    width: '100%',
+    maxWidth: CARD_MAX_WIDTH,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: 22,
+    paddingBottom: 4,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.28,
+    shadowRadius: 28,
+    elevation: 24,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+      default: {},
+    }),
+  },
+  thanksCard: {
+    paddingTop: 20,
+  },
+  reviewCard: {
+    paddingTop: 20,
+  },
+  driverIcon: {
+    width: DRIVER_ICON_SIZE,
+    height: DRIVER_ICON_SIZE,
+    borderRadius: Platform.OS === 'ios' ? 14 : 12,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+      default: {},
+    }),
+  },
+  driverIconFallback: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
   },
-  driverAvatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 4,
+  driverIconInitials: {
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
   },
-  driverInitials: { fontSize: 28, fontFamily: 'Inter_700Bold' },
-  driverName: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  prompt: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 32 },
-  star: { fontSize: 42 },
-  sectionLabel: {
+  title: {
+    fontSize: 17,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  subtitle: {
     fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 12,
-    textAlign: 'left',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 6,
+    marginBottom: 18,
+    paddingHorizontal: 4,
   },
-  tagsWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 8, marginBottom: 24 },
-  tag: {
+  thanksSubtitle: {
+    marginBottom: 14,
+  },
+  starsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 18,
   },
-  tagLabel: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  starLarge: {
+    fontSize: 40,
+    lineHeight: 44,
+  },
+  starMedium: {
+    fontSize: 32,
+    lineHeight: 36,
+  },
   reviewInput: {
-    minHeight: 116,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
+    alignSelf: 'stretch',
+    minHeight: 88,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  submitBtn: { marginTop: 8 },
+  divider: {
+    alignSelf: 'stretch',
+    height: StyleSheet.hairlineWidth,
+    marginBottom: 4,
+  },
+  actionsRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 44,
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  actionDivider: {
+    width: StyleSheet.hairlineWidth,
+    marginVertical: 8,
+  },
+  actionText: {
+    fontSize: 17,
+    fontFamily: 'Inter_400Regular',
+  },
+  actionTextBold: {
+    fontFamily: 'Inter_600SemiBold',
+  },
 });
