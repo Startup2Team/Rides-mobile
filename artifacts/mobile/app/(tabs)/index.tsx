@@ -40,11 +40,17 @@ import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
 import { useToast } from '@/context/ToastContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
-import { formatDistance, formatDuration, routeLineEndpoints } from '@/utils/mapUtils';
+import {
+  formatDistance,
+  formatDuration,
+  routeLineEndpoints,
+  sampleRouteCoordsForFit,
+} from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_CENTER_OFFSET,
   LOCATION_MAP_PIN_SIZE,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
@@ -55,10 +61,13 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
 // ~0.3 cm shorter than prior compact/expanded sizes (~11pt)
 const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.375, 297);
-const EXPANDED_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.515, 401);
+const EXPANDED_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
 const ROUTE_DRAW_STEP = 0.055;
 const ROUTE_DRAW_INTERVAL_MS = 45;
 const HOME_LOCATION_DELTA = 0.012;
+const ROUTE_FIT_SIDE_PADDING = 32;
+/** Space below top location card overlay on booking map. */
+const BOOKING_MAP_TOP_OVERLAY = 88;
 const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
@@ -493,14 +502,13 @@ export default function CustomerHome() {
   // Mirror route coordinates into local state so MapView children re-render immediately
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const routePreviewCoords = useMemo(
-    () => hasPreciseRouteLocations && destination
+    () => destination
       ? [
           { latitude: pickup.latitude, longitude: pickup.longitude },
           { latitude: destination.latitude, longitude: destination.longitude },
         ]
       : [],
     [
-      hasPreciseRouteLocations,
       pickup.latitude,
       pickup.longitude,
       destination?.latitude,
@@ -509,25 +517,43 @@ export default function CustomerHome() {
   );
   const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : [];
   const routeCenterCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
+  const routeFitCoords = useMemo(() => {
+    if (routeCenterCoords.length < 2) return [];
+    if (!destination) return sampleRouteCoordsForFit(routeCenterCoords);
+    const withEndpoints = [
+      { latitude: pickup.latitude, longitude: pickup.longitude },
+      ...routeCenterCoords,
+      { latitude: destination.latitude, longitude: destination.longitude },
+    ];
+    return sampleRouteCoordsForFit(withEndpoints);
+  }, [
+    routeCenterCoords,
+    destination,
+    pickup.latitude,
+    pickup.longitude,
+  ]);
   const centerRouteInVisibleMap = useCallback((
     coords: { latitude: number; longitude: number }[],
     panelHeightOverride?: number,
   ) => {
-    if (!isMapReady || coords.length < 2) return;
-    const panelHeight = panelHeightOverride ?? bookingPanelMapInset;
-    const topPadding = insets.top + (Platform.OS === 'web' ? 92 : 42);
-    const bottomPadding = panelHeight + insets.bottom + 36;
+    if (!isMapReady || !showBooking || coords.length < 2) return;
+    const panelHeight =
+      panelHeightOverride ??
+      (destination ? EXPANDED_PANEL_HEIGHT : bookingPanelMapInset);
+    const topPadding =
+      insets.top + (Platform.OS === 'web' ? 96 : BOOKING_MAP_TOP_OVERLAY);
+    const bottomPadding = panelHeight + insets.bottom;
 
     mapRef.current?.fitToCoordinates(coords, {
       edgePadding: {
         top: topPadding,
-        right: 54,
+        right: ROUTE_FIT_SIDE_PADDING,
         bottom: bottomPadding,
-        left: 54,
+        left: ROUTE_FIT_SIDE_PADDING,
       },
       animated: true,
     });
-  }, [bookingPanelMapInset, insets.bottom, insets.top, isMapReady]);
+  }, [bookingPanelMapInset, destination, insets.bottom, insets.top, isMapReady, showBooking]);
   const animatedRouteCoords = useMemo(
     () => {
       if (visibleRouteCoords.length < 2) return [];
@@ -588,53 +614,48 @@ export default function CustomerHome() {
   useEffect(() => {
     if (route && route.coordinates.length > 1) {
       setRouteCoords(route.coordinates);
-      centerRouteInVisibleMap(route.coordinates);
     } else if (routePreviewCoords.length > 1) {
       setRouteCoords([]);
-      centerRouteInVisibleMap(routePreviewCoords);
     } else {
       setRouteCoords([]);
     }
-  }, [route, routePreviewCoords, centerRouteInVisibleMap]);
+  }, [route, routePreviewCoords]);
 
-  // Fit map immediately when destination is set (before route loads)
   useEffect(() => {
-    if (routePreviewCoords.length > 1) {
-      centerRouteInVisibleMap(routePreviewCoords);
-    }
     if (!showBooking || !destination) {
       setRouteCoords([]);
       setRouteAnimProgress(0);
     }
-  }, [routePreviewCoords, centerRouteInVisibleMap, showBooking, destination]);
+  }, [showBooking, destination]);
 
+  // Fit route inside the visible map band (above the booking sheet), centered.
   useEffect(() => {
-    if (!routeRecenterRequest || !showBooking || !destination || routeCenterCoords.length < 2) return;
+    if (!showBooking || !destination || routeFitCoords.length < 2) return;
+
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let lateRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const runFit = () => {
+      centerRouteInVisibleMap(routeFitCoords, EXPANDED_PANEL_HEIGHT);
+    };
 
     const task = InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => {
-        centerRouteInVisibleMap(routeCenterCoords, EXPANDED_PANEL_HEIGHT);
-        setRouteRecenterRequest(0);
-      });
+      requestAnimationFrame(runFit);
+      retryTimer = setTimeout(runFit, 220);
+      lateRetryTimer = setTimeout(runFit, 480);
     });
 
-    return () => task.cancel();
+    return () => {
+      task.cancel();
+      if (retryTimer) clearTimeout(retryTimer);
+      if (lateRetryTimer) clearTimeout(lateRetryTimer);
+    };
   }, [
-    routeRecenterRequest,
     showBooking,
     destination,
-    routeCenterCoords,
-    centerRouteInVisibleMap,
-  ]);
-
-  useEffect(() => {
-    if (!isMapReady || !showBooking || routeCenterCoords.length < 2) return;
-    centerRouteInVisibleMap(routeCenterCoords, bookingPanelMapInset);
-  }, [
-    isMapReady,
-    showBooking,
-    routeCenterCoords,
-    bookingPanelMapInset,
+    routeFitCoords,
+    activePanelHeight,
+    routeRecenterRequest,
     centerRouteInVisibleMap,
   ]);
 
@@ -1078,8 +1099,10 @@ export default function CustomerHome() {
         initialRegion={homeInitialRegion}
         onMapReady={() => {
           setIsMapReady(true);
-          if (routeCenterCoords.length > 1) {
-            requestAnimationFrame(() => centerRouteInVisibleMap(routeCenterCoords, bookingPanelMapInset));
+          if (routeFitCoords.length > 1 && showBooking && destination) {
+            requestAnimationFrame(() =>
+              centerRouteInVisibleMap(routeFitCoords, EXPANDED_PANEL_HEIGHT),
+            );
           } else if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
             hasCenteredOnUserRef.current = true;
             centerMapOnUser(300);
@@ -1103,14 +1126,24 @@ export default function CustomerHome() {
         )}
 
         {shouldShowPickupMarker && (
-          <Marker coordinate={routePinPositions.pickup} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
-            <LocationMapPin variant="pickup" />
+          <Marker
+            coordinate={routePinPositions.pickup}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges
+          >
+            <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
         )}
 
         {showBooking && destination && (
-          <Marker coordinate={routePinPositions.destination!} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
-            <LocationMapPin variant="destination" />
+          <Marker
+            coordinate={routePinPositions.destination!}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges
+          >
+            <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
         )}
 
@@ -1990,6 +2023,7 @@ export default function CustomerHome() {
           <View style={styles.fixedPinContainer} pointerEvents="none">
             <LocationMapPin
               variant={mapPicker === 'dropoff' ? 'destination' : 'pickup'}
+              mapType={mapType}
             />
           </View>
 

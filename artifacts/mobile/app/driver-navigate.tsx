@@ -6,7 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
-import { LOCATION_MAP_PIN_ANCHOR, LocationMapPin } from '@/components/maps/LocationMapPin';
+import {
+  LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_CENTER_OFFSET,
+  LocationMapPin,
+} from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -306,11 +310,21 @@ export default function DriverNavigateScreen() {
             rotationDeg={vehicleRotationDeg}
           />
         </Marker>
-        <Marker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
-          <LocationMapPin variant="pickup" />
+        <Marker
+          coordinate={pickupPinCoordinate}
+          anchor={LOCATION_MAP_PIN_ANCHOR}
+          centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+          tracksViewChanges
+        >
+          <LocationMapPin variant="pickup" mapType="standard" />
         </Marker>
-        <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
-          <LocationMapPin variant="destination" />
+        <Marker
+          coordinate={destinationPinCoordinate}
+          anchor={LOCATION_MAP_PIN_ANCHOR}
+          centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+          tracksViewChanges
+        >
+          <LocationMapPin variant="destination" mapType="standard" />
         </Marker>
         {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
       </MapView>
