@@ -40,10 +40,14 @@ import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
 import { useToast } from '@/context/ToastContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
-import { formatDistance, formatDuration } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, routeLineEndpoints } from '@/utils/mapUtils';
 import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
-import { LOCATION_MAP_PIN_SIZE, LocationMapPin } from '@/components/maps/LocationMapPin';
+import {
+  LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_SIZE,
+  LocationMapPin,
+} from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -535,6 +539,31 @@ export default function CustomerHome() {
     },
     [visibleRouteCoords, routeAnimProgress],
   );
+
+  const routePinPositions = useMemo(() => {
+    const fallbackPickup = { latitude: pickup.latitude, longitude: pickup.longitude };
+    if (!destination) {
+      return { pickup: fallbackPickup, destination: null as { latitude: number; longitude: number } | null };
+    }
+    const fallbackDestination = {
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+    };
+    const routeGeometry =
+      visibleRouteCoords.length > 1
+        ? visibleRouteCoords
+        : routePreviewCoords.length > 1
+          ? routePreviewCoords
+          : null;
+    const { start, end } = routeLineEndpoints(routeGeometry, fallbackPickup, fallbackDestination);
+    return { pickup: start, destination: end };
+  }, [
+    destination,
+    pickup.latitude,
+    pickup.longitude,
+    routePreviewCoords,
+    visibleRouteCoords,
+  ]);
 
   useEffect(() => {
     if (visibleRouteCoords.length < 2) {
@@ -1074,13 +1103,13 @@ export default function CustomerHome() {
         )}
 
         {shouldShowPickupMarker && (
-          <Marker coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+          <Marker coordinate={routePinPositions.pickup} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
             <LocationMapPin variant="pickup" />
           </Marker>
         )}
 
         {showBooking && destination && (
-          <Marker coordinate={{ latitude: destination.latitude, longitude: destination.longitude }} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+          <Marker coordinate={routePinPositions.destination!} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
             <LocationMapPin variant="destination" />
           </Marker>
         )}

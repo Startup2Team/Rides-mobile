@@ -6,13 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
-import { LocationMapPin } from '@/components/maps/LocationMapPin';
+import { LOCATION_MAP_PIN_ANCHOR, LocationMapPin } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { formatDuration } from '@/utils/mapUtils';
+import { formatDuration, routeLineEndpoints } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
 
@@ -263,6 +263,28 @@ export default function DriverNavigateScreen() {
     [driverPos, route],
   );
 
+  const pickupPinCoordinate = useMemo(() => {
+    if (!currentRide) return KIGALI_CENTER;
+    const fallback = currentRide.pickup;
+    if (!route || route.coordinates.length < 2) return fallback;
+    if (phase === 'inprogress') {
+      return routeLineEndpoints(route.coordinates, fallback, currentRide.destination).start;
+    }
+    if (phase === 'pickup') {
+      return routeLineEndpoints(route.coordinates, driverPos, fallback).end;
+    }
+    return fallback;
+  }, [currentRide, driverPos, phase, route]);
+
+  const destinationPinCoordinate = useMemo(() => {
+    if (!currentRide) return KIGALI_CENTER;
+    const fallback = currentRide.destination;
+    if (phase === 'inprogress' && route && route.coordinates.length >= 2) {
+      return routeLineEndpoints(route.coordinates, currentRide.pickup, fallback).end;
+    }
+    return fallback;
+  }, [currentRide, phase, route]);
+
   const vehicleRotationDeg = useMemo(() => {
     if (!remainingRoute || remainingRoute.length < 2) return 0;
     const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
@@ -284,10 +306,10 @@ export default function DriverNavigateScreen() {
             rotationDeg={vehicleRotationDeg}
           />
         </Marker>
-        <Marker coordinate={currentRide.pickup} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+        <Marker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
           <LocationMapPin variant="pickup" />
         </Marker>
-        <Marker coordinate={currentRide.destination} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+        <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
           <LocationMapPin variant="destination" />
         </Marker>
         {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
