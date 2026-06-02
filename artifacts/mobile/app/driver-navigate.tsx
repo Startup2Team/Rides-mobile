@@ -7,6 +7,11 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
+import {
+  LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_CENTER_OFFSET,
+  LocationMapPin,
+} from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -315,15 +320,21 @@ export default function DriverNavigateScreen() {
             rotationDeg={vehicleRotationDeg}
           />
         </Marker>
-        <Marker coordinate={currentRide.pickup}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.primary }]}>
-            <Feather name="user" size={14} color="#fff" />
-          </View>
+        <Marker
+          coordinate={pickupPinCoordinate}
+          anchor={LOCATION_MAP_PIN_ANCHOR}
+          centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+          tracksViewChanges
+        >
+          <LocationMapPin variant="pickup" mapType="standard" />
         </Marker>
-        <Marker coordinate={currentRide.destination}>
-          <View style={[styles.pinMarker, { backgroundColor: colors.destructive }]}>
-            <Feather name="map-pin" size={14} color="#fff" />
-          </View>
+        <Marker
+          coordinate={destinationPinCoordinate}
+          anchor={LOCATION_MAP_PIN_ANCHOR}
+          centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+          tracksViewChanges
+        >
+          <LocationMapPin variant="destination" mapType="standard" />
         </Marker>
         {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
       </MapView>

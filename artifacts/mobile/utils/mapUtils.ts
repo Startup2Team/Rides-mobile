@@ -27,6 +27,22 @@ export function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
+const ROUTE_FIT_MAX_POINTS = 48;
+
+/** Downsample a long polyline for stable map fitting without losing extent. */
+export function sampleRouteCoordsForFit(
+  coordinates: Coords[],
+  maxPoints = ROUTE_FIT_MAX_POINTS,
+): Coords[] {
+  if (coordinates.length <= maxPoints) return coordinates;
+  const sampled: Coords[] = [];
+  for (let i = 0; i < maxPoints; i += 1) {
+    const index = Math.round((i / (maxPoints - 1)) * (coordinates.length - 1));
+    sampled.push(coordinates[index]);
+  }
+  return sampled;
+}
+
 /** Place pins on polyline endpoints when route geometry is available. */
 export function routeLineEndpoints(
   coordinates: Coords[] | null | undefined,

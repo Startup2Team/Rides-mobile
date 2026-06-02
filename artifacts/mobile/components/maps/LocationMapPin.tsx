@@ -1,28 +1,92 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 export type LocationMapPinVariant = 'pickup' | 'destination';
+export type LocationMapPinMapType = 'standard' | 'satellite' | 'hybrid';
 
 export const LOCATION_MAP_PIN_SIZE = 48;
+const LOCATION_MAP_PIN_HEAD_SIZE = Math.round(LOCATION_MAP_PIN_SIZE * 0.5);
+const LOCATION_MAP_PIN_STEM_HEIGHT = Math.round(LOCATION_MAP_PIN_SIZE * 0.44);
+const LOCATION_MAP_PIN_HEIGHT = LOCATION_MAP_PIN_HEAD_SIZE + LOCATION_MAP_PIN_STEM_HEIGHT;
 
-/** Anchor so the pin tip (not the icon bounding box) sits on the map coordinate. */
+/** Anchor so the pointed stem tip is the exact map coordinate. */
 export const LOCATION_MAP_PIN_ANCHOR = { x: 0.5, y: 1 } as const;
+/**
+ * Custom marker views can still be centered internally by map SDKs.
+ * Shift by half pin height so map coordinate lands at stem bottom tip.
+ */
+export const LOCATION_MAP_PIN_CENTER_OFFSET = Platform.select({
+  ios: { x: 0, y: -(LOCATION_MAP_PIN_HEIGHT / 2) },
+  android: { x: 0, y: -(LOCATION_MAP_PIN_HEIGHT / 2) },
+  default: { x: 0, y: 0 },
+}) as { x: number; y: number };
 
 interface LocationMapPinProps {
   variant: LocationMapPinVariant;
   size?: number;
+  mapType?: LocationMapPinMapType;
 }
 
-/** Teardrop map pin — blue pickup, red destination (matches map picker). */
-export function LocationMapPin({ variant, size = LOCATION_MAP_PIN_SIZE }: LocationMapPinProps) {
+/** Lollipop map pin: circle head + stem with pointed tip. */
+export function LocationMapPin({
+  variant,
+  size = LOCATION_MAP_PIN_SIZE,
+  mapType = 'standard',
+}: LocationMapPinProps) {
   const colors = useColors();
-  const color = variant === 'pickup' ? colors.primaryHex : colors.destructiveHex;
+  const scheme = useColorScheme();
+  const color = variant === 'pickup' ? colors.primaryHex : colors.successHex;
+  const isLightStandard = scheme !== 'dark' && mapType === 'standard';
+  const stemColor = isLightStandard ? '#6B7280' : '#FFFFFF';
+  const stemBorderColor = isLightStandard ? 'transparent' : 'rgba(0,0,0,0.65)';
+  const headSize = Math.round(size * 0.34);
+  const headRingWidth = Math.max(3, Math.round(headSize * 0.24));
+  const headInnerSize = Math.max(6, Math.round(headSize - headRingWidth * 2));
+  const stemWidth = Math.max(3, Math.round(size * 0.06));
+  const stemHeight = Math.round(size * 0.44);
+  const stemJoinOverlap = 1;
+  const pinHeight = headSize + stemHeight;
 
   return (
-    <View style={[styles.root, { width: size, height: size }]}>
-      <MaterialCommunityIcons name="map-marker" size={size} color={color} style={styles.icon} />
+    <View style={[styles.root, { width: size, height: pinHeight }]}>
+      <View
+        style={[
+          styles.head,
+          {
+            width: headSize,
+            height: headSize,
+            borderRadius: headSize / 2,
+            backgroundColor: 'transparent',
+            borderWidth: headRingWidth,
+            borderColor: color,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.headInner,
+            {
+              width: headInnerSize,
+              height: headInnerSize,
+              borderRadius: headInnerSize / 2,
+              backgroundColor: 'transparent',
+            },
+          ]}
+        />
+      </View>
+      <View
+        style={[
+          styles.stem,
+          {
+            width: stemWidth,
+            height: stemHeight,
+            backgroundColor: stemColor,
+            borderColor: stemBorderColor,
+            marginTop: -stemJoinOverlap,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -32,8 +96,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  icon: {
-    // Glyph includes transparent padding below the tip; nudge so the tip aligns with the view bottom.
-    marginBottom: -2,
+  head: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  headInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  stem: {
+    borderRadius: 999,
+    borderWidth: 0.5,
   },
 });

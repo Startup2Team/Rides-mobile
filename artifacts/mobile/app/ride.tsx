@@ -20,7 +20,11 @@ import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { AppButton } from '@/components/AppButton';
-import { LOCATION_MAP_PIN_ANCHOR, LocationMapPin } from '@/components/maps/LocationMapPin';
+import {
+  LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_CENTER_OFFSET,
+  LocationMapPin,
+} from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm, routeLineEndpoints } from '@/utils/mapUtils';
@@ -499,13 +503,23 @@ export default function RideScreen() {
           </Marker>
         )}
         {!isInProgress && pickupPinCoordinate && (
-          <Marker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
-            <LocationMapPin variant="pickup" />
+          <Marker
+            coordinate={pickupPinCoordinate}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges
+          >
+            <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
         )}
         {(isArrived || isInProgress) && destinationPinCoordinate && (
-          <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
-            <LocationMapPin variant="destination" />
+          <Marker
+            coordinate={destinationPinCoordinate}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges
+          >
+            <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
         )}
         {isArriving && remainingDriverToPickupRoute ? (
@@ -562,6 +576,7 @@ export default function RideScreen() {
       <View
         style={[
           styles.topStatus,
+          (isArriving || isArrived || isInProgress) && styles.topStatusShadow,
           {
             paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
             backgroundColor: colors.background,
@@ -832,6 +847,14 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingBottom: 14,
+    zIndex: 10,
+  },
+  topStatusShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 8,
   },
   topStatusBar: {
     flexDirection: 'row',
