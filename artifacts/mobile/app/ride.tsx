@@ -20,7 +20,11 @@ import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { AppButton } from '@/components/AppButton';
-import { LOCATION_MAP_PIN_ANCHOR, LocationMapPin } from '@/components/maps/LocationMapPin';
+import {
+  LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_CENTER_OFFSET,
+  LocationMapPin,
+} from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { formatDistance, formatDuration, haversineKm, routeLineEndpoints } from '@/utils/mapUtils';
@@ -494,12 +498,22 @@ export default function RideScreen() {
           </Marker>
         )}
         {!isInProgress && pickupPinCoordinate && (
-          <Marker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+          <Marker
+            coordinate={pickupPinCoordinate}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges={false}
+          >
             <LocationMapPin variant="pickup" />
           </Marker>
         )}
         {(isArrived || isInProgress) && destinationPinCoordinate && (
-          <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+          <Marker
+            coordinate={destinationPinCoordinate}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges={false}
+          >
             <LocationMapPin variant="destination" />
           </Marker>
         )}

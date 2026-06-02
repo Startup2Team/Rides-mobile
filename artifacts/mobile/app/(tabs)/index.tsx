@@ -45,6 +45,7 @@ import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils
 import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
+  LOCATION_MAP_PIN_CENTER_OFFSET,
   LOCATION_MAP_PIN_SIZE,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
@@ -1103,13 +1104,23 @@ export default function CustomerHome() {
         )}
 
         {shouldShowPickupMarker && (
-          <Marker coordinate={routePinPositions.pickup} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+          <Marker
+            coordinate={routePinPositions.pickup}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges={false}
+          >
             <LocationMapPin variant="pickup" />
           </Marker>
         )}
 
         {showBooking && destination && (
-          <Marker coordinate={routePinPositions.destination!} anchor={LOCATION_MAP_PIN_ANCHOR} tracksViewChanges={false}>
+          <Marker
+            coordinate={routePinPositions.destination!}
+            anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
+            tracksViewChanges={false}
+          >
             <LocationMapPin variant="destination" />
           </Marker>
         )}
