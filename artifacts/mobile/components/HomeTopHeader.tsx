@@ -49,15 +49,12 @@ export type HomeTopHeaderProps = {
   isRegisteredDriver: boolean;
 };
 
-function compactLocationDisplay(address: string, loading: boolean): string {
-  if (loading) return 'Getting location...';
-  const trimmed = address.trim();
-  if (!trimmed || trimmed === 'Set pickup location') return 'Set location';
-  if (/kigali/i.test(trimmed)) return 'Kigali';
-  const parts = trimmed.split(',').map(part => part.trim()).filter(Boolean);
-  const segment = parts.length > 1 ? parts[parts.length - 1] : trimmed;
-  return segment.length > 20 ? `${segment.slice(0, 18)}…` : segment;
-}
+/** Shared caption size for CTA label and compact location line. */
+const HEADER_CAPTION_TEXT = {
+  fontSize: 12.5,
+  fontFamily: 'Inter_600SemiBold' as const,
+  lineHeight: 16,
+};
 
 export function HomeTopHeader({
   paddingTop,
@@ -78,7 +75,9 @@ export function HomeTopHeader({
 
   const ctaMessage = DRIVER_CTA_MESSAGES[messageIndex];
   const showDriverCta = !isRegisteredDriver;
-  const compactLocation = compactLocationDisplay(locationText, locLoading);
+  const compactLocationLine = locLoading
+    ? 'Getting location...'
+    : (locationText.trim() || 'Set pickup location');
 
   const advanceMessageIndex = useCallback(() => {
     messageIndexRef.current =
@@ -254,11 +253,11 @@ export function HomeTopHeader({
           <View style={styles.locationRowCompact}>
             <Feather name="map-pin" size={16} color={colors.primary} />
             <Text
-              style={[styles.locationCompactText, { color: colors.foreground }]}
+              style={[styles.locationCompactText, HEADER_CAPTION_TEXT, { color: colors.foreground }]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {compactLocation}
+              {compactLocationLine}
             </Text>
           </View>
         ) : (
@@ -356,9 +355,7 @@ const styles = StyleSheet.create({
     paddingLeft: 3,
   },
   ctaLabel: {
-    fontSize: 12.5,
-    fontFamily: 'Inter_600SemiBold',
-    lineHeight: 16,
+    ...HEADER_CAPTION_TEXT,
   },
   profileOnlyBtn: {
     width: AVATAR_SIZE,
@@ -410,8 +407,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   locationCardCompact: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   locationCardFull: {
     paddingHorizontal: 12,
@@ -420,14 +417,13 @@ const styles = StyleSheet.create({
   locationRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
+    minWidth: 0,
   },
   locationCompactText: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
+    minWidth: 0,
+    textAlign: 'left',
   },
   locationRowFull: {
     flex: 1,
