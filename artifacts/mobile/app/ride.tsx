@@ -28,6 +28,7 @@ import {
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
+import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 import { formatDistance, formatDuration, haversineKm, routeLineEndpoints } from '@/utils/mapUtils';
 import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -216,11 +217,10 @@ export default function RideScreen() {
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
   }, [activeRemainingRoute, activeVehicleType, isArrived, rideRoute]);
 
-  const driverPhotoUri = useMemo(() => {
-    const driver = currentRide?.driver;
-    if (!driver) return undefined;
-    return driver.profileImage;
-  }, [currentRide?.driver]);
+  const driverPhotoUri = useMemo(
+    () => resolveDriverProfileImage(currentRide?.driver),
+    [currentRide?.driver],
+  );
 
   useEffect(() => {
     if (currentRide?.status !== 'arrived') return;
@@ -335,9 +335,16 @@ export default function RideScreen() {
     const fare = currentRide.agreedFare ?? 0;
     const vehicleType = currentRide.vehicleType;
     navigatingToRatingRef.current = true;
+    const driverPhoto = resolveDriverProfileImage(currentRide.driver);
     router.push({
       pathname: '/rating',
-      params: { rideId, driverName, fare: String(fare), vehicleType },
+      params: {
+        rideId,
+        driverName,
+        ...(driverPhoto ? { driverPhoto } : {}),
+        fare: String(fare),
+        vehicleType,
+      },
     });
   };
 

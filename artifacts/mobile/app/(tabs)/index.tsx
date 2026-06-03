@@ -208,6 +208,8 @@ export default function CustomerHome() {
   const hasCenteredOnUserRef = useRef(false);
 
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
+  /** GPS "where you are now" for the home header — independent of booking pickup. */
+  const [currentLocationAddress, setCurrentLocationAddress] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
@@ -219,7 +221,7 @@ export default function CustomerHome() {
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
   const [isPickerDragging, setIsPickerDragging] = useState(false);
-  const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: 'Current Location' });
+  const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: '' });
   const [destText, setDestText] = useState('');
   const [destination, setDestination] = useState<RideLocation | null>(null);
   const [bookLoading, setBookLoading] = useState(false);
@@ -377,6 +379,38 @@ export default function CustomerHome() {
     }, [reloadSavedPlaces]),
   );
 
+  const applyHereFromCoords = useCallback(
+    (coords: typeof KIGALI_CENTER, geo?: Location.LocationGeocodedAddress | null) => {
+      setUserLocation(coords);
+      setCurrentLocationAddress(formatReverseGeocodeAddress(geo, ''));
+    },
+    [],
+  );
+
+  const refreshHereLocation = useCallback(async () => {
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      const granted = permission.granted
+        || (permission.canAskAgain && (await Location.requestForegroundPermissionsAsync()).granted);
+      if (!granted) return;
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
+      applyHereFromCoords(coords, geo);
+    } catch {
+      // keep last known here address
+    }
+  }, [applyHereFromCoords]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (locationSearchTarget !== null || mapPicker !== null) return undefined;
+      void refreshHereLocation();
+      return undefined;
+    }, [locationSearchTarget, mapPicker, refreshHereLocation]),
+  );
+
   const shouldLiftSaveFormForKeyboard = Boolean(pendingSaveLocation);
   const shouldLiftSaveFormForKeyboardRef = useRef(shouldLiftSaveFormForKeyboard);
   shouldLiftSaveFormForKeyboardRef.current = shouldLiftSaveFormForKeyboard;
@@ -459,10 +493,11 @@ export default function CustomerHome() {
       const [geo] = await Location.reverseGeocodeAsync(loc.coords).catch(() => [null]);
       if (!mounted) return true;
 
-      setUserLocation(coords);
+      const address = formatReverseGeocodeAddress(geo, '');
+      applyHereFromCoords(coords, geo);
       setPickup({
         ...coords,
-        address: formatReverseGeocodeAddress(geo),
+        address,
         locationType: 'precise',
       });
       return true;
@@ -477,14 +512,32 @@ export default function CustomerHome() {
     (async () => {
       try {
         if (Platform.OS === 'web') {
-          navigator.geolocation?.getCurrentPosition(p => {
-            const coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
-            setUserLocation(coords);
-            setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
-            setLocLoading(false);
-          }, () => {
-            setLocLoading(false);
-          });
+          navigator.geolocation?.getCurrentPosition(
+            async p => {
+              const coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
+              if (!mounted) return;
+              try {
+                const [geo] = await Location.reverseGeocodeAsync(coords);
+                if (!mounted) return;
+                const address = formatReverseGeocodeAddress(geo, '');
+                applyHereFromCoords(coords, geo);
+                setPickup({
+                  ...coords,
+                  address,
+                  locationType: 'precise',
+                });
+              } catch {
+                if (mounted) {
+                  applyHereFromCoords(coords, null);
+                  setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
+                }
+              }
+              setLocLoading(false);
+            },
+            () => {
+              if (mounted) setLocLoading(false);
+            },
+          );
         } else {
           await resolveLocation();
           await requestNotificationPermission();
@@ -498,7 +551,7 @@ export default function CustomerHome() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [applyHereFromCoords]);
 
   // Real road route via Mapbox Directions API
   const { route, loading: routeLoading } = useRoute(
@@ -685,12 +738,19 @@ export default function CustomerHome() {
       setPickup({
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
-        address: 'Current Location',
+        address: currentLocationAddress || 'Current Location',
         locationType: 'precise',
       });
       requestAnimationFrame(() => centerMapOnUser(400, homePanelMapInset));
     });
-  }, [activePanelHeight, homePanelMapInset, sheetAnim, userLocation.latitude, userLocation.longitude]);
+  }, [
+    activePanelHeight,
+    currentLocationAddress,
+    homePanelMapInset,
+    sheetAnim,
+    userLocation.latitude,
+    userLocation.longitude,
+  ]);
 
   const snapBookingSheetOpen = () => {
     bookingCloseRef.current?.spinOpen();
@@ -1288,8 +1348,7 @@ export default function CustomerHome() {
       {locationSearchTarget === null && mapPicker === null ? (
         <HomeTopHeader
           paddingTop={insets.top + (Platform.OS === 'web' ? 67 : 0) + 12}
-          locationLabel="Current location"
-          locationText={pickup.address ?? 'Set pickup location'}
+          locationText={currentLocationAddress}
           locLoading={locLoading}
           profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
           isRegisteredDriver={Boolean(driverProfile)}

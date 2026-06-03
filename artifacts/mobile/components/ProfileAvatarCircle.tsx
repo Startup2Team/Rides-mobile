@@ -18,6 +18,8 @@ import { STORAGE_KEYS } from '@/constants/storage';
 export type ProfileAvatarCircleProps = {
   size?: number;
   initial: string;
+  /** When set (including null), skips loading the signed-in user's profile photo from storage. */
+  imageUri?: string | null;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
@@ -26,24 +28,28 @@ export type ProfileAvatarCircleProps = {
 export function ProfileAvatarCircle({
   size = 44,
   initial,
+  imageUri,
   onPress,
   style,
   accessibilityLabel = 'Profile',
 }: ProfileAvatarCircleProps) {
   const isDark = useColorScheme() === 'dark';
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [storedProfileImage, setStoredProfileImage] = useState<string | null>(null);
   const radius = size / 2;
+  const useStoredProfile = imageUri === undefined;
+  const displayUri = useStoredProfile ? storedProfileImage : imageUri;
 
   useFocusEffect(
     useCallback(() => {
+      if (!useStoredProfile) return undefined;
       let active = true;
       void AsyncStorage.getItem(STORAGE_KEYS.profileImage).then(uri => {
-        if (active) setProfileImage(uri);
+        if (active) setStoredProfileImage(uri);
       });
       return () => {
         active = false;
       };
-    }, []),
+    }, [useStoredProfile]),
   );
 
   const content = (
@@ -60,10 +66,10 @@ export function ProfileAvatarCircle({
       ]}
     >
       <View style={[styles.circle, { width: size, height: size, borderRadius: radius }]}>
-        {profileImage ? (
+        {displayUri ? (
           <Image
-            key={profileImage}
-            source={{ uri: profileImage }}
+            key={displayUri}
+            source={{ uri: displayUri }}
             style={{ width: size, height: size }}
           />
         ) : (

@@ -23,6 +23,7 @@ import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { NegotiationMessage, RideStatus, VEHICLE_LABELS } from '@/types';
+import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 
 const RIDE_FLOW_STATUSES: RideStatus[] = ['confirmed', 'arriving', 'arrived', 'in_progress'];
 
@@ -369,8 +370,8 @@ export default function NegotiationScreen() {
 
   if (!currentRide) return null;
 
-  const driverProfileImage = currentRide.driver?.profileImage;
   const driverInitial = currentRide.driver?.name?.trim()?.[0]?.toUpperCase() ?? 'D';
+  const driverProfileImage = resolveDriverProfileImage(currentRide.driver);
   const destinationIsGeneric = currentRide.destination.locationType === 'generic';
   const dropoffAccent = destinationIsGeneric ? WARNING : colors.destructive;
 

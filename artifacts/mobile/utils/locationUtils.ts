@@ -24,6 +24,15 @@ export function formatReverseGeocodeAddress(
   return fallback;
 }
 
+/** Home header — street line only; never show generic "Current location" label text. */
+export function formatHomeHeaderLocation(address: string, loading: boolean): string {
+  if (loading) return 'Getting location...';
+  const trimmed = address.trim();
+  if (!trimmed || /^set pickup location$/i.test(trimmed)) return 'Set pickup location';
+  if (/^current location$/i.test(trimmed)) return 'Getting location...';
+  return trimmed;
+}
+
 export const SAME_LOCATION_THRESHOLD_METERS = 30;
 
 export function getCoordDistance(

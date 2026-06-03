@@ -29,6 +29,7 @@ import {
 } from '@/constants/homeDriverCta';
 import { STORAGE_KEYS } from '@/constants/storage';
 import { useColors } from '@/hooks/useColors';
+import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 
 const AVATAR_SIZE = 44;
 const CTA_AVATAR_SIZE = 34;
@@ -41,7 +42,6 @@ const FADE_HALF_MS = DRIVER_CTA_FADE_MS / 2;
 
 export type HomeTopHeaderProps = {
   paddingTop: number;
-  locationLabel: string;
   locationText: string;
   locLoading: boolean;
   profileInitial: string;
@@ -58,7 +58,6 @@ const HEADER_CAPTION_TEXT = {
 
 export function HomeTopHeader({
   paddingTop,
-  locationLabel,
   locationText,
   locLoading,
   profileInitial,
@@ -75,9 +74,7 @@ export function HomeTopHeader({
 
   const ctaMessage = DRIVER_CTA_MESSAGES[messageIndex];
   const showDriverCta = !isRegisteredDriver;
-  const compactLocationLine = locLoading
-    ? 'Getting location...'
-    : (locationText.trim() || 'Set pickup location');
+  const headerLocationLine = formatHomeHeaderLocation(locationText, locLoading);
 
   const advanceMessageIndex = useCallback(() => {
     messageIndexRef.current =
@@ -242,43 +239,17 @@ export function HomeTopHeader({
         </Pressable>
       )}
 
-      <View
-        style={[
-          styles.locationCard,
-          { backgroundColor: colors.card },
-          showDriverCta ? styles.locationCardCompact : styles.locationCardFull,
-        ]}
-      >
-        {showDriverCta ? (
-          <View style={styles.locationRowCompact}>
-            <Feather name="map-pin" size={16} color={colors.primary} />
-            <Text
-              style={[styles.locationCompactText, HEADER_CAPTION_TEXT, { color: colors.foreground }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {compactLocationLine}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.locationRowFull}>
-            <View style={styles.locationIcon}>
-              <Feather name="map-pin" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.locationCopy}>
-              <Text style={[styles.locationLabel, { color: colors.mutedForeground }]}>
-                {locationLabel}
-              </Text>
-              <Text
-                style={[styles.locationText, { color: colors.foreground }]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {locLoading ? 'Getting location...' : locationText}
-              </Text>
-            </View>
-          </View>
-        )}
+      <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.card }]}>
+        <View style={styles.locationRowCompact}>
+          <Feather name="map-pin" size={16} color={colors.primary} />
+          <Text
+            style={[styles.locationCompactText, HEADER_CAPTION_TEXT, { color: colors.foreground }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {headerLocationLine}
+          </Text>
+        </View>
       </View>
 
       <TouchableOpacity
@@ -410,10 +381,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  locationCardFull: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
   locationRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -424,36 +391,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     textAlign: 'left',
-  },
-  locationRowFull: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  locationIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationCopy: {
-    flex: 1,
-    alignItems: 'center',
-    minWidth: 0,
-  },
-  locationLabel: {
-    fontSize: 9,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'uppercase',
-  },
-  locationText: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    maxWidth: '100%',
-    textAlign: 'center',
   },
   notifBtn: {
     width: AVATAR_SIZE,

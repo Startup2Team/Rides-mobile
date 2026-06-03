@@ -12,6 +12,7 @@ import {
   VehicleType,
 } from '@/types';
 import { STORAGE_KEYS } from '@/constants/storage';
+import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 
 interface RideContextType {
   currentRide: Ride | null;
@@ -121,11 +122,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     if (isMatchingPausedRef.current) return;
 
     const matching = MOCK_DRIVERS.filter(d => d.vehicleType === vehicleType);
-    const driver: MockDriver = matching.length > 0
+    const picked = matching.length > 0
       ? matching[Math.floor(Math.random() * matching.length)]
       : MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
-
-    setDriverLocation(driver.location);
 
     const isGeneric = pickup.locationType === 'generic' || destination.locationType === 'generic';
     const initialMessages: NegotiationMessage[] = [];
@@ -140,33 +139,39 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    setCurrentRide(prev => {
-      if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
-      return {
-        ...prev,
-        status: 'negotiating',
-        driver,
-        driverId: driver.id,
-        negotiation: initialMessages,
-      };
-    });
-
-    driverOfferTimeoutRef.current = setTimeout(() => {
-      driverOfferTimeoutRef.current = null;
+    void buildDriverWithUploadedPhoto(picked).then(driver => {
       if (isMatchingPausedRef.current) return;
+
+      setDriverLocation(driver.location);
+
       setCurrentRide(prev => {
-        if (!prev || prev.status !== 'negotiating') return prev;
-        const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
-        const driverMsg: NegotiationMessage = {
-          id: generateId(),
-          sender: 'driver',
-          type: 'offer',
-          amount: driverOffer,
-          timestamp: new Date().toISOString(),
+        if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
+        return {
+          ...prev,
+          status: 'negotiating',
+          driver,
+          driverId: driver.id,
+          negotiation: initialMessages,
         };
-        return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
       });
-    }, 2500);
+
+      driverOfferTimeoutRef.current = setTimeout(() => {
+        driverOfferTimeoutRef.current = null;
+        if (isMatchingPausedRef.current) return;
+        setCurrentRide(prev => {
+          if (!prev || prev.status !== 'negotiating') return prev;
+          const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
+          const driverMsg: NegotiationMessage = {
+            id: generateId(),
+            sender: 'driver',
+            type: 'offer',
+            amount: driverOffer,
+            timestamp: new Date().toISOString(),
+          };
+          return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
+        });
+      }, 2500);
+    });
   }, []);
 
   const scheduleDriverMatch = useCallback((
