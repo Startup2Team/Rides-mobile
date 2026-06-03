@@ -224,9 +224,13 @@ export default function CustomerHome() {
   const [editingSavedLocation, setEditingSavedLocation] = useState<SavedLocation | null>(null);
   const [editingSavedLabel, setEditingSavedLabel] = useState('');
   const [editingSavedAddress, setEditingSavedAddress] = useState('');
+  const [editingSavedAddressSuggestions, setEditingSavedAddressSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const [editingSavedAddressLoading, setEditingSavedAddressLoading] = useState(false);
+  const [editingSavedFocusedField, setEditingSavedFocusedField] = useState<'label' | 'address' | null>(null);
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editAddressGeocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const sheetDragStart = useRef(0);
   const bookingCloseRef = useRef<CloseButtonHandle>(null);
@@ -235,6 +239,8 @@ export default function CustomerHome() {
   const activePanelHeightRef = useRef(COMPACT_PANEL_HEIGHT);
   const closeBookingRef = useRef<() => void>(() => {});
   const editSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
+  const editSheetBottomAnim = useRef(new Animated.Value(0)).current;
+  const editSheetKeyboardOpenRef = useRef(false);
   const editSheetEnterAnim = useRef(new Animated.Value(24)).current;
   const editSheetOpacityAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragAnim = useRef(new Animated.Value(0)).current;
@@ -365,36 +371,50 @@ export default function CustomerHome() {
   );
 
   useEffect(() => {
-    const liftEditSheet = (height: number) => {
-      Animated.spring(editSheetKeyboardAnim, {
-        toValue: Math.max(0, height - insets.bottom),
-        damping: 24,
-        stiffness: 260,
-        mass: 0.8,
+    const liftEditSheet = (height: number, duration = 220) => {
+      const lift = Math.max(0, height - insets.bottom);
+      editSheetKeyboardOpenRef.current = lift > 0;
+
+      Animated.timing(editSheetKeyboardAnim, {
+        toValue: lift,
+        duration,
         useNativeDriver: true,
+      }).start();
+      Animated.timing(editSheetBottomAnim, {
+        toValue: lift,
+        duration,
+        useNativeDriver: false,
+      }).start();
+    };
+    const lowerEditSheet = (duration = 180) => {
+      editSheetKeyboardOpenRef.current = false;
+      setEditingSavedFocusedField(null);
+      Animated.timing(editSheetKeyboardAnim, {
+        toValue: 0,
+        duration,
+        useNativeDriver: true,
+      }).start();
+      Animated.timing(editSheetBottomAnim, {
+        toValue: 0,
+        duration,
+        useNativeDriver: false,
       }).start();
     };
 
-    const willShowSub = Keyboard.addListener('keyboardWillShow', event => {
-      liftEditSheet(event.endCoordinates.height);
-    });
-    const showSub = Keyboard.addListener('keyboardDidShow', event => {
-      liftEditSheet(event.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      Animated.timing(editSheetKeyboardAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
-    });
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      event => liftEditSheet(event.endCoordinates.height, event.duration ?? 220),
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      event => lowerEditSheet(event.duration ?? 180),
+    );
 
     return () => {
-      willShowSub.remove();
       showSub.remove();
       hideSub.remove();
     };
-  }, [editSheetKeyboardAnim, insets.bottom]);
+  }, [editSheetBottomAnim, editSheetKeyboardAnim, insets.bottom]);
 
   useEffect(() => {
     if (!pendingSaveLocation) return;
@@ -409,6 +429,7 @@ export default function CustomerHome() {
   useEffect(() => {
     if (!editingSavedLocation) {
       editSheetKeyboardAnim.setValue(0);
+      editSheetBottomAnim.setValue(0);
       editSheetEnterAnim.setValue(0);
       editSheetOpacityAnim.setValue(0);
       return;
@@ -418,10 +439,10 @@ export default function CustomerHome() {
     editSheetEnterAnim.setValue(0);
     editSheetOpacityAnim.setValue(0);
     Animated.parallel([
-      Animated.spring(formSheetDragAnim, {
+      Animated.timing(formSheetDragAnim, {
         toValue: 0,
+        duration: 190,
         useNativeDriver: true,
-        bounciness: 4,
       }),
       Animated.timing(editSheetOpacityAnim, {
         toValue: 1,
@@ -429,7 +450,7 @@ export default function CustomerHome() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [editingSavedLocation, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim, formSheetDragAnim]);
+  }, [editingSavedLocation, editSheetBottomAnim, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim, formSheetDragAnim]);
 
   // Get user location and notification permissions using native OS prompts only.
   useEffect(() => {
@@ -795,6 +816,40 @@ export default function CustomerHome() {
     }, 350);
   };
 
+  const handleEditSavedAddressText = (text: string) => {
+    setEditingSavedAddress(text);
+    if (editAddressGeocodeTimer.current) clearTimeout(editAddressGeocodeTimer.current);
+    if (text.trim().length < 2) {
+      setEditingSavedAddressSuggestions([]);
+      setEditingSavedAddressLoading(false);
+      return;
+    }
+    setEditingSavedAddressLoading(true);
+    editAddressGeocodeTimer.current = setTimeout(async () => {
+      const results = await geocodeAddress(text, userLocation);
+      setEditingSavedAddressSuggestions(results.slice(0, 5));
+      setEditingSavedAddressLoading(false);
+    }, 350);
+  };
+
+  const applyEditSavedAddressSuggestion = (suggestion: GeocodeSuggestion) => {
+    setEditingSavedAddress(suggestion.place_name);
+    setEditingSavedLocation(prev =>
+      prev
+        ? {
+            ...prev,
+            ...suggestion.coords,
+            address: suggestion.place_name,
+            locationType: 'precise',
+          }
+        : prev,
+    );
+    setEditingSavedAddressSuggestions([]);
+    setEditingSavedAddressLoading(false);
+    setEditingSavedFocusedField(null);
+    Keyboard.dismiss();
+  };
+
   const buildTypedLocation = (): RideLocation => ({
     latitude: userLocation.latitude + 0.02,
     longitude: userLocation.longitude + 0.02,
@@ -822,10 +877,15 @@ export default function CustomerHome() {
   };
 
   const closeEditSavedLocation = () => {
+    editSheetKeyboardOpenRef.current = false;
     editSheetKeyboardAnim.setValue(0);
+    editSheetBottomAnim.setValue(0);
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditingSavedAddressSuggestions([]);
+    setEditingSavedAddressLoading(false);
+    setEditingSavedFocusedField(null);
     Keyboard.dismiss();
   };
 
@@ -929,7 +989,12 @@ export default function CustomerHome() {
 
   const editFormSheetPanResponder = useMemo(
     () => createFormSheetPanResponder(
-      () => closeEditSavedLocationRef.current(),
+      () => {
+        editSheetKeyboardOpenRef.current = false;
+        setEditingSavedFocusedField(null);
+        setEditingSavedAddressSuggestions([]);
+        closeEditSavedLocationRef.current();
+      },
       () => editFormCloseRef.current?.spinShut(),
       progress => editFormCloseRef.current?.setSpinProgress(progress),
       () => editFormCloseRef.current?.spinOpen(),
@@ -947,10 +1012,15 @@ export default function CustomerHome() {
   };
 
   const openSavedLocationMenu = (location: SavedLocation) => {
+    editSheetKeyboardOpenRef.current = false;
     editSheetKeyboardAnim.setValue(0);
+    editSheetBottomAnim.setValue(0);
     setEditingSavedLocation(location);
     setEditingSavedLabel(location.label);
     setEditingSavedAddress(location.address ?? '');
+    setEditingSavedAddressSuggestions([]);
+    setEditingSavedAddressLoading(false);
+    setEditingSavedFocusedField(null);
     setPendingSaveLocation(null);
     setIsCustomSaveLabel(false);
     setCustomSaveLabel('');
@@ -964,7 +1034,7 @@ export default function CustomerHome() {
 
     const next = savedPlaces.map(place =>
       place.id === editingSavedLocation.id
-        ? { ...place, label, address: address || place.address }
+        ? { ...editingSavedLocation, label, address: address || editingSavedLocation.address }
         : place
     );
     await persistSavedPlaces(next);
@@ -972,6 +1042,9 @@ export default function CustomerHome() {
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditingSavedAddressSuggestions([]);
+    setEditingSavedAddressLoading(false);
+    setEditingSavedFocusedField(null);
   };
 
   const openSavedLocationMap = () => {
@@ -990,6 +1063,9 @@ export default function CustomerHome() {
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditingSavedAddressSuggestions([]);
+    setEditingSavedAddressLoading(false);
+    setEditingSavedFocusedField(null);
   };
 
   const handleChooseOnMap = () => {
@@ -1873,8 +1949,20 @@ export default function CustomerHome() {
 
           {editingSavedLocation && (
             <>
-              <SheetBackdrop onPress={dismissEditFormSheet} animatedOpacity={formSheetBackdropOpacity} />
+              <SheetBackdrop
+                onPress={() => {}}
+                animatedOpacity={formSheetBackdropOpacity}
+                blurIntensity={18}
+                lightScrimOpacity={0.2}
+                darkScrimOpacity={0.42}
+              />
 
+              <Animated.View
+                style={[
+                  styles.overlayFormSheet,
+                  styles.overlayFormSheetRaised,
+                ]}
+              >
               <Animated.View
                 onLayout={event => {
                   const height = event.nativeEvent.layout.height;
@@ -1882,21 +1970,12 @@ export default function CustomerHome() {
                   setFormSheetMeasuredHeight(height);
                 }}
                 style={[
-                  styles.overlayFormSheet,
                   styles.formSheetSurface,
-                  styles.overlayFormSheetRaised,
                   formSheetSurface,
                   {
                     paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
                     opacity: editSheetOpacityAnim,
-                    transform: [
-                      {
-                        translateY: Animated.add(
-                          formSheetDragAnim,
-                          Animated.multiply(editSheetKeyboardAnim, -1),
-                        ),
-                      },
-                    ],
+                    transform: [{ translateY: formSheetDragAnim }],
                   },
                 ]}
                 {...editFormSheetPanResponder.panHandlers}
@@ -1935,37 +2014,75 @@ export default function CustomerHome() {
                     value={editingSavedLabel}
                     onChangeText={setEditingSavedLabel}
                     onFocus={() => {
-                      Animated.spring(editSheetKeyboardAnim, {
-                        toValue: estimatedKeyboardOffset,
-                        damping: 24,
-                        stiffness: 280,
-                        mass: 0.8,
-                        useNativeDriver: true,
-                      }).start();
+                      setEditingSavedFocusedField('label');
                     }}
                     placeholder="Location name"
                     placeholderTextColor={colors.mutedForeground}
                   />
                 </View>
 
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                  <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.mutedForeground} />
-                  <TextInput
-                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
-                    value={editingSavedAddress}
-                    onChangeText={setEditingSavedAddress}
-                    onFocus={() => {
-                      Animated.spring(editSheetKeyboardAnim, {
-                        toValue: estimatedKeyboardOffset,
-                        damping: 24,
-                        stiffness: 280,
-                        mass: 0.8,
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    placeholder="Address"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
+                <View style={styles.savedLocationAddressSuggestAnchor}>
+                  <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.mutedForeground} />
+                    <TextInput
+                      style={[styles.savedLocationEditInput, { color: colors.foreground }]}
+                      value={editingSavedAddress}
+                      onChangeText={handleEditSavedAddressText}
+                      onFocus={() => {
+                        setEditingSavedFocusedField('address');
+                      }}
+                      placeholder="Address"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                    {editingSavedAddressLoading && <ActivityIndicator size="small" color={colors.primary} />}
+                    {editingSavedAddress.length > 0 && !editingSavedAddressLoading && (
+                      <TouchableOpacity
+                        style={styles.savedLocationAddressClear}
+                        onPress={() => {
+                          if (editAddressGeocodeTimer.current) clearTimeout(editAddressGeocodeTimer.current);
+                          setEditingSavedAddress('');
+                          setEditingSavedAddressSuggestions([]);
+                          setEditingSavedAddressLoading(false);
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Clear address"
+                      >
+                        <Feather name="x" size={16} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {editingSavedAddressSuggestions.length > 0 && (
+                    <ScrollView
+                      style={styles.savedLocationSuggestions}
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled
+                    >
+                      {editingSavedAddressSuggestions.map((suggestion, index) => (
+                        <TouchableOpacity
+                          key={suggestion.id}
+                          style={[
+                            styles.savedLocationSuggestion,
+                            index < editingSavedAddressSuggestions.length - 1
+                              ? { borderBottomColor: colors.border }
+                              : { borderBottomWidth: 0 },
+                          ]}
+                          onPress={() => applyEditSavedAddressSuggestion(suggestion)}
+                          activeOpacity={0.75}
+                        >
+                          <MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.mutedForeground} />
+                          <View style={styles.savedLocationSuggestionText}>
+                            <Text style={[styles.savedLocationSuggestionTitle, { color: colors.foreground }]} numberOfLines={1}>
+                              {suggestion.title}
+                            </Text>
+                            <Text style={[styles.savedLocationSuggestionSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+                              {suggestion.subtitle ?? suggestion.place_name}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
 
                 <View style={styles.savedLocationActions}>
@@ -1997,6 +2114,8 @@ export default function CustomerHome() {
                 </TouchableOpacity>
                 </View>
                 </View>
+                <Animated.View style={{ height: editSheetBottomAnim }} pointerEvents="none" />
+              </Animated.View>
               </Animated.View>
             </>
           )}
@@ -2668,6 +2787,41 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
+  },
+  savedLocationAddressClear: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedLocationAddressSuggestAnchor: {
+    gap: 8,
+  },
+  savedLocationSuggestions: {
+    maxHeight: 168,
+    overflow: 'hidden',
+  },
+  savedLocationSuggestion: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  savedLocationSuggestionText: {
+    flex: 1,
+    gap: 2,
+  },
+  savedLocationSuggestionTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  savedLocationSuggestionSub: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
   },
   savedLocationActions: {
     flexDirection: 'row',
