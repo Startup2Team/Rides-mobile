@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import { EditSavedLocationSheet } from '@/components/EditSavedLocationSheet';
+import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
@@ -47,7 +48,7 @@ import {
   routeLineEndpoints,
   sampleRouteCoordsForFit,
 } from '@/utils/mapUtils';
-import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
+import { arePickupAndDropoffSame, formatReverseGeocodeAddress, getCoordDistance } from '@/utils/locationUtils';
 import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
@@ -197,7 +198,7 @@ export default function CustomerHome() {
   );
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
-  const { user } = useAuth();
+  const { user, driverProfile } = useAuth();
   const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
   const pathname = usePathname();
   const lastRideFlowStatusRef = useRef<string | null>(null);
@@ -461,7 +462,7 @@ export default function CustomerHome() {
       setUserLocation(coords);
       setPickup({
         ...coords,
-        address: geo ? `${geo.street ?? ''} ${geo.city ?? 'Kigali'}`.trim() : 'Current Location',
+        address: formatReverseGeocodeAddress(geo),
         locationType: 'precise',
       });
       return true;
@@ -1284,34 +1285,16 @@ export default function CustomerHome() {
         )}
       </MapView>
 
-      {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 }]}>
-        <View
-          style={[styles.topCard, { backgroundColor: colors.card }]}
-        >
-          <View style={styles.locationRow}>
-            <View style={styles.locationIcon}>
-              <Feather name="map-pin" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.locationCopy}>
-              <Text style={[styles.locationLabel, { color: colors.mutedForeground }]}>
-                Current location
-              </Text>
-              <Text style={[styles.locationText, { color: colors.foreground }]} numberOfLines={1}>
-                {locLoading ? 'Getting location...' : 'Kigali, Rwanda'}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[styles.notifBtn, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/notifications')}
-          activeOpacity={0.82}
-        >
-          <Feather name="bell" size={20} color={colors.foreground} />
-          <View style={[styles.notifBadge, { backgroundColor: colors.destructive, borderColor: colors.card }]} />
-        </TouchableOpacity>
-      </View>
+      {locationSearchTarget === null && mapPicker === null ? (
+        <HomeTopHeader
+          paddingTop={insets.top + (Platform.OS === 'web' ? 67 : 0) + 12}
+          locationLabel="Current location"
+          locationText={pickup.address ?? 'Set pickup location'}
+          locLoading={locLoading}
+          profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
+          isRegisteredDriver={Boolean(driverProfile)}
+        />
+      ) : null}
 
       {/* Map layer button */}
       <TouchableOpacity
@@ -2131,7 +2114,9 @@ export default function CustomerHome() {
                       : 'Selected Drop Off';
                 try {
                   const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
-                  if (geo) address = `${geo.street ?? ''} ${geo.city ?? ''}`.trim() || address;
+                  if (geo) {
+                    address = formatReverseGeocodeAddress(geo, address);
+                  }
                 } catch {}
                 if (mapPicker === 'pickup') {
                   setPickup({ ...pinCoords, address, locationType: 'precise' });
@@ -2175,15 +2160,6 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, gap: 10, zIndex: 10 },
-  topCard: { flex: 1, minHeight: BUTTON_HEIGHT.sm, borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm), paddingHorizontal: 12, paddingVertical: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  locationRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  locationIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  locationCopy: { flex: 1, alignItems: 'center', minWidth: 0 },
-  locationLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
-  locationText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', maxWidth: '100%', textAlign: 'center' },
-  notifBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  notifBadge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   youAreHereContainer: { alignItems: 'center' },
