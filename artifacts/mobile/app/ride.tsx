@@ -14,6 +14,7 @@ import {
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useDriverTracking } from '@/hooks/useDriverTracking';
@@ -218,7 +219,7 @@ export default function RideScreen() {
   const driverPhotoUri = useMemo(() => {
     const driver = currentRide?.driver;
     if (!driver) return undefined;
-    return driver.profileImage ?? `https://i.pravatar.cc/160?u=${encodeURIComponent(driver.id)}`;
+    return driver.profileImage;
   }, [currentRide?.driver]);
 
   useEffect(() => {
@@ -468,6 +469,7 @@ export default function RideScreen() {
   const pickupDistanceText = isArriving && activeDriverLocation
     ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
     : null;
+  const driverInitial = currentRide.driver?.name?.trim()?.[0]?.toUpperCase() ?? 'D';
 
   const mapControlsBottomInset =
     driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 12) + 16;
@@ -637,17 +639,22 @@ export default function RideScreen() {
         {/* Driver info */}
         <View style={styles.driverRow}>
           {driverPhotoUri ? (
-            <Image
-              source={{ uri: driverPhotoUri }}
-              style={styles.driverAvatarImage}
-              accessibilityLabel={`${currentRide.driver?.name ?? 'Driver'} profile photo`}
-            />
-          ) : (
-            <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.driverInitial, { color: colors.primaryForeground }]}>
-                {currentRide.driver?.name?.[0] ?? 'D'}
-              </Text>
+            <View style={styles.driverAvatarImageShadow}>
+              <Image
+                source={{ uri: driverPhotoUri }}
+                style={styles.driverAvatarImage}
+                accessibilityLabel={`${currentRide.driver?.name ?? 'Driver'} profile photo`}
+              />
             </View>
+          ) : (
+            <LinearGradient
+              colors={['#9DBBE0', '#7984C3']}
+              style={styles.driverAvatar}
+              accessibilityLabel={currentRide.driver?.name ?? 'Driver'}
+              accessibilityRole="image"
+            >
+              <Text style={styles.driverInitial}>{driverInitial}</Text>
+            </LinearGradient>
           )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.driverName, { color: colors.foreground }]}>
@@ -911,9 +918,34 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  driverAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  driverAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' },
+    }),
+  },
   driverAvatarImage: { width: 40, height: 40, borderRadius: 20 },
-  driverInitial: { fontSize: 19, fontFamily: 'Inter_700Bold' },
+  driverAvatarImageShadow: {
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 5,
+    elevation: 4,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.16)' },
+    }),
+  },
+  driverInitial: { fontSize: 20, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 24 },
   driverName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   driverVehicle: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   ratingBadge: {

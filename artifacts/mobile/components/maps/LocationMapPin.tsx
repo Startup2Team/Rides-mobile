@@ -42,7 +42,6 @@ export function LocationMapPin({
   const stemBorderColor = isLightStandard ? 'transparent' : 'rgba(0,0,0,0.65)';
   const headSize = Math.round(size * 0.34);
   const headRingWidth = Math.max(3, Math.round(headSize * 0.24));
-  const headInnerSize = Math.max(6, Math.round(headSize - headRingWidth * 2));
   const stemWidth = Math.max(3, Math.round(size * 0.06));
   const stemHeight = Math.round(size * 0.44);
   const stemJoinOverlap = 1;
@@ -62,19 +61,7 @@ export function LocationMapPin({
             borderColor: color,
           },
         ]}
-      >
-        <View
-          style={[
-            styles.headInner,
-            {
-              width: headInnerSize,
-              height: headInnerSize,
-              borderRadius: headInnerSize / 2,
-              backgroundColor: 'transparent',
-            },
-          ]}
-        />
-      </View>
+      />
       <View
         style={[
           styles.stem,
@@ -100,13 +87,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-  },
-  headInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
   },
   stem: {
     borderRadius: 999,

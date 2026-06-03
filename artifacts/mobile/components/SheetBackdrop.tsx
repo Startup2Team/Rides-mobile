@@ -12,20 +12,30 @@ interface SheetBackdropProps {
   onPress: () => void;
   /** Fades with sheet drag — pass formSheetDragAnim interpolated 1→0 */
   animatedOpacity?: Animated.AnimatedInterpolation<number>;
+  blurIntensity?: number;
+  lightScrimOpacity?: number;
+  darkScrimOpacity?: number;
 }
 
 /**
  * Modal scrim shared by bottom sheets — matches Book a Ride dimming
  * with theme-aware frosted glass (same language as GlassHeader).
  */
-export function SheetBackdrop({ onPress, animatedOpacity }: SheetBackdropProps) {
+export function SheetBackdrop({
+  onPress,
+  animatedOpacity,
+  blurIntensity = 40,
+  lightScrimOpacity = 0.42,
+  darkScrimOpacity = 0.78,
+}: SheetBackdropProps) {
   const scheme = useColorScheme();
   const glassTint = scheme === 'dark' ? 'dark' : 'light';
-  const scrimColor = scheme === 'dark' ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.42)';
+  const scrimOpacity = scheme === 'dark' ? darkScrimOpacity : lightScrimOpacity;
+  const scrimColor = `rgba(0,0,0,${scrimOpacity})`;
 
   const content = (
     <>
-      <BlurView intensity={40} tint={glassTint} style={StyleSheet.absoluteFill} />
+      <BlurView intensity={blurIntensity} tint={glassTint} style={StyleSheet.absoluteFill} />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }]} />
     </>
   );

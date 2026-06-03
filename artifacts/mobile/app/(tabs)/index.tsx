@@ -26,6 +26,7 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/BackButton';
+import { EditSavedLocationSheet } from '@/components/EditSavedLocationSheet';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
@@ -51,7 +52,6 @@ import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_F
 import {
   LOCATION_MAP_PIN_ANCHOR,
   LOCATION_MAP_PIN_CENTER_OFFSET,
-  LOCATION_MAP_PIN_SIZE,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -69,6 +69,15 @@ const ROUTE_FIT_SIDE_PADDING = 32;
 /** Space below top location card overlay on booking map. */
 const BOOKING_MAP_TOP_OVERLAY = 88;
 const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
+/** Lift save-form overlay (translateY) above the software keyboard. */
+function computeOverlayFormKeyboardLift(keyboardHeight: number, bottomInset: number): number {
+  return Math.max(0, keyboardHeight - bottomInset);
+}
+
+function computeOverlayFormKeyboardLiftFromFrame(screenHeight: number, keyboardScreenY: number, bottomInset: number): number {
+  return Math.max(0, screenHeight - keyboardScreenY - bottomInset);
+}
+
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 const GREETING_LEFT_INSET = 14;
@@ -208,6 +217,7 @@ export default function CustomerHome() {
   const [showBooking, setShowBooking] = useState(false);
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
+  const [isPickerDragging, setIsPickerDragging] = useState(false);
   const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: 'Current Location' });
   const [destText, setDestText] = useState('');
   const [destination, setDestination] = useState<RideLocation | null>(null);
@@ -224,25 +234,27 @@ export default function CustomerHome() {
   const [editingSavedLocation, setEditingSavedLocation] = useState<SavedLocation | null>(null);
   const [editingSavedLabel, setEditingSavedLabel] = useState('');
   const [editingSavedAddress, setEditingSavedAddress] = useState('');
+  const [editingSavedFocusedField, setEditingSavedFocusedField] = useState<'label' | 'address' | null>(null);
+  const [editSavedFieldErrors, setEditSavedFieldErrors] = useState<{
+    label?: string;
+    address?: string;
+  }>({});
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geocodeRequestId = useRef(0);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const sheetDragStart = useRef(0);
   const bookingCloseRef = useRef<CloseButtonHandle>(null);
   const saveFormCloseRef = useRef<CloseButtonHandle>(null);
-  const editFormCloseRef = useRef<CloseButtonHandle>(null);
   const activePanelHeightRef = useRef(COMPACT_PANEL_HEIGHT);
   const closeBookingRef = useRef<() => void>(() => {});
-  const editSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
-  const editSheetEnterAnim = useRef(new Animated.Value(24)).current;
-  const editSheetOpacityAnim = useRef(new Animated.Value(0)).current;
+  const saveSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragStart = useRef(0);
   const formSheetHeightRef = useRef(280);
   const [formSheetMeasuredHeight, setFormSheetMeasuredHeight] = useState(280);
   const closePendingSaveLocationRef = useRef<() => void>(() => {});
-  const closeEditSavedLocationRef = useRef<() => void>(() => {});
   const dismissFormSheetAnimatedRef = useRef<(close: () => void, onAnimateStart?: () => void) => void>(() => {});
   const estimatedKeyboardOffset = Math.max(240, Math.min(SCREEN_HEIGHT * 0.34, 340));
   const formSheetBackdropOpacity = useMemo(
@@ -364,37 +376,58 @@ export default function CustomerHome() {
     }, [reloadSavedPlaces]),
   );
 
-  useEffect(() => {
-    const liftEditSheet = (height: number) => {
-      Animated.spring(editSheetKeyboardAnim, {
-        toValue: Math.max(0, height - insets.bottom),
-        damping: 24,
-        stiffness: 260,
-        mass: 0.8,
-        useNativeDriver: true,
-      }).start();
-    };
+  const shouldLiftSaveFormForKeyboard = Boolean(pendingSaveLocation);
+  const shouldLiftSaveFormForKeyboardRef = useRef(shouldLiftSaveFormForKeyboard);
+  shouldLiftSaveFormForKeyboardRef.current = shouldLiftSaveFormForKeyboard;
 
-    const willShowSub = Keyboard.addListener('keyboardWillShow', event => {
-      liftEditSheet(event.endCoordinates.height);
-    });
-    const showSub = Keyboard.addListener('keyboardDidShow', event => {
-      liftEditSheet(event.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      Animated.timing(editSheetKeyboardAnim, {
-        toValue: 0,
-        duration: 100,
+  const applySaveFormKeyboardLift = useCallback(
+    (lift: number, duration = 220) => {
+      if (!shouldLiftSaveFormForKeyboardRef.current) return;
+      const clampedLift = Math.max(0, lift);
+      Animated.timing(saveSheetKeyboardAnim, {
+        toValue: clampedLift,
+        duration,
         useNativeDriver: true,
       }).start();
+    },
+    [saveSheetKeyboardAnim],
+  );
+
+  useEffect(() => {
+    if (!shouldLiftSaveFormForKeyboard) {
+      saveSheetKeyboardAnim.setValue(0);
+      return;
+    }
+
+    if (Platform.OS === 'ios') {
+      const frameSub = Keyboard.addListener('keyboardWillChangeFrame', event => {
+        if (!shouldLiftSaveFormForKeyboardRef.current) return;
+        const lift = computeOverlayFormKeyboardLiftFromFrame(
+          SCREEN_HEIGHT,
+          event.endCoordinates.screenY,
+          insets.bottom,
+        );
+        applySaveFormKeyboardLift(lift, event.duration ?? 250);
+      });
+      return () => frameSub.remove();
+    }
+
+    const showSub = Keyboard.addListener('keyboardDidShow', event => {
+      if (!shouldLiftSaveFormForKeyboardRef.current) return;
+      applySaveFormKeyboardLift(
+        computeOverlayFormKeyboardLift(event.endCoordinates.height, insets.bottom),
+        event.duration ?? 220,
+      );
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', event => {
+      applySaveFormKeyboardLift(0, event.duration ?? 180);
     });
 
     return () => {
-      willShowSub.remove();
       showSub.remove();
       hideSub.remove();
     };
-  }, [editSheetKeyboardAnim, insets.bottom]);
+  }, [applySaveFormKeyboardLift, insets.bottom, shouldLiftSaveFormForKeyboard]);
 
   useEffect(() => {
     if (!pendingSaveLocation) return;
@@ -405,31 +438,6 @@ export default function CustomerHome() {
       bounciness: 4,
     }).start();
   }, [pendingSaveLocation, formSheetDragAnim]);
-
-  useEffect(() => {
-    if (!editingSavedLocation) {
-      editSheetKeyboardAnim.setValue(0);
-      editSheetEnterAnim.setValue(0);
-      editSheetOpacityAnim.setValue(0);
-      return;
-    }
-
-    formSheetDragAnim.setValue(formSheetHeightRef.current);
-    editSheetEnterAnim.setValue(0);
-    editSheetOpacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.spring(formSheetDragAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 4,
-      }),
-      Animated.timing(editSheetOpacityAnim, {
-        toValue: 1,
-        duration: 140,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [editingSavedLocation, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim, formSheetDragAnim]);
 
   // Get user location and notification permissions using native OS prompts only.
   useEffect(() => {
@@ -779,20 +787,72 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
+  const schedulePlaceSearch = useCallback(
+    (text: string) => {
+      if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+      const trimmed = text.trim();
+      if (trimmed.length < 2) {
+        setSuggestions([]);
+        setLocationSearchLoading(false);
+        return;
+      }
+      setLocationSearchLoading(true);
+      const requestId = geocodeRequestId.current + 1;
+      geocodeRequestId.current = requestId;
+      geocodeTimer.current = setTimeout(async () => {
+        const results = await geocodeAddress(text, userLocation);
+        if (geocodeRequestId.current !== requestId) return;
+        setSuggestions(results);
+        setLocationSearchLoading(false);
+      }, 350);
+    },
+    [userLocation],
+  );
+
   const handleLocationSearchText = (text: string) => {
     setLocationSearchText(text);
-    if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
-    if (text.trim().length < 2) {
-      setSuggestions([]);
-      setLocationSearchLoading(false);
-      return;
-    }
-    setLocationSearchLoading(true);
-    geocodeTimer.current = setTimeout(async () => {
-      const results = await geocodeAddress(text, userLocation);
-      setSuggestions(results);
-      setLocationSearchLoading(false);
-    }, 350);
+    schedulePlaceSearch(text);
+  };
+
+  const handleEditSavedAddressText = (text: string) => {
+    setEditingSavedAddress(text);
+    schedulePlaceSearch(text);
+  };
+
+  const applyEditSavedAddressSuggestion = (suggestion: GeocodeSuggestion) => {
+    setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+    setEditingSavedAddress(suggestion.place_name);
+    setEditingSavedLocation(prev =>
+      prev
+        ? {
+            ...prev,
+            ...suggestion.coords,
+            address: suggestion.place_name,
+            locationType: 'precise',
+          }
+        : prev,
+    );
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
+    Keyboard.dismiss();
+  };
+
+  const applyEditTypedAddress = () => {
+    const address = editingSavedAddress.trim();
+    if (!editingSavedLocation || address.length < 2) return;
+    setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+    setEditingSavedLocation({
+      ...editingSavedLocation,
+      latitude: userLocation.latitude + 0.02,
+      longitude: userLocation.longitude + 0.02,
+      address,
+      locationType: 'generic',
+    });
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
+    Keyboard.dismiss();
   };
 
   const buildTypedLocation = (): RideLocation => ({
@@ -822,15 +882,17 @@ export default function CustomerHome() {
   };
 
   const closeEditSavedLocation = () => {
-    editSheetKeyboardAnim.setValue(0);
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditSavedFieldErrors({});
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
     Keyboard.dismiss();
   };
 
   closePendingSaveLocationRef.current = closePendingSaveLocation;
-  closeEditSavedLocationRef.current = closeEditSavedLocation;
 
   const snapFormSheetOpen = useCallback((onSnapOpen?: () => void) => {
     onSnapOpen?.();
@@ -909,30 +971,12 @@ export default function CustomerHome() {
     [dismissFormSheetAnimated],
   );
 
-  const dismissEditFormSheet = useCallback(
-    () => dismissFormSheetAnimated(
-      () => closeEditSavedLocationRef.current(),
-      () => editFormCloseRef.current?.spinShut(),
-    ),
-    [dismissFormSheetAnimated],
-  );
-
   const saveFormSheetPanResponder = useMemo(
     () => createFormSheetPanResponder(
       () => closePendingSaveLocationRef.current(),
       () => saveFormCloseRef.current?.spinShut(),
       progress => saveFormCloseRef.current?.setSpinProgress(progress),
       () => saveFormCloseRef.current?.spinOpen(),
-    ),
-    [createFormSheetPanResponder],
-  );
-
-  const editFormSheetPanResponder = useMemo(
-    () => createFormSheetPanResponder(
-      () => closeEditSavedLocationRef.current(),
-      () => editFormCloseRef.current?.spinShut(),
-      progress => editFormCloseRef.current?.setSpinProgress(progress),
-      () => editFormCloseRef.current?.spinOpen(),
     ),
     [createFormSheetPanResponder],
   );
@@ -947,24 +991,91 @@ export default function CustomerHome() {
   };
 
   const openSavedLocationMenu = (location: SavedLocation) => {
-    editSheetKeyboardAnim.setValue(0);
     setEditingSavedLocation(location);
     setEditingSavedLabel(location.label);
     setEditingSavedAddress(location.address ?? '');
+    setEditSavedFieldErrors({});
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
     setPendingSaveLocation(null);
     setIsCustomSaveLabel(false);
     setCustomSaveLabel('');
     Keyboard.dismiss();
   };
 
+  const performDeleteSavedLocation = async (location: SavedLocation) => {
+    const next = savedPlaces.filter(place => place.id !== location.id);
+    await persistSavedPlaces(next);
+    showToast('Location removed', 'error');
+    if (editingSavedLocation?.id === location.id) {
+      setEditingSavedLocation(null);
+      setEditingSavedLabel('');
+      setEditingSavedAddress('');
+      setEditSavedFieldErrors({});
+      setSuggestions([]);
+      setLocationSearchLoading(false);
+      setEditingSavedFocusedField(null);
+    }
+  };
+
+  const confirmDeleteSavedLocation = (location: SavedLocation) => {
+    Alert.alert(
+      `Delete "${location.label}"?`,
+      'This saved place will be removed from your list. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void performDeleteSavedLocation(location);
+          },
+        },
+      ],
+    );
+  };
+
+  const showSavedLocationActions = (location: SavedLocation) => {
+    Alert.alert(location.label, location.address ?? '', [
+      { text: 'Edit', onPress: () => openSavedLocationMenu(location) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => confirmDeleteSavedLocation(location),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const renameSavedLocation = async () => {
+    if (!editingSavedLocation) return;
+
     const label = editingSavedLabel.trim();
     const address = editingSavedAddress.trim();
-    if (!editingSavedLocation || label.length === 0) return;
+    const errors: { label?: string; address?: string } = {};
 
+    if (label.length === 0) {
+      errors.label = 'Enter a name for this saved place';
+    }
+    if (address.length < 2) {
+      errors.address = 'Enter an address or pick one from the suggestions';
+    }
+
+    if (errors.label || errors.address) {
+      setEditSavedFieldErrors(errors);
+      const toastMessage =
+        errors.label && errors.address
+          ? 'Add a name and address before saving'
+          : (errors.label ?? errors.address)!;
+      showToast(toastMessage, 'error');
+      return;
+    }
+
+    setEditSavedFieldErrors({});
     const next = savedPlaces.map(place =>
       place.id === editingSavedLocation.id
-        ? { ...place, label, address: address || place.address }
+        ? { ...editingSavedLocation, label, address }
         : place
     );
     await persistSavedPlaces(next);
@@ -972,6 +1083,10 @@ export default function CustomerHome() {
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditSavedFieldErrors({});
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
   };
 
   const openSavedLocationMap = () => {
@@ -981,15 +1096,9 @@ export default function CustomerHome() {
     setMapPicker('savedLocation');
   };
 
-  const deleteSavedLocation = async () => {
+  const deleteSavedLocation = () => {
     if (!editingSavedLocation) return;
-
-    const next = savedPlaces.filter(place => place.id !== editingSavedLocation.id);
-    await persistSavedPlaces(next);
-    showToast('Location removed', 'error');
-    setEditingSavedLocation(null);
-    setEditingSavedLabel('');
-    setEditingSavedAddress('');
+    confirmDeleteSavedLocation(editingSavedLocation);
   };
 
   const handleChooseOnMap = () => {
@@ -1056,6 +1165,10 @@ export default function CustomerHome() {
   }, [userLocation.latitude, userLocation.longitude]);
 
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
+  const showEditAddressSuggestions = useMemo(
+    () => editingSavedFocusedField === 'address' && editingSavedAddress.trim().length >= 2,
+    [editingSavedAddress, editingSavedFocusedField],
+  );
 
   const recentLocations = useMemo<RideLocation[]>(() => {
     const seen = new Set<string>();
@@ -1159,7 +1272,7 @@ export default function CustomerHome() {
           </Marker>
         ))}
 
-        {!locLoading && !hasPreciseRouteLocations && (
+        {!locLoading && !hasPreciseRouteLocations && mapPicker === null && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
             <View style={styles.youAreHereContainer}>
               <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
@@ -1442,7 +1555,7 @@ export default function CustomerHome() {
             style={[
               styles.locationSearchBody,
               {
-                paddingTop: locationHeaderMetrics.contentTop + 12,
+                paddingTop: locationHeaderMetrics.contentTop - 8,
                 paddingBottom: insets.bottom,
               },
             ]}
@@ -1666,50 +1779,42 @@ export default function CustomerHome() {
                 </View>
               )}
               {locationListTab === 'saved' && savedLocations.map((location, index) => (
-                <TouchableOpacity
-                  key={`${location.address}-${index}`}
+                <View
+                  key={location.id ?? `${location.address}-${index}`}
                   style={[styles.locationOption, { borderBottomColor: colors.border }]}
-                  onPress={() => applyLocation(locationSearchTarget, location)}
-                  onLongPress={() => {
-                    Alert.alert(location.label, location.address ?? '', [
-                      { text: 'Edit', onPress: () => openSavedLocationMenu(location) },
-                      {
-                        text: 'Delete',
-                        onPress: async () => {
-                          const next = savedPlaces.filter(p => p.id !== location.id);
-                          await persistSavedPlaces(next);
-                          showToast('Location removed', 'error');
-                        },
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]);
-                  }}
-                  delayLongPress={400}
                 >
-                  <View style={styles.locationOptionIcon}>
-                    <Feather name="bookmark" size={16} color={colors.primary} />
-                  </View>
-                  <View style={styles.locationOptionText}>
-                    <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
-                      {location.label}
-                    </Text>
-                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {location.address}
-                    </Text>
-                  </View>
-                  {savedPlaces.some(place => place.id === location.id) && (
-                    <TouchableOpacity
-                      style={styles.savedLocationMenuButton}
-                      onPress={event => {
-                        event.stopPropagation();
-                        openSavedLocationMenu(location);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Feather name="more-horizontal" size={18} color={colors.foreground} />
-                    </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.locationOptionMain}
+                    onPress={() => applyLocation(locationSearchTarget, location)}
+                    onLongPress={() => showSavedLocationActions(location)}
+                    delayLongPress={400}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${location.label}, ${location.address ?? 'saved place'}`}
+                  >
+                    <View style={styles.locationOptionIcon}>
+                      <Feather name="bookmark" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.locationOptionText}>
+                      <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
+                        {location.label}
+                      </Text>
+                      <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        {location.address}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.savedLocationMenuButton}
+                    onPress={() => showSavedLocationActions(location)}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`More options for ${location.label}`}
+                  >
+                    <Feather name="more-horizontal" size={18} color={colors.foreground} />
+                  </TouchableOpacity>
+                </View>
               ))}
 
               {locationListTab === 'previous' && (
@@ -1771,7 +1876,7 @@ export default function CustomerHome() {
                       {
                         translateY: Animated.add(
                           formSheetDragAnim,
-                          isCustomSaveLabel ? Animated.multiply(editSheetKeyboardAnim, -1) : 0,
+                          Animated.multiply(saveSheetKeyboardAnim, -1),
                         ),
                       },
                     ],
@@ -1834,6 +1939,16 @@ export default function CustomerHome() {
                         placeholderTextColor={colors.mutedForeground}
                         autoFocus
                         returnKeyType="done"
+                        onFocus={() => {
+                          if (Platform.OS === 'web') {
+                            applySaveFormKeyboardLift(estimatedKeyboardOffset, 0);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (Platform.OS === 'web') {
+                            applySaveFormKeyboardLift(0, 0);
+                          }
+                        }}
                         onSubmitEditing={() => saveLocationAs(customSaveLabel)}
                       />
                     </View>
@@ -1872,133 +1987,44 @@ export default function CustomerHome() {
           )}
 
           {editingSavedLocation && (
-            <>
-              <SheetBackdrop onPress={dismissEditFormSheet} animatedOpacity={formSheetBackdropOpacity} />
-
-              <Animated.View
-                onLayout={event => {
-                  const height = event.nativeEvent.layout.height;
-                  formSheetHeightRef.current = height;
-                  setFormSheetMeasuredHeight(height);
-                }}
-                style={[
-                  styles.overlayFormSheet,
-                  styles.formSheetSurface,
-                  styles.overlayFormSheetRaised,
-                  formSheetSurface,
-                  {
-                    paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
-                    opacity: editSheetOpacityAnim,
-                    transform: [
-                      {
-                        translateY: Animated.add(
-                          formSheetDragAnim,
-                          Animated.multiply(editSheetKeyboardAnim, -1),
-                        ),
-                      },
-                    ],
-                  },
-                ]}
-                {...editFormSheetPanResponder.panHandlers}
-              >
-                <View style={styles.formSheetCloseAnchor} pointerEvents="box-none">
-                  <CloseButton
-                    ref={editFormCloseRef}
-                    shutOnPress={false}
-                    onPress={dismissEditFormSheet}
-                    accessibilityLabel="Close edit location"
-                  />
-                </View>
-                <View style={styles.formSheetBody}>
-                  <View style={[styles.sheetDragZone, styles.formSheetDragZone]}>
-                    <View style={[styles.sheetHandleTouch, styles.formSheetHandleTouch]}>
-                      <View style={styles.sheetHandle} />
-                    </View>
-                    <View style={styles.formSheetHeader}>
-                      <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Edit saved location</Text>
-                    </View>
-                    <View style={styles.formSheetSubheader}>
-                      <Text style={[styles.formSheetSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {editingSavedLocation.address ?? 'Saved location'}
-                      </Text>
-                      <Text style={[styles.formSheetHint, { color: colors.mutedForeground }]}>
-                        Rename, update, or delete this saved place.
-                      </Text>
-                    </View>
-                  </View>
-
-                <View style={styles.formSheetContent}>
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                  <Feather name="edit-3" size={16} color={colors.mutedForeground} />
-                  <TextInput
-                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
-                    value={editingSavedLabel}
-                    onChangeText={setEditingSavedLabel}
-                    onFocus={() => {
-                      Animated.spring(editSheetKeyboardAnim, {
-                        toValue: estimatedKeyboardOffset,
-                        damping: 24,
-                        stiffness: 280,
-                        mass: 0.8,
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    placeholder="Location name"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
-
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                  <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.mutedForeground} />
-                  <TextInput
-                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
-                    value={editingSavedAddress}
-                    onChangeText={setEditingSavedAddress}
-                    onFocus={() => {
-                      Animated.spring(editSheetKeyboardAnim, {
-                        toValue: estimatedKeyboardOffset,
-                        damping: 24,
-                        stiffness: 280,
-                        mass: 0.8,
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    placeholder="Address"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
-
-                <View style={styles.savedLocationActions}>
-                  <TouchableOpacity
-                    style={[styles.savedLocationAction, { backgroundColor: colors.primary }]}
-                    onPress={renameSavedLocation}
-                    activeOpacity={0.85}
-                  >
-                    <Feather name="check" size={16} color={colors.primaryForeground} />
-                    <Text style={[styles.savedLocationActionText, { color: colors.primaryForeground }]}>Save changes</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.savedLocationAction, { backgroundColor: colors.muted, borderColor: colors.border, borderWidth: 1 }]}
-                    onPress={openSavedLocationMap}
-                    activeOpacity={0.85}
-                  >
-                    <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.foreground} />
-                    <Text style={[styles.savedLocationActionText, { color: colors.foreground }]}>Use GPS</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.savedLocationDelete, { backgroundColor: colors.destructiveHex + '14', borderColor: colors.destructiveHex + '40' }]}
-                  onPress={deleteSavedLocation}
-                  activeOpacity={0.85}
-                >
-                  <Feather name="trash-2" size={16} color={colors.destructive} />
-                  <Text style={[styles.savedLocationDeleteText, { color: colors.destructive }]}>Delete saved location</Text>
-                </TouchableOpacity>
-                </View>
-                </View>
-              </Animated.View>
-            </>
+            <EditSavedLocationSheet
+              location={editingSavedLocation}
+              label={editingSavedLabel}
+              address={editingSavedAddress}
+              fieldErrors={editSavedFieldErrors}
+              suggestions={suggestions}
+              searchLoading={locationSearchLoading}
+              showAddressSuggestions={showEditAddressSuggestions}
+              onLabelChange={text => {
+                setEditingSavedLabel(text);
+                setEditSavedFieldErrors(prev => ({ ...prev, label: undefined }));
+              }}
+              onAddressChange={text => {
+                handleEditSavedAddressText(text);
+                setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+              }}
+              onLabelFocus={() => setEditingSavedFocusedField('label')}
+              onAddressFocus={() => {
+                setEditingSavedFocusedField('address');
+                if (editingSavedAddress.trim().length >= 2) {
+                  schedulePlaceSearch(editingSavedAddress);
+                }
+              }}
+              onClearAddress={() => {
+                if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+                geocodeRequestId.current += 1;
+                setEditingSavedAddress('');
+                setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+                setSuggestions([]);
+                setLocationSearchLoading(false);
+              }}
+              onSelectSuggestion={applyEditSavedAddressSuggestion}
+              onUseTypedAddress={applyEditTypedAddress}
+              onSave={renameSavedLocation}
+              onDelete={deleteSavedLocation}
+              onUseGps={openSavedLocationMap}
+              onClose={closeEditSavedLocation}
+            />
           )}
         </View>
       )}
@@ -2014,17 +2040,25 @@ export default function CustomerHome() {
             showsMyLocationButton={false}
             mapType={mapType}
             customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
+            onPanDrag={() => setIsPickerDragging(true)}
             onRegionChangeComplete={region => {
               setPinCoords({ latitude: region.latitude, longitude: region.longitude });
+              setIsPickerDragging(false);
             }}
           />
 
           {/* Fixed center pin */}
-          <View style={styles.fixedPinContainer} pointerEvents="none">
-            <LocationMapPin
-              variant={mapPicker === 'dropoff' ? 'destination' : 'pickup'}
-              mapType={mapType}
-            />
+          <View
+            style={[styles.fixedPinContainer, isPickerDragging && styles.fixedPinContainerDragging]}
+            pointerEvents="none"
+          >
+            <View style={[styles.uberPin, isPickerDragging && styles.uberPinDragging]}>
+              <View style={styles.uberPinHead}>
+                <View style={styles.uberPinSquare} />
+              </View>
+              <View style={[styles.uberPinStem, isPickerDragging && styles.uberPinStemDragging]} />
+            </View>
+            {isPickerDragging && <View style={styles.uberPinGroundDot} />}
           </View>
 
           {/* Top back button */}
@@ -2525,9 +2559,17 @@ const styles = StyleSheet.create({
     minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: 10,
+  },
+  locationOptionMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 44,
+    paddingRight: 4,
   },
   locationOptionIcon: {
     width: 24,
@@ -2538,11 +2580,12 @@ const styles = StyleSheet.create({
   locationOptionTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   locationOptionSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   savedLocationMenuButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   saveLocationButton: {
     minWidth: 54,
@@ -2647,58 +2690,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
-  savedLocationEditInputWrap: {
-    height: 48,
-    borderRadius: buttonCornerRadius(48),
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-  },
-  savedLocationEditInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  savedLocationActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  savedLocationAction: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: buttonCornerRadius(46),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  savedLocationActionText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  savedLocationDelete: {
-    minHeight: 46,
-    borderRadius: buttonCornerRadius(46),
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  savedLocationDeleteText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
   // Map picker
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
   fixedPinContainer: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -(LOCATION_MAP_PIN_SIZE / 2),
-    marginTop: -LOCATION_MAP_PIN_SIZE,
+    width: 46,
+    height: 94,
+    marginLeft: -23,
+    marginTop: -42,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  fixedPinContainerDragging: {
+    marginTop: -60,
+  },
+  uberPin: {
+    width: 20,
+    height: 54,
+    alignItems: 'center',
+  },
+  uberPinDragging: {
+    transform: [{ translateY: -4 }],
+  },
+  uberPinHead: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  uberPinSquare: {
+    width: 4,
+    height: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  uberPinStem: {
+    width: 2,
+    height: 22,
+    backgroundColor: '#111111',
+  },
+  uberPinStemDragging: {
+    height: 32,
+  },
+  uberPinGroundDot: {
+    position: 'absolute',
+    top: 57,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#111111',
   },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   mapPickerControlsRail: {
