@@ -17,6 +17,7 @@ import { RouteTimeline } from '@/components/RouteTimeline';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { RideLocation, VEHICLE_LABELS } from '@/types';
+import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 
 function formatRideDate(value: string) {
   return new Date(value).toLocaleDateString('en-RW', {
@@ -136,7 +137,7 @@ export default function RideDetailScreen() {
   const timeStr = formatRideTime(completedAt);
   const fare = ride.agreedFare ?? ride.suggestedFare;
   const driverImage = ride.driver
-    ? ride.driver.profileImage ?? `https://i.pravatar.cc/160?u=${encodeURIComponent(ride.driver.id)}`
+    ? resolveDriverProfileImage(ride.driver)
     : null;
 
   return (

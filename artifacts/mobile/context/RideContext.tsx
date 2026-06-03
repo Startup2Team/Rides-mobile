@@ -5,6 +5,7 @@ import {
   MockDriver,
   MOCK_DRIVERS,
   NegotiationMessage,
+  BookingFormDraft,
   Ride,
   RideLocation,
   RideStatus,
@@ -12,13 +13,23 @@ import {
   VehicleType,
 } from '@/types';
 import { STORAGE_KEYS } from '@/constants/storage';
+import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 
 interface RideContextType {
   currentRide: Ride | null;
   rideHistory: Ride[];
   driverLocation: Coords | null;
   pendingRequest: Ride | null;
-  createRide: (pickup: RideLocation, destination: RideLocation, vehicleType: VehicleType) => Promise<void>;
+  createRide: (
+    pickup: RideLocation,
+    destination: RideLocation,
+    vehicleType: VehicleType,
+    destText?: string,
+  ) => Promise<void>;
+  cancelledSearchDraft: BookingFormDraft | null;
+  restoreBookingOnHomeFocus: boolean;
+  clearCancelledSearchDraft: () => void;
+  clearRestoreBookingOnHomeFocus: () => void;
   cancelRide: () => void;
   pauseDriverMatching: () => void;
   resumeDriverMatching: () => void;
@@ -94,8 +105,24 @@ function buildMockRideRequest(): Ride {
   };
 }
 
+function cloneBookingDraft(
+  pickup: RideLocation,
+  destination: RideLocation,
+  vehicleType: VehicleType,
+  destText: string,
+): BookingFormDraft {
+  return {
+    pickup: { ...pickup },
+    destination: { ...destination },
+    destText,
+    vehicleType,
+  };
+}
+
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
+  const [cancelledSearchDraft, setCancelledSearchDraft] = useState<BookingFormDraft | null>(null);
+  const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
   const [rideHistory, setRideHistory] = useState<Ride[]>([]);
   const [driverLocation, setDriverLocation] = useState<Coords | null>(null);
   const [pendingRequest, setPendingRequest] = useState<Ride | null>(null);
@@ -121,11 +148,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     if (isMatchingPausedRef.current) return;
 
     const matching = MOCK_DRIVERS.filter(d => d.vehicleType === vehicleType);
-    const driver: MockDriver = matching.length > 0
+    const picked = matching.length > 0
       ? matching[Math.floor(Math.random() * matching.length)]
       : MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
-
-    setDriverLocation(driver.location);
 
     const isGeneric = pickup.locationType === 'generic' || destination.locationType === 'generic';
     const initialMessages: NegotiationMessage[] = [];
@@ -140,33 +165,41 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    setCurrentRide(prev => {
-      if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
-      return {
-        ...prev,
-        status: 'negotiating',
-        driver,
-        driverId: driver.id,
-        negotiation: initialMessages,
-      };
-    });
-
-    driverOfferTimeoutRef.current = setTimeout(() => {
-      driverOfferTimeoutRef.current = null;
+    void buildDriverWithUploadedPhoto(picked).then(driver => {
       if (isMatchingPausedRef.current) return;
+
+      setDriverLocation(driver.location);
+
+      setCancelledSearchDraft(null);
+
       setCurrentRide(prev => {
-        if (!prev || prev.status !== 'negotiating') return prev;
-        const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
-        const driverMsg: NegotiationMessage = {
-          id: generateId(),
-          sender: 'driver',
-          type: 'offer',
-          amount: driverOffer,
-          timestamp: new Date().toISOString(),
+        if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
+        return {
+          ...prev,
+          status: 'negotiating',
+          driver,
+          driverId: driver.id,
+          negotiation: initialMessages,
         };
-        return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
       });
-    }, 2500);
+
+      driverOfferTimeoutRef.current = setTimeout(() => {
+        driverOfferTimeoutRef.current = null;
+        if (isMatchingPausedRef.current) return;
+        setCurrentRide(prev => {
+          if (!prev || prev.status !== 'negotiating') return prev;
+          const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
+          const driverMsg: NegotiationMessage = {
+            id: generateId(),
+            sender: 'driver',
+            type: 'offer',
+            amount: driverOffer,
+            timestamp: new Date().toISOString(),
+          };
+          return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
+        });
+      }, 2500);
+    });
   }, []);
 
   const scheduleDriverMatch = useCallback((
@@ -209,10 +242,20 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setCurrentRide(prev => prev ? { ...prev, status, ...extra } : null);
   };
 
+  const clearCancelledSearchDraft = useCallback(() => {
+    setCancelledSearchDraft(null);
+    setRestoreBookingOnHomeFocus(false);
+  }, []);
+
+  const clearRestoreBookingOnHomeFocus = useCallback(() => {
+    setRestoreBookingOnHomeFocus(false);
+  }, []);
+
   const createRide = useCallback(async (
     pickup: RideLocation,
     destination: RideLocation,
     vehicleType: VehicleType,
+    destText = '',
   ) => {
     if (currentRide && ['negotiating', 'confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
       return;
@@ -237,6 +280,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
+    const displayDestText = destText.trim() || destination.address?.trim() || '';
+    setCancelledSearchDraft(cloneBookingDraft(pickup, destination, vehicleType, displayDestText));
+
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
     clearSearchTimers();
@@ -250,6 +296,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     clearSearchTimers();
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
     setDriverLocation(null);
+    setRestoreBookingOnHomeFocus(true);
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
     setTimeout(() => setCurrentRide(null), 2000);
   }, [clearSearchTimers]);
@@ -485,6 +532,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       driverLocation,
       pendingRequest,
       createRide,
+      cancelledSearchDraft,
+      restoreBookingOnHomeFocus,
+      clearCancelledSearchDraft,
+      clearRestoreBookingOnHomeFocus,
       cancelRide,
       pauseDriverMatching,
       resumeDriverMatching,

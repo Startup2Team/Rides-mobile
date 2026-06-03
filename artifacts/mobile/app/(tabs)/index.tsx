@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { router, useFocusEffect, usePathname } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import { EditSavedLocationSheet } from '@/components/EditSavedLocationSheet';
+import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
@@ -44,14 +45,25 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import {
   formatDistance,
   formatDuration,
-  routeLineEndpoints,
   sampleRouteCoordsForFit,
 } from '@/utils/mapUtils';
-import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
-import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import {
+  arePickupAndDropoffSame,
+  formatReverseGeocodeAddress,
+  getCoordDistance,
+  isPickupFarFromUserGps,
+} from '@/utils/locationUtils';
+import {
+  BookingFormDraft,
+  KIGALI_CENTER,
+  RideLocation,
+  SavedLocation,
+  VehicleType,
+  VEHICLE_BASE_FARE,
+  VEHICLE_LABELS,
+} from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
-  LOCATION_MAP_PIN_CENTER_OFFSET,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -197,16 +209,30 @@ export default function CustomerHome() {
   );
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
-  const { user } = useAuth();
-  const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
+  const { user, driverProfile } = useAuth();
+  const {
+    currentRide,
+    createRide,
+    rideHistory,
+    loadHistory,
+    isMatchingPaused,
+    cancelledSearchDraft,
+    restoreBookingOnHomeFocus,
+    clearCancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+  } = useRide();
   const pathname = usePathname();
   const lastRideFlowStatusRef = useRef<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
   const hasCenteredOnUserRef = useRef(false);
+  const cancelledSearchDraftRef = useRef(cancelledSearchDraft);
+  cancelledSearchDraftRef.current = cancelledSearchDraft;
 
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
+  /** GPS "where you are now" for the home header — independent of booking pickup. */
+  const [currentLocationAddress, setCurrentLocationAddress] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
@@ -218,7 +244,7 @@ export default function CustomerHome() {
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
   const [isPickerDragging, setIsPickerDragging] = useState(false);
-  const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: 'Current Location' });
+  const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: '' });
   const [destText, setDestText] = useState('');
   const [destination, setDestination] = useState<RideLocation | null>(null);
   const [bookLoading, setBookLoading] = useState(false);
@@ -347,18 +373,57 @@ export default function CustomerHome() {
     lastRideFlowStatusRef.current = currentRide.status;
   }, [currentRide?.status, isMatchingPaused, pathname]);
 
-  useEffect(() => {
-    if (currentRide?.status !== 'cancelled') return;
+  const applyCancelledSearchDraft = useCallback(
+    (draft: BookingFormDraft) => {
+      setSelectedVehicle(draft.vehicleType);
+      setPickup({ ...draft.pickup });
+      setDestination({ ...draft.destination });
+      setDestText(draft.destText);
+      setSuggestions([]);
+      setShowBooking(true);
+      sheetAnim.setValue(0);
+      setRouteRecenterRequest(value => value + 1);
+    },
+    [sheetAnim],
+  );
 
-    setSelectedVehicle(currentRide.vehicleType);
-    setPickup(currentRide.pickup);
-    setDestination(currentRide.destination);
-    setDestText(currentRide.destination.address ?? '');
-    setSuggestions([]);
-    setShowBooking(true);
-    sheetAnim.setValue(0);
-    setRouteRecenterRequest(value => value + 1);
-  }, [currentRide?.status, sheetAnim]);
+  const tryRestoreCancelledSearch = useCallback(() => {
+    if (!restoreBookingOnHomeFocus && !cancelledSearchDraft) return;
+    if (currentRide?.status === 'searching') return;
+
+    if (cancelledSearchDraft) {
+      applyCancelledSearchDraft(cancelledSearchDraft);
+    } else if (currentRide?.status === 'cancelled') {
+      setSelectedVehicle(currentRide.vehicleType);
+      setPickup({ ...currentRide.pickup });
+      setDestination({ ...currentRide.destination });
+      setDestText(currentRide.destination.address ?? '');
+      setSuggestions([]);
+      setShowBooking(true);
+      sheetAnim.setValue(0);
+      setRouteRecenterRequest(value => value + 1);
+    }
+
+    clearRestoreBookingOnHomeFocus();
+  }, [
+    applyCancelledSearchDraft,
+    cancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+    currentRide,
+    restoreBookingOnHomeFocus,
+    sheetAnim,
+  ]);
+
+  useLayoutEffect(() => {
+    tryRestoreCancelledSearch();
+  }, [tryRestoreCancelledSearch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      tryRestoreCancelledSearch();
+      return undefined;
+    }, [tryRestoreCancelledSearch]),
+  );
 
   useEffect(() => {
     loadHistory();
@@ -374,6 +439,38 @@ export default function CustomerHome() {
     useCallback(() => {
       void reloadSavedPlaces();
     }, [reloadSavedPlaces]),
+  );
+
+  const applyHereFromCoords = useCallback(
+    (coords: typeof KIGALI_CENTER, geo?: Location.LocationGeocodedAddress | null) => {
+      setUserLocation(coords);
+      setCurrentLocationAddress(formatReverseGeocodeAddress(geo, ''));
+    },
+    [],
+  );
+
+  const refreshHereLocation = useCallback(async () => {
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      const granted = permission.granted
+        || (permission.canAskAgain && (await Location.requestForegroundPermissionsAsync()).granted);
+      if (!granted) return;
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
+      applyHereFromCoords(coords, geo);
+    } catch {
+      // keep last known here address
+    }
+  }, [applyHereFromCoords]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (locationSearchTarget !== null || mapPicker !== null) return undefined;
+      void refreshHereLocation();
+      return undefined;
+    }, [locationSearchTarget, mapPicker, refreshHereLocation]),
   );
 
   const shouldLiftSaveFormForKeyboard = Boolean(pendingSaveLocation);
@@ -458,12 +555,15 @@ export default function CustomerHome() {
       const [geo] = await Location.reverseGeocodeAsync(loc.coords).catch(() => [null]);
       if (!mounted) return true;
 
-      setUserLocation(coords);
-      setPickup({
-        ...coords,
-        address: geo ? `${geo.street ?? ''} ${geo.city ?? 'Kigali'}`.trim() : 'Current Location',
-        locationType: 'precise',
-      });
+      const address = formatReverseGeocodeAddress(geo, '');
+      applyHereFromCoords(coords, geo);
+      if (!cancelledSearchDraftRef.current) {
+        setPickup({
+          ...coords,
+          address,
+          locationType: 'precise',
+        });
+      }
       return true;
     };
 
@@ -476,14 +576,36 @@ export default function CustomerHome() {
     (async () => {
       try {
         if (Platform.OS === 'web') {
-          navigator.geolocation?.getCurrentPosition(p => {
-            const coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
-            setUserLocation(coords);
-            setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
-            setLocLoading(false);
-          }, () => {
-            setLocLoading(false);
-          });
+          navigator.geolocation?.getCurrentPosition(
+            async p => {
+              const coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
+              if (!mounted) return;
+              try {
+                const [geo] = await Location.reverseGeocodeAsync(coords);
+                if (!mounted) return;
+                const address = formatReverseGeocodeAddress(geo, '');
+                applyHereFromCoords(coords, geo);
+                if (!cancelledSearchDraftRef.current) {
+                  setPickup({
+                    ...coords,
+                    address,
+                    locationType: 'precise',
+                  });
+                }
+              } catch {
+                if (mounted && !cancelledSearchDraftRef.current) {
+                  applyHereFromCoords(coords, null);
+                  setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
+                } else if (mounted) {
+                  applyHereFromCoords(coords, null);
+                }
+              }
+              setLocLoading(false);
+            },
+            () => {
+              if (mounted) setLocLoading(false);
+            },
+          );
         } else {
           await resolveLocation();
           await requestNotificationPermission();
@@ -497,7 +619,7 @@ export default function CustomerHome() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [applyHereFromCoords]);
 
   // Real road route via Mapbox Directions API
   const { route, loading: routeLoading } = useRoute(
@@ -574,30 +696,16 @@ export default function CustomerHome() {
     [visibleRouteCoords, routeAnimProgress],
   );
 
-  const routePinPositions = useMemo(() => {
-    const fallbackPickup = { latitude: pickup.latitude, longitude: pickup.longitude };
-    if (!destination) {
-      return { pickup: fallbackPickup, destination: null as { latitude: number; longitude: number } | null };
-    }
-    const fallbackDestination = {
-      latitude: destination.latitude,
-      longitude: destination.longitude,
-    };
-    const routeGeometry =
-      visibleRouteCoords.length > 1
-        ? visibleRouteCoords
-        : routePreviewCoords.length > 1
-          ? routePreviewCoords
-          : null;
-    const { start, end } = routeLineEndpoints(routeGeometry, fallbackPickup, fallbackDestination);
-    return { pickup: start, destination: end };
-  }, [
-    destination,
-    pickup.latitude,
-    pickup.longitude,
-    routePreviewCoords,
-    visibleRouteCoords,
-  ]);
+  /** Pins use the exact coordinates the customer picked — never snap to road polyline endpoints. */
+  const routePinPositions = useMemo(
+    () => ({
+      pickup: { latitude: pickup.latitude, longitude: pickup.longitude },
+      destination: destination
+        ? { latitude: destination.latitude, longitude: destination.longitude }
+        : null,
+    }),
+    [destination, pickup.latitude, pickup.longitude],
+  );
 
   useEffect(() => {
     if (visibleRouteCoords.length < 2) {
@@ -673,6 +781,7 @@ export default function CustomerHome() {
   };
 
   const doCloseBooking = useCallback(() => {
+    clearCancelledSearchDraft();
     bookingCloseRef.current?.spinShut();
     Animated.timing(sheetAnim, { toValue: activePanelHeight, duration: 250, useNativeDriver: true }).start(() => {
       setShowBooking(false);
@@ -684,12 +793,20 @@ export default function CustomerHome() {
       setPickup({
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
-        address: 'Current Location',
+        address: currentLocationAddress || 'Current Location',
         locationType: 'precise',
       });
       requestAnimationFrame(() => centerMapOnUser(400, homePanelMapInset));
     });
-  }, [activePanelHeight, homePanelMapInset, sheetAnim, userLocation.latitude, userLocation.longitude]);
+  }, [
+    activePanelHeight,
+    clearCancelledSearchDraft,
+    currentLocationAddress,
+    homePanelMapInset,
+    sheetAnim,
+    userLocation.latitude,
+    userLocation.longitude,
+  ]);
 
   const snapBookingSheetOpen = () => {
     bookingCloseRef.current?.spinOpen();
@@ -1112,27 +1229,18 @@ export default function CustomerHome() {
   };
 
   const proceedWithBooking = async (finalDestination: RideLocation) => {
+    const dropoffDisplayText = destination?.address?.trim() || destText.trim();
+    setShowBooking(true);
     setBookLoading(true);
     try {
-      await createRide(pickup, finalDestination, selectedVehicle);
+      await createRide(pickup, finalDestination, selectedVehicle, dropoffDisplayText);
       router.push('/searching');
     } finally {
       setBookLoading(false);
     }
   };
 
-  const handleBook = () => {
-    if (!destination && !destText.trim()) return;
-
-    const finalDestination: RideLocation = destination
-      ? { ...destination, locationType: destination.locationType ?? 'precise' }
-      : {
-          latitude: userLocation.latitude + 0.02,
-          longitude: userLocation.longitude + 0.02,
-          address: destText.trim(),
-          locationType: 'generic',
-        };
-
+  const confirmAndProceedWithBooking = (finalDestination: RideLocation) => {
     if (arePickupAndDropoffSame(pickup, finalDestination)) {
       Alert.alert(
         'Same location',
@@ -1147,6 +1255,33 @@ export default function CustomerHome() {
     }
 
     void proceedWithBooking(finalDestination);
+  };
+
+  const handleBook = () => {
+    if (!destination && !destText.trim()) return;
+
+    const finalDestination: RideLocation = destination
+      ? { ...destination, locationType: destination.locationType ?? 'precise' }
+      : {
+          latitude: userLocation.latitude + 0.02,
+          longitude: userLocation.longitude + 0.02,
+          address: destText.trim(),
+          locationType: 'generic',
+        };
+
+    if (!locLoading && isPickupFarFromUserGps(pickup, userLocation)) {
+      Alert.alert(
+        'Pickup seems far away',
+        'Your pickup location seems far from your GPS location. Are you sure you want to continue?',
+        [
+          { text: 'Change pickup', onPress: () => openLocationSearch('pickup') },
+          { text: 'Continue', onPress: () => confirmAndProceedWithBooking(finalDestination) },
+        ],
+      );
+      return;
+    }
+
+    confirmAndProceedWithBooking(finalDestination);
   };
 
   const dist = destination
@@ -1242,8 +1377,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.pickup}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
@@ -1253,8 +1387,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.destination!}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
@@ -1284,34 +1417,15 @@ export default function CustomerHome() {
         )}
       </MapView>
 
-      {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 }]}>
-        <View
-          style={[styles.topCard, { backgroundColor: colors.card }]}
-        >
-          <View style={styles.locationRow}>
-            <View style={styles.locationIcon}>
-              <Feather name="map-pin" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.locationCopy}>
-              <Text style={[styles.locationLabel, { color: colors.mutedForeground }]}>
-                Current location
-              </Text>
-              <Text style={[styles.locationText, { color: colors.foreground }]} numberOfLines={1}>
-                {locLoading ? 'Getting location...' : 'Kigali, Rwanda'}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[styles.notifBtn, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/notifications')}
-          activeOpacity={0.82}
-        >
-          <Feather name="bell" size={20} color={colors.foreground} />
-          <View style={[styles.notifBadge, { backgroundColor: colors.destructive, borderColor: colors.card }]} />
-        </TouchableOpacity>
-      </View>
+      {locationSearchTarget === null && mapPicker === null ? (
+        <HomeTopHeader
+          paddingTop={insets.top + (Platform.OS === 'web' ? 67 : 0) + 12}
+          locationText={currentLocationAddress}
+          locLoading={locLoading}
+          profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
+          isRegisteredDriver={Boolean(driverProfile)}
+        />
+      ) : null}
 
       {/* Map layer button */}
       <TouchableOpacity
@@ -1439,7 +1553,7 @@ export default function CustomerHome() {
                 <View style={styles.locTextBlock}>
                   <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Drop off</Text>
                   <Text style={[styles.locValue, { color: destination ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>
-                    {destText || 'Where to?'}
+                    {destination?.address?.trim() || destText.trim() || 'Where to?'}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -2131,7 +2245,9 @@ export default function CustomerHome() {
                       : 'Selected Drop Off';
                 try {
                   const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
-                  if (geo) address = `${geo.street ?? ''} ${geo.city ?? ''}`.trim() || address;
+                  if (geo) {
+                    address = formatReverseGeocodeAddress(geo, address);
+                  }
                 } catch {}
                 if (mapPicker === 'pickup') {
                   setPickup({ ...pinCoords, address, locationType: 'precise' });
@@ -2175,15 +2291,6 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, gap: 10, zIndex: 10 },
-  topCard: { flex: 1, minHeight: BUTTON_HEIGHT.sm, borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm), paddingHorizontal: 12, paddingVertical: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  locationRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  locationIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  locationCopy: { flex: 1, alignItems: 'center', minWidth: 0 },
-  locationLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
-  locationText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', maxWidth: '100%', textAlign: 'center' },
-  notifBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  notifBadge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   youAreHereContainer: { alignItems: 'center' },

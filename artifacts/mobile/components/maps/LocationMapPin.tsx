@@ -1,26 +1,21 @@
 import React from 'react';
-import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 export type LocationMapPinVariant = 'pickup' | 'destination';
 export type LocationMapPinMapType = 'standard' | 'satellite' | 'hybrid';
 
 export const LOCATION_MAP_PIN_SIZE = 48;
-const LOCATION_MAP_PIN_HEAD_SIZE = Math.round(LOCATION_MAP_PIN_SIZE * 0.5);
-const LOCATION_MAP_PIN_STEM_HEIGHT = Math.round(LOCATION_MAP_PIN_SIZE * 0.44);
-const LOCATION_MAP_PIN_HEIGHT = LOCATION_MAP_PIN_HEAD_SIZE + LOCATION_MAP_PIN_STEM_HEIGHT;
 
-/** Anchor so the pointed stem tip is the exact map coordinate. */
+/** Rendered pin height for a given size — stem tip sits at the bottom edge of this box. */
+export function getLocationMapPinHeight(size = LOCATION_MAP_PIN_SIZE): number {
+  const headSize = Math.round(size * 0.34);
+  const stemHeight = Math.round(size * 0.44);
+  return headSize + stemHeight - 1;
+}
+
+/** Bottom-center of the pin view = stem tip = exact map coordinate. Do not pair with centerOffset. */
 export const LOCATION_MAP_PIN_ANCHOR = { x: 0.5, y: 1 } as const;
-/**
- * Custom marker views can still be centered internally by map SDKs.
- * Shift by half pin height so map coordinate lands at stem bottom tip.
- */
-export const LOCATION_MAP_PIN_CENTER_OFFSET = Platform.select({
-  ios: { x: 0, y: -(LOCATION_MAP_PIN_HEIGHT / 2) },
-  android: { x: 0, y: -(LOCATION_MAP_PIN_HEIGHT / 2) },
-  default: { x: 0, y: 0 },
-}) as { x: number; y: number };
 
 interface LocationMapPinProps {
   variant: LocationMapPinVariant;
@@ -81,7 +76,7 @@ export function LocationMapPin({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
   head: {
     alignItems: 'center',
