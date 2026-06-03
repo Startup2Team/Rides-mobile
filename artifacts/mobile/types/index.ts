@@ -24,6 +24,14 @@ export interface RideLocation extends Coords {
   locationType?: LocationType;
 }
 
+/** Snapshot of the booking form when a driver search starts or is cancelled. */
+export interface BookingFormDraft {
+  pickup: RideLocation;
+  destination: RideLocation;
+  destText: string;
+  vehicleType: VehicleType;
+}
+
 export interface SavedLocation extends RideLocation {
   id: string;
   label: string;

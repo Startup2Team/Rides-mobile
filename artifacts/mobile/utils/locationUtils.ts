@@ -35,6 +35,17 @@ export function formatHomeHeaderLocation(address: string, loading: boolean): str
 
 export const SAME_LOCATION_THRESHOLD_METERS = 30;
 
+/** Pickup farther than this from device GPS triggers a confirmation before Find Driver. */
+export const PICKUP_GPS_MISMATCH_THRESHOLD_METERS = 400;
+
+export function isPickupFarFromUserGps(
+  pickup: RideLocation,
+  userGps: { latitude: number; longitude: number },
+  thresholdMeters = PICKUP_GPS_MISMATCH_THRESHOLD_METERS,
+): boolean {
+  return getCoordDistance(pickup, userGps) > thresholdMeters;
+}
+
 export function getCoordDistance(
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },

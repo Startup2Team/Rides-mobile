@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { router, useFocusEffect, usePathname } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -48,8 +48,21 @@ import {
   routeLineEndpoints,
   sampleRouteCoordsForFit,
 } from '@/utils/mapUtils';
-import { arePickupAndDropoffSame, formatReverseGeocodeAddress, getCoordDistance } from '@/utils/locationUtils';
-import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import {
+  arePickupAndDropoffSame,
+  formatReverseGeocodeAddress,
+  getCoordDistance,
+  isPickupFarFromUserGps,
+} from '@/utils/locationUtils';
+import {
+  BookingFormDraft,
+  KIGALI_CENTER,
+  RideLocation,
+  SavedLocation,
+  VehicleType,
+  VEHICLE_BASE_FARE,
+  VEHICLE_LABELS,
+} from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
   LOCATION_MAP_PIN_CENTER_OFFSET,
@@ -199,13 +212,25 @@ export default function CustomerHome() {
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
   const { user, driverProfile } = useAuth();
-  const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused } = useRide();
+  const {
+    currentRide,
+    createRide,
+    rideHistory,
+    loadHistory,
+    isMatchingPaused,
+    cancelledSearchDraft,
+    restoreBookingOnHomeFocus,
+    clearCancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+  } = useRide();
   const pathname = usePathname();
   const lastRideFlowStatusRef = useRef<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
   const hasCenteredOnUserRef = useRef(false);
+  const cancelledSearchDraftRef = useRef(cancelledSearchDraft);
+  cancelledSearchDraftRef.current = cancelledSearchDraft;
 
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
   /** GPS "where you are now" for the home header — independent of booking pickup. */
@@ -350,18 +375,57 @@ export default function CustomerHome() {
     lastRideFlowStatusRef.current = currentRide.status;
   }, [currentRide?.status, isMatchingPaused, pathname]);
 
-  useEffect(() => {
-    if (currentRide?.status !== 'cancelled') return;
+  const applyCancelledSearchDraft = useCallback(
+    (draft: BookingFormDraft) => {
+      setSelectedVehicle(draft.vehicleType);
+      setPickup({ ...draft.pickup });
+      setDestination({ ...draft.destination });
+      setDestText(draft.destText);
+      setSuggestions([]);
+      setShowBooking(true);
+      sheetAnim.setValue(0);
+      setRouteRecenterRequest(value => value + 1);
+    },
+    [sheetAnim],
+  );
 
-    setSelectedVehicle(currentRide.vehicleType);
-    setPickup(currentRide.pickup);
-    setDestination(currentRide.destination);
-    setDestText(currentRide.destination.address ?? '');
-    setSuggestions([]);
-    setShowBooking(true);
-    sheetAnim.setValue(0);
-    setRouteRecenterRequest(value => value + 1);
-  }, [currentRide?.status, sheetAnim]);
+  const tryRestoreCancelledSearch = useCallback(() => {
+    if (!restoreBookingOnHomeFocus && !cancelledSearchDraft) return;
+    if (currentRide?.status === 'searching') return;
+
+    if (cancelledSearchDraft) {
+      applyCancelledSearchDraft(cancelledSearchDraft);
+    } else if (currentRide?.status === 'cancelled') {
+      setSelectedVehicle(currentRide.vehicleType);
+      setPickup({ ...currentRide.pickup });
+      setDestination({ ...currentRide.destination });
+      setDestText(currentRide.destination.address ?? '');
+      setSuggestions([]);
+      setShowBooking(true);
+      sheetAnim.setValue(0);
+      setRouteRecenterRequest(value => value + 1);
+    }
+
+    clearRestoreBookingOnHomeFocus();
+  }, [
+    applyCancelledSearchDraft,
+    cancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+    currentRide,
+    restoreBookingOnHomeFocus,
+    sheetAnim,
+  ]);
+
+  useLayoutEffect(() => {
+    tryRestoreCancelledSearch();
+  }, [tryRestoreCancelledSearch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      tryRestoreCancelledSearch();
+      return undefined;
+    }, [tryRestoreCancelledSearch]),
+  );
 
   useEffect(() => {
     loadHistory();
@@ -495,11 +559,13 @@ export default function CustomerHome() {
 
       const address = formatReverseGeocodeAddress(geo, '');
       applyHereFromCoords(coords, geo);
-      setPickup({
-        ...coords,
-        address,
-        locationType: 'precise',
-      });
+      if (!cancelledSearchDraftRef.current) {
+        setPickup({
+          ...coords,
+          address,
+          locationType: 'precise',
+        });
+      }
       return true;
     };
 
@@ -521,15 +587,19 @@ export default function CustomerHome() {
                 if (!mounted) return;
                 const address = formatReverseGeocodeAddress(geo, '');
                 applyHereFromCoords(coords, geo);
-                setPickup({
-                  ...coords,
-                  address,
-                  locationType: 'precise',
-                });
+                if (!cancelledSearchDraftRef.current) {
+                  setPickup({
+                    ...coords,
+                    address,
+                    locationType: 'precise',
+                  });
+                }
               } catch {
-                if (mounted) {
+                if (mounted && !cancelledSearchDraftRef.current) {
                   applyHereFromCoords(coords, null);
                   setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
+                } else if (mounted) {
+                  applyHereFromCoords(coords, null);
                 }
               }
               setLocLoading(false);
@@ -727,6 +797,7 @@ export default function CustomerHome() {
   };
 
   const doCloseBooking = useCallback(() => {
+    clearCancelledSearchDraft();
     bookingCloseRef.current?.spinShut();
     Animated.timing(sheetAnim, { toValue: activePanelHeight, duration: 250, useNativeDriver: true }).start(() => {
       setShowBooking(false);
@@ -745,6 +816,7 @@ export default function CustomerHome() {
     });
   }, [
     activePanelHeight,
+    clearCancelledSearchDraft,
     currentLocationAddress,
     homePanelMapInset,
     sheetAnim,
@@ -1173,27 +1245,18 @@ export default function CustomerHome() {
   };
 
   const proceedWithBooking = async (finalDestination: RideLocation) => {
+    const dropoffDisplayText = destination?.address?.trim() || destText.trim();
+    setShowBooking(true);
     setBookLoading(true);
     try {
-      await createRide(pickup, finalDestination, selectedVehicle);
+      await createRide(pickup, finalDestination, selectedVehicle, dropoffDisplayText);
       router.push('/searching');
     } finally {
       setBookLoading(false);
     }
   };
 
-  const handleBook = () => {
-    if (!destination && !destText.trim()) return;
-
-    const finalDestination: RideLocation = destination
-      ? { ...destination, locationType: destination.locationType ?? 'precise' }
-      : {
-          latitude: userLocation.latitude + 0.02,
-          longitude: userLocation.longitude + 0.02,
-          address: destText.trim(),
-          locationType: 'generic',
-        };
-
+  const confirmAndProceedWithBooking = (finalDestination: RideLocation) => {
     if (arePickupAndDropoffSame(pickup, finalDestination)) {
       Alert.alert(
         'Same location',
@@ -1208,6 +1271,33 @@ export default function CustomerHome() {
     }
 
     void proceedWithBooking(finalDestination);
+  };
+
+  const handleBook = () => {
+    if (!destination && !destText.trim()) return;
+
+    const finalDestination: RideLocation = destination
+      ? { ...destination, locationType: destination.locationType ?? 'precise' }
+      : {
+          latitude: userLocation.latitude + 0.02,
+          longitude: userLocation.longitude + 0.02,
+          address: destText.trim(),
+          locationType: 'generic',
+        };
+
+    if (!locLoading && isPickupFarFromUserGps(pickup, userLocation)) {
+      Alert.alert(
+        'Pickup seems far away',
+        'Your pickup location seems far from your GPS location. Are you sure you want to continue?',
+        [
+          { text: 'Change pickup', onPress: () => openLocationSearch('pickup') },
+          { text: 'Continue', onPress: () => confirmAndProceedWithBooking(finalDestination) },
+        ],
+      );
+      return;
+    }
+
+    confirmAndProceedWithBooking(finalDestination);
   };
 
   const dist = destination
@@ -1481,7 +1571,7 @@ export default function CustomerHome() {
                 <View style={styles.locTextBlock}>
                   <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Drop off</Text>
                   <Text style={[styles.locValue, { color: destination ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>
-                    {destText || 'Where to?'}
+                    {destination?.address?.trim() || destText.trim() || 'Where to?'}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
