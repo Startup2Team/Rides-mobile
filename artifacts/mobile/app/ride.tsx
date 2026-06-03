@@ -23,13 +23,12 @@ import { useRoute } from '@/hooks/useRoute';
 import { AppButton } from '@/components/AppButton';
 import {
   LOCATION_MAP_PIN_ANCHOR,
-  LOCATION_MAP_PIN_CENTER_OFFSET,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-import { formatDistance, formatDuration, haversineKm, routeLineEndpoints } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
 import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
@@ -186,26 +185,8 @@ export default function RideScreen() {
   );
   const activeRemainingRoute = isArriving ? remainingDriverToPickupRoute : remainingPickupToDestinationRoute;
 
-  const pickupPinCoordinate = useMemo(() => {
-    if (!currentRide) return null;
-    const fallback = currentRide.pickup;
-    if (isArriving && driverToPickupRoute && driverToPickupRoute.coordinates.length >= 2) {
-      return routeLineEndpoints(driverToPickupRoute.coordinates, fallback, fallback).end;
-    }
-    if (rideRoute && rideRoute.coordinates.length >= 2) {
-      return routeLineEndpoints(rideRoute.coordinates, fallback, currentRide.destination).start;
-    }
-    return fallback;
-  }, [currentRide, driverToPickupRoute, isArriving, rideRoute]);
-
-  const destinationPinCoordinate = useMemo(() => {
-    if (!currentRide) return null;
-    const fallback = currentRide.destination;
-    if (rideRoute && rideRoute.coordinates.length >= 2) {
-      return routeLineEndpoints(rideRoute.coordinates, currentRide.pickup, fallback).end;
-    }
-    return fallback;
-  }, [currentRide, rideRoute]);
+  const pickupPinCoordinate = currentRide?.pickup ?? null;
+  const destinationPinCoordinate = currentRide?.destination ?? null;
 
   const activeVehicleType = currentRide?.vehicleType ?? 'moto';
   const vehicleRotationDeg = useMemo(() => {
@@ -510,8 +491,7 @@ export default function RideScreen() {
           <Marker
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
@@ -520,8 +500,7 @@ export default function RideScreen() {
           <Marker
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>

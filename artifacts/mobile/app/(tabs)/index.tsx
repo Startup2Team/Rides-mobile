@@ -45,7 +45,6 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import {
   formatDistance,
   formatDuration,
-  routeLineEndpoints,
   sampleRouteCoordsForFit,
 } from '@/utils/mapUtils';
 import {
@@ -65,7 +64,6 @@ import {
 } from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
-  LOCATION_MAP_PIN_CENTER_OFFSET,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -698,30 +696,16 @@ export default function CustomerHome() {
     [visibleRouteCoords, routeAnimProgress],
   );
 
-  const routePinPositions = useMemo(() => {
-    const fallbackPickup = { latitude: pickup.latitude, longitude: pickup.longitude };
-    if (!destination) {
-      return { pickup: fallbackPickup, destination: null as { latitude: number; longitude: number } | null };
-    }
-    const fallbackDestination = {
-      latitude: destination.latitude,
-      longitude: destination.longitude,
-    };
-    const routeGeometry =
-      visibleRouteCoords.length > 1
-        ? visibleRouteCoords
-        : routePreviewCoords.length > 1
-          ? routePreviewCoords
-          : null;
-    const { start, end } = routeLineEndpoints(routeGeometry, fallbackPickup, fallbackDestination);
-    return { pickup: start, destination: end };
-  }, [
-    destination,
-    pickup.latitude,
-    pickup.longitude,
-    routePreviewCoords,
-    visibleRouteCoords,
-  ]);
+  /** Pins use the exact coordinates the customer picked — never snap to road polyline endpoints. */
+  const routePinPositions = useMemo(
+    () => ({
+      pickup: { latitude: pickup.latitude, longitude: pickup.longitude },
+      destination: destination
+        ? { latitude: destination.latitude, longitude: destination.longitude }
+        : null,
+    }),
+    [destination, pickup.latitude, pickup.longitude],
+  );
 
   useEffect(() => {
     if (visibleRouteCoords.length < 2) {
@@ -1393,8 +1377,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.pickup}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
@@ -1404,8 +1387,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.destination!}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
