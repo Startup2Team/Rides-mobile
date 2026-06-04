@@ -51,6 +51,7 @@ const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
+  rifani: 270,
   cab: 315,
   hilux: 90,
   fuso: 90,

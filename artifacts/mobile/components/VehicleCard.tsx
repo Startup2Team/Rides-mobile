@@ -14,6 +14,7 @@ interface VehicleCardProps {
 
 const VEHICLE_DATA: Record<VehicleType, { seats: string; desc: string }> = {
   moto: { seats: '1 seat', desc: 'Fast & affordable' },
+  rifani: { seats: '1–2 seats', desc: 'Three-wheel ride' },
   cab: { seats: '4 seats', desc: 'Comfortable ride' },
   fuso: { seats: '10+ seats', desc: 'Heavy cargo & groups' },
   hilux: { seats: '5 seats', desc: 'Light cargo & family' },

@@ -2,11 +2,15 @@ Paste transparent PNG vehicle marker images in this folder.
 
 Use these exact filenames so the app can reference them cleanly:
 
-- moto.png (chips / selectors)
-- moto-map.png (live map markers)
-- cab.png
-- hilux.png
-- fuso.png
+- moto.png, cab.png, hilux.png, fuso.png, rifani.png (chips / selectors)
+- moto-map.png (live map marker for moto only)
+- cab.png, hilux.png, fuso.png, rifani.png (chips and live map — same files)
+
+Regenerate optimized markers from large sources in `assets/images/`:
+
+```bash
+python artifacts/mobile/scripts/optimize-vehicle-markers.py
+```
 
 Best format:
 

@@ -22,7 +22,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/BackButton';
@@ -31,6 +31,7 @@ import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
+import { CUSTOMER_VEHICLE_TYPES } from '@/constants/vehicles';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { floatingPanelSurface } from '@/constants/surfaces';
@@ -115,7 +116,6 @@ const SAVE_LABEL_WIDTHS: Record<string, number> = {
   Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
 };
 
-const VEHICLE_TYPES: VehicleType[] = ['moto', 'cab', 'hilux', 'fuso'];
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 type MapPickerTarget = 'pickup' | 'dropoff' | 'savedLocation';
@@ -136,7 +136,14 @@ const DRIVER_OFFSETS = [
 
 function calcEstFare(type: VehicleType, dist: number) {
   const base = VEHICLE_BASE_FARE[type];
-  const perKm = type === 'moto' ? 200 : type === 'cab' ? 400 : type === 'hilux' ? 600 : 800;
+  const perKm =
+    type === 'moto' || type === 'rifani'
+      ? 200
+      : type === 'cab'
+        ? 400
+        : type === 'hilux'
+          ? 600
+          : 800;
   return Math.round((base + dist * perKm) / 100) * 100;
 }
 
@@ -243,6 +250,7 @@ export default function CustomerHome() {
   const [showBooking, setShowBooking] = useState(false);
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
+  const [pickerMapSize, setPickerMapSize] = useState({ width: 0, height: 0 });
   const [isPickerDragging, setIsPickerDragging] = useState(false);
   const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: '' });
   const [destText, setDestText] = useState('');
@@ -308,6 +316,8 @@ export default function CustomerHome() {
     destination.locationType !== 'generic';
   const pickupOverlapsUser = getCoordDistance(pickup, userLocation) < 20;
   const shouldShowPickupMarker = showBooking && (!pickupOverlapsUser || destination !== null);
+  /** Home map only — hidden during booking, map picker, or location load. */
+  const shouldShowYouAreHere = !showBooking && !locLoading && mapPicker === null;
   const cycleMapType = () => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
@@ -336,6 +346,37 @@ export default function CustomerHome() {
       500,
     );
   };
+
+  /** Map center under the picker pin stem tip (matches LocationMapPin anchor 0.5, 1). */
+  const syncPickerCoordsFromMapCenter = useCallback(
+    async (regionFallback?: Region) => {
+      const map = pickerMapRef.current;
+      if (map && pickerMapSize.width > 0 && pickerMapSize.height > 0) {
+        try {
+          const coord = await map.coordinateForPoint({
+            x: pickerMapSize.width / 2,
+            y: pickerMapSize.height / 2,
+          });
+          setPinCoords({ latitude: coord.latitude, longitude: coord.longitude });
+          return;
+        } catch {
+          // fall through to region center
+        }
+      }
+      if (regionFallback) {
+        setPinCoords({
+          latitude: regionFallback.latitude,
+          longitude: regionFallback.longitude,
+        });
+      }
+    },
+    [pickerMapSize.height, pickerMapSize.width],
+  );
+
+  useEffect(() => {
+    if (mapPicker === null) return;
+    void syncPickerCoordsFromMapCenter();
+  }, [mapPicker, pickerMapSize.height, pickerMapSize.width, syncPickerCoordsFromMapCenter]);
 
   // Redirect when ride status changes (do not re-push /searching when only isMatchingPaused toggles — cancel alert)
   useEffect(() => {
@@ -1405,7 +1446,7 @@ export default function CustomerHome() {
           </Marker>
         ))}
 
-        {!locLoading && !hasPreciseRouteLocations && mapPicker === null && (
+        {shouldShowYouAreHere && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
             <View style={styles.youAreHereContainer}>
               <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
@@ -1472,12 +1513,15 @@ export default function CustomerHome() {
             Select your ride
           </Text>
           <View style={styles.vehicleRow}>
-            {VEHICLE_TYPES.map(v => (
+            {CUSTOMER_VEHICLE_TYPES.map(v => (
               <TouchableOpacity
                 key={v}
                 style={[styles.vehicleChip, { backgroundColor: selectedVehicle === v ? colors.primary : colors.muted, borderWidth: selectedVehicle === v ? 0 : 1, borderColor: colors.border }]}
                 onPress={() => setSelectedVehicle(v)}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={VEHICLE_LABELS[v]}
+                accessibilityState={{ selected: selectedVehicle === v }}
               >
                 <VehicleTypeIcon type={v} selected={selectedVehicle === v} />
                 <Text style={[styles.vehicleLabel, { color: selectedVehicle === v ? colors.primaryForeground : colors.foreground }]}>
@@ -2154,14 +2198,20 @@ export default function CustomerHome() {
             showsMyLocationButton={false}
             mapType={mapType}
             customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
+            onLayout={event => {
+              const { width, height } = event.nativeEvent.layout;
+              if (width > 0 && height > 0) {
+                setPickerMapSize({ width, height });
+              }
+            }}
             onPanDrag={() => setIsPickerDragging(true)}
             onRegionChangeComplete={region => {
-              setPinCoords({ latitude: region.latitude, longitude: region.longitude });
               setIsPickerDragging(false);
+              void syncPickerCoordsFromMapCenter(region);
             }}
           />
 
-          {/* Fixed center pin */}
+          {/* Fixed center pin — Uber style */}
           <View
             style={[styles.fixedPinContainer, isPickerDragging && styles.fixedPinContainerDragging]}
             pointerEvents="none"
@@ -2237,6 +2287,7 @@ export default function CustomerHome() {
               fullWidth
               size="lg"
               onPress={async () => {
+                await syncPickerCoordsFromMapCenter();
                 let address =
                   mapPicker === 'pickup'
                     ? 'Selected Pickup'
@@ -2314,7 +2365,7 @@ const styles = StyleSheet.create({
   selectRide: { fontSize: 14, fontFamily: 'Inter_500Medium', textAlign: 'left', marginTop: -4, marginLeft: GREETING_LEFT_INSET },
   vehicleRow: { flexDirection: 'row', gap: 8, marginTop: 2, marginHorizontal: GREETING_LEFT_INSET },
   vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 7, borderRadius: 14, gap: 4, minHeight: 56, justifyContent: 'center' },
-  vehicleLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  vehicleLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: buttonCornerRadius(50), gap: 8, marginTop: 4, marginHorizontal: GREETING_LEFT_INSET },
   continueBtnText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   // Booking sheet

@@ -69,7 +69,14 @@ function calcDistance(a: Coords, b: Coords): number {
 
 function calcFare(vehicleType: VehicleType, distanceKm: number): number {
   const base = VEHICLE_BASE_FARE[vehicleType];
-  const perKm = vehicleType === 'moto' ? 200 : vehicleType === 'cab' ? 400 : vehicleType === 'hilux' ? 600 : 800;
+  const perKm =
+    vehicleType === 'moto' || vehicleType === 'rifani'
+      ? 200
+      : vehicleType === 'cab'
+        ? 400
+        : vehicleType === 'hilux'
+          ? 600
+          : 800;
   return Math.round((base + distanceKm * perKm) / 100) * 100;
 }
 
