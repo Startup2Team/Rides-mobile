@@ -46,6 +46,7 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import {
   formatDistance,
   formatDuration,
+  routePolylineThroughPinTips,
   sampleRouteCoordsForFit,
 } from '@/utils/mapUtils';
 import {
@@ -64,6 +65,7 @@ import {
   VEHICLE_LABELS,
 } from '@/types';
 import {
+  getLocationMapPinCenterOffset,
   LOCATION_MAP_PIN_ANCHOR,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
@@ -316,8 +318,6 @@ export default function CustomerHome() {
     destination.locationType !== 'generic';
   const pickupOverlapsUser = getCoordDistance(pickup, userLocation) < 20;
   const shouldShowPickupMarker = showBooking && (!pickupOverlapsUser || destination !== null);
-  /** Home map only — hidden during booking, map picker, or location load. */
-  const shouldShowYouAreHere = !showBooking && !locLoading && mapPicker === null;
   const cycleMapType = () => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
@@ -725,17 +725,41 @@ export default function CustomerHome() {
       animated: true,
     });
   }, [bookingPanelMapInset, destination, insets.bottom, insets.top, isMapReady, showBooking]);
+  const routeLineCoords = useMemo(() => {
+    if (visibleRouteCoords.length < 2) {
+      return routePreviewCoords.length > 1 ? routePreviewCoords : [];
+    }
+    if (!destination) return visibleRouteCoords;
+    return routePolylineThroughPinTips(
+      visibleRouteCoords,
+      { latitude: pickup.latitude, longitude: pickup.longitude },
+      { latitude: destination.latitude, longitude: destination.longitude },
+    );
+  }, [
+    visibleRouteCoords,
+    routePreviewCoords,
+    destination,
+    pickup.latitude,
+    pickup.longitude,
+  ]);
+
   const animatedRouteCoords = useMemo(
     () => {
-      if (visibleRouteCoords.length < 2) return [];
+      if (routeLineCoords.length < 2) return [];
       return sliceRouteByProgress(
-        visibleRouteCoords,
+        routeLineCoords,
         0,
         Math.min(routeAnimProgress, 1),
       );
     },
-    [visibleRouteCoords, routeAnimProgress],
+    [routeLineCoords, routeAnimProgress],
   );
+
+  const shouldShowBookingRoute =
+    showBooking && destination !== null && routeLineCoords.length > 1;
+  /** Home + Book a Ride before a route is drawn; hidden when map picker is open. */
+  const shouldShowYouAreHere =
+    !locLoading && mapPicker === null && (!showBooking || !shouldShowBookingRoute);
 
   /** Pins use the exact coordinates the customer picked — never snap to road polyline endpoints. */
   const routePinPositions = useMemo(
@@ -749,7 +773,7 @@ export default function CustomerHome() {
   );
 
   useEffect(() => {
-    if (visibleRouteCoords.length < 2) {
+    if (routeLineCoords.length < 2) {
       setRouteAnimProgress(0);
       return;
     }
@@ -766,7 +790,7 @@ export default function CustomerHome() {
     }, ROUTE_DRAW_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [visibleRouteCoords]);
+  }, [routeLineCoords]);
 
   useEffect(() => {
     if (route && route.coordinates.length > 1) {
@@ -1409,7 +1433,7 @@ export default function CustomerHome() {
             coordinates={animatedRouteCoords}
             strokeColor={colors.destructiveHex}
             strokeWidth={4}
-            lineCap="round"
+            lineCap="butt"
             lineJoin="round"
           />
         )}
@@ -1418,6 +1442,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.pickup}
             anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
@@ -1428,6 +1453,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.destination!}
             anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />

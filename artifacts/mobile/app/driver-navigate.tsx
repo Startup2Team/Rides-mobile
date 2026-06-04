@@ -7,6 +7,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
 import {
+  getLocationMapPinCenterOffset,
   LOCATION_MAP_PIN_ANCHOR,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
@@ -15,7 +16,7 @@ import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { formatDuration } from '@/utils/mapUtils';
+import { formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
 
@@ -262,13 +263,15 @@ export default function DriverNavigateScreen() {
   };
 
   const isCustomerLate = pickupWait.isLate;
-  const remainingRoute = useMemo(
-    () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
-    [driverPos, route],
-  );
-
   const pickupPinCoordinate = currentRide?.pickup ?? KIGALI_CENTER;
   const destinationPinCoordinate = currentRide?.destination ?? KIGALI_CENTER;
+
+  const remainingRoute = useMemo(() => {
+    if (!route) return null;
+    const slice = getRemainingRouteCoordinates(route.coordinates, driverPos);
+    const endPin = phase === 'inprogress' ? destinationPinCoordinate : pickupPinCoordinate;
+    return routePolylineThroughPinTips(slice, null, endPin);
+  }, [destinationPinCoordinate, driverPos, phase, pickupPinCoordinate, route]);
 
   const vehicleRotationDeg = useMemo(() => {
     if (!remainingRoute || remainingRoute.length < 2) return 0;
@@ -294,6 +297,7 @@ export default function DriverNavigateScreen() {
         <Marker
           coordinate={pickupPinCoordinate}
           anchor={LOCATION_MAP_PIN_ANCHOR}
+          centerOffset={getLocationMapPinCenterOffset()}
           tracksViewChanges={false}
         >
           <LocationMapPin variant="pickup" mapType="standard" />
@@ -301,6 +305,7 @@ export default function DriverNavigateScreen() {
         <Marker
           coordinate={destinationPinCoordinate}
           anchor={LOCATION_MAP_PIN_ANCHOR}
+          centerOffset={getLocationMapPinCenterOffset()}
           tracksViewChanges={false}
         >
           <LocationMapPin variant="destination" mapType="standard" />

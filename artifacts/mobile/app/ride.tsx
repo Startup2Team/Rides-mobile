@@ -22,13 +22,14 @@ import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { AppButton } from '@/components/AppButton';
 import {
+  getLocationMapPinCenterOffset,
   LOCATION_MAP_PIN_ANCHOR,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { StatusChip } from '@/components/StatusChip';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-import { formatDistance, formatDuration, haversineKm } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, haversineKm, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
@@ -173,16 +174,32 @@ export default function RideScreen() {
     () => {
       if (!isArriving || !activeDriverLocation || !currentRide) return null;
       if (!driverToPickupRoute) return null;
-      return getRemainingRouteCoordinates(driverToPickupRoute.coordinates, activeDriverLocation);
+      const remaining = getRemainingRouteCoordinates(
+        driverToPickupRoute.coordinates,
+        activeDriverLocation,
+      );
+      return routePolylineThroughPinTips(remaining, null, currentRide.pickup);
     },
-    [activeDriverLocation, currentRide?.pickup.latitude, currentRide?.pickup.longitude, driverToPickupRoute, isArriving],
+    [activeDriverLocation, currentRide, driverToPickupRoute, isArriving],
   );
   const remainingPickupToDestinationRoute = useMemo(
     () => {
-      if (!isInProgress || !activeDriverLocation || !rideRoute) return null;
-      return getRemainingRouteCoordinates(rideRoute.coordinates, activeDriverLocation);
+      if (!isInProgress || !activeDriverLocation || !currentRide || !rideRoute) return null;
+      const remaining = getRemainingRouteCoordinates(rideRoute.coordinates, activeDriverLocation);
+      return routePolylineThroughPinTips(remaining, null, currentRide.destination);
     },
-    [activeDriverLocation, isInProgress, rideRoute],
+    [activeDriverLocation, currentRide, isInProgress, rideRoute],
+  );
+  const fullRideRouteThroughPins = useMemo(
+    () => {
+      if (!rideRoute || !currentRide || rideRoute.coordinates.length < 2) return null;
+      return routePolylineThroughPinTips(
+        rideRoute.coordinates,
+        currentRide.pickup,
+        currentRide.destination,
+      );
+    },
+    [currentRide, rideRoute],
   );
   const activeRemainingRoute = isArriving ? remainingDriverToPickupRoute : remainingPickupToDestinationRoute;
 
@@ -492,6 +509,7 @@ export default function RideScreen() {
           <Marker
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
@@ -501,6 +519,7 @@ export default function RideScreen() {
           <Marker
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
+            centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
@@ -512,8 +531,8 @@ export default function RideScreen() {
         {isInProgress && remainingPickupToDestinationRoute ? (
           <RoutePolyline coordinates={remainingPickupToDestinationRoute} color={colors.destructiveHex} width={4} />
         ) : null}
-        {isArrived && rideRoute ? (
-          <RoutePolyline coordinates={rideRoute.coordinates} color={colors.destructiveHex} width={4} />
+        {isArrived && fullRideRouteThroughPins ? (
+          <RoutePolyline coordinates={fullRideRouteThroughPins} color={colors.destructiveHex} width={4} />
         ) : null}
       </MapView>
 

@@ -7,15 +7,25 @@ export type LocationMapPinMapType = 'standard' | 'satellite' | 'hybrid';
 
 export const LOCATION_MAP_PIN_SIZE = 48;
 
-/** Rendered pin height for a given size — stem tip sits at the bottom edge of this box. */
+/** Rendered pin height for a given size — flat stem foot sits on the bottom edge. */
 export function getLocationMapPinHeight(size = LOCATION_MAP_PIN_SIZE): number {
   const headSize = Math.round(size * 0.34);
   const stemHeight = Math.round(size * 0.44);
-  return headSize + stemHeight - 1;
+  return headSize + stemHeight;
 }
 
-/** Bottom-center of the pin view = stem tip = exact map coordinate. Do not pair with centerOffset. */
+/** Map coordinate = flat foot of the stem (0 cm), not the stem top (2 cm) under the ring. */
 export const LOCATION_MAP_PIN_ANCHOR = { x: 0.5, y: 1 } as const;
+
+/**
+ * Custom marker views are often centered on the coordinate; shift up by half the pin height
+ * so the route meets the bottom of the stem, not the stem–head join.
+ */
+export function getLocationMapPinCenterOffset(
+  size = LOCATION_MAP_PIN_SIZE,
+): { x: number; y: number } {
+  return { x: 0, y: -getLocationMapPinHeight(size) / 2 };
+}
 
 interface LocationMapPinProps {
   variant: LocationMapPinVariant;
@@ -23,7 +33,7 @@ interface LocationMapPinProps {
   mapType?: LocationMapPinMapType;
 }
 
-/** Lollipop map pin: circle head + stem with pointed tip. */
+/** Lollipop map pin: ring head + stem; route meets the flat stem foot on the coordinate. */
 export function LocationMapPin({
   variant,
   size = LOCATION_MAP_PIN_SIZE,
@@ -40,10 +50,11 @@ export function LocationMapPin({
   const stemWidth = Math.max(3, Math.round(size * 0.06));
   const stemHeight = Math.round(size * 0.44);
   const stemJoinOverlap = 1;
+  const stemFootRadius = stemWidth / 2;
   const pinHeight = headSize + stemHeight;
 
   return (
-    <View style={[styles.root, { width: size, height: pinHeight }]}>
+    <View style={[styles.root, { width: size, height: pinHeight }]} collapsable={false}>
       <View
         style={[
           styles.head,
@@ -66,6 +77,10 @@ export function LocationMapPin({
             backgroundColor: stemColor,
             borderColor: stemBorderColor,
             marginTop: -stemJoinOverlap,
+            borderTopLeftRadius: stemFootRadius,
+            borderTopRightRadius: stemFootRadius,
+            borderBottomLeftRadius: 0,
+            borderBottomRightRadius: 0,
           },
         ]}
       />
@@ -84,7 +99,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   stem: {
-    borderRadius: 999,
     borderWidth: 0.5,
   },
 });
