@@ -44,6 +44,9 @@ interface RideContextType {
   acceptCustomerOffer: () => void;
   declineDriverOffer: () => void;
   completeRide: () => void;
+  /** Clear ride state locally without making any API call. Used by the customer
+   * rating screen after the driver has already completed the ride server-side. */
+  clearCurrentRide: () => void;
   markArrived: () => void;
   startJourney: () => void;
   acceptRideRequest: () => void;
@@ -156,6 +159,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const [pendingRequest, setPendingRequest] = useState<Ride | null>(null);
   const [isMatchingPaused, setIsMatchingPaused] = useState(false);
   const wsRef = useRef<RideWebSocket | null>(null);
+  // Prevents duplicate in-flight calls when the driver taps a transition button
+  // multiple times (e.g. tapping Complete while the first request is still in-flight).
+  // Only one ride-state transition can be in progress at a time.
+  const transitionLockRef = useRef(false);
 
   // ── Persistence ─────────────────────────────────────────────────────────────
   // Whenever the ride changes, snapshot it to AsyncStorage keyed by role.
@@ -501,32 +508,76 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [cancelRide]);
 
   const markArrived = useCallback(async () => {
-    if (!currentRide?.id) return;
-    await driverRideService.markArrived(currentRide.id);
-    const refreshed = await driverRideService.getRideForDriver(currentRide.id);
-    setCurrentRide(mapBackendRideToUiRide(refreshed));
+    if (!currentRide?.id || transitionLockRef.current) return;
+    transitionLockRef.current = true;
+    try {
+      await driverRideService.markArrived(currentRide.id);
+      const refreshed = await driverRideService.getRideForDriver(currentRide.id);
+      setCurrentRide(mapBackendRideToUiRide(refreshed));
+    } catch (err: any) {
+      // 409 = transition already happened (e.g. from a previous tap that timed out
+      // on the client but succeeded on the server). Refresh state so UI catches up.
+      if (err?.response?.status === 409) {
+        try {
+          const refreshed = await driverRideService.getRideForDriver(currentRide.id);
+          setCurrentRide(mapBackendRideToUiRide(refreshed));
+        } catch {}
+      } else {
+        throw err;
+      }
+    } finally {
+      transitionLockRef.current = false;
+    }
   }, [currentRide?.id]);
 
   const startJourney = useCallback(async () => {
-    if (!currentRide?.id) return;
+    if (!currentRide?.id || transitionLockRef.current) return;
+    transitionLockRef.current = true;
     try {
       await driverRideService.startRide(currentRide.id);
       const refreshed = await driverRideService.getRideForDriver(currentRide.id);
       setCurrentRide(mapBackendRideToUiRide(refreshed));
-    } catch {
-      // Logged by the API interceptor. The most common cause is a non-driver
-      // JWT calling this endpoint — which should no longer happen after
-      // removing the "Start Journey" button from the customer ride screen.
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        try {
+          const refreshed = await driverRideService.getRideForDriver(currentRide.id);
+          setCurrentRide(mapBackendRideToUiRide(refreshed));
+        } catch {}
+      }
+      // Other errors logged by the API interceptor.
+    } finally {
+      transitionLockRef.current = false;
     }
   }, [currentRide?.id]);
+
+  // Clears local ride state without touching the API.
+  // Used by the customer rating screen — the driver already called /complete
+  // server-side, so the customer must NOT call it again (wrong role → 403).
+  const clearCurrentRide = useCallback(() => {
+    setCurrentRide(null);
+  }, []);
 
   // Only ever called by the driver (from driver-navigate.tsx).
   // The customer reaches the rating screen solely via WS `ride_completed` event
   // or the 30s polling fallback — they have no "Complete Ride" button.
   const completeRide = useCallback(async () => {
-    if (!currentRide?.id) return;
-    await driverRideService.completeRide(currentRide.id);
-    setCurrentRide(null);
+    if (!currentRide?.id || transitionLockRef.current) return;
+    transitionLockRef.current = true;
+    try {
+      await driverRideService.completeRide(currentRide.id);
+      setCurrentRide(null);
+    } catch (err: any) {
+      // 409 = already completed (client timed out but server succeeded on a prior attempt)
+      // Treat as success: clear local state so the driver returns home.
+      if (err?.response?.status === 409) {
+        setCurrentRide(null);
+      } else {
+        throw err;
+      }
+    } finally {
+      // Lock is released whether we succeeded, got 409, or threw.
+      transitionLockRef.current = false;
+    }
   }, [currentRide?.id]);
 
   const acceptRideRequest = useCallback(async () => {
@@ -614,6 +665,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       acceptCustomerOffer,
       declineDriverOffer,
       completeRide,
+      clearCurrentRide,
       markArrived,
       startJourney,
       acceptRideRequest,
@@ -631,6 +683,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       acceptRideRequest,
       cancelRide,
       completeRide,
+      clearCurrentRide,
       counterOffer,
       createRide,
       declineDriverOffer,

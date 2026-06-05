@@ -71,7 +71,7 @@ export default function RatingScreen() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const { currentRide, rideHistory, completeRide } = useRide();
+  const { currentRide, rideHistory, clearCurrentRide } = useRide();
   const params = useLocalSearchParams<{ rideId?: string; driverName?: string; fare?: string; vehicleType?: string }>();
 
   const [phase, setPhase] = useState<RatingPhase>('rate');
@@ -104,9 +104,12 @@ export default function RatingScreen() {
   }, [ratedRide?.driver]);
 
   const finalizeRide = () => {
-    if (finalizedRideRef.current || !currentRide) return;
+    if (finalizedRideRef.current) return;
     finalizedRideRef.current = true;
-    completeRide();
+    // The driver already called POST /complete server-side — just clear local state.
+    // Calling completeRide() here would hit a driver-only endpoint with the
+    // customer JWT and return 403.
+    clearCurrentRide();
   };
 
   const finishAndExit = async () => {

@@ -86,6 +86,7 @@ export default function DriverNavigateScreen() {
   const { showToast } = useToast();
   const [driverPos, setDriverPos] = useState(KIGALI_CENTER);
   const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
+  const [transitioning, setTransitioning] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
   const waitRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -217,7 +218,22 @@ export default function DriverNavigateScreen() {
     fittedMapPhaseRef.current = phase;
   }, [currentRide, driverPos, phase, target]);
 
+  // ── Derived values that use hooks — MUST be before any early return ──────────
+  // React requires hooks to be called unconditionally on every render.
+  const remainingRoute = useMemo(
+    () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
+    [driverPos, route],
+  );
+  const vehicleRotationDeg = useMemo(() => {
+    if (!currentRide || !remainingRoute || remainingRoute.length < 2) return 0;
+    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
+    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
+  }, [currentRide, remainingRoute]);
+
   if (!currentRide) return null;
+
+  const pickupPinCoordinate = { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude };
+  const destinationPinCoordinate = { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude };
 
   const canMarkArrived = phase !== 'pickup' || distanceToTargetKm <= ARRIVAL_UNLOCK_KM;
   const pickupDistanceText = formatDistance(distanceToTargetKm);
@@ -274,10 +290,13 @@ export default function DriverNavigateScreen() {
       {
         text: 'Complete',
         onPress: async () => {
+          setTransitioning(true);
           try {
             await completeRide();
           } catch {
             // Logged by the API interceptor — safe to swallow here.
+          } finally {
+            setTransitioning(false);
           }
           // Navigation is deferred to the !currentRide useEffect guard above —
           // avoids a double router.navigate race when setCurrentRide(null) and
@@ -295,15 +314,6 @@ export default function DriverNavigateScreen() {
   };
 
   const timerExpired = waitSeconds === 0;
-  const remainingRoute = useMemo(
-    () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
-    [driverPos, route],
-  );
-  const vehicleRotationDeg = useMemo(() => {
-    if (!remainingRoute || remainingRoute.length < 2) return 0;
-    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
-    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
-  }, [currentRide.vehicleType, remainingRoute]);
 
   return (
     <View style={styles.container}>
@@ -449,6 +459,8 @@ export default function DriverNavigateScreen() {
           <AppButton
             title={canMarkArrived ? 'I Have Arrived' : `Arrive closer (${pickupDistanceText})`}
             onPress={async () => {
+              if (transitioning) return;
+              setTransitioning(true);
               try {
                 await markArrived();
               } catch (err: any) {
@@ -457,9 +469,12 @@ export default function DriverNavigateScreen() {
                   err?.message ??
                   'Could not mark arrival. Please try again.';
                 showToast(msg, 'error');
+              } finally {
+                setTransitioning(false);
               }
             }}
-            disabled={!canMarkArrived}
+            loading={transitioning}
+            disabled={!canMarkArrived || transitioning}
             fullWidth
             size="lg"
           />
@@ -481,7 +496,19 @@ export default function DriverNavigateScreen() {
               </Text>
             )}
             <View style={styles.waitingActions}>
-              <AppButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
+              <AppButton
+              title="Start Journey"
+              onPress={async () => {
+                if (transitioning) return;
+                setTransitioning(true);
+                try { await startJourney(); }
+                finally { setTransitioning(false); }
+              }}
+              loading={transitioning}
+              disabled={transitioning}
+              style={{ flex: 1 }}
+              size="lg"
+            />
               <TouchableOpacity
                 style={[
                   styles.cancelRideBtn,
@@ -508,7 +535,14 @@ export default function DriverNavigateScreen() {
               <Feather name="alert-octagon" size={16} color={colors.destructive} />
               <Text style={[styles.cancelRideBtnText, { color: colors.destructive }]}>End Journey</Text>
             </TouchableOpacity>
-            <AppButton title="Complete Ride" onPress={handleCompleteRide} style={{ flex: 1 }} size="lg" />
+            <AppButton
+              title="Complete Ride"
+              onPress={handleCompleteRide}
+              loading={transitioning}
+              disabled={transitioning}
+              style={{ flex: 1 }}
+              size="lg"
+            />
           </View>
         )}
       </View>

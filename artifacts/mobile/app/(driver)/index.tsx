@@ -128,15 +128,16 @@ export default function DriverDashboard() {
   }, [isOnline, pendingRequest, slideAnim]);
 
   useEffect(() => {
-    // Guard: stop posting location if user has logged out or gone offline.
-    // Without the user guard the interval fires with a revoked token after logout.
-    if (!user || !isOnline) return;
+    // Stop posting location if: logged out, offline, or on an active trip.
+    // When a trip is active the driver-navigate screen handles location via WS —
+    // both paths competing through the same network causes request pile-ups.
+    if (!user || !isOnline || currentRide) return;
     updateDriverLocation(driverLocation.latitude, driverLocation.longitude).catch(() => {});
     const interval = setInterval(() => {
       updateDriverLocation(driverLocation.latitude, driverLocation.longitude).catch(() => {});
     }, 12000);
     return () => clearInterval(interval);
-  }, [user, driverLocation.latitude, driverLocation.longitude, isOnline]);
+  }, [user, driverLocation.latitude, driverLocation.longitude, isOnline, currentRide]);
 
   // Track which ride we've already navigated to driver-navigate for so we
   // don't push a second copy when markEnRoute transitions confirmed→arriving.

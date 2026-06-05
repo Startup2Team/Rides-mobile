@@ -49,7 +49,10 @@ export async function setDriverAvailability(isOnline: boolean) {
 }
 
 export async function updateDriverLocation(lat: number, lng: number) {
-  await api.post('/driver/location', { lat, lng });
+  // 5 s timeout — location updates are fire-and-forget. If this one misses,
+  // the next GPS ping (every 5 s) will carry the same position. A 15 s timeout
+  // lets up to 3 stale requests pile up in the ngrok tunnel simultaneously.
+  await api.post('/driver/location', { lat, lng }, { timeout: 5000 });
 }
 
 export async function proposeDriverFare(rideId: string, amount: number) {
