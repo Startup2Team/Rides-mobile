@@ -1,26 +1,21 @@
 import React from 'react';
-import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 export type LocationMapPinVariant = 'pickup' | 'destination';
 export type LocationMapPinMapType = 'standard' | 'satellite' | 'hybrid';
 
 export const LOCATION_MAP_PIN_SIZE = 48;
-const LOCATION_MAP_PIN_HEAD_SIZE = Math.round(LOCATION_MAP_PIN_SIZE * 0.5);
-const LOCATION_MAP_PIN_STEM_HEIGHT = Math.round(LOCATION_MAP_PIN_SIZE * 0.44);
-const LOCATION_MAP_PIN_HEIGHT = LOCATION_MAP_PIN_HEAD_SIZE + LOCATION_MAP_PIN_STEM_HEIGHT;
 
-/** Anchor so the pointed stem tip is the exact map coordinate. */
+/** Rendered pin height for a given size — stem tip sits at the bottom edge of this box. */
+export function getLocationMapPinHeight(size = LOCATION_MAP_PIN_SIZE): number {
+  const headSize = Math.round(size * 0.34);
+  const stemHeight = Math.round(size * 0.44);
+  return headSize + stemHeight - 1;
+}
+
+/** Bottom-center of the pin view = stem tip = exact map coordinate. Do not pair with centerOffset. */
 export const LOCATION_MAP_PIN_ANCHOR = { x: 0.5, y: 1 } as const;
-/**
- * Custom marker views can still be centered internally by map SDKs.
- * Shift by half pin height so map coordinate lands at stem bottom tip.
- */
-export const LOCATION_MAP_PIN_CENTER_OFFSET = Platform.select({
-  ios: { x: 0, y: -(LOCATION_MAP_PIN_HEIGHT / 2) },
-  android: { x: 0, y: -(LOCATION_MAP_PIN_HEIGHT / 2) },
-  default: { x: 0, y: 0 },
-}) as { x: number; y: number };
 
 interface LocationMapPinProps {
   variant: LocationMapPinVariant;
@@ -42,7 +37,6 @@ export function LocationMapPin({
   const stemBorderColor = isLightStandard ? 'transparent' : 'rgba(0,0,0,0.65)';
   const headSize = Math.round(size * 0.34);
   const headRingWidth = Math.max(3, Math.round(headSize * 0.24));
-  const headInnerSize = Math.max(6, Math.round(headSize - headRingWidth * 2));
   const stemWidth = Math.max(3, Math.round(size * 0.06));
   const stemHeight = Math.round(size * 0.44);
   const stemJoinOverlap = 1;
@@ -62,19 +56,7 @@ export function LocationMapPin({
             borderColor: color,
           },
         ]}
-      >
-        <View
-          style={[
-            styles.headInner,
-            {
-              width: headInnerSize,
-              height: headInnerSize,
-              borderRadius: headInnerSize / 2,
-              backgroundColor: 'transparent',
-            },
-          ]}
-        />
-      </View>
+      />
       <View
         style={[
           styles.stem,
@@ -94,19 +76,12 @@ export function LocationMapPin({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
   head: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-  },
-  headInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
   },
   stem: {
     borderRadius: 999,

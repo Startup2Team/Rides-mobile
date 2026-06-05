@@ -65,7 +65,11 @@ export default function SearchingScreen() {
     ) {
       router.replace('/negotiation');
     } else if (!isCancellingRef.current && (!currentRide || currentRide.status === 'cancelled')) {
-      router.replace('/(tabs)');
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
     }
   }, [currentRide?.status, isMatchingPaused]);
 
@@ -73,7 +77,11 @@ export default function SearchingScreen() {
     isCancellingRef.current = true;
     cancelRide();
     showToast('Search cancelled', 'info');
-    router.replace('/(tabs)');
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   const handleCancel = () => {

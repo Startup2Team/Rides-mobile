@@ -9,7 +9,6 @@ import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
 import {
   LOCATION_MAP_PIN_ANCHOR,
-  LOCATION_MAP_PIN_CENTER_OFFSET,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
@@ -314,6 +313,20 @@ export default function DriverNavigateScreen() {
   };
 
   const timerExpired = waitSeconds === 0;
+  const isCustomerLate = pickupWait.isLate;
+  const remainingRoute = useMemo(
+    () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
+    [driverPos, route],
+  );
+
+  const pickupPinCoordinate = currentRide?.pickup ?? KIGALI_CENTER;
+  const destinationPinCoordinate = currentRide?.destination ?? KIGALI_CENTER;
+
+  const vehicleRotationDeg = useMemo(() => {
+    if (!remainingRoute || remainingRoute.length < 2) return 0;
+    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
+    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
+  }, [currentRide.vehicleType, remainingRoute]);
 
   return (
     <View style={styles.container}>
@@ -333,16 +346,14 @@ export default function DriverNavigateScreen() {
         <Marker
           coordinate={pickupPinCoordinate}
           anchor={LOCATION_MAP_PIN_ANCHOR}
-          centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-          tracksViewChanges
+          tracksViewChanges={false}
         >
           <LocationMapPin variant="pickup" mapType="standard" />
         </Marker>
         <Marker
           coordinate={destinationPinCoordinate}
           anchor={LOCATION_MAP_PIN_ANCHOR}
-          centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-          tracksViewChanges
+          tracksViewChanges={false}
         >
           <LocationMapPin variant="destination" mapType="standard" />
         </Marker>

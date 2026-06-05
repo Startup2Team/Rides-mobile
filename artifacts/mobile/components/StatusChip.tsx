@@ -70,8 +70,17 @@ export function StatusChip({ status, variant = 'default', compact = false }: Sta
 
   const isCompact = compact || variant === 'rideHeader';
 
+  const isRideHeader = variant === 'rideHeader';
+
   return (
-    <View style={[styles.chip, isCompact && styles.chipCompact, { backgroundColor: chip.bg }]}>
+    <View
+      style={[
+        styles.chip,
+        isCompact && styles.chipCompact,
+        isRideHeader && styles.chipPlain,
+        { backgroundColor: isRideHeader ? 'transparent' : chip.bg },
+      ]}
+    >
       <Text
         style={[styles.text, isCompact && styles.textCompact, { color: chip.text }]}
         numberOfLines={1}
@@ -99,6 +108,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     maxWidth: 108,
+  },
+  chipPlain: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   textCompact: {
     fontSize: 11,

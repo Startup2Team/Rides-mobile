@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -22,6 +23,7 @@ import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { NegotiationMessage, RideStatus, VEHICLE_LABELS } from '@/types';
+import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 
 const RIDE_FLOW_STATUSES: RideStatus[] = ['confirmed', 'arriving', 'arrived', 'in_progress'];
 
@@ -377,7 +379,8 @@ export default function NegotiationScreen() {
 
   if (!currentRide) return null;
 
-  const driverProfileImage = currentRide.driver?.profileImage;
+  const driverInitial = currentRide.driver?.name?.trim()?.[0]?.toUpperCase() ?? 'D';
+  const driverProfileImage = resolveDriverProfileImage(currentRide.driver);
   const destinationIsGeneric = currentRide.destination.locationType === 'generic';
   const dropoffAccent = destinationIsGeneric ? WARNING : colors.destructive;
 
@@ -402,13 +405,14 @@ export default function NegotiationScreen() {
                 accessibilityLabel={currentRide.driver?.name ?? 'Driver profile photo'}
               />
             ) : (
-              <View
-                style={[styles.avatar, { backgroundColor: colors.muted }]}
+              <LinearGradient
+                colors={['#9DBBE0', '#7984C3']}
+                style={styles.avatar}
                 accessibilityLabel={currentRide.driver?.name ?? 'Driver'}
                 accessibilityRole="image"
               >
-                <Feather name="user" size={22} color={colors.foreground} />
-              </View>
+                <Text style={styles.avatarInitial}>{driverInitial}</Text>
+              </LinearGradient>
             )}
             <View style={styles.identityText}>
               <Text style={[styles.title, { color: colors.foreground }]}>
@@ -680,7 +684,22 @@ const styles = StyleSheet.create({
   topSection: { paddingHorizontal: 16, gap: 10, paddingBottom: 6 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   identityRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' },
+    }),
+  },
+  avatarInitial: { fontSize: 23, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 28 },
   avatarImage: { width: 46, height: 46, borderRadius: 23 },
   identityText: { flex: 1, minWidth: 0 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },

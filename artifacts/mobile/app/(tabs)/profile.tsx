@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
@@ -77,6 +78,7 @@ export default function ProfileScreen() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const separatorColor = isDark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
+  const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
 
   useFocusEffect(
     useCallback(() => {
@@ -146,11 +148,13 @@ export default function ProfileScreen() {
         accessibilityLabel="Edit profile"
       >
         {profileImage ? (
-          <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-        ) : (
-          <View style={styles.avatar}>
-            <Feather name="user" size={42} color={colors.primary} />
+          <View style={styles.avatarImageShadow}>
+            <Image source={{ uri: profileImage }} style={styles.avatarImage} />
           </View>
+        ) : (
+          <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatar}>
+            <Text style={styles.avatarInitial}>{profileInitial}</Text>
+          </LinearGradient>
         )}
         <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
         <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
@@ -257,12 +261,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+    backgroundColor: '#8FA8D4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 16px rgba(0,0,0,0.12)' },
+    }),
   },
+  avatarInitial: { fontSize: 42, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 48 },
   avatarImage: {
     width: 88,
     height: 88,
     borderRadius: 44,
+  },
+  avatarImageShadow: {
     marginBottom: 8,
+    borderRadius: 44,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 4,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 16px rgba(0,0,0,0.16)' },
+    }),
   },
   name: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   phone: { fontSize: 14, fontFamily: 'Inter_400Regular' },

@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { router, useFocusEffect, usePathname } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,8 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BackButton, CloseButton, type CloseButtonHandle } from '@/components/BackButton';
+import { EditSavedLocationSheet } from '@/components/EditSavedLocationSheet';
+import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
@@ -43,15 +45,25 @@ import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
 import {
   formatDistance,
   formatDuration,
-  routeLineEndpoints,
   sampleRouteCoordsForFit,
 } from '@/utils/mapUtils';
-import { arePickupAndDropoffSame, getCoordDistance } from '@/utils/locationUtils';
-import { KIGALI_CENTER, RideLocation, SavedLocation, VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
+import {
+  arePickupAndDropoffSame,
+  formatReverseGeocodeAddress,
+  getCoordDistance,
+  isPickupFarFromUserGps,
+} from '@/utils/locationUtils';
+import {
+  BookingFormDraft,
+  KIGALI_CENTER,
+  RideLocation,
+  SavedLocation,
+  VehicleType,
+  VEHICLE_BASE_FARE,
+  VEHICLE_LABELS,
+} from '@/types';
 import {
   LOCATION_MAP_PIN_ANCHOR,
-  LOCATION_MAP_PIN_CENTER_OFFSET,
-  LOCATION_MAP_PIN_SIZE,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -71,6 +83,15 @@ const ROUTE_FIT_SIDE_PADDING = 32;
 /** Space below top location card overlay on booking map. */
 const BOOKING_MAP_TOP_OVERLAY = 88;
 const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
+/** Lift save-form overlay (translateY) above the software keyboard. */
+function computeOverlayFormKeyboardLift(keyboardHeight: number, bottomInset: number): number {
+  return Math.max(0, keyboardHeight - bottomInset);
+}
+
+function computeOverlayFormKeyboardLiftFromFrame(screenHeight: number, keyboardScreenY: number, bottomInset: number): number {
+  return Math.max(0, screenHeight - keyboardScreenY - bottomInset);
+}
+
 const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 const GREETING_LEFT_INSET = 14;
@@ -178,16 +199,31 @@ export default function CustomerHome() {
   );
   const insets = useSafeAreaInsets();
   const locationHeaderMetrics = useGlassHeaderMetrics();
-  const { user } = useAuth();
-  const { currentRide, createRide, rideHistory, loadHistory, isMatchingPaused, initCustomerSession } = useRide();
+  const { user, driverProfile } = useAuth();
+  const {
+    currentRide,
+    createRide,
+    rideHistory,
+    loadHistory,
+    isMatchingPaused,
+    initCustomerSession,
+    cancelledSearchDraft,
+    restoreBookingOnHomeFocus,
+    clearCancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+  } = useRide();
   const pathname = usePathname();
   const lastRideFlowStatusRef = useRef<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
   const hasCenteredOnUserRef = useRef(false);
+  const cancelledSearchDraftRef = useRef(cancelledSearchDraft);
+  cancelledSearchDraftRef.current = cancelledSearchDraft;
 
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
+  /** GPS "where you are now" for the home header — independent of booking pickup. */
+  const [currentLocationAddress, setCurrentLocationAddress] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
@@ -198,7 +234,8 @@ export default function CustomerHome() {
   const [showBooking, setShowBooking] = useState(false);
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
-  const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: 'Current Location' });
+  const [isPickerDragging, setIsPickerDragging] = useState(false);
+  const [pickup, setPickup] = useState<RideLocation>({ ...KIGALI_CENTER, address: '' });
   const [destText, setDestText] = useState('');
   const [destination, setDestination] = useState<RideLocation | null>(null);
   const [bookLoading, setBookLoading] = useState(false);
@@ -214,26 +251,28 @@ export default function CustomerHome() {
   const [editingSavedLocation, setEditingSavedLocation] = useState<SavedLocation | null>(null);
   const [editingSavedLabel, setEditingSavedLabel] = useState('');
   const [editingSavedAddress, setEditingSavedAddress] = useState('');
+  const [editingSavedFocusedField, setEditingSavedFocusedField] = useState<'label' | 'address' | null>(null);
+  const [editSavedFieldErrors, setEditSavedFieldErrors] = useState<{
+    label?: string;
+    address?: string;
+  }>({});
   const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriverPin[]>([]);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geocodeRequestId = useRef(0);
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const sheetDragStart = useRef(0);
   const bookingCloseRef = useRef<CloseButtonHandle>(null);
   const saveFormCloseRef = useRef<CloseButtonHandle>(null);
-  const editFormCloseRef = useRef<CloseButtonHandle>(null);
   const activePanelHeightRef = useRef(COMPACT_PANEL_HEIGHT);
   const closeBookingRef = useRef<() => void>(() => {});
-  const editSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
-  const editSheetEnterAnim = useRef(new Animated.Value(24)).current;
-  const editSheetOpacityAnim = useRef(new Animated.Value(0)).current;
+  const saveSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragStart = useRef(0);
   const formSheetHeightRef = useRef(280);
   const [formSheetMeasuredHeight, setFormSheetMeasuredHeight] = useState(280);
   const closePendingSaveLocationRef = useRef<() => void>(() => {});
-  const closeEditSavedLocationRef = useRef<() => void>(() => {});
   const dismissFormSheetAnimatedRef = useRef<(close: () => void, onAnimateStart?: () => void) => void>(() => {});
   const estimatedKeyboardOffset = Math.max(240, Math.min(SCREEN_HEIGHT * 0.34, 340));
   const formSheetBackdropOpacity = useMemo(
@@ -326,18 +365,57 @@ export default function CustomerHome() {
     lastRideFlowStatusRef.current = currentRide.status;
   }, [currentRide?.status, isMatchingPaused, pathname]);
 
-  useEffect(() => {
-    if (currentRide?.status !== 'cancelled') return;
+  const applyCancelledSearchDraft = useCallback(
+    (draft: BookingFormDraft) => {
+      setSelectedVehicle(draft.vehicleType);
+      setPickup({ ...draft.pickup });
+      setDestination({ ...draft.destination });
+      setDestText(draft.destText);
+      setSuggestions([]);
+      setShowBooking(true);
+      sheetAnim.setValue(0);
+      setRouteRecenterRequest(value => value + 1);
+    },
+    [sheetAnim],
+  );
 
-    setSelectedVehicle(currentRide.vehicleType);
-    setPickup(currentRide.pickup);
-    setDestination(currentRide.destination);
-    setDestText(currentRide.destination.address ?? '');
-    setSuggestions([]);
-    setShowBooking(true);
-    sheetAnim.setValue(0);
-    setRouteRecenterRequest(value => value + 1);
-  }, [currentRide?.status, sheetAnim]);
+  const tryRestoreCancelledSearch = useCallback(() => {
+    if (!restoreBookingOnHomeFocus && !cancelledSearchDraft) return;
+    if (currentRide?.status === 'searching') return;
+
+    if (cancelledSearchDraft) {
+      applyCancelledSearchDraft(cancelledSearchDraft);
+    } else if (currentRide?.status === 'cancelled') {
+      setSelectedVehicle(currentRide.vehicleType);
+      setPickup({ ...currentRide.pickup });
+      setDestination({ ...currentRide.destination });
+      setDestText(currentRide.destination.address ?? '');
+      setSuggestions([]);
+      setShowBooking(true);
+      sheetAnim.setValue(0);
+      setRouteRecenterRequest(value => value + 1);
+    }
+
+    clearRestoreBookingOnHomeFocus();
+  }, [
+    applyCancelledSearchDraft,
+    cancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+    currentRide,
+    restoreBookingOnHomeFocus,
+    sheetAnim,
+  ]);
+
+  useLayoutEffect(() => {
+    tryRestoreCancelledSearch();
+  }, [tryRestoreCancelledSearch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      tryRestoreCancelledSearch();
+      return undefined;
+    }, [tryRestoreCancelledSearch]),
+  );
 
   useEffect(() => {
     loadHistory();
@@ -363,37 +441,90 @@ export default function CustomerHome() {
     }, [reloadSavedPlaces]),
   );
 
-  useEffect(() => {
-    const liftEditSheet = (height: number) => {
-      Animated.spring(editSheetKeyboardAnim, {
-        toValue: Math.max(0, height - insets.bottom),
-        damping: 24,
-        stiffness: 260,
-        mass: 0.8,
-        useNativeDriver: true,
-      }).start();
-    };
+  const applyHereFromCoords = useCallback(
+    (coords: typeof KIGALI_CENTER, geo?: Location.LocationGeocodedAddress | null) => {
+      setUserLocation(coords);
+      setCurrentLocationAddress(formatReverseGeocodeAddress(geo, ''));
+    },
+    [],
+  );
 
-    const willShowSub = Keyboard.addListener('keyboardWillShow', event => {
-      liftEditSheet(event.endCoordinates.height);
-    });
-    const showSub = Keyboard.addListener('keyboardDidShow', event => {
-      liftEditSheet(event.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      Animated.timing(editSheetKeyboardAnim, {
-        toValue: 0,
-        duration: 100,
+  const refreshHereLocation = useCallback(async () => {
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      const granted = permission.granted
+        || (permission.canAskAgain && (await Location.requestForegroundPermissionsAsync()).granted);
+      if (!granted) return;
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
+      applyHereFromCoords(coords, geo);
+    } catch {
+      // keep last known here address
+    }
+  }, [applyHereFromCoords]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (locationSearchTarget !== null || mapPicker !== null) return undefined;
+      void refreshHereLocation();
+      return undefined;
+    }, [locationSearchTarget, mapPicker, refreshHereLocation]),
+  );
+
+  const shouldLiftSaveFormForKeyboard = Boolean(pendingSaveLocation);
+  const shouldLiftSaveFormForKeyboardRef = useRef(shouldLiftSaveFormForKeyboard);
+  shouldLiftSaveFormForKeyboardRef.current = shouldLiftSaveFormForKeyboard;
+
+  const applySaveFormKeyboardLift = useCallback(
+    (lift: number, duration = 220) => {
+      if (!shouldLiftSaveFormForKeyboardRef.current) return;
+      const clampedLift = Math.max(0, lift);
+      Animated.timing(saveSheetKeyboardAnim, {
+        toValue: clampedLift,
+        duration,
         useNativeDriver: true,
       }).start();
+    },
+    [saveSheetKeyboardAnim],
+  );
+
+  useEffect(() => {
+    if (!shouldLiftSaveFormForKeyboard) {
+      saveSheetKeyboardAnim.setValue(0);
+      return;
+    }
+
+    if (Platform.OS === 'ios') {
+      const frameSub = Keyboard.addListener('keyboardWillChangeFrame', event => {
+        if (!shouldLiftSaveFormForKeyboardRef.current) return;
+        const lift = computeOverlayFormKeyboardLiftFromFrame(
+          SCREEN_HEIGHT,
+          event.endCoordinates.screenY,
+          insets.bottom,
+        );
+        applySaveFormKeyboardLift(lift, event.duration ?? 250);
+      });
+      return () => frameSub.remove();
+    }
+
+    const showSub = Keyboard.addListener('keyboardDidShow', event => {
+      if (!shouldLiftSaveFormForKeyboardRef.current) return;
+      applySaveFormKeyboardLift(
+        computeOverlayFormKeyboardLift(event.endCoordinates.height, insets.bottom),
+        event.duration ?? 220,
+      );
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', event => {
+      applySaveFormKeyboardLift(0, event.duration ?? 180);
     });
 
     return () => {
-      willShowSub.remove();
       showSub.remove();
       hideSub.remove();
     };
-  }, [editSheetKeyboardAnim, insets.bottom]);
+  }, [applySaveFormKeyboardLift, insets.bottom, shouldLiftSaveFormForKeyboard]);
 
   useEffect(() => {
     if (!pendingSaveLocation) return;
@@ -404,31 +535,6 @@ export default function CustomerHome() {
       bounciness: 4,
     }).start();
   }, [pendingSaveLocation, formSheetDragAnim]);
-
-  useEffect(() => {
-    if (!editingSavedLocation) {
-      editSheetKeyboardAnim.setValue(0);
-      editSheetEnterAnim.setValue(0);
-      editSheetOpacityAnim.setValue(0);
-      return;
-    }
-
-    formSheetDragAnim.setValue(formSheetHeightRef.current);
-    editSheetEnterAnim.setValue(0);
-    editSheetOpacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.spring(formSheetDragAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 4,
-      }),
-      Animated.timing(editSheetOpacityAnim, {
-        toValue: 1,
-        duration: 140,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [editingSavedLocation, editSheetEnterAnim, editSheetKeyboardAnim, editSheetOpacityAnim, formSheetDragAnim]);
 
   // Get user location and notification permissions using native OS prompts only.
   useEffect(() => {
@@ -449,12 +555,15 @@ export default function CustomerHome() {
       const [geo] = await Location.reverseGeocodeAsync(loc.coords).catch(() => [null]);
       if (!mounted) return true;
 
-      setUserLocation(coords);
-      setPickup({
-        ...coords,
-        address: geo ? `${geo.street ?? ''} ${geo.city ?? 'Kigali'}`.trim() : 'Current Location',
-        locationType: 'precise',
-      });
+      const address = formatReverseGeocodeAddress(geo, '');
+      applyHereFromCoords(coords, geo);
+      if (!cancelledSearchDraftRef.current) {
+        setPickup({
+          ...coords,
+          address,
+          locationType: 'precise',
+        });
+      }
       return true;
     };
 
@@ -467,14 +576,36 @@ export default function CustomerHome() {
     (async () => {
       try {
         if (Platform.OS === 'web') {
-          navigator.geolocation?.getCurrentPosition(p => {
-            const coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
-            setUserLocation(coords);
-            setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
-            setLocLoading(false);
-          }, () => {
-            setLocLoading(false);
-          });
+          navigator.geolocation?.getCurrentPosition(
+            async p => {
+              const coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
+              if (!mounted) return;
+              try {
+                const [geo] = await Location.reverseGeocodeAsync(coords);
+                if (!mounted) return;
+                const address = formatReverseGeocodeAddress(geo, '');
+                applyHereFromCoords(coords, geo);
+                if (!cancelledSearchDraftRef.current) {
+                  setPickup({
+                    ...coords,
+                    address,
+                    locationType: 'precise',
+                  });
+                }
+              } catch {
+                if (mounted && !cancelledSearchDraftRef.current) {
+                  applyHereFromCoords(coords, null);
+                  setPickup(prev => ({ ...prev, ...coords, locationType: 'precise' }));
+                } else if (mounted) {
+                  applyHereFromCoords(coords, null);
+                }
+              }
+              setLocLoading(false);
+            },
+            () => {
+              if (mounted) setLocLoading(false);
+            },
+          );
         } else {
           await resolveLocation();
           await requestNotificationPermission();
@@ -488,7 +619,7 @@ export default function CustomerHome() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [applyHereFromCoords]);
 
   // Nearby drivers — real-time pins on the home screen.
   //
@@ -636,30 +767,16 @@ export default function CustomerHome() {
     [visibleRouteCoords, routeAnimProgress],
   );
 
-  const routePinPositions = useMemo(() => {
-    const fallbackPickup = { latitude: pickup.latitude, longitude: pickup.longitude };
-    if (!destination) {
-      return { pickup: fallbackPickup, destination: null as { latitude: number; longitude: number } | null };
-    }
-    const fallbackDestination = {
-      latitude: destination.latitude,
-      longitude: destination.longitude,
-    };
-    const routeGeometry =
-      visibleRouteCoords.length > 1
-        ? visibleRouteCoords
-        : routePreviewCoords.length > 1
-          ? routePreviewCoords
-          : null;
-    const { start, end } = routeLineEndpoints(routeGeometry, fallbackPickup, fallbackDestination);
-    return { pickup: start, destination: end };
-  }, [
-    destination,
-    pickup.latitude,
-    pickup.longitude,
-    routePreviewCoords,
-    visibleRouteCoords,
-  ]);
+  /** Pins use the exact coordinates the customer picked — never snap to road polyline endpoints. */
+  const routePinPositions = useMemo(
+    () => ({
+      pickup: { latitude: pickup.latitude, longitude: pickup.longitude },
+      destination: destination
+        ? { latitude: destination.latitude, longitude: destination.longitude }
+        : null,
+    }),
+    [destination, pickup.latitude, pickup.longitude],
+  );
 
   useEffect(() => {
     if (visibleRouteCoords.length < 2) {
@@ -735,6 +852,7 @@ export default function CustomerHome() {
   };
 
   const doCloseBooking = useCallback(() => {
+    clearCancelledSearchDraft();
     bookingCloseRef.current?.spinShut();
     Animated.timing(sheetAnim, { toValue: activePanelHeight, duration: 250, useNativeDriver: true }).start(() => {
       setShowBooking(false);
@@ -746,12 +864,20 @@ export default function CustomerHome() {
       setPickup({
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
-        address: 'Current Location',
+        address: currentLocationAddress || 'Current Location',
         locationType: 'precise',
       });
       requestAnimationFrame(() => centerMapOnUser(400, homePanelMapInset));
     });
-  }, [activePanelHeight, homePanelMapInset, sheetAnim, userLocation.latitude, userLocation.longitude]);
+  }, [
+    activePanelHeight,
+    clearCancelledSearchDraft,
+    currentLocationAddress,
+    homePanelMapInset,
+    sheetAnim,
+    userLocation.latitude,
+    userLocation.longitude,
+  ]);
 
   const snapBookingSheetOpen = () => {
     bookingCloseRef.current?.spinOpen();
@@ -849,20 +975,72 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
+  const schedulePlaceSearch = useCallback(
+    (text: string) => {
+      if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+      const trimmed = text.trim();
+      if (trimmed.length < 2) {
+        setSuggestions([]);
+        setLocationSearchLoading(false);
+        return;
+      }
+      setLocationSearchLoading(true);
+      const requestId = geocodeRequestId.current + 1;
+      geocodeRequestId.current = requestId;
+      geocodeTimer.current = setTimeout(async () => {
+        const results = await geocodeAddress(text, userLocation);
+        if (geocodeRequestId.current !== requestId) return;
+        setSuggestions(results);
+        setLocationSearchLoading(false);
+      }, 350);
+    },
+    [userLocation],
+  );
+
   const handleLocationSearchText = (text: string) => {
     setLocationSearchText(text);
-    if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
-    if (text.trim().length < 2) {
-      setSuggestions([]);
-      setLocationSearchLoading(false);
-      return;
-    }
-    setLocationSearchLoading(true);
-    geocodeTimer.current = setTimeout(async () => {
-      const results = await geocodeAddress(text, userLocation);
-      setSuggestions(results);
-      setLocationSearchLoading(false);
-    }, 350);
+    schedulePlaceSearch(text);
+  };
+
+  const handleEditSavedAddressText = (text: string) => {
+    setEditingSavedAddress(text);
+    schedulePlaceSearch(text);
+  };
+
+  const applyEditSavedAddressSuggestion = (suggestion: GeocodeSuggestion) => {
+    setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+    setEditingSavedAddress(suggestion.place_name);
+    setEditingSavedLocation(prev =>
+      prev
+        ? {
+            ...prev,
+            ...suggestion.coords,
+            address: suggestion.place_name,
+            locationType: 'precise',
+          }
+        : prev,
+    );
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
+    Keyboard.dismiss();
+  };
+
+  const applyEditTypedAddress = () => {
+    const address = editingSavedAddress.trim();
+    if (!editingSavedLocation || address.length < 2) return;
+    setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+    setEditingSavedLocation({
+      ...editingSavedLocation,
+      latitude: userLocation.latitude + 0.02,
+      longitude: userLocation.longitude + 0.02,
+      address,
+      locationType: 'generic',
+    });
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
+    Keyboard.dismiss();
   };
 
   const buildTypedLocation = (): RideLocation => ({
@@ -892,15 +1070,17 @@ export default function CustomerHome() {
   };
 
   const closeEditSavedLocation = () => {
-    editSheetKeyboardAnim.setValue(0);
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditSavedFieldErrors({});
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
     Keyboard.dismiss();
   };
 
   closePendingSaveLocationRef.current = closePendingSaveLocation;
-  closeEditSavedLocationRef.current = closeEditSavedLocation;
 
   const snapFormSheetOpen = useCallback((onSnapOpen?: () => void) => {
     onSnapOpen?.();
@@ -979,30 +1159,12 @@ export default function CustomerHome() {
     [dismissFormSheetAnimated],
   );
 
-  const dismissEditFormSheet = useCallback(
-    () => dismissFormSheetAnimated(
-      () => closeEditSavedLocationRef.current(),
-      () => editFormCloseRef.current?.spinShut(),
-    ),
-    [dismissFormSheetAnimated],
-  );
-
   const saveFormSheetPanResponder = useMemo(
     () => createFormSheetPanResponder(
       () => closePendingSaveLocationRef.current(),
       () => saveFormCloseRef.current?.spinShut(),
       progress => saveFormCloseRef.current?.setSpinProgress(progress),
       () => saveFormCloseRef.current?.spinOpen(),
-    ),
-    [createFormSheetPanResponder],
-  );
-
-  const editFormSheetPanResponder = useMemo(
-    () => createFormSheetPanResponder(
-      () => closeEditSavedLocationRef.current(),
-      () => editFormCloseRef.current?.spinShut(),
-      progress => editFormCloseRef.current?.setSpinProgress(progress),
-      () => editFormCloseRef.current?.spinOpen(),
     ),
     [createFormSheetPanResponder],
   );
@@ -1017,24 +1179,91 @@ export default function CustomerHome() {
   };
 
   const openSavedLocationMenu = (location: SavedLocation) => {
-    editSheetKeyboardAnim.setValue(0);
     setEditingSavedLocation(location);
     setEditingSavedLabel(location.label);
     setEditingSavedAddress(location.address ?? '');
+    setEditSavedFieldErrors({});
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
     setPendingSaveLocation(null);
     setIsCustomSaveLabel(false);
     setCustomSaveLabel('');
     Keyboard.dismiss();
   };
 
+  const performDeleteSavedLocation = async (location: SavedLocation) => {
+    const next = savedPlaces.filter(place => place.id !== location.id);
+    await persistSavedPlaces(next);
+    showToast('Location removed', 'error');
+    if (editingSavedLocation?.id === location.id) {
+      setEditingSavedLocation(null);
+      setEditingSavedLabel('');
+      setEditingSavedAddress('');
+      setEditSavedFieldErrors({});
+      setSuggestions([]);
+      setLocationSearchLoading(false);
+      setEditingSavedFocusedField(null);
+    }
+  };
+
+  const confirmDeleteSavedLocation = (location: SavedLocation) => {
+    Alert.alert(
+      `Delete "${location.label}"?`,
+      'This saved place will be removed from your list. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void performDeleteSavedLocation(location);
+          },
+        },
+      ],
+    );
+  };
+
+  const showSavedLocationActions = (location: SavedLocation) => {
+    Alert.alert(location.label, location.address ?? '', [
+      { text: 'Edit', onPress: () => openSavedLocationMenu(location) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => confirmDeleteSavedLocation(location),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const renameSavedLocation = async () => {
+    if (!editingSavedLocation) return;
+
     const label = editingSavedLabel.trim();
     const address = editingSavedAddress.trim();
-    if (!editingSavedLocation || label.length === 0) return;
+    const errors: { label?: string; address?: string } = {};
 
+    if (label.length === 0) {
+      errors.label = 'Enter a name for this saved place';
+    }
+    if (address.length < 2) {
+      errors.address = 'Enter an address or pick one from the suggestions';
+    }
+
+    if (errors.label || errors.address) {
+      setEditSavedFieldErrors(errors);
+      const toastMessage =
+        errors.label && errors.address
+          ? 'Add a name and address before saving'
+          : (errors.label ?? errors.address)!;
+      showToast(toastMessage, 'error');
+      return;
+    }
+
+    setEditSavedFieldErrors({});
     const next = savedPlaces.map(place =>
       place.id === editingSavedLocation.id
-        ? { ...place, label, address: address || place.address }
+        ? { ...editingSavedLocation, label, address }
         : place
     );
     await persistSavedPlaces(next);
@@ -1042,6 +1271,10 @@ export default function CustomerHome() {
     setEditingSavedLocation(null);
     setEditingSavedLabel('');
     setEditingSavedAddress('');
+    setEditSavedFieldErrors({});
+    setSuggestions([]);
+    setLocationSearchLoading(false);
+    setEditingSavedFocusedField(null);
   };
 
   const openSavedLocationMap = () => {
@@ -1051,15 +1284,9 @@ export default function CustomerHome() {
     setMapPicker('savedLocation');
   };
 
-  const deleteSavedLocation = async () => {
+  const deleteSavedLocation = () => {
     if (!editingSavedLocation) return;
-
-    const next = savedPlaces.filter(place => place.id !== editingSavedLocation.id);
-    await persistSavedPlaces(next);
-    showToast('Location removed', 'error');
-    setEditingSavedLocation(null);
-    setEditingSavedLabel('');
-    setEditingSavedAddress('');
+    confirmDeleteSavedLocation(editingSavedLocation);
   };
 
   const handleChooseOnMap = () => {
@@ -1073,27 +1300,18 @@ export default function CustomerHome() {
   };
 
   const proceedWithBooking = async (finalDestination: RideLocation) => {
+    const dropoffDisplayText = destination?.address?.trim() || destText.trim();
+    setShowBooking(true);
     setBookLoading(true);
     try {
-      await createRide(pickup, finalDestination, selectedVehicle);
+      await createRide(pickup, finalDestination, selectedVehicle, dropoffDisplayText);
       router.push('/searching');
     } finally {
       setBookLoading(false);
     }
   };
 
-  const handleBook = () => {
-    if (!destination && !destText.trim()) return;
-
-    const finalDestination: RideLocation = destination
-      ? { ...destination, locationType: destination.locationType ?? 'precise' }
-      : {
-          latitude: userLocation.latitude + 0.02,
-          longitude: userLocation.longitude + 0.02,
-          address: destText.trim(),
-          locationType: 'generic',
-        };
-
+  const confirmAndProceedWithBooking = (finalDestination: RideLocation) => {
     if (arePickupAndDropoffSame(pickup, finalDestination)) {
       Alert.alert(
         'Same location',
@@ -1110,6 +1328,33 @@ export default function CustomerHome() {
     void proceedWithBooking(finalDestination);
   };
 
+  const handleBook = () => {
+    if (!destination && !destText.trim()) return;
+
+    const finalDestination: RideLocation = destination
+      ? { ...destination, locationType: destination.locationType ?? 'precise' }
+      : {
+          latitude: userLocation.latitude + 0.02,
+          longitude: userLocation.longitude + 0.02,
+          address: destText.trim(),
+          locationType: 'generic',
+        };
+
+    if (!locLoading && isPickupFarFromUserGps(pickup, userLocation)) {
+      Alert.alert(
+        'Pickup seems far away',
+        'Your pickup location seems far from your GPS location. Are you sure you want to continue?',
+        [
+          { text: 'Change pickup', onPress: () => openLocationSearch('pickup') },
+          { text: 'Continue', onPress: () => confirmAndProceedWithBooking(finalDestination) },
+        ],
+      );
+      return;
+    }
+
+    confirmAndProceedWithBooking(finalDestination);
+  };
+
   const dist = destination
     ? Math.sqrt(
         Math.pow((destination.latitude - pickup.latitude) * 111, 2) +
@@ -1118,6 +1363,10 @@ export default function CustomerHome() {
     : 0;
 
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
+  const showEditAddressSuggestions = useMemo(
+    () => editingSavedFocusedField === 'address' && editingSavedAddress.trim().length >= 2,
+    [editingSavedAddress, editingSavedFocusedField],
+  );
 
   const recentLocations = useMemo<RideLocation[]>(() => {
     const seen = new Set<string>();
@@ -1191,8 +1440,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.pickup}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
@@ -1202,8 +1450,7 @@ export default function CustomerHome() {
           <Marker
             coordinate={routePinPositions.destination!}
             anchor={LOCATION_MAP_PIN_ANCHOR}
-            centerOffset={LOCATION_MAP_PIN_CENTER_OFFSET}
-            tracksViewChanges
+            tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
@@ -1234,7 +1481,7 @@ export default function CustomerHome() {
           );
         })}
 
-        {!locLoading && !hasPreciseRouteLocations && (
+        {!locLoading && !hasPreciseRouteLocations && mapPicker === null && (
           <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
             <View style={styles.youAreHereContainer}>
               <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
@@ -1246,34 +1493,15 @@ export default function CustomerHome() {
         )}
       </MapView>
 
-      {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 }]}>
-        <View
-          style={[styles.topCard, { backgroundColor: colors.card }]}
-        >
-          <View style={styles.locationRow}>
-            <View style={styles.locationIcon}>
-              <Feather name="map-pin" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.locationCopy}>
-              <Text style={[styles.locationLabel, { color: colors.mutedForeground }]}>
-                Current location
-              </Text>
-              <Text style={[styles.locationText, { color: colors.foreground }]} numberOfLines={1}>
-                {locLoading ? 'Getting location...' : 'Kigali, Rwanda'}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[styles.notifBtn, { backgroundColor: colors.card }]}
-          onPress={() => router.push('/notifications')}
-          activeOpacity={0.82}
-        >
-          <Feather name="bell" size={20} color={colors.foreground} />
-          <View style={[styles.notifBadge, { backgroundColor: colors.destructive, borderColor: colors.card }]} />
-        </TouchableOpacity>
-      </View>
+      {locationSearchTarget === null && mapPicker === null ? (
+        <HomeTopHeader
+          paddingTop={insets.top + (Platform.OS === 'web' ? 67 : 0) + 12}
+          locationText={currentLocationAddress}
+          locLoading={locLoading}
+          profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
+          isRegisteredDriver={Boolean(driverProfile)}
+        />
+      ) : null}
 
       {/* Map layer button */}
       <TouchableOpacity
@@ -1401,7 +1629,7 @@ export default function CustomerHome() {
                 <View style={styles.locTextBlock}>
                   <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Drop off</Text>
                   <Text style={[styles.locValue, { color: destination ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>
-                    {destText || 'Where to?'}
+                    {destination?.address?.trim() || destText.trim() || 'Where to?'}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -1517,7 +1745,7 @@ export default function CustomerHome() {
             style={[
               styles.locationSearchBody,
               {
-                paddingTop: locationHeaderMetrics.contentTop + 12,
+                paddingTop: locationHeaderMetrics.contentTop - 8,
                 paddingBottom: insets.bottom,
               },
             ]}
@@ -1741,50 +1969,42 @@ export default function CustomerHome() {
                 </View>
               )}
               {locationListTab === 'saved' && savedLocations.map((location, index) => (
-                <TouchableOpacity
-                  key={`${location.address}-${index}`}
+                <View
+                  key={location.id ?? `${location.address}-${index}`}
                   style={[styles.locationOption, { borderBottomColor: colors.border }]}
-                  onPress={() => applyLocation(locationSearchTarget, location)}
-                  onLongPress={() => {
-                    Alert.alert(location.label, location.address ?? '', [
-                      { text: 'Edit', onPress: () => openSavedLocationMenu(location) },
-                      {
-                        text: 'Delete',
-                        onPress: async () => {
-                          const next = savedPlaces.filter(p => p.id !== location.id);
-                          await persistSavedPlaces(next);
-                          showToast('Location removed', 'error');
-                        },
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]);
-                  }}
-                  delayLongPress={400}
                 >
-                  <View style={styles.locationOptionIcon}>
-                    <Feather name="bookmark" size={16} color={colors.primary} />
-                  </View>
-                  <View style={styles.locationOptionText}>
-                    <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
-                      {location.label}
-                    </Text>
-                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {location.address}
-                    </Text>
-                  </View>
-                  {savedPlaces.some(place => place.id === location.id) && (
-                    <TouchableOpacity
-                      style={styles.savedLocationMenuButton}
-                      onPress={event => {
-                        event.stopPropagation();
-                        openSavedLocationMenu(location);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Feather name="more-horizontal" size={18} color={colors.foreground} />
-                    </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.locationOptionMain}
+                    onPress={() => applyLocation(locationSearchTarget, location)}
+                    onLongPress={() => showSavedLocationActions(location)}
+                    delayLongPress={400}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${location.label}, ${location.address ?? 'saved place'}`}
+                  >
+                    <View style={styles.locationOptionIcon}>
+                      <Feather name="bookmark" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.locationOptionText}>
+                      <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
+                        {location.label}
+                      </Text>
+                      <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        {location.address}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.savedLocationMenuButton}
+                    onPress={() => showSavedLocationActions(location)}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`More options for ${location.label}`}
+                  >
+                    <Feather name="more-horizontal" size={18} color={colors.foreground} />
+                  </TouchableOpacity>
+                </View>
               ))}
 
               {locationListTab === 'previous' && (
@@ -1846,7 +2066,7 @@ export default function CustomerHome() {
                       {
                         translateY: Animated.add(
                           formSheetDragAnim,
-                          isCustomSaveLabel ? Animated.multiply(editSheetKeyboardAnim, -1) : 0,
+                          Animated.multiply(saveSheetKeyboardAnim, -1),
                         ),
                       },
                     ],
@@ -1909,6 +2129,16 @@ export default function CustomerHome() {
                         placeholderTextColor={colors.mutedForeground}
                         autoFocus
                         returnKeyType="done"
+                        onFocus={() => {
+                          if (Platform.OS === 'web') {
+                            applySaveFormKeyboardLift(estimatedKeyboardOffset, 0);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (Platform.OS === 'web') {
+                            applySaveFormKeyboardLift(0, 0);
+                          }
+                        }}
                         onSubmitEditing={() => saveLocationAs(customSaveLabel)}
                       />
                     </View>
@@ -1947,133 +2177,44 @@ export default function CustomerHome() {
           )}
 
           {editingSavedLocation && (
-            <>
-              <SheetBackdrop onPress={dismissEditFormSheet} animatedOpacity={formSheetBackdropOpacity} />
-
-              <Animated.View
-                onLayout={event => {
-                  const height = event.nativeEvent.layout.height;
-                  formSheetHeightRef.current = height;
-                  setFormSheetMeasuredHeight(height);
-                }}
-                style={[
-                  styles.overlayFormSheet,
-                  styles.formSheetSurface,
-                  styles.overlayFormSheetRaised,
-                  formSheetSurface,
-                  {
-                    paddingBottom: insets.bottom + (Platform.OS === 'web' ? 78 : 64),
-                    opacity: editSheetOpacityAnim,
-                    transform: [
-                      {
-                        translateY: Animated.add(
-                          formSheetDragAnim,
-                          Animated.multiply(editSheetKeyboardAnim, -1),
-                        ),
-                      },
-                    ],
-                  },
-                ]}
-                {...editFormSheetPanResponder.panHandlers}
-              >
-                <View style={styles.formSheetCloseAnchor} pointerEvents="box-none">
-                  <CloseButton
-                    ref={editFormCloseRef}
-                    shutOnPress={false}
-                    onPress={dismissEditFormSheet}
-                    accessibilityLabel="Close edit location"
-                  />
-                </View>
-                <View style={styles.formSheetBody}>
-                  <View style={[styles.sheetDragZone, styles.formSheetDragZone]}>
-                    <View style={[styles.sheetHandleTouch, styles.formSheetHandleTouch]}>
-                      <View style={styles.sheetHandle} />
-                    </View>
-                    <View style={styles.formSheetHeader}>
-                      <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Edit saved location</Text>
-                    </View>
-                    <View style={styles.formSheetSubheader}>
-                      <Text style={[styles.formSheetSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {editingSavedLocation.address ?? 'Saved location'}
-                      </Text>
-                      <Text style={[styles.formSheetHint, { color: colors.mutedForeground }]}>
-                        Rename, update, or delete this saved place.
-                      </Text>
-                    </View>
-                  </View>
-
-                <View style={styles.formSheetContent}>
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                  <Feather name="edit-3" size={16} color={colors.mutedForeground} />
-                  <TextInput
-                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
-                    value={editingSavedLabel}
-                    onChangeText={setEditingSavedLabel}
-                    onFocus={() => {
-                      Animated.spring(editSheetKeyboardAnim, {
-                        toValue: estimatedKeyboardOffset,
-                        damping: 24,
-                        stiffness: 280,
-                        mass: 0.8,
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    placeholder="Location name"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
-
-                <View style={[styles.savedLocationEditInputWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                  <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.mutedForeground} />
-                  <TextInput
-                    style={[styles.savedLocationEditInput, { color: colors.foreground }]}
-                    value={editingSavedAddress}
-                    onChangeText={setEditingSavedAddress}
-                    onFocus={() => {
-                      Animated.spring(editSheetKeyboardAnim, {
-                        toValue: estimatedKeyboardOffset,
-                        damping: 24,
-                        stiffness: 280,
-                        mass: 0.8,
-                        useNativeDriver: true,
-                      }).start();
-                    }}
-                    placeholder="Address"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-                </View>
-
-                <View style={styles.savedLocationActions}>
-                  <TouchableOpacity
-                    style={[styles.savedLocationAction, { backgroundColor: colors.primary }]}
-                    onPress={renameSavedLocation}
-                    activeOpacity={0.85}
-                  >
-                    <Feather name="check" size={16} color={colors.primaryForeground} />
-                    <Text style={[styles.savedLocationActionText, { color: colors.primaryForeground }]}>Save changes</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.savedLocationAction, { backgroundColor: colors.muted, borderColor: colors.border, borderWidth: 1 }]}
-                    onPress={openSavedLocationMap}
-                    activeOpacity={0.85}
-                  >
-                    <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.foreground} />
-                    <Text style={[styles.savedLocationActionText, { color: colors.foreground }]}>Use GPS</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.savedLocationDelete, { backgroundColor: colors.destructiveHex + '14', borderColor: colors.destructiveHex + '40' }]}
-                  onPress={deleteSavedLocation}
-                  activeOpacity={0.85}
-                >
-                  <Feather name="trash-2" size={16} color={colors.destructive} />
-                  <Text style={[styles.savedLocationDeleteText, { color: colors.destructive }]}>Delete saved location</Text>
-                </TouchableOpacity>
-                </View>
-                </View>
-              </Animated.View>
-            </>
+            <EditSavedLocationSheet
+              location={editingSavedLocation}
+              label={editingSavedLabel}
+              address={editingSavedAddress}
+              fieldErrors={editSavedFieldErrors}
+              suggestions={suggestions}
+              searchLoading={locationSearchLoading}
+              showAddressSuggestions={showEditAddressSuggestions}
+              onLabelChange={text => {
+                setEditingSavedLabel(text);
+                setEditSavedFieldErrors(prev => ({ ...prev, label: undefined }));
+              }}
+              onAddressChange={text => {
+                handleEditSavedAddressText(text);
+                setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+              }}
+              onLabelFocus={() => setEditingSavedFocusedField('label')}
+              onAddressFocus={() => {
+                setEditingSavedFocusedField('address');
+                if (editingSavedAddress.trim().length >= 2) {
+                  schedulePlaceSearch(editingSavedAddress);
+                }
+              }}
+              onClearAddress={() => {
+                if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+                geocodeRequestId.current += 1;
+                setEditingSavedAddress('');
+                setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
+                setSuggestions([]);
+                setLocationSearchLoading(false);
+              }}
+              onSelectSuggestion={applyEditSavedAddressSuggestion}
+              onUseTypedAddress={applyEditTypedAddress}
+              onSave={renameSavedLocation}
+              onDelete={deleteSavedLocation}
+              onUseGps={openSavedLocationMap}
+              onClose={closeEditSavedLocation}
+            />
           )}
         </View>
       )}
@@ -2089,17 +2230,25 @@ export default function CustomerHome() {
             showsMyLocationButton={false}
             mapType={mapType}
             customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
+            onPanDrag={() => setIsPickerDragging(true)}
             onRegionChangeComplete={region => {
               setPinCoords({ latitude: region.latitude, longitude: region.longitude });
+              setIsPickerDragging(false);
             }}
           />
 
           {/* Fixed center pin */}
-          <View style={styles.fixedPinContainer} pointerEvents="none">
-            <LocationMapPin
-              variant={mapPicker === 'dropoff' ? 'destination' : 'pickup'}
-              mapType={mapType}
-            />
+          <View
+            style={[styles.fixedPinContainer, isPickerDragging && styles.fixedPinContainerDragging]}
+            pointerEvents="none"
+          >
+            <View style={[styles.uberPin, isPickerDragging && styles.uberPinDragging]}>
+              <View style={styles.uberPinHead}>
+                <View style={styles.uberPinSquare} />
+              </View>
+              <View style={[styles.uberPinStem, isPickerDragging && styles.uberPinStemDragging]} />
+            </View>
+            {isPickerDragging && <View style={styles.uberPinGroundDot} />}
           </View>
 
           {/* Top back button */}
@@ -2172,7 +2321,9 @@ export default function CustomerHome() {
                       : 'Selected Drop Off';
                 try {
                   const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
-                  if (geo) address = `${geo.street ?? ''} ${geo.city ?? ''}`.trim() || address;
+                  if (geo) {
+                    address = formatReverseGeocodeAddress(geo, address);
+                  }
                 } catch {}
                 if (mapPicker === 'pickup') {
                   setPickup({ ...pinCoords, address, locationType: 'precise' });
@@ -2216,15 +2367,6 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, gap: 10, zIndex: 10 },
-  topCard: { flex: 1, minHeight: BUTTON_HEIGHT.sm, borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm), paddingHorizontal: 12, paddingVertical: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  locationRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  locationIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  locationCopy: { flex: 1, alignItems: 'center', minWidth: 0 },
-  locationLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
-  locationText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', maxWidth: '100%', textAlign: 'center' },
-  notifBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  notifBadge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
   youAreHereContainer: { alignItems: 'center' },
@@ -2604,9 +2746,17 @@ const styles = StyleSheet.create({
     minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: 10,
+  },
+  locationOptionMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 44,
+    paddingRight: 4,
   },
   locationOptionIcon: {
     width: 24,
@@ -2617,11 +2767,12 @@ const styles = StyleSheet.create({
   locationOptionTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   locationOptionSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   savedLocationMenuButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   saveLocationButton: {
     minWidth: 54,
@@ -2726,58 +2877,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
-  savedLocationEditInputWrap: {
-    height: 48,
-    borderRadius: buttonCornerRadius(48),
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-  },
-  savedLocationEditInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  savedLocationActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  savedLocationAction: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: buttonCornerRadius(46),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  savedLocationActionText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
-  savedLocationDelete: {
-    minHeight: 46,
-    borderRadius: buttonCornerRadius(46),
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  savedLocationDeleteText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-  },
   // Map picker
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
   fixedPinContainer: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -(LOCATION_MAP_PIN_SIZE / 2),
-    marginTop: -LOCATION_MAP_PIN_SIZE,
+    width: 46,
+    height: 94,
+    marginLeft: -23,
+    marginTop: -42,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  fixedPinContainerDragging: {
+    marginTop: -60,
+  },
+  uberPin: {
+    width: 20,
+    height: 54,
+    alignItems: 'center',
+  },
+  uberPinDragging: {
+    transform: [{ translateY: -4 }],
+  },
+  uberPinHead: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  uberPinSquare: {
+    width: 4,
+    height: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  uberPinStem: {
+    width: 2,
+    height: 22,
+    backgroundColor: '#111111',
+  },
+  uberPinStemDragging: {
+    height: 32,
+  },
+  uberPinGroundDot: {
+    position: 'absolute',
+    top: 57,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#111111',
   },
   mapPickerBack: { position: 'absolute', left: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
   mapPickerControlsRail: {

@@ -1,0 +1,788 @@
+// =====================================================
+// TARAVELIS DATABASE SCHEMA v3
+// Ride Hailing Platform — Rwanda
+// PostgreSQL 15 + PostGIS 3 + pgcrypto
+// =====================================================
+//
+// DESIGN RULES
+// 1. PostGIS GEOGRAPHY(POINT,4326) for all spatial columns — never plain decimals for geospatial queries.
+// 2. BRIN indexes on append-only time-series tables (ride_events, analytics_events, wallet_transactions).
+// 3. Composite PKs on high-write time-series tables (zone_demand_stats) — no UUID overhead.
+// 4. Partial indexes on active rides, available drivers, open disputes.
+// 5. approval_status values: PENDING_REVIEW | APPROVED | REJECTED | SUSPENDED
+// 6. driver_profiles has two ids: id (UUID PK, used by Redis & matching engine) and user_id (auth identity).
+// =====================================================
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table users {
+  id                uuid         [pk, default: `gen_random_uuid()`]
+  phone_number      varchar(20)  [unique, not null, note: 'E.164 format +250... — primary login identity']
+  full_name         varchar(100) [not null]
+  email             varchar(100) [unique]
+  profile_image_url text
+  role_state        varchar(30)  [not null, default: 'CUSTOMER_ONLY', note: 'CUSTOMER_ONLY | DRIVER_PENDING | DRIVER_ACTIVE | BOTH']
+  current_mode      varchar(10)  [note: 'customer | driver — active UI mode for BOTH users']
+  fcm_token         varchar(512) [note: 'Latest Firebase push token, updated on every login']
+  device_id         varchar(255) [note: 'Latest device fingerprint, denorm from device_sessions for fast auth']
+  is_suspended      boolean      [not null, default: false]
+  suspension_until  timestamptz
+  suspension_reason text
+  last_seen_at      timestamptz
+  created_at        timestamptz  [not null, default: `now()`]
+  updated_at        timestamptz  [not null, default: `now()`]
+
+  indexes {
+    phone_number [name: 'idx_users_phone']
+    role_state   [name: 'idx_users_role_state']
+    (is_suspended) [name: 'idx_users_suspended', note: 'partial WHERE is_suspended = true']
+  }
+}
+
+Table otp_verifications {
+  id           uuid        [pk, default: `gen_random_uuid()`]
+  phone_number varchar(20) [not null]
+  otp_hash     text        [not null, note: 'bcrypt hash — never store plaintext']
+  purpose      varchar(30) [not null, note: 'REGISTRATION | LOGIN']
+  is_used      boolean     [not null, default: false]
+  expires_at   timestamptz [not null]
+  created_at   timestamptz [not null, default: `now()`]
+
+  indexes {
+    (phone_number, purpose, is_used) [name: 'idx_otp_lookup']
+    expires_at [name: 'idx_otp_expires', note: 'Nightly purge: DELETE WHERE expires_at < NOW() - 1 day']
+  }
+
+  Note: 'Rows purged nightly. FindLatestOTP filters is_used = false AND expires_at > NOW().'
+}
+
+Table device_sessions {
+  id             uuid         [pk, default: `gen_random_uuid()`]
+  user_id        uuid         [not null]
+  device_id      varchar(255) [not null]
+  platform       varchar(10)  [note: 'ios | android | web']
+  app_version    varchar(20)
+  fcm_token      text
+  ip_address     inet         [note: 'INET type — validates format, supports subnet ops']
+  last_active_at timestamptz
+  created_at     timestamptz  [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'idx_device_sessions_user_id']
+    device_id [name: 'idx_device_sessions_device_id', note: 'Collision detection: find all users sharing a device_id']
+    (device_id, user_id) [unique, name: 'uniq_device_user']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMER
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table customer_profiles {
+  user_id           uuid         [pk, note: 'FK → users.id  (1:1)']
+  total_rides       integer      [not null, default: 0]
+  completed_rides   integer      [not null, default: 0]
+  cancelled_rides   integer      [not null, default: 0]
+  rating            decimal(3,2) [not null, default: 5.0, note: 'Rolling average, recomputed on each new rating']
+  preferred_payment varchar(10)  [not null, default: 'cash', note: 'cash | wallet | momo']
+  updated_at        timestamptz  [not null, default: `now()`]
+}
+
+Table saved_locations {
+  id           uuid          [pk, default: `gen_random_uuid()`]
+  user_id      uuid          [not null]
+  label        varchar(30)   [not null, note: 'home | work | other']
+  custom_label varchar(50)   [note: 'Populated when label = other']
+  address      text          [not null]
+  lat          decimal(10,7) [not null]
+  lng          decimal(10,7) [not null]
+  place_id     varchar       [note: 'Mapbox feature ID for frontend dedup']
+  use_count    integer       [not null, default: 0]
+  created_at   timestamptz   [not null, default: `now()`]
+  updated_at   timestamptz   [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'idx_saved_locations_user']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VEHICLE TYPES  (static catalog — ~5 rows, always cached in memory)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table vehicle_types {
+  id              uuid        [pk, default: `gen_random_uuid()`]
+  code            varchar(20) [unique, not null, note: 'MOTO_BIKE | CAB_TAXI | LIGHT_HILUX | HEAVY_FUSO | TUK_TUK']
+  display_name    varchar(50) [not null]
+  max_passengers  integer     [not null, default: 1]
+  credit_cost_rwf integer     [not null, note: 'Platform fee deducted per COMPLETED ride (30/200/100/300/100 RWF)']
+  icon_url        text
+  is_active       boolean     [not null, default: true]
+  created_at      timestamptz [not null, default: `now()`]
+
+  Note: 'Fare calculation lives in vehicle_pricing_configs. This table is the type catalog + per-ride credit cost only.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRICING ENGINE
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table vehicle_pricing_configs {
+  id                   uuid         [pk, default: `gen_random_uuid()`]
+  vehicle_type_code    varchar(20)  [not null, note: 'FK → vehicle_types.code (UNIQUE col — valid FK target)']
+  base_fare_rwf        integer      [not null, note: 'Flat charge for the first base_distance_km']
+  base_distance_km     decimal(6,2) [not null, default: 1.0]
+  tier1_per_km_rwf     integer      [not null, note: 'Rate per km up to tier1_max_km']
+  tier1_max_km         decimal(6,2) [not null]
+  tier2_per_km_rwf     integer      [not null, note: 'Rate per km beyond tier1_max_km']
+  night_surcharge_pct  decimal(5,4) [not null, default: 0.0, note: '0.30 = 30% surcharge']
+  night_start_hour     smallint     [not null, default: 22]
+  night_end_hour       smallint     [not null, default: 5]
+  waiting_rwf_per_min  decimal(8,2) [not null, default: 0.0]
+  waiting_free_minutes smallint     [not null, default: 0]
+  min_fare_rwf         integer      [not null, default: 0]
+  cancellation_fee_rwf integer      [not null, default: 0]
+  is_active            boolean      [not null, default: true]
+  effective_from       timestamptz  [not null, default: `now()`]
+  created_by           uuid         [note: 'FK → users.id (admin)']
+  created_at           timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (vehicle_type_code, is_active, effective_from) [name: 'idx_vpc_lookup']
+  }
+
+  Note: 'Admin creates a new row to update pricing — history is preserved. Latest is_active row per code wins.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRIVER
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table driver_profiles {
+  id                           uuid         [pk, default: `gen_random_uuid()`]
+  user_id                      uuid         [unique, not null, note: 'FK → users.id. NOTE: id (not user_id) is stored in Redis GEO and used by the matching engine.']
+  permit_number                varchar(50)  [unique, not null, note: 'Rwanda driving permit — permanent business identity. One permit can own many vehicles.']
+  momo_phone                   varchar(20)  [note: 'MoMo number for withdrawal, may differ from login phone']
+  momo_provider                varchar(10)  [note: 'mtn | airtel']
+  province                     varchar(50)
+  district                     varchar(50)
+  sector                       varchar(50)
+  active_vehicle_id            uuid         [note: 'FK → driver_vehicles.id — currently selected vehicle. DEFERRABLE FK (circular).']
+  approval_status              varchar(20)  [not null, default: 'PENDING_REVIEW', note: 'PENDING_REVIEW | APPROVED | REJECTED | SUSPENDED']
+  approved_by                  uuid         [note: 'FK → users.id (admin who approved)']
+  approved_at                  timestamptz
+  rejection_reason             text
+  suspension_reason            text
+  policy_accepted              boolean      [not null, default: false]
+  policy_accepted_at           timestamptz
+  is_online                    boolean      [not null, default: false, note: 'DB copy of Redis state — synced on WS connect/disconnect. Survives Redis flush.']
+  priority_tier                integer      [not null, default: 1, note: '1 = highest priority in matching sort. Lower number wins.']
+  acceptance_rate              decimal(5,2) [not null, default: 100.0]
+  cancellation_rate            decimal(5,2) [not null, default: 0.0]
+  daily_declines               integer      [not null, default: 0, note: 'Reset every midnight by cron']
+  suspicious_disconnect_count  integer      [not null, default: 0, note: '3+ mid-ride disconnects in 30 days triggers auto-review']
+  rating                       decimal(3,2) [not null, default: 5.0]
+  total_rides                  integer      [not null, default: 0]
+  total_earnings_rwf           bigint       [not null, default: 0]
+  free_trial_used              boolean      [not null, default: false, note: 'One-time free package per driver']
+  created_at                   timestamptz  [not null, default: `now()`]
+  updated_at                   timestamptz  [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'idx_dp_user_id']
+    approval_status [name: 'idx_dp_approval_status']
+    (approval_status, is_online) [name: 'idx_dp_matching', note: 'partial WHERE approval_status = APPROVED AND is_online = TRUE']
+    priority_tier [name: 'idx_dp_priority_tier']
+  }
+
+  Note: 'Matching engine filters approval_status = APPROVED. FindNearby sorts by priority_tier ASC, distance ASC.'
+}
+
+Table driver_vehicles {
+  id               uuid         [pk, default: `gen_random_uuid()`]
+  driver_id        uuid         [not null, note: 'FK → driver_profiles.id']
+  vehicle_type_id  uuid         [not null, note: 'FK → vehicle_types.id']
+  plate_number     varchar(20)  [unique, not null, note: 'Rwanda plate e.g. RAD 123 A']
+  make             varchar(50)  [note: 'Honda | Toyota | Bajaj | Kiger...']
+  model            varchar(50)  [note: 'CB125 | Corolla | Boxer...']
+  year             integer
+  color            varchar(30)
+  passenger_seats  integer
+  load_capacity_kg decimal(8,2)
+  is_active        boolean      [not null, default: true]
+  created_at       timestamptz  [not null, default: `now()`]
+  updated_at       timestamptz  [not null, default: `now()`]
+
+  indexes {
+    driver_id [name: 'idx_vehicles_driver']
+    (driver_id, is_active) [name: 'idx_vehicles_driver_active']
+    vehicle_type_id [name: 'idx_vehicles_type']
+  }
+}
+
+Table driver_documents {
+  id            uuid        [pk, default: `gen_random_uuid()`]
+  driver_id     uuid        [not null, note: 'FK → driver_profiles.id']
+  vehicle_id    uuid        [note: 'FK → driver_vehicles.id. NULL = driver-level doc (permit, national ID). SET = vehicle doc.']
+  document_type varchar(30) [not null, note: 'DRIVING_PERMIT | NATIONAL_ID | VEHICLE_INSURANCE | VEHICLE_INSPECTION | VEHICLE_LICENSE']
+  file_url      text        [not null, note: 'MinIO / S3 path']
+  verified      boolean     [not null, default: false]
+  verified_at   timestamptz
+  verified_by   uuid        [note: 'FK → users.id (admin)']
+  expires_at    date        [note: 'Insurance/inspection expiry — admin sees alerts 14 days before']
+  created_at    timestamptz [not null, default: `now()`]
+
+  indexes {
+    driver_id [name: 'idx_docs_driver']
+    (driver_id, document_type) [unique, name: 'uniq_driver_doc_type']
+    (vehicle_id, document_type) [name: 'idx_docs_vehicle']
+    expires_at [name: 'idx_docs_expires', note: 'Expiry alert cron: WHERE expires_at < NOW() + 14 days']
+  }
+}
+
+Table driver_locations {
+  driver_id       uuid                   [pk, note: 'FK → driver_profiles.id. One row per driver, updated in-place on every GPS tick.']
+  location        geography(point, 4326) [not null, note: 'PostGIS GEOGRAPHY. ST_DWithin + GiST index is the only scalable way to do radius queries.']
+  geohash6        varchar(6)             [note: 'Precision-6 geohash (~1.2 km² cell). Precomputed on write for zone_demand_stats.']
+  speed_kmh       decimal(6,2)
+  heading         decimal(5,2)
+  accuracy_meters decimal(7,2)           [note: 'Device GPS accuracy. Used to filter mocked/poor signal.']
+  is_available    boolean                [not null, default: false, note: 'Mirrors Redis driver:{id}:state. Written on every state change.']
+  is_mocked       boolean                [not null, default: false]
+  updated_at      timestamptz            [not null, default: `now()`]
+
+  indexes {
+    location [name: 'idx_driver_locations_geo', type: gist]
+    (is_available, geohash6) [name: 'idx_driver_locations_avail', note: 'partial WHERE is_available = true']
+  }
+
+  Note: 'Source of truth for last-known position. Redis GEO is the hot index for matching but can be rebuilt from this table.'
+}
+
+Table driver_sessions {
+  id                   uuid        [pk, default: `gen_random_uuid()`]
+  driver_id            uuid        [not null, note: 'FK → driver_profiles.id']
+  vehicle_id           uuid        [note: 'FK → driver_vehicles.id']
+  started_at           timestamptz [not null, default: `now()`]
+  ended_at             timestamptz
+  total_online_minutes integer     [not null, default: 0]
+  rides_completed      integer     [not null, default: 0]
+  earnings_rwf         bigint      [not null, default: 0]
+
+  indexes {
+    driver_id [name: 'idx_sessions_driver']
+    (driver_id, started_at) [name: 'idx_sessions_history']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PACKAGES & CREDITS
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table ride_packages {
+  id              uuid        [pk, default: `gen_random_uuid()`]
+  name            varchar(50) [not null, note: 'Moto Starter | Moto Pro | Cab Standard | Free Trial...']
+  vehicle_type_id uuid        [not null, note: 'FK → vehicle_types.id']
+  ride_count      integer     [not null, note: '0 = use is_unlimited flag']
+  is_unlimited    boolean     [not null, default: false]
+  validity_days   integer     [not null, default: 30]
+  price_rwf       integer     [not null, note: '0 for promotional packages']
+  is_promotional  boolean     [not null, default: false]
+  is_active       boolean     [not null, default: true]
+  created_at      timestamptz [not null, default: `now()`]
+
+  indexes {
+    (vehicle_type_id, is_active) [name: 'idx_packages_active']
+  }
+}
+
+Table driver_ride_credits {
+  id              uuid        [pk, default: `gen_random_uuid()`]
+  driver_id       uuid        [not null, note: 'FK → driver_profiles.id']
+  package_id      uuid        [not null, note: 'FK → ride_packages.id']
+  vehicle_type_id uuid        [not null, note: 'FK → vehicle_types.id — denorm from package for fast credit check']
+  rides_total     integer     [not null]
+  rides_remaining integer     [not null, note: 'CHECK rides_remaining >= 0. Decremented only on COMPLETED.']
+  is_unlimited    boolean     [not null, default: false]
+  is_promotional  boolean     [not null, default: false]
+  expires_at      timestamptz [not null]
+  is_active       boolean     [not null, default: true]
+  purchased_at    timestamptz [not null, default: `now()`]
+
+  indexes {
+    (driver_id, vehicle_type_id, is_active, expires_at) [name: 'idx_credits_check', note: 'partial WHERE is_active = TRUE']
+  }
+
+  Note: 'HasCredits check: rides_remaining > 0 OR is_unlimited = true, AND is_active = true AND expires_at > now().'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOT ZONES & DEMAND HEATMAP
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table hot_zones {
+  id            uuid          [pk, default: `gen_random_uuid()`]
+  name          varchar(100)  [not null, note: 'University of Rwanda, Kimironko Market, Nyabugogo Bus Park...']
+  category      varchar(30)   [not null, note: 'university | market | transport_hub | hospital | church | hotel | office']
+  lat           decimal(10,7) [not null]
+  lng           decimal(10,7) [not null]
+  geohash6      varchar(6)    [not null]
+  radius_meters integer       [not null, default: 500]
+  city          varchar(50)   [not null, default: 'Kigali']
+  is_active     boolean       [not null, default: true]
+  created_at    timestamptz   [not null, default: `now()`]
+
+  indexes {
+    geohash6 [name: 'idx_hot_zones_geohash']
+    (city, is_active) [name: 'idx_hot_zones_city_active']
+  }
+}
+
+Table zone_demand_stats {
+  geohash6           varchar(6)   [not null, note: 'Precision-6 cell (~1.2 km²)']
+  vehicle_type_id    uuid         [not null, note: 'FK → vehicle_types.id']
+  hour_bucket        timestamptz  [not null, note: 'date_trunc(hour, NOW()). One row per cell + type + hour.']
+  ride_request_count integer      [not null, default: 0]
+  completed_count    integer      [not null, default: 0]
+  avg_wait_seconds   integer
+
+  indexes {
+    (geohash6, vehicle_type_id, hour_bucket) [pk, name: 'pk_zone_demand']
+    (geohash6, hour_bucket) [name: 'idx_zone_demand_geo_hour']
+  }
+
+  Note: 'Composite PK — no UUID. Upserted via ON CONFLICT DO UPDATE every 15 min from ride_events. Powers driver heatmap.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIDES
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table rides {
+  id                        uuid                   [pk, default: `gen_random_uuid()`]
+  customer_id               uuid                   [not null, note: 'FK → users.id']
+  driver_id                 uuid                   [note: 'FK → driver_profiles.id. NULL until MATCHED.']
+  vehicle_type_id           uuid                   [not null, note: 'FK → vehicle_types.id']
+  transport_type            varchar(20)            [not null, note: 'Denorm of vehicle_types.code — avoids a join in hot matching/fare/location paths']
+  driver_vehicle_id         uuid                   [note: 'FK → driver_vehicles.id — specific vehicle assigned at MATCHED']
+  pricing_config_id         uuid                   [note: 'FK → vehicle_pricing_configs.id — snapshot at ride creation for historical accuracy']
+
+  status                    varchar(30)            [not null, default: 'SEARCHING', note: 'SEARCHING | MATCHED | NEGOTIATING | CONFIRMED | DRIVER_EN_ROUTE | DRIVER_ARRIVED | IN_PROGRESS | COMPLETED | CANCELLED | DISPUTED']
+
+  // Pickup
+  pickup_lat                decimal(10,7)          [not null]
+  pickup_lng                decimal(10,7)          [not null]
+  pickup_point              geography(point, 4326) [not null, note: 'PostGIS — driver arrival geofence (ST_DWithin 100 m)']
+  pickup_geohash6           varchar(6)
+  pickup_address            text                   [not null]
+  pickup_place_id           varchar
+
+  // Destination
+  dest_lat                  decimal(10,7)          [not null]
+  dest_lng                  decimal(10,7)          [not null]
+  dest_point                geography(point, 4326) [not null, note: 'PostGIS — journey completion geofence']
+  dest_geohash6             varchar(6)
+  dest_address              text                   [not null]
+  dest_place_id             varchar
+  is_generic_dest           boolean                [not null, default: false, note: 'TRUE = destination is flexible (guided). Disables dest geofence.']
+
+  // Fare
+  estimated_fare_rwf        integer                [note: 'Shown at booking from route_cache + pricing_config']
+  customer_initial_fare_rwf integer                [note: 'Fare shown when customer tapped Request']
+  agreed_fare_rwf           integer                [note: 'Final negotiated/locked fare']
+  fare_locked_at            timestamptz
+  surge_multiplier          decimal(4,2)           [not null, default: 1.0]
+  night_surcharge_applied   boolean                [not null, default: false]
+  night_surcharge_pct       decimal(5,4)           [not null, default: 0.0]
+  waiting_seconds           integer                [not null, default: 0]
+  waiting_charge_rwf        decimal(10,2)          [not null, default: 0.0]
+  cancellation_fee_rwf      decimal(10,2)          [not null, default: 0.0]
+  final_fare_rwf            decimal(10,2)          [note: 'Locked on COMPLETED — source of truth for payment and earnings']
+
+  // Route
+  distance_km               decimal(8,2)
+  duration_minutes          integer
+  route_polyline            text                   [note: 'Encoded Mapbox polyline — stored for replay and dispute resolution']
+
+  // Cancellation
+  cancel_reason             text
+  cancelled_by              varchar(10)            [note: 'customer | driver | system']
+  cancelled_at              timestamptz
+
+  // Pickup expiry
+  pickup_expired            boolean                [not null, default: false]
+  pickup_expired_at         timestamptz
+
+  // Offline / disconnect
+  connection_lost_at        timestamptz
+  connection_lost_by        varchar(10)            [note: 'driver | customer | both']
+  journey_confirmed         boolean                [not null, default: false]
+  journey_confirmed_at      timestamptz
+  journey_confirmed_by      varchar(20)            [note: 'driver_self | gps_auto | admin']
+
+  // Payment
+  payment_method            varchar(10)            [not null, default: 'cash', note: 'cash | wallet | momo']
+  payment_status            varchar(15)            [not null, default: 'PENDING', note: 'PENDING | COMPLETED | DISPUTED | REFUNDED']
+
+  customer_notes            text
+
+  // Timestamps
+  requested_at              timestamptz            [not null, default: `now()`]
+  matched_at                timestamptz
+  confirmed_at              timestamptz
+  driver_arrived_at         timestamptz
+  started_at                timestamptz
+  completed_at              timestamptz
+  created_at                timestamptz            [not null, default: `now()`]
+  updated_at                timestamptz            [not null, default: `now()`]
+
+  indexes {
+    customer_id [name: 'idx_rides_customer_id']
+    driver_id [name: 'idx_rides_driver_id']
+    status [name: 'idx_rides_status']
+    created_at [name: 'idx_rides_created_at']
+    pickup_point [name: 'idx_rides_pickup_geo', type: gist]
+    dest_point [name: 'idx_rides_dest_geo', type: gist]
+    (driver_id, status) [name: 'idx_rides_active_driver', note: 'partial WHERE status NOT IN (COMPLETED,CANCELLED)']
+    (customer_id, status) [name: 'idx_rides_active_customer', note: 'partial WHERE status NOT IN (COMPLETED,CANCELLED)']
+    (status, created_at) [name: 'idx_rides_status_time']
+  }
+}
+
+Table ride_events {
+  id          uuid        [pk, default: `gen_random_uuid()`]
+  ride_id     uuid        [not null, note: 'FK → rides.id']
+  actor_id    uuid        [note: 'FK → users.id. NULL for system events.']
+  actor_role  varchar(10) [not null, note: 'customer | driver | system | admin']
+  event_type  varchar(50) [not null, note: 'ride_created | driver_matched | fare_proposed | fare_accepted | ride_confirmed | driver_en_route | driver_arrived | journey_started | journey_completed | ride_cancelled | connection_lost | journey_confirmed_offline | dispute_raised | credit_deducted']
+  payload     jsonb       [note: 'Event-specific structured data']
+  occurred_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    ride_id [name: 'idx_ride_events_ride_id']
+    occurred_at [name: 'idx_ride_events_time', type: brin, note: 'BRIN — append-only monotone inserts. ~300x smaller than B-tree.']
+  }
+
+  Note: 'APPEND-ONLY. Never UPDATE or DELETE. BRIN index is optimal for this pattern.'
+}
+
+Table ride_disputes {
+  id                uuid          [pk, default: `gen_random_uuid()`]
+  ride_id           uuid          [not null, note: 'FK → rides.id']
+  raised_by_id      uuid          [not null, note: 'FK → users.id']
+  raised_by_role    varchar(10)   [not null, note: 'customer | driver | system']
+  dispute_type      varchar(30)   [not null, note: 'offline_disconnect | false_cancel | payment | behaviour | gps_fraud']
+  description       text
+  driver_last_lat   decimal(10,7) [note: 'GPS snapshot at moment of dispute']
+  driver_last_lng   decimal(10,7)
+  customer_last_lat decimal(10,7)
+  customer_last_lng decimal(10,7)
+  status            varchar(15)   [not null, default: 'OPEN', note: 'OPEN | INVESTIGATING | RESOLVED | DISMISSED']
+  resolution        varchar(30)   [note: 'completed_confirmed | cancelled_confirmed | warning_issued | suspended']
+  resolved_by       uuid          [note: 'FK → users.id (admin)']
+  resolved_at       timestamptz
+  created_at        timestamptz   [not null, default: `now()`]
+
+  indexes {
+    ride_id [name: 'idx_disputes_ride_id']
+    (status, created_at) [name: 'idx_disputes_open', note: 'partial WHERE status = OPEN']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEGOTIATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table negotiation_rounds {
+  id                uuid        [pk, default: `gen_random_uuid()`]
+  ride_id           uuid        [not null, note: 'FK → rides.id']
+  round_number      integer     [not null, note: '1, 2, 3. Round 3 unlocks the call option.']
+  proposed_by       varchar(10) [not null, note: 'customer | driver']
+  amount_rwf        integer     [not null]
+  response          varchar(10) [note: 'ACCEPTED | DECLINED | EXPIRED | NULL (pending)']
+  call_initiated    boolean     [not null, default: false]
+  call_initiated_at timestamptz
+  expires_at        timestamptz [note: 'Each proposal has a 30 s TTL']
+  responded_at      timestamptz
+  created_at        timestamptz [not null, default: `now()`]
+
+  indexes {
+    ride_id [name: 'idx_negotiation_ride_id']
+  }
+
+  Note: 'Max 3 rounds. Acceptance writes agreed_fare_rwf to rides and sets fare_locked_at.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENTS & WALLET
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table payments {
+  id                    uuid        [pk, default: `gen_random_uuid()`]
+  ride_id               uuid        [unique, not null, note: 'FK → rides.id. UNIQUE — exactly one payment per ride.']
+  payer_id              uuid        [not null, note: 'FK → users.id (customer)']
+  receiver_id           uuid        [not null, note: 'FK → users.id (driver)']
+  amount_rwf            integer     [not null, note: 'Total fare paid by customer']
+  platform_fee_rwf      integer     [not null, default: 0, note: 'Platform cut — currently 0, credits are the monetisation']
+  driver_amount_rwf     integer     [not null, note: 'amount_rwf - platform_fee_rwf']
+  payment_method        varchar(10) [not null, note: 'cash | wallet | momo']
+  momo_provider         varchar(10) [note: 'mtn | airtel — only when payment_method = momo']
+  transaction_reference varchar
+  status                varchar(15) [not null, default: 'PENDING', note: 'PENDING | COMPLETED | FAILED | REFUNDED']
+  paid_at               timestamptz
+  created_at            timestamptz [not null, default: `now()`]
+
+  indexes {
+    payer_id [name: 'idx_payments_payer']
+    receiver_id [name: 'idx_payments_receiver']
+  }
+}
+
+Table wallets {
+  id            uuid        [pk, default: `gen_random_uuid()`]
+  user_id       uuid        [unique, not null, note: 'FK → users.id. UNIQUE — one wallet per user.']
+  balance_rwf   bigint      [not null, default: 0]
+  currency      varchar(5)  [not null, default: 'RWF']
+  is_frozen     boolean     [not null, default: false]
+  freeze_reason text
+  created_at    timestamptz [not null, default: `now()`]
+  updated_at    timestamptz [not null, default: `now()`]
+
+  Note: 'Balance MUST only change inside a DB transaction that also inserts a wallet_transactions row. Never SET to absolute value — always use balance + delta.'
+}
+
+Table wallet_transactions {
+  id             uuid        [pk, default: `gen_random_uuid()`]
+  wallet_id      uuid        [not null, note: 'FK → wallets.id']
+  type           varchar(25) [not null, note: 'TOP_UP | RIDE_PAYMENT | RIDE_EARNING | PACKAGE_PURCHASE | WITHDRAWAL | REFUND | BONUS | ADJUSTMENT']
+  amount_rwf     integer     [not null, note: 'Positive = credit. Negative = debit. Never zero.']
+  balance_before bigint      [not null, note: 'Snapshot before this transaction']
+  balance_after  bigint      [not null, note: 'Must equal balance_before + amount_rwf']
+  status         varchar(15) [not null, default: 'COMPLETED', note: 'PENDING | COMPLETED | FAILED']
+  reference_type varchar(20) [note: 'ride | package | withdrawal | topup | system']
+  reference_id   uuid
+  description    text
+  created_at     timestamptz [not null, default: `now()`]
+
+  indexes {
+    (wallet_id, created_at) [name: 'idx_wallet_txn_history']
+    created_at [name: 'idx_wallet_txn_time', type: brin]
+  }
+
+  Note: 'APPEND-ONLY ledger. balance_before/after creates a self-auditing chain. BRIN is ideal — inserts are always monotone.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RATINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table ratings {
+  id         uuid     [pk, default: `gen_random_uuid()`]
+  ride_id    uuid     [not null, note: 'FK → rides.id']
+  rater_id   uuid     [not null, note: 'FK → users.id']
+  rated_id   uuid     [not null, note: 'FK → users.id']
+  direction  varchar(25) [not null, note: 'customer_to_driver | driver_to_customer']
+  score      smallint [not null, note: '1 to 5']
+  comment    text
+  tags       text[]   [note: 'polite | fast | safe | reckless | no_show | friendly | careful_driving']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (ride_id, rater_id) [unique, name: 'uniq_rating_ride_rater']
+    rated_id [name: 'idx_ratings_rated']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LANDMARKS & ROUTE CACHE
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table landmarks {
+  id         uuid          [pk, default: `gen_random_uuid()`]
+  name       varchar(100)  [not null]
+  category   varchar(30)   [not null, note: 'university | market | hospital | hotel | transport | government | other']
+  lat        decimal(10,7) [not null]
+  lng        decimal(10,7) [not null]
+  geohash6   varchar(6)    [not null]
+  city       varchar(50)   [not null, default: 'Kigali']
+  is_active  boolean       [not null, default: true]
+  created_at timestamptz   [not null, default: `now()`]
+
+  indexes {
+    geohash6 [name: 'idx_landmarks_geohash']
+    (city, category) [name: 'idx_landmarks_city_category']
+  }
+}
+
+Table route_cache {
+  cache_key        text          [pk, note: 'Natural PK: {origin_geohash6}:{dest_geohash6}:{vehicle_type_code}. O(1) exact lookup — no UUID needed.']
+  origin_geohash   varchar(6)    [not null]
+  dest_geohash     varchar(6)    [not null]
+  vehicle_type     varchar(20)   [not null]
+  distance_km      decimal(8,2)  [not null]
+  duration_minutes integer       [not null]
+  polyline         text          [note: 'Mapbox encoded polyline — served to mobile without re-fetching Directions API']
+  agreed_fares     jsonb         [not null, default: '[]', note: 'Ring-buffer of last 10 agreed fares on this route']
+  avg_fare_rwf     integer       [note: 'Precomputed average, updated on every new agreed fare']
+  use_count        integer       [not null, default: 1]
+  expires_at       timestamptz   [not null, note: 'NOW() + 90 days, refreshed on every hit. Nightly purge: DELETE WHERE expires_at < NOW().']
+  last_used_at     timestamptz   [not null, default: `now()`]
+  created_at       timestamptz   [not null, default: `now()`]
+
+  indexes {
+    (origin_geohash, dest_geohash) [name: 'idx_route_cache_pair']
+    expires_at [name: 'idx_route_cache_expires']
+  }
+
+  Note: 'Redis is L1 cache (hot routes). This table is L2 (survives restarts). Text PK = O(1) lookup.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table analytics_events {
+  id          bigint      [pk, increment, note: 'BIGSERIAL — lower overhead than UUID at high insert rates']
+  event_type  varchar(100) [not null]
+  actor_role  varchar(20)
+  actor_id    uuid
+  ride_id     uuid
+  payload     jsonb       [not null, default: '{}']
+  occurred_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    event_type [name: 'idx_analytics_event_type']
+    ride_id [name: 'idx_analytics_ride_id']
+    occurred_at [name: 'idx_analytics_time', type: brin]
+  }
+
+  Note: 'Written by background Redis consumer. BIGSERIAL pk avoids UUID generation at high insert rates. BRIN ideal for monotone time column.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS & ANOMALIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table notifications {
+  id       uuid         [pk, default: `gen_random_uuid()`]
+  user_id  uuid         [not null, note: 'FK → users.id']
+  title    varchar(100) [not null]
+  body     text         [not null]
+  type     varchar(20)  [not null, note: 'ride | payment | package | hot_zone | system | promo']
+  data     jsonb        [note: 'Deep-link payload: {ride_id, screen, params}']
+  is_read  boolean      [not null, default: false]
+  sent_at  timestamptz  [not null, default: `now()`]
+  read_at  timestamptz
+
+  indexes {
+    (user_id, is_read, sent_at) [name: 'idx_notif_unread', note: 'partial WHERE is_read = false']
+    sent_at [name: 'idx_notif_time', type: brin]
+  }
+}
+
+Table gps_anomalies {
+  id            uuid          [pk, default: `gen_random_uuid()`]
+  driver_id     uuid          [not null, note: 'FK → driver_profiles.id']
+  ride_id       uuid          [note: 'FK → rides.id. NULL if detected outside a ride.']
+  anomaly_type  varchar(30)   [not null, note: 'speed_exceeded | mocked_location | teleport | offline_mid_ride']
+  speed_kmh     decimal(8,2)
+  lat           decimal(10,7)
+  lng           decimal(10,7)
+  details       jsonb         [note: 'Structured context: {prev_lat, prev_lng, delta_km, delta_seconds}']
+  created_at    timestamptz   [not null, default: `now()`]
+
+  indexes {
+    driver_id [name: 'idx_anomalies_driver']
+    (driver_id, created_at) [name: 'idx_anomalies_driver_time']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RELATIONSHIPS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Auth
+Ref: customer_profiles.user_id - users.id [delete: cascade]
+Ref: device_sessions.user_id > users.id
+Ref: saved_locations.user_id > users.id [delete: cascade]
+
+// Driver
+Ref: driver_profiles.user_id - users.id [delete: cascade]
+Ref: driver_profiles.approved_by > users.id
+Ref: driver_profiles.active_vehicle_id > driver_vehicles.id
+
+Ref: driver_vehicles.driver_id > driver_profiles.id [delete: cascade]
+Ref: driver_vehicles.vehicle_type_id > vehicle_types.id
+
+Ref: driver_documents.driver_id > driver_profiles.id [delete: cascade]
+Ref: driver_documents.vehicle_id > driver_vehicles.id
+Ref: driver_documents.verified_by > users.id
+
+Ref: driver_locations.driver_id - driver_profiles.id [delete: cascade]
+
+Ref: driver_sessions.driver_id > driver_profiles.id
+Ref: driver_sessions.vehicle_id > driver_vehicles.id
+
+// Pricing
+Ref: vehicle_pricing_configs.vehicle_type_code > vehicle_types.code
+Ref: vehicle_pricing_configs.created_by > users.id
+
+// Packages
+Ref: ride_packages.vehicle_type_id > vehicle_types.id
+Ref: driver_ride_credits.driver_id > driver_profiles.id
+Ref: driver_ride_credits.package_id > ride_packages.id
+Ref: driver_ride_credits.vehicle_type_id > vehicle_types.id
+
+// Hot zones
+Ref: zone_demand_stats.vehicle_type_id > vehicle_types.id
+
+// Rides
+Ref: rides.customer_id > users.id
+Ref: rides.driver_id > driver_profiles.id
+Ref: rides.vehicle_type_id > vehicle_types.id
+Ref: rides.driver_vehicle_id > driver_vehicles.id
+Ref: rides.pricing_config_id > vehicle_pricing_configs.id
+
+Ref: ride_events.ride_id > rides.id [delete: cascade]
+Ref: ride_events.actor_id > users.id
+
+Ref: ride_disputes.ride_id > rides.id
+Ref: ride_disputes.raised_by_id > users.id
+Ref: ride_disputes.resolved_by > users.id
+
+Ref: negotiation_rounds.ride_id > rides.id [delete: cascade]
+
+// Payments
+Ref: payments.ride_id - rides.id
+Ref: payments.payer_id > users.id
+Ref: payments.receiver_id > users.id
+
+Ref: wallets.user_id - users.id
+Ref: wallet_transactions.wallet_id > wallets.id
+
+// Ratings
+Ref: ratings.ride_id > rides.id
+Ref: ratings.rater_id > users.id
+Ref: ratings.rated_id > users.id
+
+// Notifications & anomalies
+Ref: notifications.user_id > users.id [delete: cascade]
+Ref: gps_anomalies.driver_id > driver_profiles.id
+Ref: gps_anomalies.ride_id > rides.id

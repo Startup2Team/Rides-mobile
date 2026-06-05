@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import {
   Coords,
   NegotiationMessage,
+  BookingFormDraft,
   Ride,
   RideLocation,
   VehicleType,
@@ -32,7 +33,16 @@ interface RideContextType {
   rideHistory: Ride[];
   driverLocation: Coords | null;
   pendingRequest: Ride | null;
-  createRide: (pickup: RideLocation, destination: RideLocation, vehicleType: VehicleType) => Promise<void>;
+  createRide: (
+    pickup: RideLocation,
+    destination: RideLocation,
+    vehicleType: VehicleType,
+    destText?: string,
+  ) => Promise<void>;
+  cancelledSearchDraft: BookingFormDraft | null;
+  restoreBookingOnHomeFocus: boolean;
+  clearCancelledSearchDraft: () => void;
+  clearRestoreBookingOnHomeFocus: () => void;
   /** Pass `isDriver=true` from driver screens so the driver-side cancel endpoint is used. */
   cancelRide: (isDriver?: boolean) => void;
   pauseDriverMatching: () => void;
@@ -152,8 +162,24 @@ const mapDriverRequestToRide = (payload: any): Ride => {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
+function cloneBookingDraft(
+  pickup: RideLocation,
+  destination: RideLocation,
+  vehicleType: VehicleType,
+  destText: string,
+): BookingFormDraft {
+  return {
+    pickup: { ...pickup },
+    destination: { ...destination },
+    destText,
+    vehicleType,
+  };
+}
+
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
+  const [cancelledSearchDraft, setCancelledSearchDraft] = useState<BookingFormDraft | null>(null);
+  const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
   const [rideHistory, setRideHistory] = useState<Ride[]>([]);
   const [driverLocation, setDriverLocation] = useState<Coords | null>(null);
   const [pendingRequest, setPendingRequest] = useState<Ride | null>(null);
@@ -408,10 +434,20 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   // ── Ride actions ─────────────────────────────────────────────────────────────
 
+  const clearCancelledSearchDraft = useCallback(() => {
+    setCancelledSearchDraft(null);
+    setRestoreBookingOnHomeFocus(false);
+  }, []);
+
+  const clearRestoreBookingOnHomeFocus = useCallback(() => {
+    setRestoreBookingOnHomeFocus(false);
+  }, []);
+
   const createRide = useCallback(async (
     pickup: RideLocation,
     destination: RideLocation,
     vehicleType: VehicleType,
+    destText = '',
   ) => {
     if (currentRide && CUSTOMER_ACTIVE_STATUSES.has(currentRide.status)) return;
 
@@ -439,6 +475,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
+    const displayDestText = destText.trim() || destination.address?.trim() || '';
+    setCancelledSearchDraft(cloneBookingDraft(pickup, destination, vehicleType, displayDestText));
+
     setCurrentRide(ride);
     await connectCustomerWS(data.ride_id);
   }, [connectCustomerWS, currentRide]);
@@ -456,6 +495,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       rideService.cancelRide(activeRideId, 'customer cancelled').catch(() => {});
     }
     disconnectWS();
+    setRestoreBookingOnHomeFocus(true);
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled' } : null);
     setDriverLocation(null);
   }, [currentRide?.id, disconnectWS]);
@@ -655,6 +695,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       driverLocation,
       pendingRequest,
       createRide,
+      cancelledSearchDraft,
+      restoreBookingOnHomeFocus,
+      clearCancelledSearchDraft,
+      clearRestoreBookingOnHomeFocus,
       cancelRide,
       pauseDriverMatching,
       resumeDriverMatching,

@@ -43,7 +43,10 @@ export function sampleRouteCoordsForFit(
   return sampled;
 }
 
-/** Place pins on polyline endpoints when route geometry is available. */
+/**
+ * First/last point of a driving route polyline (usually on the nearest road).
+ * Use for route geometry only — not for customer pickup/dropoff pins (use stored RideLocation coords).
+ */
 export function routeLineEndpoints(
   coordinates: Coords[] | null | undefined,
   fallbackStart: Coords,

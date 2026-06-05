@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
+import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -35,6 +36,7 @@ function RootLayoutNav() {
       <Stack.Screen name="negotiation" />
       <Stack.Screen name="ride" options={{ animation: 'none' }} />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="join-driver" />
       <Stack.Screen name="driver-onboarding" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />

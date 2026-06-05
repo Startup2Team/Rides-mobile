@@ -17,9 +17,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { APP_NAME } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
+import {
+  isUploadedProfileImageUri,
+  resolveDriverProfileImage,
+} from '@/utils/driverProfileImage';
 
 const CARD_MAX_WIDTH = 320;
 const DRIVER_ICON_SIZE = 64;
@@ -72,7 +77,13 @@ export default function RatingScreen() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { currentRide, rideHistory, clearCurrentRide } = useRide();
-  const params = useLocalSearchParams<{ rideId?: string; driverName?: string; fare?: string; vehicleType?: string }>();
+  const params = useLocalSearchParams<{
+    rideId?: string;
+    driverName?: string;
+    driverPhoto?: string;
+    fare?: string;
+    vehicleType?: string;
+  }>();
 
   const [phase, setPhase] = useState<RatingPhase>('rate');
   const [stars, setStars] = useState(0);
@@ -98,10 +109,12 @@ export default function RatingScreen() {
   }, [currentRide, params.rideId, rideHistory]);
 
   const driverPhotoUri = useMemo(() => {
-    const driver = ratedRide?.driver;
-    if (!driver) return undefined;
-    return driver.profileImage ?? `https://i.pravatar.cc/160?u=${encodeURIComponent(driver.id)}`;
-  }, [ratedRide?.driver]);
+    const paramPhoto =
+      typeof params.driverPhoto === 'string' && isUploadedProfileImageUri(params.driverPhoto)
+        ? params.driverPhoto.trim()
+        : undefined;
+    return paramPhoto ?? resolveDriverProfileImage(ratedRide?.driver);
+  }, [params.driverPhoto, ratedRide?.driver]);
 
   const finalizeRide = () => {
     if (finalizedRideRef.current) return;
@@ -160,28 +173,17 @@ export default function RatingScreen() {
     return () => clearTimeout(focusTimer);
   }, [phase]);
 
-  const initials = driverName
-    .split(' ')
-    .map(n => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const driverInitial =
+    (ratedRide?.driver?.name ?? driverName).trim()?.[0]?.toUpperCase() ?? '?';
 
   const canRateSubmit = stars > 0 && !submitting;
-  const backdropDismiss = phase === 'rate' ? exitToHome : undefined;
 
   return (
     <View style={styles.root} accessibilityViewIsModal>
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={backdropDismiss}
-        disabled={!backdropDismiss}
-        accessibilityRole="button"
-        accessibilityLabel={backdropDismiss ? 'Not now' : undefined}
-      >
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <BlurView intensity={48} tint={glassTint} style={StyleSheet.absoluteFill} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }]} />
-      </Pressable>
+      </View>
 
       {phase === 'review' ? (
         <KeyboardAwareScrollViewCompat
@@ -273,17 +275,13 @@ export default function RatingScreen() {
             accessibilityRole="alert"
             accessibilityLabel={`Rate ${driverName}`}
           >
-            {driverPhotoUri ? (
-              <Image
-                source={{ uri: driverPhotoUri }}
-                style={styles.driverIcon}
-                accessibilityLabel={`${driverName} profile photo`}
-              />
-            ) : (
-              <View style={[styles.driverIcon, styles.driverIconFallback, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.driverIconInitials, { color: colors.primaryForeground }]}>{initials}</Text>
-              </View>
-            )}
+            <ProfileAvatarCircle
+              size={DRIVER_ICON_SIZE}
+              initial={driverInitial}
+              imageUri={driverPhotoUri ?? null}
+              style={styles.driverAvatar}
+              accessibilityLabel={`${driverName} profile photo`}
+            />
 
             <Text style={[styles.title, { color: colors.foreground }]}>Rate Your Driver</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
@@ -422,23 +420,9 @@ const styles = StyleSheet.create({
   reviewCard: {
     paddingTop: 20,
   },
-  driverIcon: {
-    width: DRIVER_ICON_SIZE,
-    height: DRIVER_ICON_SIZE,
-    borderRadius: Platform.OS === 'ios' ? 14 : 12,
+  driverAvatar: {
     marginBottom: 14,
-    ...Platform.select({
-      ios: { borderCurve: 'continuous' },
-      default: {},
-    }),
-  },
-  driverIconFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  driverIconInitials: {
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    alignSelf: 'center',
   },
   title: {
     fontSize: 17,
