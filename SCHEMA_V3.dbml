@@ -338,6 +338,51 @@ Table driver_ride_credits {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BONUS SYSTEM
+// — Admin-configurable purchase bonuses + registration free rides.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table bonus_tiers {
+  id              uuid         [pk, default: `gen_random_uuid()`]
+  name            varchar(100) [not null, note: 'First Purchase Bonus | Loyal Rider Bonus | Registration Welcome']
+  description     text         [note: 'Shown to driver in app — e.g. "Get +10 rides free on your first package!"']
+  trigger_type    varchar(20)  [not null, default: 'PURCHASE_COUNT', note: 'PURCHASE_COUNT | REGISTRATION']
+  purchase_number integer      [note: 'For PURCHASE_COUNT: which purchase number fires this tier. NULL = catch-all for every purchase beyond the last explicit tier.']
+  bonus_rides     integer      [not null, note: 'Ride credits granted as bonus. CHECK bonus_rides > 0.']
+  vehicle_type_id uuid         [note: 'FK → vehicle_types.id. NULL = applies to all vehicle types.']
+  is_active       boolean      [not null, default: true, note: 'Admin can deactivate to stop future grants without deleting history.']
+  created_at      timestamptz  [not null, default: `now()`]
+  updated_at      timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (trigger_type, is_active, purchase_number) [name: 'idx_bonus_tiers_lookup']
+  }
+
+  Note: 'Default seed: purchase 1 → +10, purchase 2 → +20, purchase 3+ (NULL) → +30, REGISTRATION → +30. Admin manages via POST/DELETE /admin/bonuses/tiers.'
+}
+
+Table bonus_grants {
+  id                uuid        [pk, default: `gen_random_uuid()`]
+  driver_id         uuid        [not null, note: 'FK → users.id']
+  tier_id           uuid        [not null, note: 'FK → bonus_tiers.id — which tier fired']
+  trigger_credit_id uuid        [note: 'FK → driver_ride_credits.id. NULL for REGISTRATION grants.']
+  vehicle_type_id   uuid        [not null, note: 'FK → vehicle_types.id — vehicle the bonus credits apply to']
+  bonus_rides       integer     [not null, note: 'Snapshot of tier.bonus_rides at grant time']
+  expires_at        timestamptz [not null, note: 'Inherits validity window from the triggering package or 30 days for REGISTRATION.']
+  granted_at        timestamptz [not null, default: `now()`]
+
+  indexes {
+    (driver_id, granted_at) [name: 'idx_bonus_grants_driver']
+    tier_id [name: 'idx_bonus_grants_tier']
+    (trigger_credit_id) [name: 'idx_bonus_grants_credit', note: 'partial WHERE trigger_credit_id IS NOT NULL']
+    (driver_id, tier_id) [unique, name: 'uniq_bonus_registration', note: 'partial WHERE trigger_credit_id IS NULL — prevents duplicate REGISTRATION grants']
+  }
+
+  Note: 'APPEND-ONLY audit log. bonus_grants + corresponding driver_ride_credits inserted atomically in a single transaction. Double-grant prevented by partial unique index.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HOT ZONES & DEMAND HEATMAP
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -605,19 +650,10 @@ Table wallet_transactions {
 
 Table platform_settings {
   key        varchar(100) [pk, note: 'commission | negotiation | fares | regions | integrations | notifications | payment']
-  value      jsonb        [not null, note: 'Structured JSON per key. See notes for each key shape.']
+  value      jsonb        [not null, note: 'Structured JSON per key. commission={moto:15,...} negotiation={maxRounds:3,...} fares={motoBase:500,...} payment={mtn_momo_number,airtel_number,instructions}']
   updated_at timestamptz  [not null, default: `now()`]
 
-  Note: '''
-    Key shapes (current):
-    commission    → {"moto":15,"cab":15,"hilux":12,"fuso":10,"tuk_tuk":12}
-    negotiation   → {"maxRounds":3,"responseTimeoutSec":60,"maskedCallSec":120}
-    fares         → {"motoBase":500,"motoPerKm":200,...}
-    regions       → [{"id":"kigali","name":"Kigali","status":"Active","driverCount":0},...]
-    integrations  → {"mtnMomo":true,"airtelMoney":true,"mapsProvider":"Google","sms":true,"email":true}
-    notifications → {"sosToOps":true,"sosToAdmins":true,"payoutSummary":true,...}
-    payment       → {"mtn_momo_number":"078...","airtel_number":"073...","instructions":"Pay to the number shown..."}
-  '''
+  Note: 'Key-value config store. Each key has a fixed JSON shape managed by admin. payment key stores MoMo numbers shown to drivers before wallet top-up.'
 }
 
 
@@ -693,7 +729,7 @@ Table route_cache {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Table analytics_events {
-  id          bigint       [pk, increment, note: 'BIGSERIAL — lower overhead than UUID at high insert rates']
+  id          bigint       [pk, not null, increment, note: 'BIGSERIAL — lower overhead than UUID at high insert rates']
   event_type  varchar(100) [not null]
   actor_role  varchar(20)
   actor_id    uuid
@@ -785,6 +821,13 @@ Ref: ride_packages.vehicle_type_id > vehicle_types.id
 Ref: driver_ride_credits.driver_id > users.id
 Ref: driver_ride_credits.package_id > ride_packages.id
 Ref: driver_ride_credits.vehicle_type_id > vehicle_types.id
+
+// Bonus system
+Ref: bonus_tiers.vehicle_type_id > vehicle_types.id
+Ref: bonus_grants.driver_id > users.id
+Ref: bonus_grants.tier_id > bonus_tiers.id
+Ref: bonus_grants.trigger_credit_id > driver_ride_credits.id
+Ref: bonus_grants.vehicle_type_id > vehicle_types.id
 
 // Hot zones
 Ref: zone_demand_stats.vehicle_type_id > vehicle_types.id
