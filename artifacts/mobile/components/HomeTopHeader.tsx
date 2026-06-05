@@ -182,7 +182,7 @@ export function HomeTopHeader({
   };
 
   const handleDriverCtaPress = () => {
-    router.push('/join-driver');
+    router.push('/driver-onboarding');
   };
 
   const handleProfilePress = () => {
@@ -204,7 +204,7 @@ export function HomeTopHeader({
           ]}
           accessibilityRole="button"
           accessibilityLabel={ctaMessage}
-          accessibilityHint="Opens driver signup"
+          accessibilityHint="Opens driver onboarding"
         >
           <View style={styles.ctaAvatarInset}>
             {renderAvatar(CTA_AVATAR_SIZE, true)}

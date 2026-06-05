@@ -58,6 +58,7 @@ const DOCS: { key: DocumentKey; label: string; hint: string }[] = [
 
 const VEHICLE_QUESTIONS: Record<VehicleType, { field: string; label: string; placeholder: string; keyboardType?: 'numeric' }[]> = {
   moto: [],
+  rifani: [],
   cab: [{ field: 'passengerSeats', label: 'How many passenger seats does your vehicle have?', placeholder: 'e.g. 4', keyboardType: 'numeric' }],
   hilux: [{ field: 'passengerSeats', label: 'How many passenger seats does your vehicle have?', placeholder: 'e.g. 5', keyboardType: 'numeric' }],
   fuso: [{ field: 'loadCapacityKg', label: 'Maximum load capacity (kg)', placeholder: 'e.g. 5000', keyboardType: 'numeric' }],
@@ -596,7 +597,7 @@ export default function DriverOnboarding() {
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</Text>
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Vehicle Type</Text>
             <View style={styles.vehicleGrid}>
-              {(['moto', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(v => (
+              {(['moto', 'rifani', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(v => (
                 <VehicleCard
                   key={v}
                   type={v}

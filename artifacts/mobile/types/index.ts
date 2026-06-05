@@ -1,4 +1,4 @@
-export type VehicleType = 'moto' | 'cab' | 'fuso' | 'hilux';
+export type VehicleType = 'moto' | 'rifani' | 'cab' | 'fuso' | 'hilux';
 export type AppMode = 'customer' | 'driver';
 export type LocationType = 'precise' | 'generic';
 
@@ -119,6 +119,7 @@ export interface Ride {
 
 export const VEHICLE_MCI: Record<VehicleType, string> = {
   moto: 'moped',
+  rifani: 'moped',
   cab: 'car-side',
   hilux: 'pickup-truck',
   fuso: 'truck-trailer',
@@ -126,6 +127,7 @@ export const VEHICLE_MCI: Record<VehicleType, string> = {
 
 export const VEHICLE_LABELS: Record<VehicleType, string> = {
   moto: 'Moto',
+  rifani: 'Rifani',
   cab: 'Cab',
   fuso: 'Fuso',
   hilux: 'Hilux',
@@ -133,6 +135,7 @@ export const VEHICLE_LABELS: Record<VehicleType, string> = {
 
 export const VEHICLE_LABELS_FULL: Record<VehicleType, string> = {
   moto: 'Moto Bike',
+  rifani: 'Rifani',
   cab: 'Cab Taxi',
   fuso: 'Heavy Fuso',
   hilux: 'Light Hilux',
@@ -140,6 +143,7 @@ export const VEHICLE_LABELS_FULL: Record<VehicleType, string> = {
 
 export const VEHICLE_ICONS: Record<VehicleType, string> = {
   moto: 'motorcycle',
+  rifani: 'motorcycle',
   cab: 'car',
   fuso: 'truck',
   hilux: 'truck',
@@ -147,6 +151,7 @@ export const VEHICLE_ICONS: Record<VehicleType, string> = {
 
 export const VEHICLE_BASE_FARE: Record<VehicleType, number> = {
   moto: 500,
+  rifani: 600,
   cab: 1500,
   fuso: 5000,
   hilux: 3000,

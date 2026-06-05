@@ -44,6 +44,27 @@ export function sampleRouteCoordsForFit(
 }
 
 /**
+ * Extend Directions geometry so the drawn line starts/ends at pin-tip coordinates.
+ * Pins stay on the customer-picked point; road nodes may be slightly offset on the network.
+ */
+export function routePolylineThroughPinTips(
+  geometry: Coords[],
+  startPin: Coords | null,
+  endPin: Coords | null,
+): Coords[] {
+  if (geometry.length < 2) {
+    if (startPin && endPin) return [startPin, endPin];
+    if (startPin) return [startPin];
+    if (endPin) return [endPin];
+    return geometry;
+  }
+  const line = [...geometry];
+  if (startPin) line[0] = startPin;
+  if (endPin) line[line.length - 1] = endPin;
+  return line;
+}
+
+/**
  * First/last point of a driving route polyline (usually on the nearest road).
  * Use for route geometry only — not for customer pickup/dropoff pins (use stored RideLocation coords).
  */
