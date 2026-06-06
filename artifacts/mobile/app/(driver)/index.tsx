@@ -357,7 +357,7 @@ export default function DriverDashboard() {
 
           <View style={styles.requestActions}>
             <TouchableOpacity
-              style={[styles.reqBtn, { backgroundColor: colors.destructive + '20', borderColor: colors.destructive }]}
+              style={[styles.reqBtn, { backgroundColor: colors.destructiveHex + '20', borderColor: colors.destructive }]}
               onPress={handleDecline}
             >
               <Feather name="x" size={22} color={colors.destructive} />

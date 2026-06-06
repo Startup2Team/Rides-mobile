@@ -235,7 +235,7 @@ export default function DriverNegotiationScreen() {
 
       <View style={[styles.actionPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 10) }]}>
         {driverLimitReached && (
-          <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '12' }]}>
+          <View style={[styles.limitBanner, { backgroundColor: colors.destructiveHex + '12' }]}>
             <Feather name="alert-circle" size={15} color={colors.destructive} />
             <Text style={[styles.limitText, { color: colors.destructive }]}>Offer limit reached. Use Call to continue.</Text>
           </View>

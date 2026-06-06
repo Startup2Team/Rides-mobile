@@ -52,7 +52,7 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
         <StatRow label="Rides Completed" value={String(dp.dailyRides)} icon="navigation" />
-        <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructive} />
+        <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
         <StatRow label="Gross Earnings" value={`${todayGross.toLocaleString()} RWF`} icon="dollar-sign" color={colors.primaryHex} />
         <StatRow label="Platform Fee" value={`-${platformFee.toLocaleString()} RWF`} icon="percent" />
         <StatRow label="Today's Payout" value={`${todayPayout.toLocaleString()} RWF`} icon="credit-card" color={colors.primaryHex} />
