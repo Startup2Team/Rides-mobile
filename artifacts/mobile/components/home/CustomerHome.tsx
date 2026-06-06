@@ -37,6 +37,7 @@ import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
 import { useToast } from '@/context/ToastContext';
 import { geocodeAddress, GeocodeSuggestion } from '@/services/geocoding';
+import { isAbortedNetworkRequest } from '@/services/networkRequest';
 import {
   arePickupAndDropoffSame,
   formatReverseGeocodeAddress,
@@ -146,6 +147,15 @@ export default function CustomerHome() {
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const geocodeRequestId = useRef(0);
+  const geocodeAbortController = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+      geocodeAbortController.current?.abort();
+      geocodeRequestId.current += 1;
+    },
+    [],
+  );
   const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
   const sheetDragStart = useRef(0);
   const bookingCloseRef = useRef<CloseButtonHandle>(null);
@@ -583,6 +593,11 @@ export default function CustomerHome() {
   };
 
   const closeLocationSearch = () => {
+    if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+    geocodeTimer.current = null;
+    geocodeAbortController.current?.abort();
+    geocodeAbortController.current = null;
+    geocodeRequestId.current += 1;
     setLocationSearchTarget(null);
     setLocationSearchText('');
     setLocationSearchLoading(false);
@@ -609,8 +624,12 @@ export default function CustomerHome() {
   const schedulePlaceSearch = useCallback(
     (text: string) => {
       if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+      geocodeTimer.current = null;
+      geocodeAbortController.current?.abort();
+      geocodeAbortController.current = null;
       const trimmed = text.trim();
       if (trimmed.length < 2) {
+        geocodeRequestId.current += 1;
         setSuggestions([]);
         setLocationSearchLoading(false);
         return;
@@ -619,10 +638,26 @@ export default function CustomerHome() {
       const requestId = geocodeRequestId.current + 1;
       geocodeRequestId.current = requestId;
       geocodeTimer.current = setTimeout(async () => {
-        const results = await geocodeAddress(text, userLocation);
-        if (geocodeRequestId.current !== requestId) return;
-        setSuggestions(results);
-        setLocationSearchLoading(false);
+        geocodeTimer.current = null;
+        const controller = new AbortController();
+        geocodeAbortController.current = controller;
+        try {
+          const results = await geocodeAddress(text, userLocation, { signal: controller.signal });
+          if (geocodeRequestId.current !== requestId) return;
+          setSuggestions(results);
+        } catch (error) {
+          // Provider failures are reported and converted to existing empty-result fallbacks.
+          if (!isAbortedNetworkRequest(error) && geocodeRequestId.current === requestId) {
+            setSuggestions([]);
+          }
+        } finally {
+          if (geocodeAbortController.current === controller) {
+            geocodeAbortController.current = null;
+          }
+          if (geocodeRequestId.current === requestId) {
+            setLocationSearchLoading(false);
+          }
+        }
       }, 350);
     },
     [userLocation],
@@ -1581,6 +1616,9 @@ export default function CustomerHome() {
               }}
               onClearAddress={() => {
                 if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+                geocodeTimer.current = null;
+                geocodeAbortController.current?.abort();
+                geocodeAbortController.current = null;
                 geocodeRequestId.current += 1;
                 setEditingSavedAddress('');
                 setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));

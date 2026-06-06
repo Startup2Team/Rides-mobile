@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchRoute, RouteResult } from '@/services/mapbox';
 import { Coords } from '@/types';
 import { reportOperationalFailure } from '@/observability/monitoring';
+import { isAbortedNetworkRequest, NetworkRequestError } from '@/services/networkRequest';
 
 interface UseRouteResult {
   route: RouteResult | null;
@@ -64,11 +65,12 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setRoute(null);
 
-    fetchRoute(origin, destination)
+    fetchRoute(origin, destination, { signal: controller.signal })
       .then(result => {
         if (!cancelled) {
           cacheRoute(key, result);
@@ -77,15 +79,24 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
         }
       })
       .catch(err => {
-        if (!cancelled) {
+        if (!cancelled && !isAbortedNetworkRequest(err)) {
           console.warn('[useRoute] fetch failed:', err?.message);
-          reportOperationalFailure('map.route.fetch', err);
+          reportOperationalFailure('map.route.fetch', err, {
+            service: err instanceof NetworkRequestError ? err.service : 'mapbox',
+            operation: err instanceof NetworkRequestError ? err.operation : 'directions',
+            kind: err instanceof NetworkRequestError ? err.kind : 'unknown',
+            status: err instanceof NetworkRequestError ? err.status : undefined,
+            attempt: err instanceof NetworkRequestError ? err.attempt : undefined,
+          });
           setError(err instanceof Error ? err.message : 'Route fetch failed');
           setLoading(false);
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [
     origin?.latitude,
     origin?.longitude,
