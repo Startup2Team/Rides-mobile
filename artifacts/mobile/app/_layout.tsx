@@ -36,7 +36,6 @@ function RootLayoutNav() {
       <Stack.Screen name="negotiation" />
       <Stack.Screen name="ride" options={{ animation: 'none' }} />
       <Stack.Screen name="notifications" />
-      <Stack.Screen name="join-driver" />
       <Stack.Screen name="driver-onboarding" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />

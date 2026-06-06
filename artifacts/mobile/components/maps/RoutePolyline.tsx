@@ -25,7 +25,7 @@ export function RoutePolyline({
       coordinates={coordinates}
       strokeColor={color}
       strokeWidth={width}
-      lineCap="round"
+      lineCap="butt"
       lineJoin="round"
     />
   );

@@ -7,21 +7,11 @@ import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { showCancelSearchAlert } from '@/utils/cancelSearchAlert';
-import { VEHICLE_LABELS, VehicleType } from '@/types';
-
-const VEHICLE_IMAGES: Record<VehicleType, any> = {
-  moto: require('../assets/vehicle-markers/moto.png'),
-  cab: require('../assets/vehicle-markers/cab.png'),
-  hilux: require('../assets/vehicle-markers/hilux.png'),
-  fuso: require('../assets/vehicle-markers/fuso.png'),
-};
-
-const VEHICLE_IMAGE_STYLES: Record<VehicleType, { width: number; height: number }> = {
-  moto: { width: 66, height: 50 },
-  cab: { width: 62, height: 46 },
-  hilux: { width: 70, height: 46 },
-  fuso: { width: 72, height: 48 },
-};
+import {
+  VEHICLE_MAP_MARKER_IMAGES,
+  VEHICLE_SEARCHING_IMAGE_SIZE,
+} from '@/constants/vehicles';
+import { VEHICLE_LABELS } from '@/types';
 
 export default function SearchingScreen() {
   const colors = useColors();
@@ -140,8 +130,8 @@ export default function SearchingScreen() {
 
         <View style={[styles.centerDot, { backgroundColor: colors.primary, shadowColor: colors.primaryHex }]}>
           <Image
-            source={VEHICLE_IMAGES[vehicleType]}
-            style={[styles.vehicleImage, VEHICLE_IMAGE_STYLES[vehicleType]]}
+            source={VEHICLE_MAP_MARKER_IMAGES[vehicleType]}
+            style={[styles.vehicleImage, VEHICLE_SEARCHING_IMAGE_SIZE[vehicleType]]}
             resizeMode="contain"
           />
         </View>

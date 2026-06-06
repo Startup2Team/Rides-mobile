@@ -1,4 +1,4 @@
-export type VehicleType = 'moto' | 'cab' | 'fuso' | 'hilux';
+export type VehicleType = 'moto' | 'rifani' | 'cab' | 'fuso' | 'hilux';
 export type AppMode = 'customer' | 'driver';
 export type LocationType = 'precise' | 'generic';
 
@@ -119,6 +119,7 @@ export interface Ride {
 
 export const VEHICLE_MCI: Record<VehicleType, string> = {
   moto: 'moped',
+  rifani: 'moped',
   cab: 'car-side',
   hilux: 'pickup-truck',
   fuso: 'truck-trailer',
@@ -126,6 +127,7 @@ export const VEHICLE_MCI: Record<VehicleType, string> = {
 
 export const VEHICLE_LABELS: Record<VehicleType, string> = {
   moto: 'Moto',
+  rifani: 'Rifani',
   cab: 'Cab',
   fuso: 'Fuso',
   hilux: 'Hilux',
@@ -133,6 +135,7 @@ export const VEHICLE_LABELS: Record<VehicleType, string> = {
 
 export const VEHICLE_LABELS_FULL: Record<VehicleType, string> = {
   moto: 'Moto Bike',
+  rifani: 'Rifani',
   cab: 'Cab Taxi',
   fuso: 'Heavy Fuso',
   hilux: 'Light Hilux',
@@ -140,6 +143,7 @@ export const VEHICLE_LABELS_FULL: Record<VehicleType, string> = {
 
 export const VEHICLE_ICONS: Record<VehicleType, string> = {
   moto: 'motorcycle',
+  rifani: 'motorcycle',
   cab: 'car',
   fuso: 'truck',
   hilux: 'truck',
@@ -147,6 +151,7 @@ export const VEHICLE_ICONS: Record<VehicleType, string> = {
 
 export const VEHICLE_BASE_FARE: Record<VehicleType, number> = {
   moto: 500,
+  rifani: 600,
   cab: 1500,
   fuso: 5000,
   hilux: 3000,
@@ -169,6 +174,10 @@ export const MOCK_DRIVERS: MockDriver[] = [
   { id: 'd8', name: 'Olivier Niyonzima', phone: '+250788111008', vehicleType: 'moto', plateNumber: 'RAD 008 H', location: { latitude: -1.9400, longitude: 30.0530 }, rating: 4.6, eta: 5 },
   { id: 'd9', name: 'Alexis Rutaganda', phone: '+250788111009', vehicleType: 'moto', plateNumber: 'RAD 009 I', location: { latitude: -1.9320, longitude: 30.0610 }, rating: 4.7, eta: 7 },
   { id: 'd10', name: 'Fiston Nzeyimana', phone: '+250788111010', vehicleType: 'moto', plateNumber: 'RAD 010 J', location: { latitude: -1.9600, longitude: 30.0590 }, rating: 4.9, eta: 3 },
+
+  { id: 'd31', name: 'Rifani Uwase', phone: '+250788111031', vehicleType: 'rifani', plateNumber: 'RAF 001 A', location: { latitude: -1.9415, longitude: 30.0605 }, rating: 4.8, eta: 4 },
+  { id: 'd32', name: 'Emmanuel Niyonsaba', phone: '+250788111032', vehicleType: 'rifani', plateNumber: 'RAF 002 B', location: { latitude: -1.9495, longitude: 30.0675 }, rating: 4.7, eta: 5 },
+  { id: 'd33', name: 'Fabrice Habimana', phone: '+250788111033', vehicleType: 'rifani', plateNumber: 'RAF 003 C', location: { latitude: -1.9335, longitude: 30.0545 }, rating: 4.9, eta: 3 },
 
   { id: 'd11', name: 'Marie Uwimana', phone: '+250788111011', vehicleType: 'cab', plateNumber: 'RAC 001 B', location: { latitude: -1.9461, longitude: 30.0639 }, rating: 4.9, eta: 5 },
   { id: 'd12', name: 'Alice Mukamana', phone: '+250788111012', vehicleType: 'cab', plateNumber: 'RAC 002 B', location: { latitude: -1.9451, longitude: 30.0590 }, rating: 4.6, eta: 7 },
