@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { z } from 'zod';
+import { reportOperationalWarning } from '@/observability/monitoring';
 
 export const STORAGE_VERSION = 1;
 
@@ -15,6 +16,7 @@ export interface StorageLoadResult<T> {
 
 function warnStorage(key: string, reason: string, details?: unknown) {
   console.warn('[storage-validation]', { key, reason, details });
+  reportOperationalWarning('storage.validation', { key, reason });
 }
 
 export function serializeVersionedStorage<T>(data: T) {

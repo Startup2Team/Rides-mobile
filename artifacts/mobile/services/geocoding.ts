@@ -1,4 +1,5 @@
 import { Coords } from '@/types';
+import { reportOperationalFailure } from '@/observability/monitoring';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
 /** Required by OpenStreetMap Nominatim usage policy (https://operations.osmfoundation.org/policies/nominatim/). */
@@ -359,41 +360,46 @@ export async function geocodeAddress(
 ): Promise<GeocodeSuggestion[]> {
   if (!query || query.length < 2) return [];
 
-  const nearby = proximity ?? RWANDA_CENTER;
-  const trimmed = query.trim();
-  const streetAddress = isStreetAddressQuery(trimmed);
+  try {
+    const nearby = proximity ?? RWANDA_CENTER;
+    const trimmed = query.trim();
+    const streetAddress = isStreetAddressQuery(trimmed);
 
-  const nominatimQueries = streetAddress
-    ? buildAddressSearchQueries(trimmed)
-    : [trimmed];
+    const nominatimQueries = streetAddress
+      ? buildAddressSearchQueries(trimmed)
+      : [trimmed];
 
-  const nominatimResults: GeocodeSuggestion[] = [];
-  for (const q of nominatimQueries.slice(0, streetAddress ? 2 : 1)) {
-    const batch = await fetchNominatimSearch(q);
-    nominatimResults.push(...batch);
-  }
-
-  const mapboxTasks: Promise<GeocodeSuggestion[]>[] = [];
-  if (MAPBOX_TOKEN) {
-    mapboxTasks.push(
-      fetchSearchBoxForward(trimmed, nearby),
-      fetchLegacyGeocode(trimmed, nearby, { limit: 8 }),
-    );
-    if (streetAddress) {
-      mapboxTasks.push(
-        fetchLegacyGeocode(`${trimmed}, Kigali`, nearby, {
-          types: 'address,street,place',
-          limit: 6,
-        }),
-      );
+    const nominatimResults: GeocodeSuggestion[] = [];
+    for (const q of nominatimQueries.slice(0, streetAddress ? 2 : 1)) {
+      const batch = await fetchNominatimSearch(q);
+      nominatimResults.push(...batch);
     }
+
+    const mapboxTasks: Promise<GeocodeSuggestion[]>[] = [];
+    if (MAPBOX_TOKEN) {
+      mapboxTasks.push(
+        fetchSearchBoxForward(trimmed, nearby),
+        fetchLegacyGeocode(trimmed, nearby, { limit: 8 }),
+      );
+      if (streetAddress) {
+        mapboxTasks.push(
+          fetchLegacyGeocode(`${trimmed}, Kigali`, nearby, {
+            types: 'address,street,place',
+            limit: 6,
+          }),
+        );
+      }
+    }
+
+    const mapboxBatches = mapboxTasks.length > 0 ? await Promise.all(mapboxTasks) : [];
+    const mapboxFiltered = mapboxBatches
+      .flat()
+      .filter(item => !isLowQualityMapboxHit(trimmed, item));
+
+    const merged = dedupeSuggestions([...nominatimResults, ...mapboxFiltered]);
+    return rankForQuery(trimmed, merged).slice(0, 12);
+  } catch (error) {
+    reportOperationalFailure('map.geocoding.search', error);
+    throw error;
   }
-
-  const mapboxBatches = mapboxTasks.length > 0 ? await Promise.all(mapboxTasks) : [];
-  const mapboxFiltered = mapboxBatches
-    .flat()
-    .filter(item => !isLowQualityMapboxHit(trimmed, item));
-
-  const merged = dedupeSuggestions([...nominatimResults, ...mapboxFiltered]);
-  return rankForQuery(trimmed, merged).slice(0, 12);
 }

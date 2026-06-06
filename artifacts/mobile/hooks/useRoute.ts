@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchRoute, RouteResult } from '@/services/mapbox';
 import { Coords } from '@/types';
+import { reportOperationalFailure } from '@/observability/monitoring';
 
 interface UseRouteResult {
   route: RouteResult | null;
@@ -78,6 +79,7 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
       .catch(err => {
         if (!cancelled) {
           console.warn('[useRoute] fetch failed:', err?.message);
+          reportOperationalFailure('map.route.fetch', err);
           setError(err instanceof Error ? err.message : 'Route fetch failed');
           setLoading(false);
         }

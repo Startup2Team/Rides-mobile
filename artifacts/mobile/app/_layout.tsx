@@ -21,8 +21,10 @@ import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
+import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
 
 SplashScreen.preventAutoHideAsync();
+initializeMonitoring();
 
 const queryClient = new QueryClient();
 
@@ -82,7 +84,13 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
+      <ErrorBoundary
+        onError={(error, componentStack) => {
+          reportRuntimeError(error, 'react.error-boundary', {
+            hasComponentStack: componentStack.length > 0,
+          });
+        }}
+      >
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <RideProvider>

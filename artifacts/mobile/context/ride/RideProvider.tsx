@@ -48,6 +48,7 @@ import {
   JOURNEY_TRACKING_NOISE,
   NEGOTIATION_RESPONSE_DELAY_MS,
 } from './rideConstants';
+import { reportOperationalFailure } from '@/observability/monitoring';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -290,7 +291,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       setRideHistory(hist => [completed, ...hist]);
-      void appendRideHistory(completed);
+      void appendRideHistory(completed).catch(error => {
+        reportOperationalFailure('ride.history.persist', error, { status: completed.status });
+      });
       return null;
     });
     setDriverLocation(null);
@@ -336,7 +339,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     try {
       const history = await loadRideHistory();
       if (history) setRideHistory(history);
-    } catch {
+    } catch (error) {
+      reportOperationalFailure('ride.history.load', error);
     }
   }, []);
 

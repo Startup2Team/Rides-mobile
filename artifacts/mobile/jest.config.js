@@ -12,7 +12,7 @@ module.exports = {
     '^.+\\.[jt]sx?$': ['babel-jest', { presets: ['babel-preset-expo'] }],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!\\.pnpm/(react-native@|@react-native\\+|@testing-library\\+react-native@)|((jest-)?react-native|@react-native(-community)?|@testing-library/react-native)/)',
+    'node_modules/(?!\\.pnpm/(expo@|react-native@|@react-native\\+|@testing-library\\+react-native@)|(expo|jest-react-native|react-native|@react-native(-community)?|@testing-library/react-native)/)',
   ],
   testMatch: ['<rootDir>/**/*.test.ts', '<rootDir>/**/*.test.tsx'],
 };

@@ -1,5 +1,20 @@
 global.__DEV__ = true;
 
+jest.mock('@sentry/react-native', () => {
+  const scope = {
+    setTag: jest.fn(),
+    setContext: jest.fn(),
+  };
+
+  return {
+    init: jest.fn(),
+    captureException: jest.fn(),
+    captureMessage: jest.fn(),
+    withScope: jest.fn(callback => callback(scope)),
+    __scope: scope,
+  };
+});
+
 jest.mock('@react-native-async-storage/async-storage', () => {
   const storage = new Map();
 
