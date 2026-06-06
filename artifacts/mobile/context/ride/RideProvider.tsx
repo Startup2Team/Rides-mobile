@@ -27,6 +27,7 @@ import {
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
 import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
+import { createRideTimerManager, type RideSessionToken } from './rideTimerManager';
 import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   ARRIVING_TRACKING_INTERVAL_MS,
@@ -55,27 +56,30 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const matchDriverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const driverOfferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMatchingPausedRef = useRef(false);
+  const timerManagerRef = useRef(createRideTimerManager());
+  const timers = timerManagerRef.current;
 
   const clearSearchTimers = useCallback(() => {
-    if (matchDriverTimeoutRef.current) clearTimeout(matchDriverTimeoutRef.current);
-    if (driverOfferTimeoutRef.current) clearTimeout(driverOfferTimeoutRef.current);
+    timers.clearTimeout(matchDriverTimeoutRef.current);
+    timers.clearTimeout(driverOfferTimeoutRef.current);
     matchDriverTimeoutRef.current = null;
     driverOfferTimeoutRef.current = null;
-  }, []);
+  }, [timers]);
 
   const assignMatchedDriver = useCallback((
     vehicleType: VehicleType,
     pickup: RideLocation,
     destination: RideLocation,
     dist: number,
+    session: RideSessionToken,
   ) => {
-    if (isMatchingPausedRef.current) return;
+    if (!timers.isActive(session) || isMatchingPausedRef.current) return;
 
     const picked = pickMockDriver(vehicleType);
     const initialMessages = buildInitialNegotiationMessages(pickup, destination);
 
     void buildDriverWithUploadedPhoto(picked).then(driver => {
-      if (isMatchingPausedRef.current) return;
+      if (!timers.isActive(session) || isMatchingPausedRef.current) return;
 
       setDriverLocation(driver.location);
 
@@ -92,7 +96,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         };
       });
 
-      driverOfferTimeoutRef.current = setTimeout(() => {
+      driverOfferTimeoutRef.current = timers.scheduleTimeout(() => {
         driverOfferTimeoutRef.current = null;
         if (isMatchingPausedRef.current) return;
         setCurrentRide(prev => {
@@ -100,9 +104,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           const driverMsg = buildInitialDriverOffer(vehicleType, dist);
           return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
         });
-      }, DRIVER_OFFER_DELAY_MS);
+      }, DRIVER_OFFER_DELAY_MS, session);
     });
-  }, []);
+  }, [timers]);
 
   const scheduleDriverMatch = useCallback((
     vehicleType: VehicleType,
@@ -112,11 +116,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     delayMs?: number,
   ) => {
     const delay = delayMs ?? getDriverMatchDelay();
-    matchDriverTimeoutRef.current = setTimeout(() => {
+    const session = timers.currentSession();
+    matchDriverTimeoutRef.current = timers.scheduleTimeout(() => {
       matchDriverTimeoutRef.current = null;
-      assignMatchedDriver(vehicleType, pickup, destination, dist);
-    }, delay);
-  }, [assignMatchedDriver]);
+      assignMatchedDriver(vehicleType, pickup, destination, dist, session);
+    }, delay, session);
+  }, [assignMatchedDriver, timers]);
 
   const pauseDriverMatching = useCallback(() => {
     isMatchingPausedRef.current = true;
@@ -187,29 +192,34 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
+    timers.startSession();
     clearSearchTimers();
     setCurrentRide(ride);
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
-  }, [clearSearchTimers, currentRide, scheduleDriverMatch]);
+  }, [clearSearchTimers, currentRide, scheduleDriverMatch, timers]);
 
   const cancelRide = useCallback(() => {
+    const session = timers.endSession();
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
     clearSearchTimers();
-    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
     setDriverLocation(null);
     setRestoreBookingOnHomeFocus(true);
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
-    setTimeout(() => setCurrentRide(null), CANCELLED_RIDE_CLEAR_DELAY_MS);
-  }, [clearSearchTimers]);
+    timers.scheduleTimeout(() => {
+      setCurrentRide(prev => prev?.status === 'cancelled' ? null : prev);
+    }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
+  }, [clearSearchTimers, timers]);
 
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => addCustomerCounterOffer(prev, amount));
 
-    setTimeout(() => {
+    timers.scheduleTimeout(() => {
       setCurrentRide(prev => respondToCustomerCounterOffer(prev, amount));
     }, NEGOTIATION_RESPONSE_DELAY_MS);
-  }, []);
+  }, [timers]);
 
   const acceptDriverOffer = useCallback(() => {
     setCurrentRide(acceptLatestDriverOffer);
@@ -230,30 +240,36 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const startLiveTracking = useCallback(() => {
     let step = 0;
-    driverIntervalRef.current = setInterval(() => {
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = timers.scheduleInterval(() => {
       step++;
       setDriverLocation(prev => addTrackingNoise(prev, ARRIVING_TRACKING_NOISE));
       if (step === ARRIVING_TRACKING_STEPS) {
         setCurrentRide(markRideArrived);
-        if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+        timers.clearInterval(driverIntervalRef.current);
+        driverIntervalRef.current = null;
       }
     }, ARRIVING_TRACKING_INTERVAL_MS);
-  }, []);
+  }, [timers]);
 
   const markArrived = useCallback(() => {
-    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
     setCurrentRide(markRideArrived);
-  }, []);
+  }, [timers]);
 
   const startJourney = useCallback(() => {
     setCurrentRide(startRideJourney);
-    driverIntervalRef.current = setInterval(() => {
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = timers.scheduleInterval(() => {
       setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
     }, JOURNEY_TRACKING_INTERVAL_MS);
-  }, []);
+  }, [timers]);
 
   const completeRide = useCallback(() => {
-    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    timers.endSession();
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
     setCurrentRide(prev => {
       if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
@@ -262,15 +278,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       return null;
     });
     setDriverLocation(null);
-  }, []);
+  }, [timers]);
 
   const acceptRideRequest = useCallback(() => {
     if (!pendingRequest) return;
+    timers.startSession();
     const request = pendingRequest;
     const initialMessages = buildInitialNegotiationMessages(request.pickup, request.destination);
     setCurrentRide({ ...request, status: 'negotiating', negotiation: initialMessages });
     setPendingRequest(null);
-  }, [pendingRequest]);
+  }, [pendingRequest, timers]);
 
   const declineRideRequest = useCallback(() => {
     setPendingRequest(null);
@@ -287,13 +304,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (currentRide?.status === 'confirmed') {
-      const timer = setTimeout(() => {
+      const timer = timers.scheduleTimeout(() => {
         updateStatus('arriving');
         startLiveTracking();
       }, CONFIRMED_RIDE_START_DELAY_MS);
-      return () => clearTimeout(timer);
+      return () => timers.clearTimeout(timer);
     }
-  }, [currentRide?.status === 'confirmed']);
+  }, [currentRide?.status === 'confirmed', startLiveTracking, timers]);
+
+  React.useEffect(() => () => {
+    timers.endSession();
+  }, [timers]);
 
   const loadHistory = useCallback(async () => {
     try {
