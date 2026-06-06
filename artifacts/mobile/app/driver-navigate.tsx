@@ -76,6 +76,7 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 
 export default function DriverNavigateScreen() {
   const colors = useColors();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
@@ -469,7 +470,7 @@ export default function DriverNavigateScreen() {
                 style={[
                   styles.cancelRideBtn,
                   {
-                    backgroundColor: isCustomerLate ? colors.destructive + '20' : colors.muted,
+                    backgroundColor: isCustomerLate ? colors.destructiveHex + '20' : colors.muted,
                     borderColor: isCustomerLate ? colors.destructive : colors.border,
                   },
                 ]}
@@ -485,7 +486,7 @@ export default function DriverNavigateScreen() {
         {phase === 'inprogress' && (
           <View style={styles.waitingActions}>
             <TouchableOpacity
-              style={[styles.cancelRideBtn, { backgroundColor: colors.destructive + '15', borderColor: colors.destructive }]}
+              style={[styles.cancelRideBtn, { backgroundColor: colors.destructiveHex + '15', borderColor: colors.destructive }]}
               onPress={handleEmergencyEnd}
             >
               <Feather name="alert-octagon" size={16} color={colors.destructive} />

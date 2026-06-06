@@ -224,7 +224,7 @@ export default function EditProfileScreen() {
 
         {/* Danger zone */}
         <TouchableOpacity
-          style={[styles.dangerRow, { borderColor: colors.destructive + '40' }]}
+          style={[styles.dangerRow, { borderColor: colors.destructiveHex + '40' }]}
           activeOpacity={0.7}
           onPress={handleDeleteAccount}
         >
