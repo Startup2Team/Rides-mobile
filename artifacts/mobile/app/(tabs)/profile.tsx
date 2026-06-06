@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -20,9 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
-import { STORAGE_KEYS } from '@/constants/storage';
-
-const PROFILE_IMAGE_KEY = STORAGE_KEYS.profileImage;
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
 function MenuItem({
   icon,
@@ -83,8 +80,8 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      AsyncStorage.getItem(PROFILE_IMAGE_KEY).then(uri => {
-        if (active) setProfileImage(uri);
+      loadStoredProfileImage().then(stored => {
+        if (active) setProfileImage(stored.data);
       });
       return () => {
         active = false;

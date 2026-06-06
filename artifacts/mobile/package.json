@@ -84,6 +84,7 @@
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-navigation/native": "^7.2.5",
     "expo-modules-core": "~3.0.30",
+    "expo-secure-store": "~15.0.8",
     "expo-store-review": "~9.0.9",
     "invariant": "^2.2.4",
     "react-native-maps": "1.20.1",

@@ -38,6 +38,16 @@ export const userSchema = z.object({
   createdAt: z.string(),
 }).passthrough();
 
+export const paymentMethodsSchema = z.array(z.object({
+  id: z.string(),
+  provider: z.enum(['mtn', 'airtel', 'cash']),
+  label: z.string(),
+  phoneNumber: z.string().optional(),
+  isDefault: z.boolean(),
+}).passthrough());
+
+export const profileImageSchema = z.string();
+
 export const driverProfileSchema = z.object({
   vehicleType: vehicleTypeSchema,
   plateNumber: z.string(),
