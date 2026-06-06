@@ -1,7 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -14,10 +13,10 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { SaveLocationSheet } from '@/components/SaveLocationSheet';
 import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
+import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { RideLocation, VEHICLE_LABELS } from '@/types';
-import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 
 function formatRideDate(value: string) {
   return new Date(value).toLocaleDateString('en-RW', {
@@ -136,10 +135,6 @@ export default function RideDetailScreen() {
   const dateStr = formatRideDate(completedAt);
   const timeStr = formatRideTime(completedAt);
   const fare = ride.agreedFare ?? ride.suggestedFare;
-  const driverImage = ride.driver
-    ? resolveDriverProfileImage(ride.driver)
-    : null;
-
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <GlassHeader title="Ride Details" />
@@ -232,13 +227,12 @@ export default function RideDetailScreen() {
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>DRIVER</Text>
             <View style={[styles.card, { backgroundColor: colors.card }]}>
               <View style={styles.driverRow}>
-                {driverImage ? (
-                  <Image source={{ uri: driverImage }} style={styles.driverAvatarImage} />
-                ) : (
-                  <View style={styles.driverAvatar}>
-                    <Feather name="user" size={24} color={colors.primaryHex} />
-                  </View>
-                )}
+                <ProfileAvatarCircle
+                  size={44}
+                  initial={ride.driver.name.trim()[0]?.toUpperCase() ?? '?'}
+                  imageUri={ride.driver.profileImage ?? null}
+                  accessibilityLabel={`${ride.driver.name} profile photo`}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.driverName, { color: colors.foreground }]}>{ride.driver.name}</Text>
                   <Text style={[styles.driverSub, { color: colors.mutedForeground }]}>
@@ -320,8 +314,6 @@ const styles = StyleSheet.create({
   detailValue: { maxWidth: '48%', fontSize: 14, fontFamily: 'Inter_700Bold', textAlign: 'right' },
   rowDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  driverAvatar: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  driverAvatarImage: { width: 44, height: 44, borderRadius: 22 },
   driverName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   driverSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   ratingBadge: {

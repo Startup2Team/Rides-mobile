@@ -1422,7 +1422,7 @@ export default function CustomerHome() {
           ]}
         >
           <Text style={[styles.greeting, { color: colors.foreground }]}>
-            Hi {user?.name?.split(' ')[0]} ðŸ‘‹
+            Hi {user?.name?.split(' ')[0]} 👋
           </Text>
           <Text style={[styles.selectRide, { color: colors.mutedForeground }]}>
             Select your ride
