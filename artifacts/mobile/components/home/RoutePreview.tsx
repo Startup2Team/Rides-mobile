@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { Marker, Polyline } from 'react-native-maps';
 import {
   getLocationMapPinCenterOffset,
@@ -7,8 +7,9 @@ import {
 } from '@/components/maps/LocationMapPin';
 import type { Coords } from '@/types';
 import type { AppMapType } from './homeUtils';
+import { ROUTE_DRAW_INTERVAL_MS, ROUTE_DRAW_STEP, sliceRouteByProgress } from './homeUtils';
 
-export function RoutePreview({
+function RoutePreviewComponent({
   coordinates,
   color,
   pickup,
@@ -25,11 +26,37 @@ export function RoutePreview({
   showDestination: boolean;
   mapType: AppMapType;
 }) {
+  const [progress, setProgress] = useState(0);
+  const animatedCoordinates = useMemo(
+    () => coordinates.length < 2
+      ? []
+      : sliceRouteByProgress(coordinates, 0, Math.min(progress, 1)),
+    [coordinates, progress],
+  );
+
+  useEffect(() => {
+    if (coordinates.length < 2) {
+      setProgress(0);
+      return;
+    }
+    setProgress(0);
+    const interval = setInterval(() => {
+      setProgress(previous => {
+        if (previous >= 1) {
+          clearInterval(interval);
+          return 1;
+        }
+        return Math.min(previous + ROUTE_DRAW_STEP, 1);
+      });
+    }, ROUTE_DRAW_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [coordinates]);
+
   return (
     <>
-      {coordinates.length > 1 && (
+      {animatedCoordinates.length > 1 && (
         <Polyline
-          coordinates={coordinates}
+          coordinates={animatedCoordinates}
           strokeColor={color}
           strokeWidth={4}
           lineCap="butt"
@@ -59,3 +86,5 @@ export function RoutePreview({
     </>
   );
 }
+
+export const RoutePreview = memo(RoutePreviewComponent);

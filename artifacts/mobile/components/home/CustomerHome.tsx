@@ -188,7 +188,7 @@ export default function CustomerHome() {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
 
-  const centerMapOnUser = (duration = 700, panelHeightOverride?: number) => {
+  const centerMapOnUser = useCallback((duration = 700, panelHeightOverride?: number) => {
     const panelHeight = panelHeightOverride ?? (showBooking ? bookingPanelMapInset : homePanelMapInset);
     const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     mapRef.current?.animateToRegion(
@@ -200,7 +200,13 @@ export default function CustomerHome() {
       },
       duration,
     );
-  };
+  }, [
+    bookingPanelMapInset,
+    homePanelMapInset,
+    showBooking,
+    userLocation.latitude,
+    userLocation.longitude,
+  ]);
 
   const centerPickerOnUser = () => {
     pickerMapRef.current?.animateToRegion(
@@ -452,7 +458,7 @@ export default function CustomerHome() {
     route,
     routeLoading,
     routeFitCoords,
-    animatedRouteCoords,
+    routeLineCoords,
     shouldShowBookingRoute,
     routePinPositions,
     centerRouteInVisibleMap,
@@ -1014,13 +1020,33 @@ export default function CustomerHome() {
       .slice(0, 5);
   }, [rideHistory]);
 
-  const homeMapLatitudeOffset = (homePanelMapInset / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
-  const homeInitialRegion = {
-    latitude: userLocation.latitude - homeMapLatitudeOffset,
-    longitude: userLocation.longitude,
-    latitudeDelta: HOME_LOCATION_DELTA,
-    longitudeDelta: HOME_LOCATION_DELTA,
-  };
+  const homeInitialRegion = useMemo(() => {
+    const latitudeOffset = (homePanelMapInset / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
+    return {
+      latitude: userLocation.latitude - latitudeOffset,
+      longitude: userLocation.longitude,
+      latitudeDelta: HOME_LOCATION_DELTA,
+      longitudeDelta: HOME_LOCATION_DELTA,
+    };
+  }, [homePanelMapInset, userLocation.latitude, userLocation.longitude]);
+  const handleHomeMapReady = useCallback(() => {
+    setIsMapReady(true);
+    if (routeFitCoords.length > 1 && showBooking && destination) {
+      requestAnimationFrame(() =>
+        centerRouteInVisibleMap(routeFitCoords, EXPANDED_PANEL_HEIGHT),
+      );
+    } else if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
+      hasCenteredOnUserRef.current = true;
+      centerMapOnUser(300);
+    }
+  }, [
+    centerMapOnUser,
+    centerRouteInVisibleMap,
+    destination,
+    hasPreciseRouteLocations,
+    routeFitCoords,
+    showBooking,
+  ]);
 
   if (locLoading) {
     return (
@@ -1039,18 +1065,8 @@ export default function CustomerHome() {
         mapRef={mapRef}
         initialRegion={homeInitialRegion}
         mapType={mapType}
-        onMapReady={() => {
-          setIsMapReady(true);
-          if (routeFitCoords.length > 1 && showBooking && destination) {
-            requestAnimationFrame(() =>
-              centerRouteInVisibleMap(routeFitCoords, EXPANDED_PANEL_HEIGHT),
-            );
-          } else if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
-            hasCenteredOnUserRef.current = true;
-            centerMapOnUser(300);
-          }
-        }}
-        routeCoordinates={animatedRouteCoords}
+        onMapReady={handleHomeMapReady}
+        routeCoordinates={routeLineCoords}
         routeColor={colors.destructiveHex}
         pickup={routePinPositions.pickup}
         destination={routePinPositions.destination}

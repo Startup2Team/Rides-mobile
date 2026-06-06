@@ -1,4 +1,4 @@
-import React, { type RefObject } from 'react';
+import React, { memo, type RefObject } from 'react';
 import { StyleSheet, Text, View, type ColorValue } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import type { Coords, VehicleType } from '@/types';
@@ -7,7 +7,7 @@ import { darkMapStyle, styles } from './homeStyles';
 import type { AppMapType } from './homeUtils';
 import { RoutePreview } from './RoutePreview';
 
-export function HomeMap({
+function HomeMapComponent({
   mapRef,
   initialRegion,
   mapType,
@@ -77,3 +77,5 @@ export function HomeMap({
     </MapView>
   );
 }
+
+export const HomeMap = memo(HomeMapComponent);

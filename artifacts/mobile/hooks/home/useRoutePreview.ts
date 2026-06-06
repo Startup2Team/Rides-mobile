@@ -2,16 +2,15 @@ import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react
 import { InteractionManager, Platform } from 'react-native';
 import MapView from 'react-native-maps';
 import { useRoute } from '@/hooks/useRoute';
-import type { RideLocation } from '@/types';
+import type { Coords, RideLocation } from '@/types';
 import { routePolylineThroughPinTips, sampleRouteCoordsForFit } from '@/utils/mapUtils';
 import {
   BOOKING_MAP_TOP_OVERLAY,
   EXPANDED_PANEL_HEIGHT,
-  ROUTE_DRAW_INTERVAL_MS,
-  ROUTE_DRAW_STEP,
   ROUTE_FIT_SIDE_PADDING,
-  sliceRouteByProgress,
 } from '@/components/home/homeUtils';
+
+const EMPTY_COORDINATES: Coords[] = [];
 
 export function useRoutePreview({
   pickup,
@@ -39,35 +38,45 @@ export function useRoutePreview({
     destination !== null &&
     pickup.locationType !== 'generic' &&
     destination.locationType !== 'generic';
+  const pickupCoords = useMemo(
+    () => ({ latitude: pickup.latitude, longitude: pickup.longitude }),
+    [pickup.latitude, pickup.longitude],
+  );
+  const destinationCoords = useMemo(
+    () => destination
+      ? { latitude: destination.latitude, longitude: destination.longitude }
+      : null,
+    [destination?.latitude, destination?.longitude],
+  );
   const { route, loading: routeLoading } = useRoute(
-    hasPreciseRouteLocations ? pickup : null,
-    hasPreciseRouteLocations ? destination : null,
+    hasPreciseRouteLocations ? pickupCoords : null,
+    hasPreciseRouteLocations ? destinationCoords : null,
   );
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
-  const [routeAnimProgress, setRouteAnimProgress] = useState(0);
   const clearRoutePreview = useCallback(() => {
     setRouteCoords([]);
-    setRouteAnimProgress(0);
   }, []);
 
   const routePreviewCoords = useMemo(
-    () => destination ? [pickup, destination] : [],
-    [destination, pickup],
+    () => destinationCoords
+      ? [pickupCoords, destinationCoords!]
+      : EMPTY_COORDINATES,
+    [destinationCoords, pickupCoords],
   );
-  const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : [];
+  const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : EMPTY_COORDINATES;
   const routeCenterCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
   const routeFitCoords = useMemo(() => {
-    if (routeCenterCoords.length < 2) return [];
-    if (!destination) return sampleRouteCoordsForFit(routeCenterCoords);
-    return sampleRouteCoordsForFit([pickup, ...routeCenterCoords, destination]);
-  }, [destination, pickup, routeCenterCoords]);
+    if (routeCenterCoords.length < 2) return EMPTY_COORDINATES;
+    if (!destinationCoords) return sampleRouteCoordsForFit(routeCenterCoords);
+    return sampleRouteCoordsForFit([pickupCoords, ...routeCenterCoords, destinationCoords]);
+  }, [destinationCoords, pickupCoords, routeCenterCoords]);
 
   const centerRouteInVisibleMap = useCallback((
     coords: { latitude: number; longitude: number }[],
     panelHeightOverride?: number,
   ) => {
     if (!isMapReady || !showBooking || coords.length < 2) return;
-    const panelHeight = panelHeightOverride ?? (destination ? EXPANDED_PANEL_HEIGHT : bookingPanelMapInset);
+    const panelHeight = panelHeightOverride ?? (destinationCoords ? EXPANDED_PANEL_HEIGHT : bookingPanelMapInset);
     mapRef.current?.fitToCoordinates(coords, {
       edgePadding: {
         top: topInset + (Platform.OS === 'web' ? 96 : BOOKING_MAP_TOP_OVERLAY),
@@ -77,56 +86,33 @@ export function useRoutePreview({
       },
       animated: true,
     });
-  }, [bookingPanelMapInset, bottomInset, destination, isMapReady, mapRef, showBooking, topInset]);
+  }, [bookingPanelMapInset, bottomInset, destinationCoords, isMapReady, mapRef, showBooking, topInset]);
 
   const routeLineCoords = useMemo(() => {
-    if (visibleRouteCoords.length < 2) return routePreviewCoords.length > 1 ? routePreviewCoords : [];
-    if (!destination) return visibleRouteCoords;
-    return routePolylineThroughPinTips(visibleRouteCoords, pickup, destination);
-  }, [destination, pickup, routePreviewCoords, visibleRouteCoords]);
-  const animatedRouteCoords = useMemo(
-    () => routeLineCoords.length < 2
-      ? []
-      : sliceRouteByProgress(routeLineCoords, 0, Math.min(routeAnimProgress, 1)),
-    [routeAnimProgress, routeLineCoords],
-  );
-  const shouldShowBookingRoute = showBooking && destination !== null && routeLineCoords.length > 1;
-  const routePinPositions = useMemo(
-    () => ({ pickup, destination }),
-    [destination, pickup],
-  );
-
-  useEffect(() => {
-    if (routeLineCoords.length < 2) {
-      setRouteAnimProgress(0);
-      return;
+    if (visibleRouteCoords.length < 2) {
+      return routePreviewCoords.length > 1 ? routePreviewCoords : EMPTY_COORDINATES;
     }
-    setRouteAnimProgress(0);
-    const interval = setInterval(() => {
-      setRouteAnimProgress(previous => {
-        if (previous >= 1) {
-          clearInterval(interval);
-          return 1;
-        }
-        return Math.min(previous + ROUTE_DRAW_STEP, 1);
-      });
-    }, ROUTE_DRAW_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [routeLineCoords]);
+    if (!destinationCoords) return visibleRouteCoords;
+    return routePolylineThroughPinTips(visibleRouteCoords, pickupCoords, destinationCoords);
+  }, [destinationCoords, pickupCoords, routePreviewCoords, visibleRouteCoords]);
+  const shouldShowBookingRoute = showBooking && destinationCoords !== null && routeLineCoords.length > 1;
+  const routePinPositions = useMemo(
+    () => ({ pickup: pickupCoords, destination: destinationCoords }),
+    [destinationCoords, pickupCoords],
+  );
 
   useEffect(() => {
     setRouteCoords(route && route.coordinates.length > 1 ? route.coordinates : []);
   }, [route, routePreviewCoords]);
 
   useEffect(() => {
-    if (!showBooking || !destination) {
+    if (!showBooking || !destinationCoords) {
       setRouteCoords([]);
-      setRouteAnimProgress(0);
     }
-  }, [destination, showBooking]);
+  }, [destinationCoords, showBooking]);
 
   useEffect(() => {
-    if (!showBooking || !destination || routeFitCoords.length < 2) return;
+    if (!showBooking || !destinationCoords || routeFitCoords.length < 2) return;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let lateRetryTimer: ReturnType<typeof setTimeout> | null = null;
     const runFit = () => centerRouteInVisibleMap(routeFitCoords, EXPANDED_PANEL_HEIGHT);
@@ -140,13 +126,13 @@ export function useRoutePreview({
       if (retryTimer) clearTimeout(retryTimer);
       if (lateRetryTimer) clearTimeout(lateRetryTimer);
     };
-  }, [centerRouteInVisibleMap, destination, routeFitCoords, routeRecenterRequest, showBooking]);
+  }, [centerRouteInVisibleMap, destinationCoords, routeFitCoords, routeRecenterRequest, showBooking]);
 
   return {
     route,
     routeLoading,
     routeFitCoords,
-    animatedRouteCoords,
+    routeLineCoords,
     shouldShowBookingRoute,
     routePinPositions,
     centerRouteInVisibleMap,
