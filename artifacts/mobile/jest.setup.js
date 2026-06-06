@@ -1,3 +1,5 @@
+global.__DEV__ = true;
+
 jest.mock('@react-native-async-storage/async-storage', () => {
   const storage = new Map();
 

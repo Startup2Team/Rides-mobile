@@ -11,5 +11,8 @@ module.exports = {
   transform: {
     '^.+\\.[jt]sx?$': ['babel-jest', { presets: ['babel-preset-expo'] }],
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!\\.pnpm/(react-native@|@react-native\\+|@testing-library\\+react-native@)|((jest-)?react-native|@react-native(-community)?|@testing-library/react-native)/)',
+  ],
   testMatch: ['<rootDir>/**/*.test.ts', '<rootDir>/**/*.test.tsx'],
 };
