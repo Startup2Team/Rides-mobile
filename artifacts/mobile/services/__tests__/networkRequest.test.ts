@@ -9,15 +9,15 @@ function response(ok: boolean, status: number): Response {
 }
 
 describe('fetchWithResilience', () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     jest.restoreAllMocks();
   });
 
   it('throws a typed timeout error when a request exceeds its deadline', async () => {
-    global.fetch = jest.fn((_input, init) => {
+    globalThis.fetch = jest.fn((_input, init) => {
       return new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
       });
@@ -39,7 +39,7 @@ describe('fetchWithResilience', () => {
 
   it('propagates caller cancellation as a typed abort error', async () => {
     const controller = new AbortController();
-    global.fetch = jest.fn((_input, init) => {
+    globalThis.fetch = jest.fn((_input, init) => {
       return new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
       });
@@ -64,7 +64,7 @@ describe('fetchWithResilience', () => {
   });
 
   it('retries a retryable GET failure once and then succeeds', async () => {
-    global.fetch = jest
+    globalThis.fetch = jest
       .fn()
       .mockResolvedValueOnce(response(false, 503))
       .mockResolvedValueOnce(response(true, 200)) as typeof fetch;
@@ -78,11 +78,11 @@ describe('fetchWithResilience', () => {
     });
 
     expect(result.status).toBe(200);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('does not retry non-retryable HTTP failures', async () => {
-    global.fetch = jest.fn().mockResolvedValue(response(false, 400)) as typeof fetch;
+    globalThis.fetch = jest.fn().mockResolvedValue(response(false, 400)) as typeof fetch;
 
     await expect(
       fetchWithResilience('https://example.test', {}, {
@@ -98,11 +98,11 @@ describe('fetchWithResilience', () => {
         retryable: false,
       }),
     );
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not put request URLs into typed error messages', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as typeof fetch;
+    globalThis.fetch = jest.fn().mockRejectedValue(new Error('offline')) as typeof fetch;
 
     let error: NetworkRequestError | undefined;
     try {

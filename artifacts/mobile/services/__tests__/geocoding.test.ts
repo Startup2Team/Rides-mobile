@@ -1,15 +1,15 @@
 import { geocodeAddress } from '@/services/geocoding';
 
 describe('geocodeAddress network fallback', () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     jest.restoreAllMocks();
   });
 
   it('preserves the empty-result fallback when a provider request fails', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    globalThis.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 503,
     }) as typeof fetch;
@@ -19,7 +19,7 @@ describe('geocodeAddress network fallback', () => {
 
   it('propagates cancellation so stale callers cannot commit results', async () => {
     const controller = new AbortController();
-    global.fetch = jest.fn((_input, init) => {
+    globalThis.fetch = jest.fn((_input, init) => {
       return new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
       });
