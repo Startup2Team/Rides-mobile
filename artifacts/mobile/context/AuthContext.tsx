@@ -1,6 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { STORAGE_KEYS } from '@/constants/storage';
+import {
+  loadStoredDriverProfile,
+  loadStoredUser,
+  saveStoredDriverProfile,
+  saveStoredUser,
+} from '@/persistence/authPersistence';
 import { AppMode, DriverProfile, User } from '@/types';
 
 interface AuthContextType {
@@ -27,12 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadStoredData = async () => {
     try {
-      const [userStr, driverStr] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.user),
-        AsyncStorage.getItem(STORAGE_KEYS.driverProfile),
+      const [storedUser, storedDriverProfile] = await Promise.all([
+        loadStoredUser(),
+        loadStoredDriverProfile(),
       ]);
-      if (userStr) setUser(JSON.parse(userStr));
-      if (driverStr) setDriverProfile(JSON.parse(driverStr));
+      if (storedUser.data) setUser(storedUser.data);
+      if (storedDriverProfile.data) setDriverProfile(storedDriverProfile.data);
     } catch {
       // ignore
     } finally {
@@ -42,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (newUser: User) => {
     setUser(newUser);
-    await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(newUser));
+    await saveStoredUser(newUser);
   }, []);
 
   const logout = useCallback(async () => {
@@ -55,19 +61,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     const updated = { ...user, ...updates };
     setUser(updated);
-    await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(updated));
+    await saveStoredUser(updated);
   }, [user]);
 
   const saveDriverProfile = useCallback(async (profile: DriverProfile) => {
     setDriverProfile(profile);
-    await AsyncStorage.setItem(STORAGE_KEYS.driverProfile, JSON.stringify(profile));
+    await saveStoredDriverProfile(profile);
   }, []);
 
   const switchMode = useCallback(async (mode: AppMode) => {
     if (!user) return;
     const updated = { ...user, mode };
     setUser(updated);
-    await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(updated));
+    await saveStoredUser(updated);
   }, [user]);
 
   return (
