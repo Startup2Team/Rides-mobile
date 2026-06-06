@@ -16,6 +16,7 @@ import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
+import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
@@ -84,7 +85,10 @@ export default function DriverNavigateScreen() {
   const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
+  const timers = useScreenTimerManager();
   const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rerouteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const phase = currentRide?.status === 'in_progress'
     ? 'inprogress'
@@ -98,10 +102,6 @@ export default function DriverNavigateScreen() {
     currentRide ? navigationOrigin : null,
     target ? { latitude: target.latitude, longitude: target.longitude } : null,
   );
-
-  useEffect(() => {
-    if (!currentRide) router.replace('/(driver)');
-  }, [currentRide]);
 
   useEffect(() => {
     if (!currentRide && driverLocation) {
@@ -119,31 +119,39 @@ export default function DriverNavigateScreen() {
   }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
   useEffect(() => {
-    if (moveRef.current) clearInterval(moveRef.current);
+    timers.clearInterval(moveRef.current);
+    moveRef.current = null;
     if (!route || route.coordinates.length === 0 || phase === 'waiting') return;
 
     let step = 0;
     setDriverPos(route.coordinates[0]);
 
-    moveRef.current = setInterval(() => {
+    moveRef.current = timers.scheduleInterval(() => {
       step = Math.min(step + 1, route.coordinates.length - 1);
       setDriverPos(route.coordinates[step]);
 
-      if (step >= route.coordinates.length - 1 && moveRef.current) {
-        clearInterval(moveRef.current);
+      if (step >= route.coordinates.length - 1) {
+        timers.clearInterval(moveRef.current);
+        moveRef.current = null;
       }
     }, 1500);
 
     return () => {
-      if (moveRef.current) clearInterval(moveRef.current);
+      timers.clearInterval(moveRef.current);
+      moveRef.current = null;
     };
-  }, [phase, route]);
+  }, [phase, route, timers]);
 
   useEffect(() => {
+    timers.clearInterval(waitClockRef.current);
+    waitClockRef.current = null;
     if (phase !== 'waiting') return;
-    const interval = setInterval(() => setWaitClockTick(tick => tick + 1), 1000);
-    return () => clearInterval(interval);
-  }, [phase]);
+    waitClockRef.current = timers.scheduleInterval(() => setWaitClockTick(tick => tick + 1), 1000);
+    return () => {
+      timers.clearInterval(waitClockRef.current);
+      waitClockRef.current = null;
+    };
+  }, [phase, timers]);
 
   const pickupWait = useMemo(() => {
     if (phase !== 'waiting' || !currentRide?.waitStartedAt) {
@@ -160,13 +168,21 @@ export default function DriverNavigateScreen() {
   }, [currentRide?.waitStartedAt, phase, waitClockTick]);
 
   useEffect(() => {
+    timers.clearTimeout(rerouteRef.current);
+    rerouteRef.current = null;
     if (phase !== 'inprogress') {
       setShowReroute(false);
       return;
     }
-    const timer = setTimeout(() => setShowReroute(true), 5000);
-    return () => clearTimeout(timer);
-  }, [phase]);
+    rerouteRef.current = timers.scheduleTimeout(() => {
+      rerouteRef.current = null;
+      setShowReroute(true);
+    }, 5000);
+    return () => {
+      timers.clearTimeout(rerouteRef.current);
+      rerouteRef.current = null;
+    };
+  }, [phase, timers]);
 
   useEffect(() => {
     if (!mapRef.current || !target || !currentRide) return;

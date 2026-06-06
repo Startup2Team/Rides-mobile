@@ -20,6 +20,7 @@ import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
+import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS } from '@/types';
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
@@ -29,13 +30,16 @@ export default function DriverDashboard() {
   const insets = useSafeAreaInsets();
   const { user, driverProfile, saveDriverProfile } = useAuth();
   const { showToast } = useToast();
-  const { pendingRequest, currentRide, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
+  const { pendingRequest, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [, setLocLoading] = useState(true);
   const [mapType, setMapType] = useState<AppMapType>('standard');
+  const timers = useScreenTimerManager();
+  const requestSessionRef = useRef(timers.currentSession());
+  const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const mapRef = useRef<MapView | null>(null);
@@ -84,37 +88,44 @@ export default function DriverDashboard() {
   }, []);
 
   useEffect(() => {
+    const clearRequestTimers = () => {
+      timers.clearTimeout(requestTimeoutRef.current);
+      timers.clearInterval(countdownRef.current);
+      requestTimeoutRef.current = null;
+      countdownRef.current = null;
+    };
+
+    clearRequestTimers();
+    requestSessionRef.current = timers.startSession();
+
     if (!isOnline) {
       setShowRequest(false);
       setCountdown(15);
-      if (countdownRef.current) clearInterval(countdownRef.current);
       return;
     }
 
-    const t = setTimeout(() => {
+    const session = requestSessionRef.current;
+    requestTimeoutRef.current = timers.scheduleTimeout(() => {
+      requestTimeoutRef.current = null;
       simulateIncomingRideRequest();
       setShowRequest(true);
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
       setCountdown(15);
-      countdownRef.current = setInterval(() => {
+      countdownRef.current = timers.scheduleInterval(() => {
         setCountdown(c => {
           if (c <= 1) {
-            clearInterval(countdownRef.current!);
+            timers.clearInterval(countdownRef.current);
+            countdownRef.current = null;
             handleDecline();
             return 0;
           }
           return c - 1;
         });
-      }, 1000);
-    }, 5000);
+      }, 1000, session);
+    }, 5000, session);
 
-    return () => clearTimeout(t);
-  }, [isOnline, simulateIncomingRideRequest]);
-
-  useEffect(() => {
-    if (currentRide?.status === 'negotiating') router.push('/driver-negotiation');
-    if (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') router.push('/driver-navigate');
-  }, [currentRide?.status]);
+    return clearRequestTimers;
+  }, [isOnline, simulateIncomingRideRequest, timers]);
 
   useEffect(() => {
     mapRef.current?.animateToRegion(
@@ -124,7 +135,8 @@ export default function DriverDashboard() {
   }, [driverLocation]);
 
   const handleDecline = () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    timers.clearInterval(countdownRef.current);
+    countdownRef.current = null;
     Animated.timing(slideAnim, { toValue: 300, duration: 300, useNativeDriver: true }).start(() => {
       setShowRequest(false);
       setCountdown(15);
@@ -139,7 +151,8 @@ export default function DriverDashboard() {
   };
 
   const handleAccept = () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    timers.clearInterval(countdownRef.current);
+    countdownRef.current = null;
     acceptRideRequest();
     router.push('/driver-negotiation');
   };

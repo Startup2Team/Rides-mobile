@@ -20,6 +20,7 @@ import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
+import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,6 +28,7 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   useRideFlowNavigation();
+  useDriverFlowNavigation();
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
