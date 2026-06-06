@@ -122,6 +122,11 @@ export default function RatingScreen() {
     completeRide();
   };
 
+  const returnToHome = () => {
+    router.replace('/(tabs)');
+    queueMicrotask(finalizeRide);
+  };
+
   const finishAndExit = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -132,13 +137,11 @@ export default function RatingScreen() {
       if (isAvailable) await StoreReview.requestReview();
     }
 
-    finalizeRide();
-    router.replace('/(tabs)');
+    returnToHome();
   };
 
   const exitToHome = () => {
-    finalizeRide();
-    router.replace('/(tabs)');
+    returnToHome();
   };
 
   const handleStarPress = (n: number) => {

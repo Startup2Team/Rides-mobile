@@ -1,25 +1,45 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import {
   BookingFormDraft,
   Coords,
-  MOCK_DRIVERS,
-  NegotiationMessage,
   Ride,
   RideLocation,
   RideStatus,
   VehicleType,
 } from '@/types';
-import { STORAGE_KEYS } from '@/constants/storage';
 import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 import { RideContextType } from './rideTypes';
+import { calcDistance, calcFare } from './rideFare';
 import {
+  buildInitialDriverOffer,
+  buildInitialNegotiationMessages,
   buildMockRideRequest,
-  calcDistance,
-  calcFare,
-  cloneBookingDraft,
-  generateRideId,
-} from './rideUtils';
+  getDriverMatchDelay,
+  pickMockDriver,
+} from './rideMatching';
+import {
+  acceptLatestCustomerOffer,
+  acceptLatestDriverOffer,
+  acceptRideWithFare,
+  addCustomerCounterOffer,
+  addDriverOffer,
+  respondToCustomerCounterOffer,
+} from './rideNegotiation';
+import { appendRideHistory, loadRideHistory } from './ridePersistence';
+import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
+import { cloneBookingDraft, generateRideId } from './rideUtils';
+import {
+  ARRIVING_TRACKING_INTERVAL_MS,
+  ARRIVING_TRACKING_NOISE,
+  ARRIVING_TRACKING_STEPS,
+  CANCELLED_RIDE_CLEAR_DELAY_MS,
+  CONFIRMED_RIDE_START_DELAY_MS,
+  DRIVER_MATCH_RESUME_DELAY_MS,
+  DRIVER_OFFER_DELAY_MS,
+  JOURNEY_TRACKING_INTERVAL_MS,
+  JOURNEY_TRACKING_NOISE,
+  NEGOTIATION_RESPONSE_DELAY_MS,
+} from './rideConstants';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -51,23 +71,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (isMatchingPausedRef.current) return;
 
-    const matching = MOCK_DRIVERS.filter(d => d.vehicleType === vehicleType);
-    const picked = matching.length > 0
-      ? matching[Math.floor(Math.random() * matching.length)]
-      : MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
-
-    const isGeneric = pickup.locationType === 'generic' || destination.locationType === 'generic';
-    const initialMessages: NegotiationMessage[] = [];
-    if (isGeneric) {
-      const destLabel = destination.address ?? 'Unknown location';
-      initialMessages.push({
-        id: generateRideId(),
-        sender: 'system',
-        type: 'text',
-        text: `My destination is ${destLabel}. Please let me know your price.`,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    const picked = pickMockDriver(vehicleType);
+    const initialMessages = buildInitialNegotiationMessages(pickup, destination);
 
     void buildDriverWithUploadedPhoto(picked).then(driver => {
       if (isMatchingPausedRef.current) return;
@@ -92,17 +97,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         if (isMatchingPausedRef.current) return;
         setCurrentRide(prev => {
           if (!prev || prev.status !== 'negotiating') return prev;
-          const driverOffer = Math.round((calcFare(vehicleType, dist) * (1 + (Math.random() * 0.3))) / 100) * 100;
-          const driverMsg: NegotiationMessage = {
-            id: generateRideId(),
-            sender: 'driver',
-            type: 'offer',
-            amount: driverOffer,
-            timestamp: new Date().toISOString(),
-          };
+          const driverMsg = buildInitialDriverOffer(vehicleType, dist);
           return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
         });
-      }, 2500);
+      }, DRIVER_OFFER_DELAY_MS);
     });
   }, []);
 
@@ -113,7 +111,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     dist: number,
     delayMs?: number,
   ) => {
-    const delay = delayMs ?? 4000 + Math.random() * 2000;
+    const delay = delayMs ?? getDriverMatchDelay();
     matchDriverTimeoutRef.current = setTimeout(() => {
       matchDriverTimeoutRef.current = null;
       assignMatchedDriver(vehicleType, pickup, destination, dist);
@@ -136,7 +134,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         prev.pickup,
         prev.destination,
         prev.distance,
-        2000,
+        DRIVER_MATCH_RESUME_DELAY_MS,
       );
       return prev;
     });
@@ -202,122 +200,28 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setDriverLocation(null);
     setRestoreBookingOnHomeFocus(true);
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
-    setTimeout(() => setCurrentRide(null), 2000);
+    setTimeout(() => setCurrentRide(null), CANCELLED_RIDE_CLEAR_DELAY_MS);
   }, [clearSearchTimers]);
 
   const counterOffer = useCallback((amount: number) => {
-    setCurrentRide(prev => {
-      if (!prev) return null;
-      
-      // Strictly enforce the 3-message limit per Section 2.3/3.2
-      const customerMessages = prev.negotiation.filter(
-        m => m.sender === 'customer' && m.type === 'offer'
-      );
-      if (customerMessages.length >= 3) return prev;
-
-      const msg: NegotiationMessage = {
-        id: generateRideId(),
-        sender: 'customer',
-        type: 'offer',
-        amount,
-        timestamp: new Date().toISOString(),
-      };
-      return { ...prev, negotiation: [...prev.negotiation, msg] };
-    });
+    setCurrentRide(prev => addCustomerCounterOffer(prev, amount));
 
     setTimeout(() => {
-      setCurrentRide(prev => {
-        if (!prev || prev.status !== 'negotiating') return prev;
-        
-        // Check driver message limit
-        const driverMessages = prev.negotiation.filter(
-          m => m.sender === 'driver' && m.type === 'offer'
-        );
-        if (driverMessages.length >= 3) return prev;
-
-        const shouldAccept = amount >= prev.suggestedFare * 0.85 || Math.random() > 0.6;
-
-        if (shouldAccept) {
-          const agreedMsg: NegotiationMessage = {
-            id: generateRideId(),
-            sender: 'driver',
-            type: 'offer',
-            amount,
-            timestamp: new Date().toISOString(),
-            isFinal: true,
-          };
-          return {
-            ...prev,
-            status: 'confirmed',
-            agreedFare: amount,
-            negotiation: [...prev.negotiation, agreedMsg],
-          };
-        }
-
-        const counter = Math.round((amount * 1.12) / 100) * 100;
-        const driverMsg: NegotiationMessage = {
-          id: generateRideId(),
-          sender: 'driver',
-          type: 'offer',
-          amount: Math.min(counter, Math.round(prev.suggestedFare * 1.1 / 100) * 100),
-          timestamp: new Date().toISOString(),
-        };
-        return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
-      });
-    }, 2000);
+      setCurrentRide(prev => respondToCustomerCounterOffer(prev, amount));
+    }, NEGOTIATION_RESPONSE_DELAY_MS);
   }, []);
 
   const acceptDriverOffer = useCallback(() => {
-    setCurrentRide(prev => {
-      if (!prev) return null;
-      const lastDriverMsg = [...prev.negotiation].reverse().find(m => m.sender === 'driver' && m.type === 'offer');
-      if (!lastDriverMsg?.amount) return prev;
-      return { ...prev, status: 'confirmed', agreedFare: lastDriverMsg.amount };
-    });
+    setCurrentRide(acceptLatestDriverOffer);
   }, []);
 
   const sendDriverOffer = useCallback((amount: number) => {
     if (amount <= 0) return;
-    setCurrentRide(prev => {
-      if (!prev || prev.status !== 'negotiating') return prev;
-
-      const driverMessages = prev.negotiation.filter(
-        m => m.sender === 'driver' && m.type === 'offer'
-      );
-      if (driverMessages.length >= 3) return prev;
-
-      const msg: NegotiationMessage = {
-        id: generateRideId(),
-        sender: 'driver',
-        type: 'offer',
-        amount,
-        timestamp: new Date().toISOString(),
-      };
-
-      return { ...prev, negotiation: [...prev.negotiation, msg] };
-    });
+    setCurrentRide(prev => addDriverOffer(prev, amount));
   }, []);
 
   const acceptCustomerOffer = useCallback(() => {
-    setCurrentRide(prev => {
-      if (!prev) return null;
-      const lastCustomerMsg = [...prev.negotiation].reverse().find(m => m.sender === 'customer' && m.type === 'offer');
-      if (!lastCustomerMsg?.amount) return prev;
-      const agreedMsg: NegotiationMessage = {
-        id: generateRideId(),
-        sender: 'driver',
-        type: 'offer',
-        amount: lastCustomerMsg.amount,
-        timestamp: new Date().toISOString(),
-        isFinal: true,
-      };
-      return {
-        ...prev,
-        status: 'confirmed',
-        agreedFare: lastCustomerMsg.amount,
-        negotiation: [...prev.negotiation, agreedMsg],
-      };
-    });
+    setCurrentRide(acceptLatestCustomerOffer);
   }, []);
 
   const declineDriverOffer = useCallback(() => {
@@ -328,39 +232,24 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     let step = 0;
     driverIntervalRef.current = setInterval(() => {
       step++;
-      setDriverLocation(prev => {
-        if (!prev) return null;
-        const noise = () => (Math.random() - 0.5) * 0.002;
-        return { latitude: prev.latitude + noise(), longitude: prev.longitude + noise() };
-      });
-      if (step === 10) {
-        const now = new Date().toISOString();
-        setCurrentRide(prev => prev ? { ...prev, status: 'arrived', arrivedAt: now, waitStartedAt: now } : null);
+      setDriverLocation(prev => addTrackingNoise(prev, ARRIVING_TRACKING_NOISE));
+      if (step === ARRIVING_TRACKING_STEPS) {
+        setCurrentRide(markRideArrived);
         if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
       }
-    }, 2000);
+    }, ARRIVING_TRACKING_INTERVAL_MS);
   }, []);
 
   const markArrived = useCallback(() => {
     if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
-    setCurrentRide(prev => {
-      const now = new Date().toISOString();
-      return prev ? { ...prev, status: 'arrived', arrivedAt: now, waitStartedAt: now } : null;
-    });
+    setCurrentRide(markRideArrived);
   }, []);
 
   const startJourney = useCallback(() => {
-    setCurrentRide(prev => {
-      if (!prev || prev.status !== 'arrived') return prev;
-      return { ...prev, status: 'in_progress' };
-    });
+    setCurrentRide(startRideJourney);
     driverIntervalRef.current = setInterval(() => {
-      setDriverLocation(prev => {
-        if (!prev) return null;
-        const noise = () => (Math.random() - 0.5) * 0.001;
-        return { latitude: prev.latitude + noise(), longitude: prev.longitude + noise() };
-      });
-    }, 3000);
+      setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
+    }, JOURNEY_TRACKING_INTERVAL_MS);
   }, []);
 
   const completeRide = useCallback(() => {
@@ -369,10 +258,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       setRideHistory(hist => [completed, ...hist]);
-      AsyncStorage.getItem(STORAGE_KEYS.rideHistory).then(str => {
-        const hist: Ride[] = str ? JSON.parse(str) : [];
-        AsyncStorage.setItem(STORAGE_KEYS.rideHistory, JSON.stringify([completed, ...hist].slice(0, 50)));
-      });
+      void appendRideHistory(completed);
       return null;
     });
     setDriverLocation(null);
@@ -381,16 +267,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const acceptRideRequest = useCallback(() => {
     if (!pendingRequest) return;
     const request = pendingRequest;
-    const isGeneric = request.pickup.locationType === 'generic' || request.destination.locationType === 'generic';
-    const initialMessages: NegotiationMessage[] = isGeneric
-      ? [{
-          id: generateRideId(),
-          sender: 'system',
-          type: 'text',
-          text: `My destination is ${request.destination.address ?? 'Unknown location'}. Please let me know your price.`,
-          timestamp: new Date().toISOString(),
-        }]
-      : [];
+    const initialMessages = buildInitialNegotiationMessages(request.pickup, request.destination);
     setCurrentRide({ ...request, status: 'negotiating', negotiation: initialMessages });
     setPendingRequest(null);
   }, [pendingRequest]);
@@ -405,10 +282,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const riderAcceptWithFare = useCallback((amount: number) => {
     if (amount <= 0) return;
-    setCurrentRide(prev => {
-      if (!prev) return null;
-      return { ...prev, status: 'confirmed', agreedFare: amount };
-    });
+    setCurrentRide(prev => acceptRideWithFare(prev, amount));
   }, []);
 
   React.useEffect(() => {
@@ -416,15 +290,15 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       const timer = setTimeout(() => {
         updateStatus('arriving');
         startLiveTracking();
-      }, 1000);
+      }, CONFIRMED_RIDE_START_DELAY_MS);
       return () => clearTimeout(timer);
     }
   }, [currentRide?.status === 'confirmed']);
 
   const loadHistory = useCallback(async () => {
     try {
-      const str = await AsyncStorage.getItem(STORAGE_KEYS.rideHistory);
-      if (str) setRideHistory(JSON.parse(str));
+      const history = await loadRideHistory();
+      if (history) setRideHistory(history);
     } catch {
     }
   }, []);
