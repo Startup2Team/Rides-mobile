@@ -1,5 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { STORAGE_KEYS } from '@/constants/storage';
 import {
   loadStoredDriverProfile,
@@ -26,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const userRef = useRef(user);
+  userRef.current = user;
 
   useEffect(() => {
     loadStoredData();
@@ -58,11 +68,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {
-    if (!user) return;
-    const updated = { ...user, ...updates };
+    if (!userRef.current) return;
+    const updated = { ...userRef.current, ...updates };
     setUser(updated);
     await saveStoredUser(updated);
-  }, [user]);
+  }, []);
 
   const saveDriverProfile = useCallback(async (profile: DriverProfile) => {
     setDriverProfile(profile);
@@ -70,23 +80,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const switchMode = useCallback(async (mode: AppMode) => {
-    if (!user) return;
-    const updated = { ...user, mode };
+    if (!userRef.current) return;
+    const updated = { ...userRef.current, mode };
     setUser(updated);
     await saveStoredUser(updated);
-  }, [user]);
+  }, []);
+
+  const value = useMemo<AuthContextType>(() => ({
+    user,
+    driverProfile,
+    isLoading,
+    login,
+    logout,
+    updateUser,
+    saveDriverProfile,
+    switchMode,
+  }), [
+    driverProfile,
+    isLoading,
+    login,
+    logout,
+    saveDriverProfile,
+    switchMode,
+    updateUser,
+    user,
+  ]);
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      driverProfile,
-      isLoading,
-      login,
-      logout,
-      updateUser,
-      saveDriverProfile,
-      switchMode,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
