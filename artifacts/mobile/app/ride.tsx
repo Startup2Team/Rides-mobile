@@ -1,51 +1,38 @@
-import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Image,
-  Linking,
-  Modal,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { AppButton } from '@/components/AppButton';
+import { useRideActions } from '@/hooks/ride/useRideActions';
+import { useRideStatus } from '@/hooks/ride/useRideStatus';
+import { DriverInfoCard } from '@/components/ride/DriverInfoCard';
+import { RideActionsSection } from '@/components/ride/RideActionsSection';
+import { RideCompleteModal } from '@/components/ride/RideCompleteModal';
+import { RideHeader } from '@/components/ride/RideHeader';
+import { RideStatusSection } from '@/components/ride/RideStatusSection';
 import {
   getLocationMapPinCenterOffset,
   LOCATION_MAP_PIN_ANCHOR,
   LocationMapPin,
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
-import { StatusChip } from '@/components/StatusChip';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 import { formatDistance, formatDuration, haversineKm, routePolylineThroughPinTips } from '@/utils/mapUtils';
-import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
-import { Coords, KIGALI_CENTER, VehicleType, VEHICLE_LABELS_FULL } from '@/types';
-
-const STATUS_MESSAGES: Record<string, string> = {
-  confirmed: 'Ride confirmed',
-  arriving: 'Driver is on the way',
-  arrived: 'Your driver has arrived!',
-  in_progress: 'Heading to destination',
-  completed: 'Ride completed!',
-};
+import { Coords, KIGALI_CENTER, VehicleType } from '@/types';
 
 const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
-/** Free wait at pickup before late minutes accrue (matches driver navigate screen). */
-const PICKUP_WAIT_LIMIT_SECONDS = 180;
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
@@ -107,20 +94,28 @@ export default function RideScreen() {
   /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
   const [arrivedDriverCoords, setArrivedDriverCoords] = useState<Coords | null>(null);
 
-  const [waitClockTick, setWaitClockTick] = useState(0);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [driverCardHeight, setDriverCardHeight] = useState(260);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
-  const [completeModalVisible, setCompleteModalVisible] = useState(false);
 
   const { route: rideRoute } = useRoute(
     currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
     currentRide ? { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude } : null,
   );
 
-  const isArriving = currentRide?.status === 'arriving';
-  const isArrived = currentRide?.status === 'arrived';
-  const isInProgress = currentRide?.status === 'in_progress';
+  const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
+    useRideStatus(currentRide);
+  const {
+    completeModalVisible,
+    confirmCompleteRide,
+    handleCallDriver,
+    handleCancelArrived,
+    handleCancelArriving,
+    handleComplete,
+    handleEmergencyEnd,
+    handleSOS,
+    hideCompleteModal,
+  } = useRideActions({ cancelRide, currentRide, showToast });
 
   const { route: driverToPickupRoute } = useRoute(
     isArriving ? arrivingRouteOrigin : null,
@@ -219,43 +214,6 @@ export default function RideScreen() {
     [currentRide?.driver],
   );
 
-  useEffect(() => {
-    if (currentRide?.status !== 'arrived') return;
-    const interval = setInterval(() => {
-      setWaitClockTick(tick => tick + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [currentRide?.status]);
-
-  const waitElapsedSeconds = useMemo(() => {
-    if (!isArrived || !currentRide?.waitStartedAt) return 0;
-    const startedMs = new Date(currentRide.waitStartedAt).getTime();
-    if (Number.isNaN(startedMs)) return 0;
-    return Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
-  }, [currentRide?.waitStartedAt, isArrived, waitClockTick]);
-
-  const waitRemainingSeconds = Math.max(PICKUP_WAIT_LIMIT_SECONDS - waitElapsedSeconds, 0);
-  const lateSeconds = Math.max(waitElapsedSeconds - PICKUP_WAIT_LIMIT_SECONDS, 0);
-  const isPickupLate = lateSeconds > 0;
-
-  const formatCountdown = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainingSecs = secs % 60;
-    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
-  };
-
-  const formatLateDuration = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainingSecs = secs % 60;
-    if (mins === 0) return `${remainingSecs} sec`;
-    if (remainingSecs === 0) return `${mins} min`;
-    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
-  };
-
-  const arrivedBannerMessage = isPickupLate
-    ? `Your driver is still waiting. You are ${formatLateDuration(lateSeconds)} late. Please come to the pickup point.`
-    : `Your driver has arrived. Please come to the pickup point. (Waiting: ${formatCountdown(waitRemainingSeconds)})`;
-
   const mapFitEdgePadding = useMemo(
     () => ({
       top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 108,
@@ -320,83 +278,6 @@ export default function RideScreen() {
     }
   }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
 
-  const navigateToRating = () => {
-    if (!currentRide) return;
-    const rideId = currentRide.id;
-    const driverName = currentRide.driver?.name ?? '';
-    const fare = currentRide.agreedFare ?? 0;
-    const vehicleType = currentRide.vehicleType;
-    const driverPhoto = resolveDriverProfileImage(currentRide.driver);
-    router.push({
-      pathname: '/rating',
-      params: {
-        rideId,
-        driverName,
-        ...(driverPhoto ? { driverPhoto } : {}),
-        fare: String(fare),
-        vehicleType,
-      },
-    });
-  };
-
-  const handleComplete = () => {
-    setCompleteModalVisible(true);
-  };
-
-  const confirmCompleteRide = () => {
-    setCompleteModalVisible(false);
-    navigateToRating();
-  };
-
-  const handleEmergencyEnd = () => {
-    Alert.alert('End Journey', 'End this journey early?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'End Journey',
-        onPress: navigateToRating,
-      },
-    ]);
-  };
-
-  const handleCancelArrived = () => {
-    showCancelArrivedRideAlert(doCancelRide);
-  };
-
-  const handleCancelArriving = () => {
-    showCancelArrivingRideAlert(doCancelRide);
-  };
-
-  const doCancelRide = () => {
-    cancelRide();
-    showToast('Ride cancelled', 'info');
-    router.replace('/(tabs)');
-  };
-
-  const handleSOS = () => {
-    Alert.alert(
-      '🆘 Emergency',
-      `Driver: ${currentRide?.driver?.name ?? 'Unknown'}\nPlate: ${currentRide?.driver?.plateNumber ?? 'Unknown'}\n\nWhat do you need?`,
-      [
-        {
-          text: 'Call Police (112)',
-          onPress: () => Linking.openURL('tel:112'),
-        },
-        { text: 'Dismiss', style: 'cancel' },
-      ]
-    );
-  };
-
-  const handleCallDriver = () => {
-    const phone = currentRide?.driver?.phone;
-    if (!phone) {
-      Alert.alert('Cannot call', 'No driver phone number is available.');
-      return;
-    }
-    Linking.openURL(`tel:${phone}`).catch(() => {
-      Alert.alert('Cannot call', 'Unable to open the phone dialler.');
-    });
-  };
-
   const showMapControls = isArriving || isArrived || isInProgress;
 
   const cycleMapType = useCallback(() => {
@@ -454,7 +335,6 @@ export default function RideScreen() {
 
   if (!currentRide) return null;
 
-  const statusMsg = STATUS_MESSAGES[currentRide.status] ?? 'Ride confirmed';
   const pickupEtaSeconds = isArriving && activeDriverLocation
     ? Math.max(0, Math.ceil((haversineKm(activeDriverLocation, currentRide.pickup) * 1000) / ARRIVING_AVERAGE_SPEED_MPS))
     : null;
@@ -467,7 +347,6 @@ export default function RideScreen() {
   const pickupDistanceText = isArriving && activeDriverLocation
     ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
     : null;
-  const driverInitial = currentRide.driver?.name?.trim()?.[0]?.toUpperCase() ?? 'D';
 
   const mapControlsBottomInset =
     driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 12) + 16;
@@ -567,63 +446,15 @@ export default function RideScreen() {
         </>
       )}
 
-      {/* Top status */}
-      <View
-        style={[
-          styles.topStatus,
-          (isArriving || isArrived || isInProgress) && styles.topStatusShadow,
-          {
-            paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
-        <View style={styles.topStatusBar}>
-          <View style={styles.topStatusSlot}>
-            <StatusChip status={currentRide.status} variant="rideHeader" />
-          </View>
-          <View style={[styles.topStatusSlot, styles.topStatusSlotEnd]}>
-            {currentRide.driver && (
-              <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>
-                {pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.driver.eta} min`)}
-              </Text>
-            )}
-          </View>
-          <View style={styles.topStatusTitleOverlay} pointerEvents="none">
-            <Text
-              style={[styles.statusMsg, { color: colors.foreground }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-            >
-              {statusMsg}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {isArrived && (
-        <View
-          style={[
-            styles.arrivedBanner,
-            { backgroundColor: isPickupLate ? colors.destructive : colors.primary },
-          ]}
-        >
-          <Feather
-            name={isPickupLate ? 'alert-circle' : 'check-circle'}
-            size={18}
-            color={isPickupLate ? colors.destructiveForeground : colors.primaryForeground}
-          />
-          <Text
-            style={[
-              styles.arrivedBannerText,
-              { color: isPickupLate ? colors.destructiveForeground : colors.primaryForeground },
-            ]}
-          >
-            {arrivedBannerMessage}
-          </Text>
-        </View>
-      )}
+      <RideHeader
+        colors={colors}
+        etaText={pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : currentRide.driver ? `${currentRide.driver.eta} min` : null)}
+        isElevated={isArriving || isArrived || isInProgress}
+        ride={currentRide}
+        safeAreaTop={insets.top}
+        statusMessage={statusMessage}
+      />
+      {isArrived && <RideStatusSection colors={colors} isLate={isPickupLate} message={arrivedBannerMessage} />}
       <View
         onLayout={event => {
           const height = event.nativeEvent.layout.height;
@@ -634,168 +465,29 @@ export default function RideScreen() {
           paddingBottom: insets.bottom + (Platform.OS === 'web' ? 24 : 12),
         }]}
       >
-        {/* Driver info */}
-        <View style={styles.driverRow}>
-          {driverPhotoUri ? (
-            <View style={styles.driverAvatarImageShadow}>
-              <Image
-                source={{ uri: driverPhotoUri }}
-                style={styles.driverAvatarImage}
-                accessibilityLabel={`${currentRide.driver?.name ?? 'Driver'} profile photo`}
-              />
-            </View>
-          ) : (
-            <LinearGradient
-              colors={['#9DBBE0', '#7984C3']}
-              style={styles.driverAvatar}
-              accessibilityLabel={currentRide.driver?.name ?? 'Driver'}
-              accessibilityRole="image"
-            >
-              <Text style={styles.driverInitial}>{driverInitial}</Text>
-            </LinearGradient>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.driverName, { color: colors.foreground }]}>
-              {currentRide.driver?.name ?? 'Driver'}
-            </Text>
-            <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>
-              {VEHICLE_LABELS_FULL[currentRide.vehicleType]} · {currentRide.driver?.plateNumber}
-            </Text>
-          </View>
-          <View style={styles.ratingBadge}>
-            <Text style={[styles.ratingText, { color: colors.star }]}>★ {currentRide.driver?.rating?.toFixed(1)}</Text>
-          </View>
-        </View>
-
-        {/* Fare */}
-        <View style={[styles.fareRow, { backgroundColor: colors.muted }]}>
-          <View style={styles.fareItem}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Agreed Fare</Text>
-            <Text style={[styles.fareValue, { color: colors.primary }]}>
-              {currentRide.agreedFare?.toLocaleString()} RWF
-            </Text>
-          </View>
-          <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
-          <View style={[styles.fareItem]}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Distance</Text>
-            <Text style={[styles.fareValue, { color: colors.foreground }]}>
-              {pickupDistanceText ?? (rideRoute ? formatDistance(rideRoute.distanceMeters) : `${currentRide.distance} km`)}
-            </Text>
-          </View>
-          <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.fareItem}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>ETA</Text>
-            <Text style={[styles.fareValue, { color: colors.foreground }]}>
-              {displayEta}
-            </Text>
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View style={styles.actions}>
-          {(isArriving || isArrived) && (
-            <AppButton
-              title={isArriving ? 'Call driver' : 'Call'}
-              icon="phone"
-              variant="call"
-              size="sm"
-              onPress={handleCallDriver}
-              iconOnly={!isArriving}
-              style={isArriving ? styles.wideActionBtn : undefined}
-            />
-          )}
-          {isArriving && (
-            <AppButton
-              title="Cancel"
-              icon="x"
-              variant="dangerPlain"
-              size="sm"
-              iconOnly
-              onPress={handleCancelArriving}
-              accessibilityLabel="Cancel ride"
-            />
-          )}
-          {isArrived && (
-            <>
-              <AppButton
-                title="Cancel Ride"
-                icon="x"
-                variant="dangerPlain"
-                size="sm"
-                labelFontSize={14}
-                onPress={handleCancelArrived}
-                style={{ flex: 1 }}
-              />
-              <AppButton
-                title="Start Journey"
-                size="sm"
-                labelFontSize={14}
-                onPress={startJourney}
-                style={{ flex: 1 }}
-              />
-            </>
-          )}
-          {isInProgress && (
-            <>
-              <TouchableOpacity
-                style={[styles.sosBtn, { backgroundColor: colors.destructive }]}
-                onPress={handleSOS}
-                accessibilityLabel="Emergency SOS"
-                accessibilityRole="button"
-              >
-                <Text style={styles.sosBtnText}>SOS</Text>
-              </TouchableOpacity>
-              <AppButton
-                title="Emergency"
-                icon="alert-octagon"
-                variant="dangerPlain"
-                size="sm"
-                iconOnly
-                onPress={handleEmergencyEnd}
-                accessibilityLabel="Report emergency"
-              />
-              <AppButton
-                title="Complete Ride"
-                onPress={handleComplete}
-                style={{ flex: 1 }}
-              />
-            </>
-          )}
-        </View>
+        <DriverInfoCard
+          colors={colors}
+          distanceText={pickupDistanceText ?? (rideRoute ? formatDistance(rideRoute.distanceMeters) : `${currentRide.distance} km`)}
+          driverPhotoUri={driverPhotoUri}
+          etaText={displayEta}
+          ride={currentRide}
+        />
+        <RideActionsSection
+          colors={colors}
+          isArrived={isArrived}
+          isArriving={isArriving}
+          isInProgress={isInProgress}
+          onCall={handleCallDriver}
+          onCancelArrived={handleCancelArrived}
+          onCancelArriving={handleCancelArriving}
+          onComplete={handleComplete}
+          onEmergency={handleEmergencyEnd}
+          onSOS={handleSOS}
+          onStartJourney={startJourney}
+        />
       </View>
 
-      <Modal
-        visible={completeModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCompleteModalVisible(false)}
-      >
-        <View style={styles.completeOverlay}>
-          <View style={[styles.completeCard, { backgroundColor: colors.background }]}>
-            <View style={[styles.completeIconWrap, { backgroundColor: colors.primaryHex + '18' }]}>
-              <Feather name="check-circle" size={30} color={colors.primary} />
-            </View>
-            <Text style={[styles.completeTitle, { color: colors.foreground }]}>Complete ride?</Text>
-            <Text style={[styles.completeMessage, { color: colors.mutedForeground }]}>
-              Confirm only when you have reached your destination.
-            </Text>
-            <View style={styles.completeActions}>
-              <AppButton
-                title="Not yet"
-                variant="secondary"
-                onPress={() => setCompleteModalVisible(false)}
-                style={styles.completeActionBtn}
-              />
-              <AppButton
-                title="Complete"
-                variant="primary"
-                onPress={confirmCompleteRide}
-                style={styles.completeActionBtn}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <RideCompleteModal colors={colors} visible={completeModalVisible} onClose={hideCompleteModal} onConfirm={confirmCompleteRide} />
     </View>
   );
 }
@@ -810,202 +502,19 @@ const darkMapStyle = [
 const styles = StyleSheet.create({
   container: { flex: 1 },
   mapLayerBtn: {
-    position: 'absolute',
-    right: 16,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23,
+    alignItems: 'center', justifyContent: 'center', zIndex: 5, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6,
   },
   recenterBtn: {
-    position: 'absolute',
-    right: 16,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23,
+    alignItems: 'center', justifyContent: 'center', zIndex: 5, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6,
   },
-  topStatus: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    zIndex: 10,
-  },
-  topStatusShadow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  topStatusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 32,
-    position: 'relative',
-  },
-  topStatusSlot: {
-    flex: 1,
-    minWidth: 0,
-    zIndex: 1,
-    justifyContent: 'center',
-  },
-  topStatusSlotEnd: {
-    alignItems: 'flex-end',
-  },
-  topStatusTitleOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 76,
-    zIndex: 0,
-  },
-  statusMsg: {
-    maxWidth: '100%',
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    textAlign: 'center',
-    lineHeight: 17,
-  },
-  eta: {
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'right',
-  },
-  arrivedBanner: {
-    position: 'absolute',
-    top: 110,
-    left: 20,
-    right: 20,
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-  },
-  arrivedBannerText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
   driverCard: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: FLOATING_PANEL_TOP_RADIUS,
-    borderTopRightRadius: FLOATING_PANEL_TOP_RADIUS,
-    paddingTop: 14,
-    paddingHorizontal: 16,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 16,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    borderTopLeftRadius: FLOATING_PANEL_TOP_RADIUS, borderTopRightRadius: FLOATING_PANEL_TOP_RADIUS,
+    paddingTop: 14, paddingHorizontal: 16, gap: 10, shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 16,
   },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  driverAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 3,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' },
-    }),
-  },
-  driverAvatarImage: { width: 40, height: 40, borderRadius: 20 },
-  driverAvatarImageShadow: {
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.16,
-    shadowRadius: 5,
-    elevation: 4,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.16)' },
-    }),
-  },
-  driverInitial: { fontSize: 20, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 24 },
-  driverName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  driverVehicle: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  ratingBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 100,
-  },
-  ratingText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  fareRow: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  fareItem: { flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 },
-  fareDivider: { width: 1 },
-  fareLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
-  fareValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  wideActionBtn: { flex: 1 },
-  completeOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  completeCard: {
-    width: '100%',
-    maxWidth: 420,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-  },
-  completeIconWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  completeTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  completeMessage: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  completeActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 20 },
-  completeActionBtn: { flex: 1 },
-  sosBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  sosBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.5 },
 });
