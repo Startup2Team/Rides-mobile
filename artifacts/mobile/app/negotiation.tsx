@@ -1,5 +1,4 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,10 +21,8 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
-import { NegotiationMessage, RideStatus, VEHICLE_LABELS } from '@/types';
+import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-
-const RIDE_FLOW_STATUSES: RideStatus[] = ['confirmed', 'arriving', 'arrived', 'in_progress'];
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
@@ -215,7 +212,6 @@ export default function NegotiationScreen() {
   const lastDriverOffer = [...driverOffers].pop();
   const lastMsg = negotiation[negotiation.length - 1];
   const customerLimitReached = customerOffers.length >= MAX_OFFERS;
-  const previousRideStatusRef = useRef<RideStatus | null>(null);
   const isAwaitingDriverReply =
     currentRide?.status === 'negotiating' &&
     lastMsg?.sender === 'customer' &&
@@ -272,28 +268,6 @@ export default function NegotiationScreen() {
       : 'Counter offer';
 
   const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
-
-  useEffect(() => {
-    const status = currentRide?.status ?? null;
-    const previous = previousRideStatusRef.current;
-
-    if (!currentRide || status === 'cancelled') {
-      router.replace('/(tabs)');
-      previousRideStatusRef.current = status;
-      return;
-    }
-
-    const enteringRideFlow =
-      status !== null &&
-      RIDE_FLOW_STATUSES.includes(status) &&
-      previous === 'negotiating';
-
-    if (enteringRideFlow) {
-      router.replace('/ride');
-    }
-
-    previousRideStatusRef.current = status;
-  }, [currentRide?.status, currentRide]);
 
   useEffect(() => {
     if (lastMsg?.sender !== 'customer') {

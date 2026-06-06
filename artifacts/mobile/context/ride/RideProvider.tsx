@@ -1,4 +1,11 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   BookingFormDraft,
   Coords,
@@ -27,6 +34,7 @@ import {
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
 import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
+import { createRideTimerManager, type RideSessionToken } from './rideTimerManager';
 import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   ARRIVING_TRACKING_INTERVAL_MS,
@@ -40,6 +48,7 @@ import {
   JOURNEY_TRACKING_NOISE,
   NEGOTIATION_RESPONSE_DELAY_MS,
 } from './rideConstants';
+import { reportOperationalFailure } from '@/observability/monitoring';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -55,27 +64,34 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const matchDriverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const driverOfferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMatchingPausedRef = useRef(false);
+  const currentRideRef = useRef(currentRide);
+  const pendingRequestRef = useRef(pendingRequest);
+  const timerManagerRef = useRef(createRideTimerManager());
+  const timers = timerManagerRef.current;
+  currentRideRef.current = currentRide;
+  pendingRequestRef.current = pendingRequest;
 
   const clearSearchTimers = useCallback(() => {
-    if (matchDriverTimeoutRef.current) clearTimeout(matchDriverTimeoutRef.current);
-    if (driverOfferTimeoutRef.current) clearTimeout(driverOfferTimeoutRef.current);
+    timers.clearTimeout(matchDriverTimeoutRef.current);
+    timers.clearTimeout(driverOfferTimeoutRef.current);
     matchDriverTimeoutRef.current = null;
     driverOfferTimeoutRef.current = null;
-  }, []);
+  }, [timers]);
 
   const assignMatchedDriver = useCallback((
     vehicleType: VehicleType,
     pickup: RideLocation,
     destination: RideLocation,
     dist: number,
+    session: RideSessionToken,
   ) => {
-    if (isMatchingPausedRef.current) return;
+    if (!timers.isActive(session) || isMatchingPausedRef.current) return;
 
     const picked = pickMockDriver(vehicleType);
     const initialMessages = buildInitialNegotiationMessages(pickup, destination);
 
     void buildDriverWithUploadedPhoto(picked).then(driver => {
-      if (isMatchingPausedRef.current) return;
+      if (!timers.isActive(session) || isMatchingPausedRef.current) return;
 
       setDriverLocation(driver.location);
 
@@ -92,7 +108,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         };
       });
 
-      driverOfferTimeoutRef.current = setTimeout(() => {
+      driverOfferTimeoutRef.current = timers.scheduleTimeout(() => {
         driverOfferTimeoutRef.current = null;
         if (isMatchingPausedRef.current) return;
         setCurrentRide(prev => {
@@ -100,9 +116,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           const driverMsg = buildInitialDriverOffer(vehicleType, dist);
           return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
         });
-      }, DRIVER_OFFER_DELAY_MS);
+      }, DRIVER_OFFER_DELAY_MS, session);
     });
-  }, []);
+  }, [timers]);
 
   const scheduleDriverMatch = useCallback((
     vehicleType: VehicleType,
@@ -112,11 +128,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     delayMs?: number,
   ) => {
     const delay = delayMs ?? getDriverMatchDelay();
-    matchDriverTimeoutRef.current = setTimeout(() => {
+    const session = timers.currentSession();
+    matchDriverTimeoutRef.current = timers.scheduleTimeout(() => {
       matchDriverTimeoutRef.current = null;
-      assignMatchedDriver(vehicleType, pickup, destination, dist);
-    }, delay);
-  }, [assignMatchedDriver]);
+      assignMatchedDriver(vehicleType, pickup, destination, dist, session);
+    }, delay, session);
+  }, [assignMatchedDriver, timers]);
 
   const pauseDriverMatching = useCallback(() => {
     isMatchingPausedRef.current = true;
@@ -159,7 +176,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     vehicleType: VehicleType,
     destText = '',
   ) => {
-    if (currentRide && ['negotiating', 'confirmed', 'arriving', 'arrived', 'in_progress'].includes(currentRide.status)) {
+    if (
+      currentRideRef.current &&
+      ['negotiating', 'confirmed', 'arriving', 'arrived', 'in_progress'].includes(
+        currentRideRef.current.status,
+      )
+    ) {
       return;
     }
 
@@ -187,29 +209,34 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
+    timers.startSession();
     clearSearchTimers();
     setCurrentRide(ride);
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
-  }, [clearSearchTimers, currentRide, scheduleDriverMatch]);
+  }, [clearSearchTimers, scheduleDriverMatch, timers]);
 
   const cancelRide = useCallback(() => {
+    const session = timers.endSession();
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
     clearSearchTimers();
-    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
     setDriverLocation(null);
     setRestoreBookingOnHomeFocus(true);
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
-    setTimeout(() => setCurrentRide(null), CANCELLED_RIDE_CLEAR_DELAY_MS);
-  }, [clearSearchTimers]);
+    timers.scheduleTimeout(() => {
+      setCurrentRide(prev => prev?.status === 'cancelled' ? null : prev);
+    }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
+  }, [clearSearchTimers, timers]);
 
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => addCustomerCounterOffer(prev, amount));
 
-    setTimeout(() => {
+    timers.scheduleTimeout(() => {
       setCurrentRide(prev => respondToCustomerCounterOffer(prev, amount));
     }, NEGOTIATION_RESPONSE_DELAY_MS);
-  }, []);
+  }, [timers]);
 
   const acceptDriverOffer = useCallback(() => {
     setCurrentRide(acceptLatestDriverOffer);
@@ -230,47 +257,56 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const startLiveTracking = useCallback(() => {
     let step = 0;
-    driverIntervalRef.current = setInterval(() => {
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = timers.scheduleInterval(() => {
       step++;
       setDriverLocation(prev => addTrackingNoise(prev, ARRIVING_TRACKING_NOISE));
       if (step === ARRIVING_TRACKING_STEPS) {
         setCurrentRide(markRideArrived);
-        if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+        timers.clearInterval(driverIntervalRef.current);
+        driverIntervalRef.current = null;
       }
     }, ARRIVING_TRACKING_INTERVAL_MS);
-  }, []);
+  }, [timers]);
 
   const markArrived = useCallback(() => {
-    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
     setCurrentRide(markRideArrived);
-  }, []);
+  }, [timers]);
 
   const startJourney = useCallback(() => {
     setCurrentRide(startRideJourney);
-    driverIntervalRef.current = setInterval(() => {
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = timers.scheduleInterval(() => {
       setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
     }, JOURNEY_TRACKING_INTERVAL_MS);
-  }, []);
+  }, [timers]);
 
   const completeRide = useCallback(() => {
-    if (driverIntervalRef.current) clearInterval(driverIntervalRef.current);
+    timers.endSession();
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
     setCurrentRide(prev => {
       if (!prev) return null;
       const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
       setRideHistory(hist => [completed, ...hist]);
-      void appendRideHistory(completed);
+      void appendRideHistory(completed).catch(error => {
+        reportOperationalFailure('ride.history.persist', error, { status: completed.status });
+      });
       return null;
     });
     setDriverLocation(null);
-  }, []);
+  }, [timers]);
 
   const acceptRideRequest = useCallback(() => {
-    if (!pendingRequest) return;
-    const request = pendingRequest;
+    if (!pendingRequestRef.current) return;
+    timers.startSession();
+    const request = pendingRequestRef.current;
     const initialMessages = buildInitialNegotiationMessages(request.pickup, request.destination);
     setCurrentRide({ ...request, status: 'negotiating', negotiation: initialMessages });
     setPendingRequest(null);
-  }, [pendingRequest]);
+  }, [timers]);
 
   const declineRideRequest = useCallback(() => {
     setPendingRequest(null);
@@ -287,51 +323,85 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (currentRide?.status === 'confirmed') {
-      const timer = setTimeout(() => {
+      const timer = timers.scheduleTimeout(() => {
         updateStatus('arriving');
         startLiveTracking();
       }, CONFIRMED_RIDE_START_DELAY_MS);
-      return () => clearTimeout(timer);
+      return () => timers.clearTimeout(timer);
     }
-  }, [currentRide?.status === 'confirmed']);
+  }, [currentRide?.status === 'confirmed', startLiveTracking, timers]);
+
+  React.useEffect(() => () => {
+    timers.endSession();
+  }, [timers]);
 
   const loadHistory = useCallback(async () => {
     try {
       const history = await loadRideHistory();
       if (history) setRideHistory(history);
-    } catch {
+    } catch (error) {
+      reportOperationalFailure('ride.history.load', error);
     }
   }, []);
 
+  const value = useMemo<RideContextType>(() => ({
+    currentRide,
+    rideHistory,
+    driverLocation,
+    pendingRequest,
+    createRide,
+    cancelledSearchDraft,
+    restoreBookingOnHomeFocus,
+    clearCancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+    cancelRide,
+    pauseDriverMatching,
+    resumeDriverMatching,
+    isMatchingPaused,
+    counterOffer,
+    sendDriverOffer,
+    acceptDriverOffer,
+    acceptCustomerOffer,
+    declineDriverOffer,
+    completeRide,
+    markArrived,
+    startJourney,
+    acceptRideRequest,
+    declineRideRequest,
+    simulateIncomingRideRequest,
+    riderAcceptWithFare,
+    loadHistory,
+  }), [
+    acceptCustomerOffer,
+    acceptDriverOffer,
+    acceptRideRequest,
+    cancelRide,
+    cancelledSearchDraft,
+    clearCancelledSearchDraft,
+    clearRestoreBookingOnHomeFocus,
+    completeRide,
+    counterOffer,
+    createRide,
+    currentRide,
+    declineDriverOffer,
+    declineRideRequest,
+    driverLocation,
+    isMatchingPaused,
+    loadHistory,
+    markArrived,
+    pauseDriverMatching,
+    pendingRequest,
+    restoreBookingOnHomeFocus,
+    resumeDriverMatching,
+    rideHistory,
+    riderAcceptWithFare,
+    sendDriverOffer,
+    simulateIncomingRideRequest,
+    startJourney,
+  ]);
+
   return (
-    <RideContext.Provider value={{
-      currentRide,
-      rideHistory,
-      driverLocation,
-      pendingRequest,
-      createRide,
-      cancelledSearchDraft,
-      restoreBookingOnHomeFocus,
-      clearCancelledSearchDraft,
-      clearRestoreBookingOnHomeFocus,
-      cancelRide,
-      pauseDriverMatching,
-      resumeDriverMatching,
-      isMatchingPaused,
-      counterOffer,
-      sendDriverOffer,
-      acceptDriverOffer,
-      acceptCustomerOffer,
-      declineDriverOffer,
-      completeRide,
-      markArrived,
-      startJourney,
-      acceptRideRequest,
-      declineRideRequest,
-      simulateIncomingRideRequest,
-      riderAcceptWithFare,
-      loadHistory,
-    }}>
+    <RideContext.Provider value={value}>
       {children}
     </RideContext.Provider>
   );

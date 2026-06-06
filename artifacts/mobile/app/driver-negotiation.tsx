@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -103,15 +103,6 @@ export default function DriverNegotiationScreen() {
   const canSendOffer = !driverLimitReached;
   const suggestedFare = currentRide?.suggestedFare ?? 0;
   const acceptAmount = lastCustomerOffer?.amount;
-
-  useEffect(() => {
-    if (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') {
-      router.replace('/driver-navigate');
-    }
-    if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(driver)');
-    }
-  }, [currentRide?.status]);
 
   const sendOffer = (amount: number) => {
     if (!amount || amount <= 0 || !canSendOffer) return;
