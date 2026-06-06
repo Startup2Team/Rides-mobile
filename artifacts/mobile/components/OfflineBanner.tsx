@@ -10,7 +10,10 @@ export function OfflineBanner() {
   const slideAnim = React.useRef(new Animated.Value(-48)).current;
 
   useEffect(() => {
-    const unsub = NetInfo.addEventListener(state => {
+    const unsub = NetInfo.addEventListener((state: {
+      isConnected: boolean | null;
+      isInternetReachable: boolean | null;
+    }) => {
       const offline = state.isConnected === false || state.isInternetReachable === false;
       setIsOffline(offline);
       Animated.spring(slideAnim, {
