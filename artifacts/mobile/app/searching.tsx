@@ -16,9 +16,8 @@ import { VEHICLE_LABELS } from '@/types';
 export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching, isMatchingPaused } = useRide();
+  const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching } = useRide();
   const { showToast } = useToast();
-  const isCancellingRef = useRef(false);
 
   const pulseA = useRef(new Animated.Value(0)).current;
   const pulseB = useRef(new Animated.Value(0)).current;
@@ -48,20 +47,7 @@ export default function SearchingScreen() {
     startPulse(pulseC, 1000);
   }, [pulseA, pulseB, pulseC]);
 
-  useEffect(() => {
-    if (currentRide?.status === 'negotiating' && !isMatchingPaused) {
-      router.replace('/negotiation');
-    } else if (!isCancellingRef.current && (!currentRide || currentRide.status === 'cancelled')) {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)');
-      }
-    }
-  }, [currentRide?.status, isMatchingPaused]);
-
   const finishCancelSearch = () => {
-    isCancellingRef.current = true;
     cancelRide();
     showToast('Search cancelled', 'info');
     if (router.canGoBack()) {

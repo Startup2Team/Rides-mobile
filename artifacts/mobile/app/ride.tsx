@@ -107,8 +107,6 @@ export default function RideScreen() {
   /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
   const [arrivedDriverCoords, setArrivedDriverCoords] = useState<Coords | null>(null);
 
-  const navigatingToRatingRef = useRef(false);
-
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [driverCardHeight, setDriverCardHeight] = useState(260);
@@ -258,11 +256,6 @@ export default function RideScreen() {
     ? `Your driver is still waiting. You are ${formatLateDuration(lateSeconds)} late. Please come to the pickup point.`
     : `Your driver has arrived. Please come to the pickup point. (Waiting: ${formatCountdown(waitRemainingSeconds)})`;
 
-  useEffect(() => {
-    if (!currentRide && !navigatingToRatingRef.current) router.replace('/(tabs)');
-    if (currentRide?.status === 'negotiating') router.replace('/negotiation');
-  }, [currentRide?.status]);
-
   const mapFitEdgePadding = useMemo(
     () => ({
       top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 108,
@@ -333,7 +326,6 @@ export default function RideScreen() {
     const driverName = currentRide.driver?.name ?? '';
     const fare = currentRide.agreedFare ?? 0;
     const vehicleType = currentRide.vehicleType;
-    navigatingToRatingRef.current = true;
     const driverPhoto = resolveDriverProfileImage(currentRide.driver);
     router.push({
       pathname: '/rating',

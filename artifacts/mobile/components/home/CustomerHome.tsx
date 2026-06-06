@@ -1,6 +1,6 @@
 ﻿import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router, useFocusEffect, usePathname } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -113,14 +113,11 @@ export default function CustomerHome() {
     createRide,
     rideHistory,
     loadHistory,
-    isMatchingPaused,
     cancelledSearchDraft,
     restoreBookingOnHomeFocus,
     clearCancelledSearchDraft,
     clearRestoreBookingOnHomeFocus,
   } = useRide();
-  const pathname = usePathname();
-  const lastRideFlowStatusRef = useRef<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
   const locationSearchInputRef = useRef<TextInput>(null);
@@ -266,42 +263,6 @@ export default function CustomerHome() {
     if (mapPicker === null) return;
     void syncPickerCoordsFromMapCenter();
   }, [mapPicker, pickerMapSize.height, pickerMapSize.width, syncPickerCoordsFromMapCenter]);
-
-  // Redirect when ride status changes (do not re-push /searching when only isMatchingPaused toggles â€” cancel alert)
-  useEffect(() => {
-    if (!currentRide) return;
-    if (currentRide.status === 'searching') {
-      router.push('/searching');
-    }
-  }, [currentRide?.status]);
-
-  useEffect(() => {
-    if (!currentRide) {
-      lastRideFlowStatusRef.current = null;
-      return;
-    }
-    if (currentRide.status === 'negotiating' && !isMatchingPaused) {
-      lastRideFlowStatusRef.current = null;
-      if (pathname !== '/negotiation') {
-        router.push('/negotiation');
-      }
-      return;
-    }
-    const rideFlowStatuses = ['confirmed', 'arriving', 'arrived', 'in_progress'] as const;
-    if (!rideFlowStatuses.includes(currentRide.status as (typeof rideFlowStatuses)[number])) {
-      lastRideFlowStatusRef.current = null;
-      return;
-    }
-    const alreadyInRideFlow =
-      lastRideFlowStatusRef.current !== null &&
-      rideFlowStatuses.includes(
-        lastRideFlowStatusRef.current as (typeof rideFlowStatuses)[number],
-      );
-    if (!alreadyInRideFlow && pathname !== '/ride') {
-      router.replace('/ride');
-    }
-    lastRideFlowStatusRef.current = currentRide.status;
-  }, [currentRide?.status, isMatchingPaused, pathname]);
 
   const applyCancelledSearchDraft = useCallback(
     (draft: BookingFormDraft) => {
