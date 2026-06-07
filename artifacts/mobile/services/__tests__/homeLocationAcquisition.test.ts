@@ -2,6 +2,7 @@ import type { LocationObject } from 'expo-location';
 import {
   acquireBestHomeLocation,
   requestHomeLocationPermission,
+  startHomeLocationWatch,
 } from '@/services/homeLocationAcquisition';
 
 function location(accuracy: number, latitude = -1.95): LocationObject {
@@ -122,5 +123,47 @@ describe('acquireBestHomeLocation', () => {
       isActive: () => true,
       maxAttempts: 1,
     })).rejects.toThrow('no result');
+  });
+});
+
+describe('startHomeLocationWatch', () => {
+  it('forwards watched GPS updates while active and removes the subscription when stopped', async () => {
+    let callback: ((value: LocationObject) => void) | undefined;
+    const remove = jest.fn();
+    const onLocation = jest.fn();
+    const stop = await startHomeLocationWatch({
+      isActive: () => true,
+      onLocation,
+      watchPosition: jest.fn(async nextCallback => {
+        callback = nextCallback;
+        return { remove };
+      }),
+    });
+
+    const watchedLocation = location(15, -1.951);
+    callback?.(watchedLocation);
+    expect(onLocation).toHaveBeenCalledWith(watchedLocation);
+
+    stop();
+    callback?.(location(12, -1.952));
+    expect(onLocation).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes a watch that becomes inactive before subscription setup completes', async () => {
+    let active = true;
+    const remove = jest.fn();
+    const stopPromise = startHomeLocationWatch({
+      isActive: () => active,
+      onLocation: jest.fn(),
+      watchPosition: jest.fn(async () => {
+        active = false;
+        return { remove };
+      }),
+    });
+
+    const stop = await stopPromise;
+    stop();
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 });

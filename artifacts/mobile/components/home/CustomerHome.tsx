@@ -102,12 +102,13 @@ export default function CustomerHome() {
   }, []);
   const preserveInitialPickup = useCallback(() => Boolean(cancelledSearchDraftRef.current), []);
   const {
-    cancelHereLocationRefresh,
     currentLocationAddress,
     gpsLocation,
     locLoading,
     locationStatus,
     refreshHereLocation,
+    startHereLocationWatch,
+    stopHereLocationWatch,
     userLocation,
   } = useHomeLocation({ applyInitialPickup, preserveInitialPickup });
   const locationSearch = useLocationSearch(userLocation);
@@ -383,17 +384,13 @@ export default function CustomerHome() {
 
   useFocusEffect(
     useCallback(() => {
-      if (locationStatus !== 'available' || locationSearchTarget !== null || mapPicker !== null) {
-        return undefined;
-      }
-      void refreshHereLocation();
-      return cancelHereLocationRefresh;
+      if (locationStatus !== 'available') return undefined;
+      void startHereLocationWatch();
+      return stopHereLocationWatch;
     }, [
-      cancelHereLocationRefresh,
-      locationSearchTarget,
       locationStatus,
-      mapPicker,
-      refreshHereLocation,
+      startHereLocationWatch,
+      stopHereLocationWatch,
     ]),
   );
 

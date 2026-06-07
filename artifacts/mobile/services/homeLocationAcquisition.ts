@@ -12,6 +12,38 @@ type Options = {
   attemptTimeoutMs?: number;
 };
 
+type LocationSubscription = {
+  remove: () => void;
+};
+
+export async function startHomeLocationWatch({
+  isActive,
+  onLocation,
+  watchPosition,
+}: {
+  isActive: () => boolean;
+  onLocation: (location: LocationObject) => void;
+  watchPosition: (
+    callback: (location: LocationObject) => void,
+  ) => Promise<LocationSubscription>;
+}): Promise<() => void> {
+  let active = true;
+  const subscription = await watchPosition(location => {
+    if (active && isActive()) onLocation(location);
+  });
+
+  if (!active || !isActive()) {
+    active = false;
+    subscription.remove();
+  }
+
+  return () => {
+    if (!active) return;
+    active = false;
+    subscription.remove();
+  };
+}
+
 export async function requestHomeLocationPermission({
   getPermission,
   requestPermission,

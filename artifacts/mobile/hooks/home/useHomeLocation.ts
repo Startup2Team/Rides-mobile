@@ -7,6 +7,7 @@ import { KIGALI_CENTER } from '@/types';
 import {
   acquireBestHomeLocation,
   requestHomeLocationPermission,
+  startHomeLocationWatch,
 } from '@/services/homeLocationAcquisition';
 import {
   isLatestLocationRequest,
@@ -47,11 +48,17 @@ export function useHomeLocation({
   const [locationStatus, setLocationStatus] = useState<HomeLocationStatus>('loading');
   const [locationError, setLocationError] = useState<unknown>(null);
   const locationRequestRef = useRef(0);
+  const locationWatchRef = useRef<(() => void) | null>(null);
+  const locationWatchRequestRef = useRef(0);
+  const watchReverseGeocodeRef = useRef(0);
   const gpsLocationRef = useRef<RideLocation | null>(null);
   gpsLocationRef.current = gpsLocation;
 
-  const cancelHereLocationRefresh = useCallback(() => {
-    locationRequestRef.current += 1;
+  const stopHereLocationWatch = useCallback(() => {
+    locationWatchRequestRef.current += 1;
+    watchReverseGeocodeRef.current += 1;
+    locationWatchRef.current?.();
+    locationWatchRef.current = null;
   }, []);
 
   const acquireLocation = useCallback((requestId: number) => {
@@ -124,6 +131,67 @@ export function useHomeLocation({
       if (!gpsLocationRef.current) setLocationStatus('unavailable');
     }
   }, [acquireLocation, applyCoords, applyHereFromCoords]);
+
+  const startHereLocationWatch = useCallback(async () => {
+    if (Platform.OS === 'web') return;
+
+    stopHereLocationWatch();
+    const watchRequestId = locationWatchRequestRef.current;
+    try {
+      const granted = await requestHomeLocationPermission({
+        getPermission: Location.getForegroundPermissionsAsync,
+        requestPermission: Location.requestForegroundPermissionsAsync,
+      });
+      if (!granted || watchRequestId !== locationWatchRequestRef.current) return;
+
+      const stop = await startHomeLocationWatch({
+        isActive: () => watchRequestId === locationWatchRequestRef.current,
+        watchPosition: callback =>
+          Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              distanceInterval: 5,
+              timeInterval: 3_000,
+            },
+            callback,
+          ),
+        onLocation: loc => {
+          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          applyCoords(coords);
+          setLocationError(null);
+
+          const geocodeRequestId = ++watchReverseGeocodeRef.current;
+          void Location.reverseGeocodeAsync(coords)
+            .then(([geo]) => {
+              if (
+                watchRequestId !== locationWatchRequestRef.current
+                || geocodeRequestId !== watchReverseGeocodeRef.current
+              ) {
+                return;
+              }
+              const selectedAddress = selectCurrentLocationAddress(
+                geo,
+                loc.coords.accuracy,
+                CURRENT_LOCATION_FALLBACK,
+              );
+              logLocationSession(loc.coords, geo, selectedAddress);
+              applyHereFromCoords(coords, loc.coords.accuracy, geo);
+            })
+            .catch(() => {
+              // Keep the GPS pin update and neutral address when reverse geocoding fails.
+            });
+        },
+      });
+
+      if (watchRequestId !== locationWatchRequestRef.current) {
+        stop();
+        return;
+      }
+      locationWatchRef.current = stop;
+    } catch (error) {
+      if (watchRequestId === locationWatchRequestRef.current) setLocationError(error);
+    }
+  }, [applyCoords, applyHereFromCoords, stopHereLocationWatch]);
 
   useEffect(() => {
     let mounted = true;
@@ -244,17 +312,26 @@ export function useHomeLocation({
     return () => {
       mounted = false;
       locationRequestRef.current += 1;
+      stopHereLocationWatch();
     };
-  }, [acquireLocation, applyCoords, applyHereFromCoords, applyInitialPickup, preserveInitialPickup]);
+  }, [
+    acquireLocation,
+    applyCoords,
+    applyHereFromCoords,
+    applyInitialPickup,
+    preserveInitialPickup,
+    stopHereLocationWatch,
+  ]);
 
   return {
-    cancelHereLocationRefresh,
     currentLocationAddress,
     gpsLocation,
     locLoading: locationStatus === 'loading',
     locationError,
     locationStatus,
     refreshHereLocation,
+    startHereLocationWatch,
+    stopHereLocationWatch,
     userLocation,
   };
 }

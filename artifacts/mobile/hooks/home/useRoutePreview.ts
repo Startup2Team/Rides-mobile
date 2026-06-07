@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
 import { InteractionManager, Platform } from 'react-native';
 import MapView from 'react-native-maps';
-import { useRoute } from '@/hooks/useRoute';
+import { getRouteKey, useRoute } from '@/hooks/useRoute';
 import type { Coords, RideLocation } from '@/types';
-import { routePolylineThroughPinTips, sampleRouteCoordsForFit } from '@/utils/mapUtils';
+import { homeRoutePolyline, sampleRouteCoordsForFit } from '@/utils/mapUtils';
 import {
   BOOKING_MAP_TOP_OVERLAY,
   EXPANDED_PANEL_HEIGHT,
@@ -48,13 +48,19 @@ export function useRoutePreview({
       : null,
     [destination?.latitude, destination?.longitude],
   );
-  const { route, loading: routeLoading } = useRoute(
+  const { route, routeKey, loading: routeLoading } = useRoute(
     hasPreciseRouteLocations ? pickupCoords : null,
     hasPreciseRouteLocations ? destinationCoords : null,
   );
-  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const routeRequestKey = hasPreciseRouteLocations && destinationCoords
+    ? getRouteKey(pickupCoords, destinationCoords)
+    : null;
+  const [loadedRoute, setLoadedRoute] = useState<{
+    key: string;
+    coordinates: Coords[];
+  } | null>(null);
   const clearRoutePreview = useCallback(() => {
-    setRouteCoords([]);
+    setLoadedRoute(null);
   }, []);
 
   const routePreviewCoords = useMemo(
@@ -63,8 +69,11 @@ export function useRoutePreview({
       : EMPTY_COORDINATES,
     [destinationCoords, pickupCoords],
   );
-  const visibleRouteCoords = routeCoords.length > 1 ? routeCoords : EMPTY_COORDINATES;
-  const routeCenterCoords = routeCoords.length > 1 ? routeCoords : routePreviewCoords;
+  const visibleRouteCoords =
+    loadedRoute?.key === routeRequestKey && loadedRoute.coordinates.length > 1
+      ? loadedRoute.coordinates
+      : EMPTY_COORDINATES;
+  const routeCenterCoords = visibleRouteCoords.length > 1 ? visibleRouteCoords : routePreviewCoords;
   const routeFitCoords = useMemo(() => {
     if (routeCenterCoords.length < 2) return EMPTY_COORDINATES;
     if (!destinationCoords) return sampleRouteCoordsForFit(routeCenterCoords);
@@ -89,12 +98,10 @@ export function useRoutePreview({
   }, [bookingPanelMapInset, bottomInset, destinationCoords, isMapReady, mapRef, showBooking, topInset]);
 
   const routeLineCoords = useMemo(() => {
-    if (visibleRouteCoords.length < 2) {
-      return routePreviewCoords.length > 1 ? routePreviewCoords : EMPTY_COORDINATES;
-    }
+    if (visibleRouteCoords.length < 2) return EMPTY_COORDINATES;
     if (!destinationCoords) return visibleRouteCoords;
-    return routePolylineThroughPinTips(visibleRouteCoords, pickupCoords, destinationCoords);
-  }, [destinationCoords, pickupCoords, routePreviewCoords, visibleRouteCoords]);
+    return homeRoutePolyline(visibleRouteCoords, pickupCoords, destinationCoords);
+  }, [destinationCoords, pickupCoords, visibleRouteCoords]);
   const shouldShowBookingRoute = showBooking && destinationCoords !== null && routeLineCoords.length > 1;
   const routePinPositions = useMemo(
     () => ({ pickup: pickupCoords, destination: destinationCoords }),
@@ -102,12 +109,16 @@ export function useRoutePreview({
   );
 
   useEffect(() => {
-    setRouteCoords(route && route.coordinates.length > 1 ? route.coordinates : []);
-  }, [route, routePreviewCoords]);
+    setLoadedRoute(
+      routeRequestKey && routeKey === routeRequestKey && route && route.coordinates.length > 1
+        ? { key: routeRequestKey, coordinates: route.coordinates }
+        : null,
+    );
+  }, [route, routeKey, routeRequestKey]);
 
   useEffect(() => {
     if (!showBooking || !destinationCoords) {
-      setRouteCoords([]);
+      setLoadedRoute(null);
     }
   }, [destinationCoords, showBooking]);
 
