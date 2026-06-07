@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, Text, View } from 'react-native';
@@ -55,9 +55,12 @@ export function NegotiationHeader({
               <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
                 {VEHICLE_LABELS[ride.vehicleType]} - {ride.driver?.plateNumber ?? 'Plate pending'}
               </Text>
-              <Text style={[styles.ratingText, { color: colors.star }]}>
-                â˜… {ride.driver?.rating?.toFixed(1) ?? '4.8'}
-              </Text>
+              <View style={styles.ratingRow}>
+                <MaterialCommunityIcons name="star" size={13} color={colors.star} />
+                <Text style={[styles.ratingText, { color: colors.star }]}>
+                  {ride.driver?.rating?.toFixed(1) ?? '4.8'}
+                </Text>
+              </View>
             </View>
           </View>
         </View>

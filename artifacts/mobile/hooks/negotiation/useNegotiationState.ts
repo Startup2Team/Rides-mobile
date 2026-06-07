@@ -65,14 +65,14 @@ export function useNegotiationState(currentRide: Ride | null) {
       return {
         tone: 'waiting' as const,
         title: 'Driver is replying',
-        hint: 'Hang tight â€” they usually respond quickly',
+        hint: 'Hang tight - they usually respond quickly',
       };
     }
     if (lastDriverOffer?.amount) {
       return {
         tone: 'active' as const,
         title: 'New fare from driver',
-        hint: `${formatFare(lastDriverOffer.amount)} â€” tap Accept fare below when you're ready`,
+        hint: `${formatFare(lastDriverOffer.amount)} - tap Accept fare below when you're ready`,
       };
     }
     return {
