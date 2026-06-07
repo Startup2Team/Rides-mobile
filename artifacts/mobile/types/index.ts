@@ -63,6 +63,7 @@ export interface DriverProfile {
   vehicleType: VehicleType;
   plateNumber: string;
   licenseNumber: string;
+  nationalId?: string;
   licenseExpiryDate?: string;
   insuranceExpiryDate?: string;
   authorizationExpiryDate?: string;
@@ -88,6 +89,7 @@ export interface DriverProfile {
   earningsTotal: number;
   passengerSeats?: number;
   loadCapacityKg?: number;
+  rejectionReason?: string;
 }
 
 export interface NegotiationMessage {

@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
+import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -38,7 +39,7 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isProtectedDriverPath(pathname) && !canAccessDriverMode(driverProfile)) {
-      router.replace('/driver-application-status');
+      router.replace('/driver-submission-confirmation');
     }
   }, [driverProfile, pathname]);
 
@@ -54,7 +55,8 @@ function RootLayoutNav() {
       <Stack.Screen name="ride" options={{ animation: 'none' }} />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="driver-onboarding" />
-      <Stack.Screen name="driver-application-status" />
+      <Stack.Screen name="driver-submission-confirmation" />
+      <Stack.Screen name="driver-packages" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />
       <Stack.Screen
@@ -104,17 +106,19 @@ export default function RootLayout() {
       >
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <RideProvider>
-              <ToastProvider>
-                <SavedLocationsProvider>
-                  <GestureHandlerRootView style={{ flex: 1 }}>
-                    <KeyboardProvider>
-                      <RootLayoutNav />
-                    </KeyboardProvider>
-                  </GestureHandlerRootView>
-                </SavedLocationsProvider>
-              </ToastProvider>
-            </RideProvider>
+            <DriverEntitlementProvider>
+              <RideProvider>
+                <ToastProvider>
+                  <SavedLocationsProvider>
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <KeyboardProvider>
+                        <RootLayoutNav />
+                      </KeyboardProvider>
+                    </GestureHandlerRootView>
+                  </SavedLocationsProvider>
+                </ToastProvider>
+              </RideProvider>
+            </DriverEntitlementProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>

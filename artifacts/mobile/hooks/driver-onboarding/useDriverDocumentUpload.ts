@@ -6,6 +6,7 @@ import {
   type DocFaces,
   type DocumentKey,
 } from './onboardingTypes';
+import { isValidImageAsset } from '@/utils/documentValidation';
 
 export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>) {
   const [docs, setDocs] = useState<Record<DocumentKey, DocFaces>>(INITIAL_DRIVER_DOCUMENTS);
@@ -27,7 +28,13 @@ export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetState
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
-    if (!result.canceled && result.assets[0]) setDocumentFace(key, face, result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      if (!isValidImageAsset(result.assets[0])) {
+        Alert.alert('Invalid document', 'Please select a valid image file.');
+        return;
+      }
+      setDocumentFace(key, face, result.assets[0].uri);
+    }
   };
 
   const takeDocumentPhoto = async (key: DocumentKey, face: 0 | 1) => {
@@ -37,7 +44,13 @@ export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetState
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
-    if (!result.canceled && result.assets[0]) setDocumentFace(key, face, result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      if (!isValidImageAsset(result.assets[0])) {
+        Alert.alert('Invalid document', 'Please take a valid image.');
+        return;
+      }
+      setDocumentFace(key, face, result.assets[0].uri);
+    }
   };
 
   const takeSelfie = async () => {
@@ -53,5 +66,5 @@ export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetState
     }
   };
 
-  return { docs, pickDocument, selfieUri, takeDocumentPhoto, takeSelfie };
+  return { docs, pickDocument, selfieUri, setDocs, setSelfieUri, takeDocumentPhoto, takeSelfie };
 }

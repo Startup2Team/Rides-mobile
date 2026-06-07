@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { DatePickerField } from '@/components/DatePickerField';
+import { AppInput } from '@/components/AppInput';
 import type { useColors } from '@/hooks/useColors';
 import type { User } from '@/types';
 import type { CascadeField, DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
@@ -26,6 +27,7 @@ export function PersonalInformationSection({ colors, errors, form, maxDobDate, s
     <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Full Name</Text><Text style={[styles.infoValue, { color: colors.foreground }]}>{user?.name}</Text></View>
     <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Phone</Text><Text style={[styles.infoValue, { color: colors.foreground }]}>{user?.phone}</Text></View>
     <DatePickerField label="Date of Birth" value={form.dob} onChange={dob => update('dob', dob)} error={errors.dob} placeholder="DD/MM/YYYY" maximumDate={maxDobDate} />
+    <AppInput label="National ID Number" placeholder="16-digit National ID" value={form.nationalId} onChangeText={text => update('nationalId', text.replace(/\D/g, '').slice(0, 16))} error={errors.nationalId} leftIcon="credit-card" keyboardType="numeric" maxLength={16} />
     <Text style={[styles.sectionSubtitle, { color: colors.foreground }]}>Identity Verification</Text>
     <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Take a clear selfie so we can verify your identity.</Text>
     {selfieUri ? <View style={styles.selfiePreviewRow}><Image source={{ uri: selfieUri }} style={styles.selfieImage} resizeMode="cover" /><View style={{ flex: 1, gap: 8 }}><View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}><Feather name="check-circle" size={14} color={colors.primary} /><Text style={[styles.docUploadedText, { color: colors.primary }]}>Photo taken</Text></View><TouchableOpacity style={[styles.selfieRetakeBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={takeSelfie}><Feather name="camera" size={14} color={colors.mutedForeground} /><Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake selfie</Text></TouchableOpacity></View></View>

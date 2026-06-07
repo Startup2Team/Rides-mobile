@@ -49,10 +49,12 @@ import {
   NEGOTIATION_RESPONSE_DELAY_MS,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
+import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
 export function RideProvider({ children }: { children: React.ReactNode }) {
+  const driverEntitlement = useOptionalDriverEntitlement();
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [cancelledSearchDraft, setCancelledSearchDraft] = useState<BookingFormDraft | null>(null);
   const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
@@ -283,7 +285,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }, JOURNEY_TRACKING_INTERVAL_MS);
   }, [timers]);
 
-  const completeRide = useCallback(() => {
+  const completeRide = useCallback((source: 'customer' | 'driver' = 'customer') => {
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
@@ -294,10 +296,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       void appendRideHistory(completed).catch(error => {
         reportOperationalFailure('ride.history.persist', error, { status: completed.status });
       });
+      if (source === 'driver') {
+        void driverEntitlement?.deductCreditForCompletedRide(completed.id);
+      }
       return null;
     });
     setDriverLocation(null);
-  }, [timers]);
+  }, [driverEntitlement, timers]);
 
   const acceptRideRequest = useCallback(() => {
     if (!pendingRequestRef.current) return;

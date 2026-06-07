@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
 
 function StatRow({ label, value, icon, color }: { label: string; value: string; icon: keyof typeof Feather.glyphMap; color?: string }) {
   const colors = useColors();
@@ -23,6 +25,8 @@ export default function DriverStats() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { driverProfile } = useAuth();
+  const { entitlement, rideCredits } = useDriverEntitlement();
+  const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
 
   const dp = driverProfile ?? {
     dailyRides: 0,
@@ -47,6 +51,12 @@ export default function DriverStats() {
       }}
     >
       <Text style={[styles.title, { color: colors.foreground }]}>Driver Statistics</Text>
+
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>RIDE PACKAGE</Text>
+        <StatRow label="Active Plan" value={activePackage?.name ?? 'No active package'} icon="layers" />
+        <StatRow label="Remaining Credits" value={String(rideCredits)} icon="navigation" color={rideCredits < 10 ? colors.destructiveHex : colors.primaryHex} />
+      </View>
 
       {/* Today */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

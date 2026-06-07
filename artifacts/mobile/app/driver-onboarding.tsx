@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
@@ -11,6 +12,7 @@ import { DocumentUploadSection } from '@/components/driver-onboarding/DocumentUp
 import { PersonalInformationSection } from '@/components/driver-onboarding/PersonalInformationSection';
 import { ProgressHeader } from '@/components/driver-onboarding/ProgressHeader';
 import { RequirementsSection } from '@/components/driver-onboarding/RequirementsSection';
+import { ReviewSubmissionSection } from '@/components/driver-onboarding/ReviewSubmissionSection';
 import { VehicleInformationSection } from '@/components/driver-onboarding/VehicleInformationSection';
 import { styles } from '@/components/driver-onboarding/onboardingStyles';
 import { useAuth } from '@/context/AuthContext';
@@ -19,14 +21,16 @@ import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocu
 import { useDriverOnboardingForm } from '@/hooks/driver-onboarding/useDriverOnboardingForm';
 import { useDriverOnboardingValidation } from '@/hooks/driver-onboarding/useDriverOnboardingValidation';
 import type { DriverProfile } from '@/types';
-import { buildPendingDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
+import { buildDraftDriverProfile, buildPendingDriverProfile, formFromDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
+import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, saveStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
 
 export default function DriverOnboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, saveDriverProfile, switchMode } = useAuth();
+  const { driverProfile, user, saveDriverProfile, switchMode } = useAuth();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const {
     errors,
@@ -35,6 +39,7 @@ export default function DriverOnboarding() {
     maxDobDate,
     plateWarning,
     setErrors,
+    setForm,
     update,
     updateCascade,
   } = useDriverOnboardingForm();
@@ -42,6 +47,8 @@ export default function DriverOnboarding() {
     docs,
     pickDocument,
     selfieUri,
+    setDocs,
+    setSelfieUri,
     takeDocumentPhoto,
     takeSelfie,
   } = useDriverDocumentUpload(setErrors);
@@ -53,13 +60,55 @@ export default function DriverOnboarding() {
     step,
   });
 
+  useEffect(() => {
+    void (async () => {
+      const stored = await loadStoredDriverOnboardingDraft();
+      if (stored.data) {
+        setForm(stored.data.form);
+        setDocs(stored.data.docs);
+        setSelfieUri(stored.data.selfieUri);
+        setAcceptedTerms(stored.data.acceptedTerms);
+        setStep(stored.data.step);
+      } else if (driverProfile?.verificationStatus === 'rejected' || driverProfile?.verificationStatus === 'draft') {
+        setForm(formFromDriverProfile(driverProfile));
+        setSelfieUri(driverProfile.profileImage ?? null);
+      }
+      setDraftLoaded(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoaded) return;
+    const timer = setTimeout(() => {
+      void saveStoredDriverOnboardingDraft({
+        form,
+        docs,
+        selfieUri,
+        acceptedTerms,
+        step,
+        updatedAt: new Date().toISOString(),
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [acceptedTerms, docs, draftLoaded, form, selfieUri, step]);
+
+  const saveDraftAndExit = async () => {
+    setLoading(true);
+    await saveStoredDriverOnboardingDraft({ form, docs, selfieUri, acceptedTerms, step, updatedAt: new Date().toISOString() });
+    await saveDriverProfile(buildDraftDriverProfile(form, selfieUri));
+    setLoading(false);
+    router.replace('/(tabs)');
+  };
+
   const saveAndContinue = async () => {
+    setDraftLoaded(false);
     setLoading(true);
     const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
+    await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
     setLoading(false);
-    router.replace('/driver-application-status');
+    router.replace('/driver-submission-confirmation');
   };
 
   const handleNext = () => {
@@ -68,7 +117,7 @@ export default function DriverOnboarding() {
       setErrors(validationErrors);
       return;
     }
-    if (step < 3) {
+    if (step < 4) {
       setStep(current => current + 1);
     } else {
       saveAndContinue();
@@ -80,7 +129,7 @@ export default function DriverOnboarding() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ProgressHeader colors={colors} safeAreaTop={insets.top} setStep={setStep} step={step} />
+      <ProgressHeader colors={colors} onExit={saveDraftAndExit} safeAreaTop={insets.top} setStep={setStep} step={step} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 0 && (
           <PersonalInformationSection
@@ -128,14 +177,19 @@ export default function DriverOnboarding() {
             update={update}
           />
         )}
+        {step === 4 && <ReviewSubmissionSection colors={colors} docs={docs} form={form} />}
         <AppButton
-          title={step < 3 ? 'Continue' : 'Submit Registration'}
+          title={step < 4 ? 'Continue' : 'Submit Registration'}
           onPress={handleNext}
           fullWidth
           size="lg"
           loading={loading}
           disabled={step === 3 && !acceptedTerms}
         />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <AppButton title="Save & exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
+          <AppButton title="Contact Support" onPress={() => router.push('/help-support')} size="sm" compact variant="plain" style={{ flex: 1 }} />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );

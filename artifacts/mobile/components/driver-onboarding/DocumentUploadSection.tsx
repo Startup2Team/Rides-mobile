@@ -7,7 +7,7 @@ import type { DocFaces, DocumentKey, DriverOnboardingForm } from '@/hooks/driver
 import { DOCUMENTS } from './onboardingData';
 import { styles } from './onboardingStyles';
 
-const EXPIRY_FIELDS: Record<DocumentKey, keyof Pick<DriverOnboardingForm, 'licenseExpiryDate' | 'insuranceExpiryDate' | 'authorizationExpiryDate'>> = {
+const EXPIRY_FIELDS: Partial<Record<DocumentKey, keyof Pick<DriverOnboardingForm, 'licenseExpiryDate' | 'insuranceExpiryDate' | 'authorizationExpiryDate'>>> = {
   license: 'licenseExpiryDate',
   insurance: 'insuranceExpiryDate',
   authorization: 'authorizationExpiryDate',
@@ -24,15 +24,15 @@ export function DocumentUploadSection({ colors, docs, errors, form, pickDocument
 
   return <View style={styles.section}>
     <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Document Uploads</Text>
-    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Front face of each document is required. Add the back face where applicable.</Text>
+    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Upload front and back photos of each document. Lay it flat, use good lighting, and ensure all details are clearly visible.</Text>
     {DOCUMENTS.map(document => <View key={document.key} style={styles.docRow}>
       <View style={styles.docHeader}><Text style={[styles.docLabel, { color: colors.foreground }]}>{document.label}<Text style={{ color: colors.destructive }}> *</Text></Text><Text style={[styles.docHint, { color: colors.mutedForeground }]}>{document.hint}</Text></View>
-      <DatePickerField label="Expiry date" value={form[EXPIRY_FIELDS[document.key]]} onChange={value => update(EXPIRY_FIELDS[document.key], value)} error={errors[EXPIRY_FIELDS[document.key]]} placeholder="DD/MM/YYYY" minimumDate={minimumExpiryDate} />
+      {EXPIRY_FIELDS[document.key] ? <DatePickerField label="Expiry date" value={form[EXPIRY_FIELDS[document.key]!]} onChange={value => update(EXPIRY_FIELDS[document.key]!, value)} error={errors[EXPIRY_FIELDS[document.key]!]} placeholder="DD/MM/YYYY" minimumDate={minimumExpiryDate} /> : null}
       <Text style={[styles.docFaceLabel, { color: colors.mutedForeground }]}>Front face</Text>
       <DocumentFace cameraOnly={document.key === 'license'} colors={colors} uri={docs[document.key][0]} hasError={Boolean(errors[document.key])} onPick={() => pickDocument(document.key, 0)} onTake={() => takeDocumentPhoto(document.key, 0)} />
       {errors[document.key] ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors[document.key]}</Text> : null}
       {docs[document.key][0] && <><Text style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: 4 }]}>Back face</Text>
-        {docs[document.key][1] ? <DocumentFace cameraOnly={document.key === 'license'} colors={colors} uri={docs[document.key][1]} hasError={false} onPick={() => pickDocument(document.key, 1)} onTake={() => takeDocumentPhoto(document.key, 1)} />
+        {docs[document.key][1] ? <DocumentFace cameraOnly={document.key === 'license'} colors={colors} uri={docs[document.key][1]} hasError={Boolean(errors[document.key])} onPick={() => pickDocument(document.key, 1)} onTake={() => takeDocumentPhoto(document.key, 1)} />
           : <TouchableOpacity style={[styles.docAddBackBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => document.key === 'license' ? takeDocumentPhoto(document.key, 1) : Alert.alert('Add back face', 'Choose how to add the back face of this document.', [{ text: 'Take photo', onPress: () => takeDocumentPhoto(document.key, 1) }, { text: 'Upload from gallery', onPress: () => pickDocument(document.key, 1) }, { text: 'Cancel', style: 'cancel' }])}><Feather name="camera" size={15} color={colors.mutedForeground} /><Text style={[styles.docAddBackText, { color: colors.mutedForeground }]}>{document.key === 'license' ? 'Take back face photo' : 'Add another photo (back face)'}</Text></TouchableOpacity>}
       </>}
     </View>)}

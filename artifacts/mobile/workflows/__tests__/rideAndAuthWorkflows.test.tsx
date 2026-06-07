@@ -155,7 +155,7 @@ function DriverRideWorkflow() {
       <Pressable onPress={() => ride.riderAcceptWithFare(5_000)}><Text>Accept fare</Text></Pressable>
       <Pressable onPress={ride.markArrived}><Text>Mark arrived</Text></Pressable>
       <Pressable onPress={ride.startJourney}><Text>Start journey</Text></Pressable>
-      <Pressable onPress={ride.completeRide}><Text>Complete ride</Text></Pressable>
+      <Pressable onPress={() => ride.completeRide('driver')}><Text>Complete ride</Text></Pressable>
     </View>
   );
 }

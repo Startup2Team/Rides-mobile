@@ -72,7 +72,7 @@ export function HomeTopHeader({
   const messageIndexRef = useRef(0);
 
   const ctaMessage = driverVerificationStatus === 'pending_review'
-    ? 'Application under review'
+    ? 'In Review'
     : driverVerificationStatus === 'rejected'
       ? 'Update application'
       : driverVerificationStatus === 'approved'
@@ -188,8 +188,8 @@ export function HomeTopHeader({
   };
 
   const handleDriverCtaPress = () => {
-    if (driverVerificationStatus === 'pending_review') router.push('/driver-application-status');
-    else if (driverVerificationStatus === 'approved') router.push('/driver-application-status');
+    if (driverVerificationStatus === 'pending_review') router.push('/driver-submission-confirmation');
+    else if (driverVerificationStatus === 'approved') router.push('/(driver)');
     else router.push('/driver-onboarding');
   };
 

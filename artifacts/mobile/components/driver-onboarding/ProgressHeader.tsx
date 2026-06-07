@@ -6,15 +6,16 @@ import type { useColors } from '@/hooks/useColors';
 import { ONBOARDING_STEPS } from './onboardingData';
 import { styles } from './onboardingStyles';
 
-export function ProgressHeader({ colors, safeAreaTop, setStep, step }: {
+export function ProgressHeader({ colors, onExit, safeAreaTop, setStep, step }: {
   colors: ReturnType<typeof useColors>;
+  onExit?: () => void;
   safeAreaTop: number;
   setStep: React.Dispatch<React.SetStateAction<number>>;
   step: number;
 }) {
   return <>
     <View style={[styles.header, { paddingTop: safeAreaTop + (Platform.OS === 'web' ? 67 : 0) + 16 }]}>
-      <BackButton exitOnPress={step === 0} onPress={() => (step > 0 ? setStep(current => current - 1) : router.back())} />
+      <BackButton exitOnPress={step === 0} onPress={() => (step > 0 ? setStep(current => current - 1) : onExit ? onExit() : router.back())} />
       <Text style={[styles.headerTitle, { color: colors.foreground }]}>Become a Driver</Text>
       <Text style={[styles.stepIndicator, { color: colors.mutedForeground }]}>{step + 1}/{ONBOARDING_STEPS.length}</Text>
     </View>

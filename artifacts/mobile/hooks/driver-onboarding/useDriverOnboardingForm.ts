@@ -4,12 +4,7 @@ import {
   type CascadeField,
   type DriverOnboardingForm,
 } from './onboardingTypes';
-
-const RWANDAN_PLATE_PATTERNS = [
-  /^R[A-Z]{2}\s\d{3}\s[A-Z]$/,
-  /^RAC\s\d{3}\s[A-Z]$/,
-  /^RAD\s\d{3}\s[A-Z]$/,
-];
+import { formatRwandaPlateInput, isValidRwandaPlateNumber } from '@/utils/rwandaValidation';
 
 export function useDriverOnboardingForm() {
   const [form, setForm] = useState<DriverOnboardingForm>(INITIAL_DRIVER_ONBOARDING_FORM);
@@ -38,15 +33,13 @@ export function useDriverOnboardingForm() {
   };
 
   const handlePlateChange = (text: string) => {
-    const upper = text.toUpperCase();
-    update('plateNumber', upper);
-    if (upper.length < 5) {
+    const formatted = formatRwandaPlateInput(text);
+    update('plateNumber', formatted);
+    if (formatted.length < 5) {
       setPlateWarning('');
       return;
     }
-    const cleaned = upper.trim();
-    const matched = RWANDAN_PLATE_PATTERNS.some(pattern => pattern.test(cleaned));
-    setPlateWarning(matched ? '' : 'Format not matched — please verify it matches Rwanda plate standards.');
+    setPlateWarning(isValidRwandaPlateNumber(formatted) ? '' : 'Enter a Rwanda plate in the format RAD 000 A.');
   };
 
   return { errors, form, handlePlateChange, maxDobDate, plateWarning, setErrors, setForm, update, updateCascade };

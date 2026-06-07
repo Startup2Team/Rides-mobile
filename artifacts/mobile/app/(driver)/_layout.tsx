@@ -89,7 +89,7 @@ function ClassicDriverTabs() {
 
 export default function DriverTabLayout() {
   const { driverProfile } = useAuth();
-  if (!canAccessDriverMode(driverProfile)) return <Redirect href="/driver-application-status" />;
+  if (!canAccessDriverMode(driverProfile)) return <Redirect href="/driver-submission-confirmation" />;
   if (isLiquidGlassAvailable()) return <NativeDriverTabs />;
   return <ClassicDriverTabs />;
 }

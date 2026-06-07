@@ -12,6 +12,14 @@ import {
   loadStoredSavedLocations,
   saveStoredSavedLocations,
 } from '../savedLocationsPersistence';
+import {
+  loadStoredDriverOnboardingDraft,
+  removeStoredDriverOnboardingDraft,
+  saveStoredDriverOnboardingDraft,
+} from '../driverOnboardingPersistence';
+import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM } from '@/hooks/driver-onboarding/onboardingTypes';
+import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { loadStoredDriverEntitlement, saveStoredDriverEntitlement } from '../driverEntitlementPersistence';
 import { loadVersionedStorage, saveVersionedStorage } from '../versionedStorage';
 import { rideHistorySchema } from '../storageSchemas';
 import type { DriverProfile, SavedLocation, User } from '@/types';
@@ -108,5 +116,27 @@ describe('domain persistence validation', () => {
       data: [savedLocation],
       source: 'current',
     });
+  });
+
+  test('persists and removes a driver onboarding draft', async () => {
+    const draft = {
+      form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalId: '1199080012345678' },
+      docs: INITIAL_DRIVER_DOCUMENTS,
+      selfieUri: 'file:///selfie.jpg',
+      acceptedTerms: false,
+      step: 2,
+      updatedAt: '2026-06-07T12:00:00.000Z',
+    };
+    await saveStoredDriverOnboardingDraft(draft);
+    await expect(loadStoredDriverOnboardingDraft()).resolves.toEqual({ data: draft, source: 'current' });
+    await removeStoredDriverOnboardingDraft();
+    await expect(loadStoredDriverOnboardingDraft()).resolves.toEqual({ data: null, source: 'missing' });
+  });
+
+  test('persists driver ride entitlement and credit ledger securely', async () => {
+    const entitlement = activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'growth').entitlement;
+    await saveStoredDriverEntitlement(entitlement);
+    await expect(loadStoredDriverEntitlement()).resolves.toEqual({ data: entitlement, source: 'current' });
+    await expect(AsyncStorage.getItem(STORAGE_KEYS.driverEntitlement)).resolves.toBeNull();
   });
 });

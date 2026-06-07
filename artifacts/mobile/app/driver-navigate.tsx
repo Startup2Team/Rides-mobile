@@ -265,7 +265,7 @@ export default function DriverNavigateScreen() {
       {
         text: 'Complete',
         onPress: () => {
-          completeRide();
+          completeRide('driver');
           router.replace('/(driver)');
         },
       },

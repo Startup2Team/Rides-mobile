@@ -6,11 +6,15 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { VEHICLE_LABELS } from '@/types';
+import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
 
 export default function DriverProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, driverProfile, logout, switchMode } = useAuth();
+  const { entitlement, rideCredits } = useDriverEntitlement();
+  const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
 
   const handleSwitchToCustomer = () => {
     Alert.alert('Switch Mode', 'Switch to customer mode?', [
@@ -94,6 +98,21 @@ export default function DriverProfileScreen() {
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={[styles.switchModeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push('/driver-packages')}
+        activeOpacity={0.75}
+      >
+        <View style={[styles.switchModeIcon, { backgroundColor: colors.primaryHex + '15' }]}>
+          <Feather name="layers" size={16} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.switchModeText, { color: colors.foreground }]}>{activePackage?.name ?? 'Choose Ride Package'}</Text>
+          <Text style={[styles.packageSubtext, { color: colors.mutedForeground }]}>{rideCredits} ride credits remaining</Text>
+        </View>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+      </TouchableOpacity>
+
       <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]}>
           <Feather name="file-text" size={18} color={colors.foreground} />
@@ -159,6 +178,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   switchModeText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  packageSubtext: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
   menuSection: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1 },
   menuText: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular' },
