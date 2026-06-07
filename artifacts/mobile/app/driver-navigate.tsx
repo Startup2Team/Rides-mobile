@@ -87,6 +87,7 @@ export default function DriverNavigateScreen() {
   const { showToast } = useToast();
   const [driverPos, setDriverPos] = useState(KIGALI_CENTER);
   const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
+  const [waitClockTick, setWaitClockTick] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
@@ -219,12 +220,41 @@ export default function DriverNavigateScreen() {
     fittedMapPhaseRef.current = phase;
   }, [currentRide, driverPos, phase, target]);
 
+  // Tick the pickupWait clock every second while waiting so the useMemo below recomputes.
+  useEffect(() => {
+    if (phase !== 'waiting') return;
+    const interval = setInterval(() => setWaitClockTick(tick => tick + 1), 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
   // ── Derived values that use hooks — MUST be before any early return ──────────
   // React requires hooks to be called unconditionally on every render.
-  const remainingRoute = useMemo(
-    () => route ? getRemainingRouteCoordinates(route.coordinates, driverPos) : null,
-    [driverPos, route],
-  );
+  // pickupPinCoordinate / destinationPinCoordinate use optional chaining so
+  // they are safe before the currentRide guard.
+  const pickupWait = useMemo(() => {
+    if (phase !== 'waiting' || !currentRide?.waitStartedAt) {
+      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
+    }
+    const startedMs = new Date(currentRide.waitStartedAt).getTime();
+    if (Number.isNaN(startedMs)) {
+      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
+    }
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+    const remainingSeconds = Math.max(WAIT_LIMIT_SECONDS - elapsed, 0);
+    const lateSeconds = Math.max(elapsed - WAIT_LIMIT_SECONDS, 0);
+    return { remainingSeconds, lateSeconds, isLate: lateSeconds > 0 };
+  }, [currentRide?.waitStartedAt, phase, waitClockTick]);
+
+  const pickupPinCoordinate = currentRide?.pickup ?? KIGALI_CENTER;
+  const destinationPinCoordinate = currentRide?.destination ?? KIGALI_CENTER;
+
+  const remainingRoute = useMemo(() => {
+    if (!route) return null;
+    const slice = getRemainingRouteCoordinates(route.coordinates, driverPos);
+    const endPin = phase === 'inprogress' ? destinationPinCoordinate : pickupPinCoordinate;
+    return routePolylineThroughPinTips(slice, null, endPin);
+  }, [destinationPinCoordinate, driverPos, phase, pickupPinCoordinate, route]);
+
   const vehicleRotationDeg = useMemo(() => {
     if (!currentRide || !remainingRoute || remainingRoute.length < 2) return 0;
     const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
@@ -232,9 +262,6 @@ export default function DriverNavigateScreen() {
   }, [currentRide, remainingRoute]);
 
   if (!currentRide) return null;
-
-  const pickupPinCoordinate = { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude };
-  const destinationPinCoordinate = { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude };
 
   const canMarkArrived = phase !== 'pickup' || distanceToTargetKm <= ARRIVAL_UNLOCK_KM;
   const pickupDistanceText = formatDistance(distanceToTargetKm);
@@ -316,21 +343,6 @@ export default function DriverNavigateScreen() {
 
   const timerExpired = waitSeconds === 0;
   const isCustomerLate = pickupWait.isLate;
-  const pickupPinCoordinate = currentRide?.pickup ?? KIGALI_CENTER;
-  const destinationPinCoordinate = currentRide?.destination ?? KIGALI_CENTER;
-
-  const remainingRoute = useMemo(() => {
-    if (!route) return null;
-    const slice = getRemainingRouteCoordinates(route.coordinates, driverPos);
-    const endPin = phase === 'inprogress' ? destinationPinCoordinate : pickupPinCoordinate;
-    return routePolylineThroughPinTips(slice, null, endPin);
-  }, [destinationPinCoordinate, driverPos, phase, pickupPinCoordinate, route]);
-
-  const vehicleRotationDeg = useMemo(() => {
-    if (!remainingRoute || remainingRoute.length < 2) return 0;
-    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
-    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
-  }, [currentRide.vehicleType, remainingRoute]);
 
   return (
     <View style={styles.container}>
