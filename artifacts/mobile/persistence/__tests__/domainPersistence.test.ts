@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '@/constants/storage';
 import { createRide } from '@/context/ride/__tests__/rideTestFactory';
 import {
@@ -56,6 +57,7 @@ const savedLocation: SavedLocation = {
 describe('domain persistence validation', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
+    (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
     jest.restoreAllMocks();
   });
 
@@ -68,6 +70,8 @@ describe('domain persistence validation', () => {
       data: driverProfile,
       source: 'current',
     });
+    await expect(AsyncStorage.getItem(STORAGE_KEYS.user)).resolves.toBeNull();
+    await expect(AsyncStorage.getItem(STORAGE_KEYS.driverProfile)).resolves.toBeNull();
   });
 
   test('migrates legacy saved locations and ride history', async () => {
@@ -79,6 +83,7 @@ describe('domain persistence validation', () => {
       data: [savedLocation],
       source: 'legacy',
     });
+    await expect(AsyncStorage.getItem(STORAGE_KEYS.savedLocations)).resolves.toBeNull();
     await expect(
       loadVersionedStorage(STORAGE_KEYS.rideHistory, rideHistorySchema),
     ).resolves.toEqual({ data: [ride], source: 'legacy' });

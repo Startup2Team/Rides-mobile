@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -21,19 +20,8 @@ import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { BRAND_GREEN_HEX } from '@/constants/systemColors';
 
-import { STORAGE_KEYS } from '@/constants/storage';
-
-const PAYMENT_STORAGE_KEY = STORAGE_KEYS.paymentMethods;
-
-type PaymentProvider = 'mtn' | 'airtel' | 'cash';
-
-interface PaymentMethod {
-  id: string;
-  provider: PaymentProvider;
-  label: string;
-  phoneNumber?: string;
-  isDefault: boolean;
-}
+import { loadStoredPaymentMethods, saveStoredPaymentMethods } from '@/persistence/paymentPersistence';
+import type { PaymentMethod, PaymentProvider } from '@/types';
 
 const PROVIDER_META: Record<PaymentProvider, { name: string; color: string; icon: string }> = {
   mtn: { name: 'MTN Mobile Money', color: '#FFCC00', icon: 'smartphone' },
@@ -88,19 +76,14 @@ export default function PaymentMethodsScreen() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(PAYMENT_STORAGE_KEY).then(raw => {
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as PaymentMethod[];
-          setMethods(parsed);
-        } catch {}
-      }
+    loadStoredPaymentMethods().then(stored => {
+      if (stored.data) setMethods(stored.data);
     });
   }, []);
 
   const persist = async (updated: PaymentMethod[]) => {
     setMethods(updated);
-    await AsyncStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(updated));
+    await saveStoredPaymentMethods(updated);
   };
 
   const handleSetDefault = async (id: string) => {

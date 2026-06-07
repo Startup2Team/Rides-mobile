@@ -47,6 +47,16 @@ export interface User {
   createdAt: string;
 }
 
+export type PaymentProvider = 'mtn' | 'airtel' | 'cash';
+
+export interface PaymentMethod {
+  id: string;
+  provider: PaymentProvider;
+  label: string;
+  phoneNumber?: string;
+  isDefault: boolean;
+}
+
 export interface DriverProfile {
   vehicleType: VehicleType;
   plateNumber: string;

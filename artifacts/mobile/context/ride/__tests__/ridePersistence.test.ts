@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '@/constants/storage';
 import { RIDE_HISTORY_LIMIT } from '../rideConstants';
 import { appendRideHistory, loadRideHistory } from '../ridePersistence';
@@ -7,6 +8,7 @@ import { createRide } from './rideTestFactory';
 describe('ride history persistence', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
+    (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
   });
 
   test('prepends a completed ride and loads it back', async () => {

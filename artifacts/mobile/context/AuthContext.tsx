@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, {
   createContext,
   useCallback,
@@ -8,13 +7,13 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { STORAGE_KEYS } from '@/constants/storage';
 import {
   loadStoredDriverProfile,
   loadStoredUser,
   saveStoredDriverProfile,
   saveStoredUser,
 } from '@/persistence/authPersistence';
+import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
 
 interface AuthContextType {
@@ -64,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     setUser(null);
     setDriverProfile(null);
-    await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
+    await clearSensitiveStorage();
   }, []);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {

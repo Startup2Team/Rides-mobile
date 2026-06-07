@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { act, renderHook } from '@testing-library/react-native';
 import React from 'react';
 import { RideProvider, useRide } from '../RideProvider';
@@ -71,6 +72,7 @@ describe('RideProvider lifecycle orchestration', () => {
       originalConsoleError(...args);
     });
     await AsyncStorage.clear();
+    (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
   });
 
   afterEach(() => {

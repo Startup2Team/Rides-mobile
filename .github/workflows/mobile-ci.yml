@@ -59,3 +59,50 @@ jobs:
 
       - name: Run mobile typecheck
         run: pnpm --filter @workspace/mobile typecheck
+
+  mobile-release-validation:
+    name: Production export and Android config
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+      EXPO_NO_TELEMETRY: 1
+      EXPO_PUBLIC_MAPBOX_TOKEN: pk.ci_release_validation_not_a_real_token
+      EXPO_PUBLIC_SENTRY_ENVIRONMENT: ci
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate mobile release environment
+        run: pnpm --filter @workspace/mobile release:validate-env
+
+      - name: Validate Expo public configuration
+        run: pnpm --filter @workspace/mobile release:config
+        env:
+          NODE_ENV: production
+
+      - name: Export production Android bundle
+        run: pnpm --filter @workspace/mobile release:export:android
+        env:
+          NODE_ENV: production
+
+      - name: Validate Android native configuration
+        run: pnpm --filter @workspace/mobile release:prebuild:android
+        env:
+          NODE_ENV: production

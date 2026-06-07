@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -27,8 +26,8 @@ import {
   DRIVER_CTA_PILL_WIDTH,
   DRIVER_CTA_ROTATION_MS,
 } from '@/constants/homeDriverCta';
-import { STORAGE_KEYS } from '@/constants/storage';
 import { useColors } from '@/hooks/useColors';
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 
 const AVATAR_SIZE = 44;
@@ -112,8 +111,8 @@ export function HomeTopHeader({
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void AsyncStorage.getItem(STORAGE_KEYS.profileImage).then(uri => {
-        if (active) setProfileImage(uri);
+      void loadStoredProfileImage().then(stored => {
+        if (active) setProfileImage(stored.data);
       });
       return () => {
         active = false;
