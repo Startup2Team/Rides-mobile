@@ -8,7 +8,11 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "release:validate-env": "node scripts/validate-release-env.js",
+    "release:config": "expo config --type public",
+    "release:export:android": "expo export --platform android --output-dir dist/release-validation --clear",
+    "release:prebuild:android": "expo prebuild --platform android --no-install --clean"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
