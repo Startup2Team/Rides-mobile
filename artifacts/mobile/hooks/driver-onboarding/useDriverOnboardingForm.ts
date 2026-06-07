@@ -18,7 +18,7 @@ export function useDriverOnboardingForm() {
 
   const maxDobDate = useMemo(() => {
     const date = new Date();
-    date.setFullYear(date.getFullYear() - 18);
+    date.setFullYear(date.getFullYear() - 16);
     return date;
   }, []);
 
@@ -32,7 +32,7 @@ export function useDriverOnboardingForm() {
     if (field === 'province') resets.district = resets.sector = resets.cell = resets.village = '';
     if (field === 'district') resets.sector = resets.cell = resets.village = '';
     if (field === 'sector') resets.cell = resets.village = '';
-    if (field === 'village') resets.cell = '';
+    if (field === 'cell') resets.village = '';
     setForm(current => ({ ...current, ...resets, [field]: value }));
     setErrors(current => ({ ...current, [field]: '' }));
   };

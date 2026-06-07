@@ -22,6 +22,7 @@ import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { KIGALI_CENTER, VehicleType, VEHICLE_LABELS } from '@/types';
+import { canDriverGoOnline } from '@/utils/driverVerification';
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 
@@ -158,6 +159,11 @@ export default function DriverDashboard() {
   };
 
   const toggleOnline = (val: boolean) => {
+    if (val && !canDriverGoOnline(driverProfile)) {
+      setIsOnline(false);
+      showToast('Your driver application must be approved before going online', 'info');
+      return;
+    }
     setIsOnline(val);
     if (driverProfile) {
       saveDriverProfile({ ...driverProfile, isOnline: val });

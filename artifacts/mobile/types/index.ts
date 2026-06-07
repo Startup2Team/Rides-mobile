@@ -1,5 +1,6 @@
 export type VehicleType = 'moto' | 'rifani' | 'cab' | 'fuso' | 'hilux';
 export type AppMode = 'customer' | 'driver';
+export type DriverVerificationStatus = 'not_started' | 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type LocationType = 'precise' | 'generic';
 
 export type RideStatus =
@@ -58,12 +59,18 @@ export interface PaymentMethod {
 }
 
 export interface DriverProfile {
+  verificationStatus?: Exclude<DriverVerificationStatus, 'not_started'>;
   vehicleType: VehicleType;
   plateNumber: string;
   licenseNumber: string;
+  licenseExpiryDate?: string;
+  insuranceExpiryDate?: string;
+  authorizationExpiryDate?: string;
   province: string;
   district: string;
   sector: string;
+  cell?: string;
+  village?: string;
   city?: string;
   momoCode: string;
   merchantCode?: string;

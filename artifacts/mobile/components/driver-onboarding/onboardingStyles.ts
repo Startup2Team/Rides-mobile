@@ -7,7 +7,6 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 16,
-    borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold' },
   stepIndicator: { fontSize: 14, fontFamily: 'Inter_500Medium' },

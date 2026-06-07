@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
+const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',
@@ -49,12 +50,18 @@ export const paymentMethodsSchema = z.array(z.object({
 export const profileImageSchema = z.string();
 
 export const driverProfileSchema = z.object({
+  verificationStatus: driverVerificationStatusSchema.optional(),
   vehicleType: vehicleTypeSchema,
   plateNumber: z.string(),
   licenseNumber: z.string(),
+  licenseExpiryDate: z.string().optional(),
+  insuranceExpiryDate: z.string().optional(),
+  authorizationExpiryDate: z.string().optional(),
   province: z.string(),
   district: z.string(),
   sector: z.string(),
+  cell: z.string().optional(),
+  village: z.string().optional(),
   city: z.string().optional(),
   momoCode: z.string(),
   merchantCode: z.string().optional(),

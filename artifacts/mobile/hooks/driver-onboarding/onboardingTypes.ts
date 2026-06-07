@@ -8,6 +8,9 @@ export interface DriverOnboardingForm {
   vehicleType: VehicleType;
   plateNumber: string;
   licenseNumber: string;
+  licenseExpiryDate: string;
+  insuranceExpiryDate: string;
+  authorizationExpiryDate: string;
   dob: string;
   province: string;
   district: string;
@@ -25,6 +28,9 @@ export const INITIAL_DRIVER_ONBOARDING_FORM: DriverOnboardingForm = {
   vehicleType: 'moto',
   plateNumber: '',
   licenseNumber: '',
+  licenseExpiryDate: '',
+  insuranceExpiryDate: '',
+  authorizationExpiryDate: '',
   dob: '',
   province: '',
   district: '',

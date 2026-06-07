@@ -19,6 +19,7 @@ import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocu
 import { useDriverOnboardingForm } from '@/hooks/driver-onboarding/useDriverOnboardingForm';
 import { useDriverOnboardingValidation } from '@/hooks/driver-onboarding/useDriverOnboardingValidation';
 import type { DriverProfile } from '@/types';
+import { buildPendingDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -54,34 +55,11 @@ export default function DriverOnboarding() {
 
   const saveAndContinue = async () => {
     setLoading(true);
-    const profile: DriverProfile = {
-      vehicleType: form.vehicleType,
-      plateNumber: form.plateNumber,
-      licenseNumber: form.licenseNumber,
-      province: form.province,
-      district: form.district,
-      sector: form.sector,
-      momoCode: form.momoCode,
-      merchantCode: form.merchantCode,
-      momoProvider: form.momoProvider,
-      dob: form.dob,
-      profileImage: selfieUri ?? undefined,
-      isOnline: false,
-      isVerified: false,
-      acceptanceRate: 100,
-      completedRides: 0,
-      dailyRides: 0,
-      dailyDeclines: 0,
-      policyAccepted: true,
-      policyAcceptedAt: new Date().toISOString(),
-      earningsTotal: 0,
-      passengerSeats: form.passengerSeats ? parseInt(form.passengerSeats) : undefined,
-      loadCapacityKg: form.loadCapacityKg ? parseInt(form.loadCapacityKg) : undefined,
-    };
+    const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
-    await switchMode('driver');
+    await switchMode('customer');
     setLoading(false);
-    router.replace('/(driver)');
+    router.replace('/driver-application-status');
   };
 
   const handleNext = () => {
@@ -133,8 +111,10 @@ export default function DriverOnboarding() {
             colors={colors}
             docs={docs}
             errors={errors}
+            form={form}
             pickDocument={pickDocument}
             takeDocumentPhoto={takeDocumentPhoto}
+            update={update}
           />
         )}
         {step === 3 && (

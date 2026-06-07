@@ -6,7 +6,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import 'react-native-reanimated';
@@ -22,6 +22,8 @@ import { ToastProvider } from '@/context/ToastContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
+import { useAuth } from '@/context/AuthContext';
+import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -29,8 +31,16 @@ initializeMonitoring();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const pathname = usePathname();
+  const { driverProfile } = useAuth();
   useRideFlowNavigation();
   useDriverFlowNavigation();
+
+  useEffect(() => {
+    if (isProtectedDriverPath(pathname) && !canAccessDriverMode(driverProfile)) {
+      router.replace('/driver-application-status');
+    }
+  }, [driverProfile, pathname]);
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
@@ -44,6 +54,7 @@ function RootLayoutNav() {
       <Stack.Screen name="ride" options={{ animation: 'none' }} />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="driver-onboarding" />
+      <Stack.Screen name="driver-application-status" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />
       <Stack.Screen

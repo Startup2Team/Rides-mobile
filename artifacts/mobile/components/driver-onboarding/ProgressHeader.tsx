@@ -13,7 +13,7 @@ export function ProgressHeader({ colors, safeAreaTop, setStep, step }: {
   step: number;
 }) {
   return <>
-    <View style={[styles.header, { paddingTop: safeAreaTop + (Platform.OS === 'web' ? 67 : 0) + 16, borderBottomColor: colors.border }]}>
+    <View style={[styles.header, { paddingTop: safeAreaTop + (Platform.OS === 'web' ? 67 : 0) + 16 }]}>
       <BackButton exitOnPress={step === 0} onPress={() => (step > 0 ? setStep(current => current - 1) : router.back())} />
       <Text style={[styles.headerTitle, { color: colors.foreground }]}>Become a Driver</Text>
       <Text style={[styles.stepIndicator, { color: colors.mutedForeground }]}>{step + 1}/{ONBOARDING_STEPS.length}</Text>
