@@ -1,8 +1,23 @@
 import type { LocationGeocodedAddress } from 'expo-location';
 import { RideLocation } from '@/types';
 
-/** Kigali grid-style address prefix (KG 98 St, KK 15 Av, etc.). */
-const RWANDA_GRID_ADDRESS = /^(KG|KK|NY|NR|GC)\s*\d+/i;
+/** Kigali grid-style road code (KG 98 St, KK 15 Av, etc.). */
+const RWANDA_GRID_ADDRESS = /\b(KG|KK|KN|KC|KR|GF|NY|NYA|NR|GC)\s*\d+\b/i;
+export const CURRENT_LOCATION_MAX_STREET_ACCURACY_METERS = 40;
+
+function getRwandaGridRoadCode(value: string | null | undefined): string | null {
+  const match = value?.match(RWANDA_GRID_ADDRESS)?.[0];
+  return match ? match.replace(/\s+/g, '').toUpperCase() : null;
+}
+
+function hasConflictingReverseGeocodeRoads(
+  geo: LocationGeocodedAddress | null | undefined,
+): boolean {
+  if (!geo) return false;
+  const streetCode = getRwandaGridRoadCode(geo.street);
+  const nameCode = getRwandaGridRoadCode(geo.name);
+  return Boolean(streetCode && nameCode && streetCode !== nameCode);
+}
 
 /**
  * Street line only for current location — e.g. "KG 98 Street", no city or district suffix.
@@ -24,12 +39,33 @@ export function formatReverseGeocodeAddress(
   return fallback;
 }
 
-/** Home header — street line only; never show generic "Current location" label text. */
+export function selectCurrentLocationAddress(
+  geo: LocationGeocodedAddress | null | undefined,
+  accuracy: number | null | undefined,
+  fallback = 'Current location',
+): string {
+  if (
+    typeof accuracy !== 'number'
+    || !Number.isFinite(accuracy)
+    || accuracy > CURRENT_LOCATION_MAX_STREET_ACCURACY_METERS
+    || hasConflictingReverseGeocodeRoads(geo)
+  ) {
+    return fallback;
+  }
+
+  return formatReverseGeocodeAddress(geo, fallback);
+}
+
+export function isLatestLocationRequest(requestId: number, latestRequestId: number): boolean {
+  return requestId === latestRequestId;
+}
+
+/** Home header — street line when available, otherwise a neutral current-location label. */
 export function formatHomeHeaderLocation(address: string, loading: boolean): string {
   if (loading) return 'Getting location...';
   const trimmed = address.trim();
   if (!trimmed || /^set pickup location$/i.test(trimmed)) return 'Set pickup location';
-  if (/^current location$/i.test(trimmed)) return 'Getting location...';
+  if (/^current location$/i.test(trimmed)) return 'Current location';
   return trimmed;
 }
 
@@ -62,4 +98,8 @@ export function arePickupAndDropoffSame(pickupLoc: RideLocation, dropoffLoc: Rid
   const pickupAddress = (pickupLoc.address ?? '').trim().toLowerCase();
   const dropoffAddress = (dropoffLoc.address ?? '').trim().toLowerCase();
   return pickupAddress.length > 0 && pickupAddress === dropoffAddress;
+}
+
+export function hasUsablePickup(pickup: RideLocation): boolean {
+  return Boolean(pickup.address?.trim());
 }

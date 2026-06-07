@@ -14,6 +14,7 @@ import { AppButton } from '@/components/AppButton';
 import { CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import type { RideLocation } from '@/types';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
+import { hasUsablePickup } from '@/utils/locationUtils';
 import type { useColors } from '@/hooks/useColors';
 import { styles } from './homeStyles';
 
@@ -36,6 +37,7 @@ export function BookingSheet({
   destinationText,
   focusedField,
   userLocation,
+  gpsLocation,
   onOpenLocationSearch,
   onUseMap,
   onUseGpsPickup,
@@ -59,6 +61,7 @@ export function BookingSheet({
   destinationText: string;
   focusedField: 'pickup' | 'dropoff' | null;
   userLocation: RideLocation;
+  gpsLocation?: RideLocation | null;
   onOpenLocationSearch: (target: 'pickup' | 'dropoff') => void;
   onUseMap: (target: 'pickup' | 'dropoff', location: RideLocation) => void;
   onUseGpsPickup: () => void;
@@ -144,7 +147,7 @@ export function BookingSheet({
               <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
               <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>Use Map</Text>
             </TouchableOpacity>
-            <TouchableOpacity
+            {gpsLocation ? <TouchableOpacity
               style={styles.currentLocBtn}
               onPress={focusedField === 'dropoff' ? onUseGpsDestination : onUseGpsPickup}
               activeOpacity={0.7}
@@ -153,7 +156,7 @@ export function BookingSheet({
               <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
                 {focusedField === 'dropoff' ? 'Use GPS as destination' : 'Use GPS as pickup'}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> : null}
           </View>
 
           {destination && (
@@ -181,7 +184,14 @@ export function BookingSheet({
 
           {(destination || destinationText.trim().length > 0) && (
             <View style={styles.findDriverAction}>
-              <AppButton title="Find Driver" onPress={onBook} fullWidth size="sm" loading={booking} />
+              <AppButton
+                title="Find Driver"
+                onPress={onBook}
+                fullWidth
+                size="sm"
+                loading={booking}
+                disabled={!hasUsablePickup(pickup)}
+              />
             </View>
           )}
         </View>

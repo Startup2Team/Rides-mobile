@@ -64,6 +64,16 @@ export function routePolylineThroughPinTips(
   return line;
 }
 
+/** Home route previews must never substitute a direct pickup-to-destination line. */
+export function homeRoutePolyline(
+  geometry: Coords[],
+  pickup: Coords,
+  destination: Coords,
+): Coords[] {
+  if (geometry.length < 2) return [];
+  return routePolylineThroughPinTips(geometry, pickup, destination);
+}
+
 /**
  * First/last point of a driving route polyline (usually on the nearest road).
  * Use for route geometry only — not for customer pickup/dropoff pins (use stored RideLocation coords).

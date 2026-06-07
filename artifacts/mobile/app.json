@@ -17,8 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "rw.rides.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Rides needs your location to find the closest vehicles to you.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Rides needs your location to find the closest vehicles to you."
+        "NSLocationWhenInUseUsageDescription": "Rides uses your precise location while the app is open to find nearby vehicles and set accurate pickup locations."
       }
     },
     "android": {
@@ -46,8 +45,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Rides needs your location to find the closest vehicles to you.",
-          "locationAlwaysAndWhenInUsePermission": "Rides needs your location to find the closest vehicles to you."
+          "locationWhenInUsePermission": "Rides uses your precise location while the app is open to find nearby vehicles and set accurate pickup locations."
         }
       ],
       "@react-native-community/datetimepicker"

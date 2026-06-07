@@ -6,6 +6,7 @@ import { isAbortedNetworkRequest, NetworkRequestError } from '@/services/network
 
 interface UseRouteResult {
   route: RouteResult | null;
+  routeKey: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -13,7 +14,7 @@ interface UseRouteResult {
 const routeCache = new Map<string, RouteResult>();
 const MAX_ROUTE_CACHE_SIZE = 20;
 
-function getRouteKey(origin: Coords, destination: Coords) {
+export function getRouteKey(origin: Coords, destination: Coords) {
   return [
     origin.latitude.toFixed(4),
     origin.longitude.toFixed(4),
@@ -39,6 +40,7 @@ function cacheRoute(key: string, route: RouteResult) {
  */
 export function useRoute(origin: Coords | null, destination: Coords | null): UseRouteResult {
   const [route, setRoute] = useState<RouteResult | null>(null);
+  const [routeKey, setRouteKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastKey = useRef<string | null>(null);
@@ -47,6 +49,7 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     if (!origin || !destination) {
       // Clear route and reset key so next open re-fetches
       setRoute(null);
+      setRouteKey(null);
       lastKey.current = null;
       return;
     }
@@ -59,6 +62,7 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     const cachedRoute = routeCache.get(key);
     if (cachedRoute) {
       setRoute(cachedRoute);
+      setRouteKey(key);
       setLoading(false);
       setError(null);
       return;
@@ -69,12 +73,14 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     setLoading(true);
     setError(null);
     setRoute(null);
+    setRouteKey(null);
 
     fetchRoute(origin, destination, { signal: controller.signal })
       .then(result => {
         if (!cancelled) {
           cacheRoute(key, result);
           setRoute(result);
+          setRouteKey(key);
           setLoading(false);
         }
       })
@@ -104,5 +110,5 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     destination?.longitude,
   ]);
 
-  return { route, loading, error };
+  return { route, routeKey, loading, error };
 }
