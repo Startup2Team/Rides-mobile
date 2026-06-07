@@ -1,10 +1,38 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import type { RideLocation } from '@/types';
 import { KIGALI_CENTER } from '@/types';
-import { formatReverseGeocodeAddress } from '@/utils/locationUtils';
+import {
+  acquireBestHomeLocation,
+  requestHomeLocationPermission,
+} from '@/services/homeLocationAcquisition';
+import {
+  isLatestLocationRequest,
+  selectCurrentLocationAddress,
+} from '@/utils/locationUtils';
+
+const CURRENT_LOCATION_FALLBACK = 'Current location';
+export type HomeLocationStatus = 'loading' | 'available' | 'unavailable';
+
+function logLocationSession(
+  coords: Location.LocationObjectCoords,
+  geo: Location.LocationGeocodedAddress | null | undefined,
+  selectedAddress: string,
+) {
+  if (!__DEV__) return;
+  console.debug('[home-location] reverse geocode', {
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+    accuracy: coords.accuracy,
+    reverseGeocodedStreet: geo?.street ?? null,
+    reverseGeocodedName: geo?.name ?? null,
+    selectedAddress,
+    provider: 'expo-location',
+    source: 'Location.reverseGeocodeAsync',
+  });
+}
 
 export function useHomeLocation({
   applyInitialPickup,
@@ -14,67 +42,130 @@ export function useHomeLocation({
   preserveInitialPickup: () => boolean;
 }) {
   const [userLocation, setUserLocation] = useState(KIGALI_CENTER);
+  const [gpsLocation, setGpsLocation] = useState<RideLocation | null>(null);
   const [currentLocationAddress, setCurrentLocationAddress] = useState('');
-  const [locLoading, setLocLoading] = useState(true);
+  const [locationStatus, setLocationStatus] = useState<HomeLocationStatus>('loading');
   const [locationError, setLocationError] = useState<unknown>(null);
+  const locationRequestRef = useRef(0);
+  const gpsLocationRef = useRef<RideLocation | null>(null);
+  gpsLocationRef.current = gpsLocation;
+
+  const cancelHereLocationRefresh = useCallback(() => {
+    locationRequestRef.current += 1;
+  }, []);
+
+  const acquireLocation = useCallback((requestId: number) => {
+    return acquireBestHomeLocation({
+      getCurrentPosition: () =>
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      isActive: () => isLatestLocationRequest(requestId, locationRequestRef.current),
+    });
+  }, []);
+
+  const applyCoords = useCallback((coords: typeof KIGALI_CENTER) => {
+    setUserLocation(coords);
+    setCurrentLocationAddress(CURRENT_LOCATION_FALLBACK);
+    setGpsLocation({ ...coords, address: CURRENT_LOCATION_FALLBACK, locationType: 'precise' });
+    setLocationStatus('available');
+  }, []);
 
   const applyHereFromCoords = useCallback(
-    (coords: typeof KIGALI_CENTER, geo?: Location.LocationGeocodedAddress | null) => {
-      setUserLocation(coords);
-      setCurrentLocationAddress(formatReverseGeocodeAddress(geo, ''));
+    (
+      coords: typeof KIGALI_CENTER,
+      accuracy: number | null | undefined,
+      geo?: Location.LocationGeocodedAddress | null,
+    ) => {
+      applyCoords(coords);
+      const address = selectCurrentLocationAddress(geo, accuracy, CURRENT_LOCATION_FALLBACK);
+      setCurrentLocationAddress(address);
+      setGpsLocation({ ...coords, address, locationType: 'precise' });
+      setLocationStatus('available');
     },
-    [],
+    [applyCoords],
   );
 
   const refreshHereLocation = useCallback(async () => {
+    const requestId = ++locationRequestRef.current;
+    if (!gpsLocationRef.current) setLocationStatus('loading');
     try {
-      const permission = await Location.getForegroundPermissionsAsync();
-      const granted = permission.granted
-        || (permission.canAskAgain && (await Location.requestForegroundPermissionsAsync()).granted);
-      if (!granted) return;
+      const granted = await requestHomeLocationPermission({
+        getPermission: Location.getForegroundPermissionsAsync,
+        requestPermission: Location.requestForegroundPermissionsAsync,
+      });
+      if (!granted) {
+        if (!gpsLocationRef.current) setLocationStatus('unavailable');
+        return;
+      }
 
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const loc = await acquireLocation(requestId);
+      if (!loc) {
+        if (isLatestLocationRequest(requestId, locationRequestRef.current) && !gpsLocationRef.current) {
+          setLocationStatus('unavailable');
+        }
+        return;
+      }
       const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      if (!isLatestLocationRequest(requestId, locationRequestRef.current)) return;
+      applyCoords(coords);
+
       const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
-      applyHereFromCoords(coords, geo);
+      if (!isLatestLocationRequest(requestId, locationRequestRef.current)) return;
+      const selectedAddress = selectCurrentLocationAddress(
+        geo,
+        loc.coords.accuracy,
+        CURRENT_LOCATION_FALLBACK,
+      );
+      logLocationSession(loc.coords, geo, selectedAddress);
+      applyHereFromCoords(coords, loc.coords.accuracy, geo);
       setLocationError(null);
     } catch (error) {
+      if (!isLatestLocationRequest(requestId, locationRequestRef.current)) return;
       setLocationError(error);
+      if (!gpsLocationRef.current) setLocationStatus('unavailable');
     }
-  }, [applyHereFromCoords]);
+  }, [acquireLocation, applyCoords, applyHereFromCoords]);
 
   useEffect(() => {
     let mounted = true;
 
     const updateInitialPickup = (
       coords: typeof KIGALI_CENTER,
+      accuracy: number | null | undefined,
       geo?: Location.LocationGeocodedAddress | null,
     ) => {
       if (preserveInitialPickup()) return;
       applyInitialPickup({
         ...coords,
-        address: formatReverseGeocodeAddress(geo, ''),
+        address: selectCurrentLocationAddress(geo, accuracy, CURRENT_LOCATION_FALLBACK),
         locationType: 'precise',
       });
     };
 
     const resolveLocation = async () => {
-      const permission = await Location.getForegroundPermissionsAsync();
-      const finalPermission = permission.granted
-        ? permission
-        : permission.canAskAgain
-          ? await Location.requestForegroundPermissionsAsync()
-          : permission;
+      const requestId = ++locationRequestRef.current;
+      const granted = await requestHomeLocationPermission({
+        getPermission: Location.getForegroundPermissionsAsync,
+        requestPermission: Location.requestForegroundPermissionsAsync,
+      });
+      if (!granted) return false;
 
-      if (!finalPermission.granted) return false;
-
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const loc = await acquireLocation(requestId);
+      if (!loc) return false;
       const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      const [geo] = await Location.reverseGeocodeAsync(loc.coords).catch(() => [null]);
-      if (!mounted) return true;
+      if (!mounted || !isLatestLocationRequest(requestId, locationRequestRef.current)) return true;
+      applyCoords(coords);
 
-      applyHereFromCoords(coords, geo);
-      updateInitialPickup(coords, geo);
+      const [geo] = await Location.reverseGeocodeAsync(loc.coords).catch(() => [null]);
+      if (!mounted || !isLatestLocationRequest(requestId, locationRequestRef.current)) return true;
+
+      const selectedAddress = selectCurrentLocationAddress(
+        geo,
+        loc.coords.accuracy,
+        CURRENT_LOCATION_FALLBACK,
+      );
+      logLocationSession(loc.coords, geo, selectedAddress);
+      applyHereFromCoords(coords, loc.coords.accuracy, geo);
+      updateInitialPickup(coords, loc.coords.accuracy, geo);
       return true;
     };
 
@@ -93,50 +184,76 @@ export function useHomeLocation({
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude,
               };
+              const accuracy = position.coords.accuracy;
               if (!mounted) return;
               try {
                 const [geo] = await Location.reverseGeocodeAsync(coords);
                 if (!mounted) return;
-                applyHereFromCoords(coords, geo);
-                updateInitialPickup(coords, geo);
+                const selectedAddress = selectCurrentLocationAddress(
+                  geo,
+                  accuracy,
+                  CURRENT_LOCATION_FALLBACK,
+                );
+                if (__DEV__) {
+                  console.debug('[home-location] reverse geocode', {
+                    latitude: coords.latitude,
+                    longitude: coords.longitude,
+                    accuracy,
+                    reverseGeocodedStreet: geo?.street ?? null,
+                    reverseGeocodedName: geo?.name ?? null,
+                    selectedAddress,
+                    provider: 'expo-location',
+                    source: 'Location.reverseGeocodeAsync',
+                  });
+                }
+                applyHereFromCoords(coords, accuracy, geo);
+                updateInitialPickup(coords, accuracy, geo);
               } catch (error) {
                 if (!mounted) return;
                 setLocationError(error);
-                applyHereFromCoords(coords, null);
+                applyHereFromCoords(coords, accuracy, null);
                 if (!preserveInitialPickup()) {
-                  applyInitialPickup({ ...coords, locationType: 'precise' });
+                  applyInitialPickup({
+                    ...coords,
+                    address: CURRENT_LOCATION_FALLBACK,
+                    locationType: 'precise',
+                  });
                 }
               }
-              setLocLoading(false);
+              setLocationStatus('available');
             },
             error => {
               if (!mounted) return;
               setLocationError(error);
-              setLocLoading(false);
+              setLocationStatus('unavailable');
             },
           );
         } else {
-          await resolveLocation();
+          const resolved = await resolveLocation();
           await requestNotificationPermission();
-          if (mounted) setLocLoading(false);
+          if (mounted && !resolved) setLocationStatus('unavailable');
         }
       } catch (error) {
         if (mounted) {
           setLocationError(error);
-          setLocLoading(false);
+          setLocationStatus('unavailable');
         }
       }
     })();
 
     return () => {
       mounted = false;
+      locationRequestRef.current += 1;
     };
-  }, [applyHereFromCoords, applyInitialPickup, preserveInitialPickup]);
+  }, [acquireLocation, applyCoords, applyHereFromCoords, applyInitialPickup, preserveInitialPickup]);
 
   return {
+    cancelHereLocationRefresh,
     currentLocationAddress,
-    locLoading,
+    gpsLocation,
+    locLoading: locationStatus === 'loading',
     locationError,
+    locationStatus,
     refreshHereLocation,
     userLocation,
   };

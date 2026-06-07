@@ -39,6 +39,7 @@ export function LocationSearchOverlay({
   target,
   text,
   userLocation,
+  gpsLocation,
 }: {
   bottomInset: number;
   buildTypedLocation: () => RideLocation;
@@ -61,6 +62,7 @@ export function LocationSearchOverlay({
   target: LocationSearchTarget;
   text: string;
   userLocation: RideLocation;
+  gpsLocation: RideLocation | null;
 }) {
   const headerMetrics = useGlassHeaderMetrics();
   const hasSearchResults = text.trim().length >= 2 || suggestions.length > 0;
@@ -117,10 +119,10 @@ export function LocationSearchOverlay({
           </TouchableOpacity>
 
           <View style={styles.locationQuickRow}>
-            <TouchableOpacity
+            {gpsLocation ? <TouchableOpacity
               style={[styles.locationQuickCard, { backgroundColor: colors.card }]}
               onPress={() => onApplyLocation(target, {
-                ...userLocation,
+                ...gpsLocation,
                 address: 'Current Location',
                 locationType: 'precise',
               })}
@@ -133,7 +135,7 @@ export function LocationSearchOverlay({
                 <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Use current location</Text>
                 <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>GPS precise</Text>
               </View>
-            </TouchableOpacity>
+            </TouchableOpacity> : null}
 
             <TouchableOpacity
               style={[styles.locationQuickCard, { backgroundColor: colors.card }]}

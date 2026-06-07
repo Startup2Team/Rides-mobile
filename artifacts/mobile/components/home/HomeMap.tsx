@@ -37,7 +37,7 @@ function HomeMapComponent({
   drivers: { id: string; latitude: number; longitude: number }[];
   selectedVehicle: VehicleType;
   showYouAreHere: boolean;
-  userLocation: Coords;
+  userLocation: Coords | null;
   primaryColor: ColorValue;
 }) {
   return (
@@ -64,7 +64,7 @@ function HomeMapComponent({
         mapType={mapType}
       />
       <DriverMarkers drivers={drivers} vehicleType={selectedVehicle} />
-      {showYouAreHere && (
+      {showYouAreHere && userLocation && (
         <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
           <View style={styles.youAreHereContainer}>
             <View style={[styles.youAreHereBubble, { backgroundColor: primaryColor }]}>

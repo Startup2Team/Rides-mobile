@@ -4,13 +4,14 @@ import { Alert } from 'react-native';
 import type { RideLocation, VehicleType } from '@/types';
 import {
   arePickupAndDropoffSame,
+  hasUsablePickup,
   isPickupFarFromUserGps,
 } from '@/utils/locationUtils';
 import type { LocationSearchTarget } from './useLocationSearch';
 
 export function useHomeBooking({
   createRide,
-  locLoading,
+  gpsLocation,
   onBeforeCreate,
   openLocationSearch,
   userLocation,
@@ -21,7 +22,7 @@ export function useHomeBooking({
     vehicleType: VehicleType,
     destinationText?: string,
   ) => Promise<void>;
-  locLoading: boolean;
+  gpsLocation: RideLocation | null;
   onBeforeCreate: () => void;
   openLocationSearch: (target: LocationSearchTarget) => void;
   userLocation: RideLocation;
@@ -63,6 +64,14 @@ export function useHomeBooking({
 
   const handleBook = useCallback(() => {
     if (!destination && !destText.trim()) return;
+    if (!hasUsablePickup(pickup)) {
+      Alert.alert(
+        'Select pickup location',
+        'Your pickup location is required before finding a driver.',
+        [{ text: 'Select pickup manually', onPress: () => openLocationSearch('pickup') }],
+      );
+      return;
+    }
 
     const finalDestination: RideLocation = destination
       ? { ...destination, locationType: destination.locationType ?? 'precise' }
@@ -73,7 +82,7 @@ export function useHomeBooking({
           locationType: 'generic',
         };
 
-    if (!locLoading && isPickupFarFromUserGps(pickup, userLocation)) {
+    if (gpsLocation && isPickupFarFromUserGps(pickup, gpsLocation)) {
       Alert.alert(
         'Pickup seems far away',
         'Your pickup location seems far from your GPS location. Are you sure you want to continue?',
@@ -90,7 +99,7 @@ export function useHomeBooking({
     confirmAndProceedWithBooking,
     destination,
     destText,
-    locLoading,
+    gpsLocation,
     openLocationSearch,
     pickup,
     userLocation,
