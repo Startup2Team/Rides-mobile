@@ -13,6 +13,7 @@ import {
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
@@ -80,6 +81,7 @@ export default function DriverNavigateScreen() {
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
+  const { recordCompletedRide } = useAuth();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [showReroute, setShowReroute] = useState(false);
@@ -265,7 +267,9 @@ export default function DriverNavigateScreen() {
       {
         text: 'Complete',
         onPress: () => {
+          const fare = currentRide?.agreedFare ?? 0;
           completeRide('driver');
+          void recordCompletedRide(fare);
           router.replace('/(driver)');
         },
       },

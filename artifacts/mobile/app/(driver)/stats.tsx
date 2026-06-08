@@ -7,7 +7,19 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
 
-function StatRow({ label, value, icon, color }: { label: string; value: string; icon: keyof typeof Feather.glyphMap; color?: string }) {
+function StatRow({
+  label,
+  value,
+  icon,
+  color,
+  note,
+}: {
+  label: string;
+  value: string;
+  icon: keyof typeof Feather.glyphMap;
+  color?: string;
+  note?: string;
+}) {
   const colors = useColors();
   const iconColor = color ?? colors.primaryHex;
   return (
@@ -15,7 +27,10 @@ function StatRow({ label, value, icon, color }: { label: string; value: string; 
       <View style={[styles.statIcon, { backgroundColor: iconColor + '20' }]}>
         <Feather name={icon} size={18} color={iconColor} />
       </View>
-      <Text style={[styles.statLabel, { color: colors.foreground }]}>{label}</Text>
+      <View style={styles.statLabelGroup}>
+        <Text style={[styles.statLabel, { color: colors.foreground }]}>{label}</Text>
+        {note ? <Text style={[styles.statNote, { color: colors.mutedForeground }]}>{note}</Text> : null}
+      </View>
       <Text style={[styles.statValue, { color: color ?? colors.foreground }]}>{value}</Text>
     </View>
   );
@@ -31,13 +46,20 @@ export default function DriverStats() {
   const dp = driverProfile ?? {
     dailyRides: 0,
     completedRides: 0,
-    acceptanceRate: 95,
+    acceptanceRate: 0,
     dailyDeclines: 0,
     earningsTotal: 0,
   };
-  const todayGross = dp.dailyRides * 2800;
-  const platformFee = Math.round(todayGross * 0.15);
-  const todayPayout = todayGross - platformFee;
+
+  // earningsTotal is accumulated from actual agreedFare on each completed ride.
+  // Daily figures are estimated (no per-ride fare breakdown stored yet).
+  const ESTIMATED_AVG_FARE = 2800;
+  const dailyDecisionCount = dp.dailyRides + (dp.dailyDeclines ?? 0);
+  const acceptanceRateValue = dailyDecisionCount > 0 ? `${dp.acceptanceRate}%` : 'No data';
+  const acceptanceRateNote = dailyDecisionCount > 0 ? undefined : 'After your first ride decision';
+  const dailyGrossEstimate = dp.dailyRides * ESTIMATED_AVG_FARE;
+  const dailyFeeEstimate = Math.round(dailyGrossEstimate * 0.15);
+  const dailyPayoutEstimate = dailyGrossEstimate - dailyFeeEstimate;
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
 
   return (
@@ -54,8 +76,17 @@ export default function DriverStats() {
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>RIDE PACKAGE</Text>
-        <StatRow label="Active Plan" value={isEntitlementLoading ? 'Checking...' : activePackage?.name ?? 'No active package'} icon="layers" />
-        <StatRow label="Remaining Credits" value={isEntitlementLoading ? 'Checking...' : String(rideCredits)} icon="navigation" color={rideCredits <= 10 ? colors.destructiveHex : colors.primaryHex} />
+        <StatRow
+          label="Active Plan"
+          value={isEntitlementLoading ? 'Checking...' : activePackage?.name ?? 'No active package'}
+          icon="layers"
+        />
+        <StatRow
+          label="Remaining Credits"
+          value={isEntitlementLoading ? 'Checking...' : String(rideCredits)}
+          icon="navigation"
+          color={rideCredits <= 10 ? colors.destructiveHex : colors.primaryHex}
+        />
       </View>
 
       {/* Today */}
@@ -63,9 +94,26 @@ export default function DriverStats() {
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
         <StatRow label="Rides Completed" value={String(dp.dailyRides)} icon="navigation" />
         <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
-        <StatRow label="Gross Earnings" value={`${todayGross.toLocaleString()} RWF`} icon="dollar-sign" color={colors.primaryHex} />
-        <StatRow label="Platform Fee" value={`-${platformFee.toLocaleString()} RWF`} icon="percent" />
-        <StatRow label="Today's Payout" value={`${todayPayout.toLocaleString()} RWF`} icon="credit-card" color={colors.primaryHex} />
+        <StatRow
+          label="Est. Gross Earnings"
+          value={`~${dailyGrossEstimate.toLocaleString()} RWF`}
+          icon="dollar-sign"
+          color={colors.primaryHex}
+          note="Estimated · avg fare used"
+        />
+        <StatRow
+          label="Est. Platform Fee"
+          value={`~${dailyFeeEstimate.toLocaleString()} RWF`}
+          icon="percent"
+          note="Estimated · 15%"
+        />
+        <StatRow
+          label="Est. Today's Payout"
+          value={`~${dailyPayoutEstimate.toLocaleString()} RWF`}
+          icon="credit-card"
+          color={colors.primaryHex}
+          note="Estimated"
+        />
         <StatRow label="Payment Target" value={paymentTarget} icon="smartphone" />
       </View>
 
@@ -73,8 +121,20 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>ALL TIME</Text>
         <StatRow label="Total Rides" value={String(dp.completedRides)} icon="award" />
-        <StatRow label="Acceptance Rate" value={`${dp.acceptanceRate}%`} icon="check-circle" color={colors.primaryHex} />
-        <StatRow label="Total Earnings" value={`${(dp.earningsTotal ?? 0).toLocaleString()} RWF`} icon="trending-up" color={colors.primaryHex} />
+        <StatRow
+          label="Acceptance Rate"
+          value={acceptanceRateValue}
+          icon="check-circle"
+          color={colors.primaryHex}
+          note={acceptanceRateNote}
+        />
+        <StatRow
+          label="Total Earnings"
+          value={`${(dp.earningsTotal ?? 0).toLocaleString()} RWF`}
+          icon="trending-up"
+          color={colors.primaryHex}
+          note="From completed rides"
+        />
       </View>
 
       {/* Priority system */}
@@ -91,6 +151,14 @@ export default function DriverStats() {
               : `${10 - (dp.dailyDeclines ?? 0)} more declines before priority is reduced.`}
           </Text>
         </View>
+      </View>
+
+      {/* Earnings disclaimer */}
+      <View style={[styles.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <Feather name="info" size={16} color={colors.mutedForeground} />
+        <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+          Total Earnings reflects the sum of all agreed fares from your completed rides. Daily figures marked "Est." use an average fare and may differ from actual payouts.
+        </Text>
       </View>
 
       {/* Policy reminder */}
@@ -118,7 +186,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  statLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  statLabelGroup: { flex: 1 },
+  statLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+  statNote: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
   statValue: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   priorityRow: { padding: 16, gap: 12 },
   priorityBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 100 },

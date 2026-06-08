@@ -162,6 +162,8 @@ export default function DriverDashboard() {
 
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
+  const dailyDecisionCount = (driverProfile?.dailyRides ?? 0) + (driverProfile?.dailyDeclines ?? 0);
+  const acceptanceRateText = dailyDecisionCount > 0 ? `${driverProfile?.acceptanceRate ?? 0}%` : '—';
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
     ? 'Unknown — to be negotiated'
@@ -226,7 +228,7 @@ export default function DriverDashboard() {
             </View>
             <View style={[styles.topStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.topStat}>
-              <Text style={[styles.topStatValue, { color: colors.foreground }]}>{driverProfile?.acceptanceRate ?? 95}%</Text>
+              <Text style={[styles.topStatValue, { color: colors.foreground }]}>{acceptanceRateText}</Text>
               <Text style={[styles.topStatLabel, { color: colors.mutedForeground }]}>rate</Text>
             </View>
           </View>
