@@ -13,7 +13,7 @@ export default function DriverProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, driverProfile, logout, switchMode } = useAuth();
-  const { entitlement, rideCredits } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
 
   const handleSwitchToCustomer = () => {
@@ -107,8 +107,8 @@ export default function DriverProfileScreen() {
           <Feather name="layers" size={16} color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.switchModeText, { color: colors.foreground }]}>{activePackage?.name ?? 'Choose Ride Package'}</Text>
-          <Text style={[styles.packageSubtext, { color: colors.mutedForeground }]}>{rideCredits} ride credits remaining</Text>
+          <Text style={[styles.switchModeText, { color: colors.foreground }]}>{isEntitlementLoading ? 'Checking ride package...' : activePackage?.name ?? 'Choose Ride Package'}</Text>
+          <Text style={[styles.packageSubtext, { color: colors.mutedForeground }]}>{isEntitlementLoading ? 'Checking ride balance...' : `${rideCredits} ride credits remaining`}</Text>
         </View>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       </TouchableOpacity>

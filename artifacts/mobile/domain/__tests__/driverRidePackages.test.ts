@@ -5,6 +5,7 @@ import {
   deductCreditForCompletedRide,
   EMPTY_DRIVER_ENTITLEMENT,
   getActiveRideCredits,
+  getRideCreditBalanceMessage,
   hasUsedLaunchOffer,
   isLowRideCreditBalance,
 } from '../driverRidePackages';
@@ -47,5 +48,12 @@ describe('driver ride packages', () => {
     const entitlement = { ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 9 };
     expect(getActiveRideCredits(entitlement)).toBe(9);
     expect(isLowRideCreditBalance(entitlement)).toBe(true);
+  });
+
+  test('low balance messaging escalates at 10, 5, 2, and 0 credits', () => {
+    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 10 })).toContain('10 ride credits left');
+    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 5 })).toContain('Only 5 ride credits left');
+    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 2 })).toContain('Only 2 ride credits left');
+    expect(getRideCreditBalanceMessage(EMPTY_DRIVER_ENTITLEMENT)).toBe('Choose a package to start receiving ride requests.');
   });
 });

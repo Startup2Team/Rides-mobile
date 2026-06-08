@@ -25,7 +25,7 @@ export default function DriverStats() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { driverProfile } = useAuth();
-  const { entitlement, rideCredits } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
 
   const dp = driverProfile ?? {
@@ -54,8 +54,8 @@ export default function DriverStats() {
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>RIDE PACKAGE</Text>
-        <StatRow label="Active Plan" value={activePackage?.name ?? 'No active package'} icon="layers" />
-        <StatRow label="Remaining Credits" value={String(rideCredits)} icon="navigation" color={rideCredits < 10 ? colors.destructiveHex : colors.primaryHex} />
+        <StatRow label="Active Plan" value={isEntitlementLoading ? 'Checking...' : activePackage?.name ?? 'No active package'} icon="layers" />
+        <StatRow label="Remaining Credits" value={isEntitlementLoading ? 'Checking...' : String(rideCredits)} icon="navigation" color={rideCredits <= 10 ? colors.destructiveHex : colors.primaryHex} />
       </View>
 
       {/* Today */}

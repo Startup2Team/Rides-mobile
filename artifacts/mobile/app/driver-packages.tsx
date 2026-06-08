@@ -15,7 +15,7 @@ export default function DriverPackagesScreen() {
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const { driverProfile } = useAuth();
-  const { activatePackage, launchOfferUsed, rideCredits } = useDriverEntitlement();
+  const { activatePackage, isLoading: isEntitlementLoading, launchOfferUsed, rideCredits } = useDriverEntitlement();
   const [activating, setActivating] = useState<string | null>(null);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
@@ -50,7 +50,7 @@ export default function DriverPackagesScreen() {
     <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
       <View>
         <Text style={styles.balanceLabel}>AVAILABLE RIDE CREDITS</Text>
-        <Text style={styles.balanceValue}>{rideCredits}</Text>
+        <Text style={styles.balanceValue}>{isEntitlementLoading ? '...' : rideCredits}</Text>
       </View>
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
     </View>
@@ -65,6 +65,7 @@ export default function DriverPackagesScreen() {
       cardFill={cardFill}
       colors={colors}
       disabled={launchOfferUsed}
+      unavailable={isEntitlementLoading}
       loading={activating === 'launch_starter'}
       buttonTitle={launchOfferUsed ? 'Launch Offer Already Used' : 'Activate Free Plan'}
       onPress={() => void handleActivate(DRIVER_RIDE_PACKAGES.launch_starter)}
@@ -74,15 +75,15 @@ export default function DriverPackagesScreen() {
       cardFill={cardFill}
       colors={colors}
       loading={activating === 'growth'}
+      unavailable={isEntitlementLoading}
       buttonTitle="Buy Plan"
       onPress={() => void handleActivate(DRIVER_RIDE_PACKAGES.growth)}
     />
-    <Text style={[styles.prototype, { color: colors.mutedForeground }]}>Prototype payment: Buy Plan simulates a successful local purchase. Package authority will move to the backend later.</Text>
-  </ScrollView>;
+   </ScrollView>;
 }
 
-function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading, onPress, ridePackage }: {
-  buttonTitle: string; cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; loading: boolean; onPress: () => void; ridePackage: DriverRidePackage;
+function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading, onPress, ridePackage, unavailable = false }: {
+  buttonTitle: string; cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; loading: boolean; onPress: () => void; ridePackage: DriverRidePackage; unavailable?: boolean;
 }) {
   return <View style={[styles.packageCard, { backgroundColor: cardFill, borderColor: ridePackage.launchOffer ? colors.primary : colors.border }]}>
     {ridePackage.launchOffer ? <Text style={[styles.offerTag, { backgroundColor: colors.primary }]}>LAUNCH OFFER</Text> : null}
@@ -93,7 +94,7 @@ function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading,
     </View>
     <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.totalCredits} completed rides</Text>
     <Text style={[styles.creditBreakdown, { color: colors.mutedForeground }]}>{ridePackage.includedRides} included + {ridePackage.bonusRides} bonus rides</Text>
-    <AppButton title={buttonTitle} onPress={onPress} disabled={disabled} loading={loading} fullWidth size="lg" />
+    <AppButton title={buttonTitle} onPress={onPress} disabled={disabled || unavailable} loading={loading} fullWidth size="lg" />
   </View>;
 }
 

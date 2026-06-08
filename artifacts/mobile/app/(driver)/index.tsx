@@ -23,7 +23,9 @@ import { KIGALI_CENTER, VEHICLE_LABELS } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
-import { canDriverGoOnlineWithCredits, isLowRideCreditBalance } from '@/domain/driverRidePackages';
+import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
+import { DriverCreditDashboardCard } from '@/components/driver/DriverCreditDashboardCard';
+import { DriverPackageRequiredModal } from '@/components/driver/DriverPackageRequiredModal';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
@@ -33,7 +35,7 @@ export default function DriverDashboard() {
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, saveDriverProfile } = useAuth();
-  const { entitlement, rideCredits } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const { pendingRequest, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
 
   const [isOnline, setIsOnline] = useState(false);
@@ -41,6 +43,7 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
+  const [showPackageRequired, setShowPackageRequired] = useState(false);
 
   const timers = useScreenTimerManager();
   const requestSessionRef = useRef(timers.currentSession());
@@ -132,8 +135,12 @@ export default function DriverDashboard() {
 
   const toggleOnline = () => {
     const next = !isOnline;
-    if (next && (!canDriverGoOnline(driverProfile) || !canDriverGoOnlineWithCredits(driverProfile, entitlement))) {
-      router.push('/driver-packages');
+    if (next && isEntitlementLoading) return;
+    if (next && canDriverGoOnline(driverProfile) && !canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
+      setShowPackageRequired(true);
+      return;
+    }
+    if (next && !canDriverGoOnline(driverProfile)) {
       return;
     }
     // Pulse animation on toggle
@@ -224,12 +231,11 @@ export default function DriverDashboard() {
             </View>
           </View>
         </View>
-        <TouchableOpacity style={[styles.creditCard, { backgroundColor: cardFill }]} onPress={() => router.push('/driver-packages')} activeOpacity={0.8}>
-          <View style={[styles.creditIcon, { backgroundColor: colors.primaryHex + '18' }]}><Feather name="layers" size={15} color={colors.primary} /></View>
-          <Text style={[styles.creditLabel, { color: colors.foreground }]}>{rideCredits} ride credits</Text>
-          {isLowRideCreditBalance(entitlement) ? <Text style={[styles.lowCredit, { color: colors.destructive }]}>Low balance</Text> : null}
-          <Feather name="chevron-right" size={15} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        <DriverCreditDashboardCard
+          entitlement={entitlement}
+          isLoading={isEntitlementLoading}
+          onViewPackages={() => router.push('/driver-packages')}
+        />
       </View>
 
       {/* ── Map controls ── */}
@@ -258,6 +264,7 @@ export default function DriverDashboard() {
                 },
               ]}
               onPress={toggleOnline}
+              disabled={isEntitlementLoading}
               activeOpacity={0.85}
             >
               <View style={[styles.onlineBtnDot, { backgroundColor: '#fff' }]} />
@@ -347,6 +354,16 @@ export default function DriverDashboard() {
           </View>
         </Animated.View>
       )}
+
+      <DriverPackageRequiredModal
+        visible={showPackageRequired}
+        bottomInset={insets.bottom}
+        onClose={() => setShowPackageRequired(false)}
+        onViewPackages={() => {
+          setShowPackageRequired(false);
+          router.push('/driver-packages');
+        }}
+      />
     </View>
   );
 }
@@ -378,10 +395,6 @@ const styles = StyleSheet.create({
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
   topCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  creditCard: { marginTop: 8, alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, height: 38, borderRadius: 19, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 4 },
-  creditIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  creditLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  lowCredit: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   onlineDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   topGreeting: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   topSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 1 },

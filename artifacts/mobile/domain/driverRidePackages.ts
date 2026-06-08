@@ -90,7 +90,28 @@ export const hasUsedLaunchOffer = (entitlement: DriverEntitlement | null | undef
 
 export const isLowRideCreditBalance = (entitlement: DriverEntitlement | null | undefined) => {
   const credits = getActiveRideCredits(entitlement);
-  return credits > 0 && credits < 10;
+  return credits > 0 && credits <= 10;
+};
+
+export const getRideCreditBalanceMessage = (entitlement: DriverEntitlement | null | undefined) => {
+  const credits = getActiveRideCredits(entitlement);
+  if (credits === 0) return 'Choose a package to start receiving ride requests.';
+  if (credits <= 2) return `Only ${credits} ride credits left. Add a package soon to keep receiving requests.`;
+  if (credits <= 5) return `Only ${credits} ride credits left. Add a package soon to keep receiving requests.`;
+  if (credits <= 10) return `${credits} ride credits left. Consider adding a package soon.`;
+  return null;
+};
+
+export const getRideCreditProgress = (entitlement: DriverEntitlement | null | undefined) => {
+  const current = entitlement ?? EMPTY_DRIVER_ENTITLEMENT;
+  const totalGranted = current.activations.reduce((total, activation) => total + activation.creditsGranted, 0);
+  const remaining = getActiveRideCredits(current);
+  return {
+    remaining,
+    totalGranted,
+    ratio: totalGranted > 0 ? Math.min(1, remaining / totalGranted) : 0,
+    activationCount: current.activations.length,
+  };
 };
 
 export function activatePackage(

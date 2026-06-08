@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppButton } from '@/components/AppButton';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { isDriverApprovalDevtoolEnabled } from '@/utils/driverDevTools';
 
 const STEPS = [
   {
@@ -69,6 +70,10 @@ export default function DriverSubmissionConfirmation() {
 
   const isRejected = driverProfile?.verificationStatus === 'rejected';
   const isApproved = driverProfile?.verificationStatus === 'approved';
+  const showApprovalDevtool = isDriverApprovalDevtoolEnabled(
+    __DEV__,
+    process.env.EXPO_PUBLIC_ENABLE_DRIVER_APPROVAL_DEVTOOLS,
+  );
 
   const handlePrimaryAction = async () => {
     if (isApproved) {
@@ -194,7 +199,7 @@ export default function DriverSubmissionConfirmation() {
           <Feather name="help-circle" size={16} color={colors.primary} />
           <Text style={[styles.supportText, { color: colors.primary }]}>Contact Support</Text>
         </TouchableOpacity>
-        {__DEV__ && (
+        {showApprovalDevtool && (
           <TouchableOpacity style={[styles.devBtn, { borderColor: colors.border }]} onPress={handleDevApprove} activeOpacity={0.6}>
             <Feather name="zap" size={14} color={colors.mutedForeground} />
             <Text style={[styles.devText, { color: colors.mutedForeground }]}>DEV — Approve & Enter Dashboard</Text>
