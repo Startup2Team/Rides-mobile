@@ -26,6 +26,7 @@ import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
 import { DriverCreditDashboardCard } from '@/components/driver/DriverCreditDashboardCard';
 import { DriverPackageRequiredModal } from '@/components/driver/DriverPackageRequiredModal';
+import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
@@ -36,7 +37,14 @@ export default function DriverDashboard() {
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, saveDriverProfile, setDriverOnline } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
-  const { pendingRequest, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
+  const {
+    pendingRequest,
+    rideHistory,
+    loadHistory,
+    simulateIncomingRideRequest,
+    acceptRideRequest,
+    declineRideRequest,
+  } = useRide();
 
   const [showRequest, setShowRequest] = useState(false);
   const [countdown, setCountdown] = useState(15);
@@ -81,6 +89,10 @@ export default function DriverDashboard() {
     }
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   // Recenter on location
   useEffect(() => {
@@ -163,6 +175,8 @@ export default function DriverDashboard() {
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
   const dailyDecisionCount = (driverProfile?.dailyRides ?? 0) + (driverProfile?.dailyDeclines ?? 0);
   const acceptanceRateText = dailyDecisionCount > 0 ? `${driverProfile?.acceptanceRate ?? 0}%` : '—';
+  const activitySummary = getDriverActivitySummary({ driverProfile, entitlement, rideHistory });
+  const remainingCreditsText = isEntitlementLoading ? '—' : String(activitySummary.remainingRideCredits);
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
     ? 'Unknown — to be negotiated'
@@ -230,6 +244,26 @@ export default function DriverDashboard() {
               <Text style={[styles.topStatValue, { color: colors.foreground }]}>{acceptanceRateText}</Text>
               <Text style={[styles.topStatLabel, { color: colors.mutedForeground }]}>rate</Text>
             </View>
+          </View>
+        </View>
+        <View style={[styles.activityCard, { backgroundColor: cardFill }]}>
+          <View style={styles.activityStat}>
+            <Text style={[styles.activityValue, { color: colors.foreground }]}>
+              {formatRwf(activitySummary.todayEarningsRwf)}
+            </Text>
+            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Today's Earnings</Text>
+          </View>
+          <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.activityStat}>
+            <Text style={[styles.activityValue, { color: colors.foreground }]}>
+              {activitySummary.completedRidesToday}
+            </Text>
+            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Completed Today</Text>
+          </View>
+          <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.activityStat}>
+            <Text style={[styles.activityValue, { color: colors.foreground }]}>{remainingCreditsText}</Text>
+            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Ride Credits</Text>
           </View>
         </View>
         <DriverCreditDashboardCard
@@ -404,6 +438,25 @@ const styles = StyleSheet.create({
   topStatValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   topStatLabel: { fontSize: 10, fontFamily: 'Inter_400Regular' },
   topStatDivider: { width: 1, height: 24 },
+  activityCard: {
+    marginTop: 8,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 6,
+    ...Platform.select({ ios: { borderCurve: 'continuous' } }),
+  },
+  activityStat: { flex: 1, alignItems: 'center', minWidth: 0 },
+  activityValue: { fontSize: 15, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  activityLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 3 },
+  activityDivider: { width: 1, height: 28 },
 
   // Map controls
   mapControls: { position: 'absolute', right: 16, gap: 10 },

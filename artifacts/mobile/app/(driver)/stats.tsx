@@ -6,6 +6,8 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import { useRide } from '@/context/RideContext';
+import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 
 function StatRow({
   label,
@@ -41,7 +43,12 @@ export default function DriverStats() {
   const insets = useSafeAreaInsets();
   const { driverProfile } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
+  const { rideHistory, loadHistory } = useRide();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+
+  React.useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   const dp = driverProfile ?? {
     dailyRides: 0,
@@ -51,15 +58,10 @@ export default function DriverStats() {
     earningsTotal: 0,
   };
 
-  // earningsTotal is accumulated from actual agreedFare on each completed ride.
-  // Daily figures are estimated (no per-ride fare breakdown stored yet).
-  const ESTIMATED_AVG_FARE = 2800;
   const dailyDecisionCount = dp.dailyRides + (dp.dailyDeclines ?? 0);
   const acceptanceRateValue = dailyDecisionCount > 0 ? `${dp.acceptanceRate}%` : 'No data';
   const acceptanceRateNote = dailyDecisionCount > 0 ? undefined : 'After your first ride decision';
-  const dailyGrossEstimate = dp.dailyRides * ESTIMATED_AVG_FARE;
-  const dailyFeeEstimate = Math.round(dailyGrossEstimate * 0.15);
-  const dailyPayoutEstimate = dailyGrossEstimate - dailyFeeEstimate;
+  const activitySummary = getDriverActivitySummary({ driverProfile, entitlement, rideHistory });
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
 
   return (
@@ -92,28 +94,14 @@ export default function DriverStats() {
       {/* Today */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
-        <StatRow label="Rides Completed" value={String(dp.dailyRides)} icon="navigation" />
-        <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
         <StatRow
-          label="Est. Gross Earnings"
-          value={`~${dailyGrossEstimate.toLocaleString()} RWF`}
+          label="Today's Earnings"
+          value={formatRwf(activitySummary.todayEarningsRwf)}
           icon="dollar-sign"
           color={colors.primaryHex}
-          note="Estimated · avg fare used"
         />
-        <StatRow
-          label="Est. Platform Fee"
-          value={`~${dailyFeeEstimate.toLocaleString()} RWF`}
-          icon="percent"
-          note="Estimated · 15%"
-        />
-        <StatRow
-          label="Est. Today's Payout"
-          value={`~${dailyPayoutEstimate.toLocaleString()} RWF`}
-          icon="credit-card"
-          color={colors.primaryHex}
-          note="Estimated"
-        />
+        <StatRow label="Rides Completed" value={String(activitySummary.completedRidesToday)} icon="navigation" />
+        <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
         <StatRow label="Payment Target" value={paymentTarget} icon="smartphone" />
       </View>
 
@@ -130,7 +118,7 @@ export default function DriverStats() {
         />
         <StatRow
           label="Total Earnings"
-          value={`${(dp.earningsTotal ?? 0).toLocaleString()} RWF`}
+          value={formatRwf(activitySummary.allTimeEarningsRwf)}
           icon="trending-up"
           color={colors.primaryHex}
           note="From completed rides"
@@ -157,7 +145,7 @@ export default function DriverStats() {
       <View style={[styles.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
         <Feather name="info" size={16} color={colors.mutedForeground} />
         <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-          Total Earnings reflects the sum of all agreed fares from your completed rides. Daily figures marked "Est." use an average fare and may differ from actual payouts.
+          Earnings reflect agreed fares from completed rides only. Rides without an agreed fare are counted, but do not add earnings.
         </Text>
       </View>
 

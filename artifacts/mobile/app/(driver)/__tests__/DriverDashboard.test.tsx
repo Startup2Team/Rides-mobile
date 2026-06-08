@@ -7,9 +7,11 @@ import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
 import { RideProvider } from '@/context/RideContext';
 import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { STORAGE_KEYS } from '@/constants/storage';
 import { saveStoredDriverProfile, saveStoredUser, loadStoredDriverProfile } from '@/persistence/authPersistence';
 import { saveStoredDriverEntitlement } from '@/persistence/driverEntitlementPersistence';
-import type { DriverProfile, User } from '@/types';
+import { saveSecureStorage } from '@/persistence/secureStorage';
+import type { DriverProfile, Ride, User } from '@/types';
 import DriverDashboard from '../index';
 
 jest.mock('react-native', () => {
@@ -141,6 +143,25 @@ const activeEntitlement = activatePackage(
   '2026-01-01T00:00:00.000Z',
 ).entitlement;
 
+function completedRide(overrides: Partial<Ride>): Ride {
+  return {
+    id: 'ride-1',
+    customerId: 'customer-1',
+    customerName: 'Customer',
+    vehicleType: 'moto',
+    pickup: { latitude: -1.94, longitude: 30.06, address: 'Pickup' },
+    destination: { latitude: -1.95, longitude: 30.07, address: 'Destination' },
+    status: 'completed',
+    distance: 2,
+    duration: 10,
+    suggestedFare: 10000,
+    negotiation: [],
+    createdAt: '2026-06-08T09:00:00.000Z',
+    completedAt: '2026-06-08T09:20:00.000Z',
+    ...overrides,
+  };
+}
+
 function DashboardProviders() {
   return (
     <AuthProvider>
@@ -170,6 +191,7 @@ async function seedDriverState({
 describe('DriverDashboard online state', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
     const originalConsoleError = console.error;
@@ -253,5 +275,41 @@ describe('DriverDashboard online state', () => {
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
+  });
+
+  test('shows real activity-backed earnings, completed rides, and remaining credits', async () => {
+    await seedDriverState({
+      profile: { ...baseProfile, completedRides: 4, dailyRides: 2, earningsTotal: 20000 },
+    });
+    await saveSecureStorage(STORAGE_KEYS.rideHistory, [
+      completedRide({ id: 'today-real-fare', agreedFare: 3500 }),
+      completedRide({ id: 'today-no-agreed-fare', agreedFare: undefined }),
+      completedRide({
+        id: 'yesterday-real-fare',
+        agreedFare: 9900,
+        createdAt: '2026-06-07T09:00:00.000Z',
+        completedAt: '2026-06-07T09:20:00.000Z',
+      }),
+    ]);
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText("Today's Earnings")).toBeTruthy());
+
+    expect(screen.getByText('3,500 RWF')).toBeTruthy();
+    expect(screen.getByText('Completed Today')).toBeTruthy();
+    expect(screen.getByText('Ride Credits')).toBeTruthy();
+    expect(screen.getByText('35')).toBeTruthy();
+    expect(screen.queryByText('13,400 RWF')).toBeNull();
+  });
+
+  test('shows zero activity clearly when no completed ride data exists', async () => {
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText("Today's Earnings")).toBeTruthy());
+
+    expect(screen.getByText('0 RWF')).toBeTruthy();
+    expect(screen.getByText('Completed Today')).toBeTruthy();
+    expect(screen.getByText('Ride Credits')).toBeTruthy();
   });
 });
