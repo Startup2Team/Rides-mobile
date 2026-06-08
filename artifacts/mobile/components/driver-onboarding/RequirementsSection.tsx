@@ -15,9 +15,9 @@ export function RequirementsSection({ acceptedTerms, colors, errors, form, setAc
   update: (field: string, value: string) => void;
 }) {
   return <View style={styles.section}>
-    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Setup</Text>
-    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Add a phone number, merchant code, or both for future payout setup.</Text>
-    <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Payment Provider</Text>
+    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Mobile Money Details</Text>
+    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Add the Mobile Money details you use for driver account records.</Text>
+    <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Mobile Money Provider</Text>
     <View style={styles.providerRow}>{(['mtn', 'airtel'] as const).map(provider => <TouchableOpacity key={provider} style={[styles.providerCard, { backgroundColor: form.momoProvider === provider ? colors.primaryHex + '15' : colors.card, borderColor: form.momoProvider === provider ? colors.primary : colors.border }]} onPress={() => update('momoProvider', provider)}>
       <Image source={PAYMENT_PROVIDER_LOGOS[provider]} style={styles.providerLogo} resizeMode="contain" />
       <Text style={[styles.providerName, { color: colors.foreground }]}>{provider === 'mtn' ? 'MTN MoMo' : 'Airtel Money'}</Text>

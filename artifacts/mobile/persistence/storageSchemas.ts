@@ -128,6 +128,27 @@ const packageActivationSchema = z.object({
   authority: z.enum(['local_prototype', 'backend']),
 });
 
+const driverPackagePurchaseStatusSchema = z.enum([
+  'idle',
+  'pending',
+  'processing',
+  'successful',
+  'failed',
+  'cancelled',
+  'expired',
+]);
+
+const driverPackagePurchaseSchema = z.object({
+  packageId: driverRidePackageIdSchema,
+  amount: z.number().nonnegative(),
+  provider: z.enum(['mtn', 'airtel']),
+  phoneNumber: z.string(),
+  transactionId: z.string(),
+  status: driverPackagePurchaseStatusSchema,
+  createdAt: z.string(),
+  completedAt: z.string().optional(),
+});
+
 const driverCreditTransactionSchema = z.object({
   id: z.string(),
   type: z.enum(['credit', 'debit']),
@@ -160,6 +181,7 @@ export const driverEntitlementSchema = z.object({
   remainingRideCredits: z.number().int().nonnegative(),
   activations: z.array(packageActivationSchema),
   creditTransactions: z.array(driverCreditTransactionSchema),
+  purchaseHistory: z.array(driverPackagePurchaseSchema),
   updatedAt: z.string(),
   authority: z.enum(['local_prototype', 'backend']),
 });

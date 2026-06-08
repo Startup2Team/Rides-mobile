@@ -2,12 +2,14 @@ import type { DriverProfile } from '@/types';
 import {
   activatePackage,
   canDriverGoOnlineWithCredits,
+  createPackagePurchase,
   deductCreditForCompletedRide,
   EMPTY_DRIVER_ENTITLEMENT,
   getActiveRideCredits,
   getRideCreditBalanceMessage,
   hasUsedLaunchOffer,
   isLowRideCreditBalance,
+  updatePackagePurchaseStatus,
 } from '../driverRidePackages';
 
 const approvedDriver = { verificationStatus: 'approved', isVerified: true } as DriverProfile;
@@ -30,8 +32,65 @@ describe('driver ride packages', () => {
     expect(() => activatePackage(first.entitlement, 'launch_starter')).toThrow('already been used');
   });
 
-  test('growth package adds 75 credits', () => {
-    expect(getActiveRideCredits(activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'growth').entitlement)).toBe(75);
+  test('successful purchase adds credits', () => {
+    const started = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
+      packageId: 'growth',
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:00.000Z');
+    const completed = updatePackagePurchaseStatus(started.entitlement, started.purchase.transactionId, 'successful', '2026-06-08T10:01:00.000Z');
+
+    expect(getActiveRideCredits(completed.entitlement)).toBe(75);
+    expect(completed.activation?.creditsGranted).toBe(75);
+    expect(completed.purchase.status).toBe('successful');
+  });
+
+  test.each(['failed', 'cancelled', 'expired'] as const)('%s purchase adds no credits', status => {
+    const started = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
+      packageId: 'growth',
+      provider: 'airtel',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:00.000Z');
+    const completed = updatePackagePurchaseStatus(started.entitlement, started.purchase.transactionId, status, '2026-06-08T10:01:00.000Z');
+
+    expect(getActiveRideCredits(completed.entitlement)).toBe(0);
+    expect(completed.activation).toBeUndefined();
+    expect(completed.purchase.status).toBe(status);
+  });
+
+  test('duplicate success cannot add credits twice', () => {
+    const started = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
+      packageId: 'growth',
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:00.000Z');
+    const first = updatePackagePurchaseStatus(started.entitlement, started.purchase.transactionId, 'successful', '2026-06-08T10:01:00.000Z');
+    const duplicate = updatePackagePurchaseStatus(first.entitlement, started.purchase.transactionId, 'successful', '2026-06-08T10:02:00.000Z');
+
+    expect(getActiveRideCredits(duplicate.entitlement)).toBe(75);
+    expect(duplicate.entitlement.activations).toHaveLength(1);
+    expect(duplicate.entitlement.creditTransactions).toHaveLength(1);
+  });
+
+  test('purchase history records status correctly', () => {
+    const started = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
+      packageId: 'growth',
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:00.000Z');
+    const processing = updatePackagePurchaseStatus(started.entitlement, started.purchase.transactionId, 'processing', '2026-06-08T10:00:30.000Z');
+    const failed = updatePackagePurchaseStatus(processing.entitlement, started.purchase.transactionId, 'failed', '2026-06-08T10:01:00.000Z');
+
+    expect(failed.entitlement.purchaseHistory).toEqual([
+      expect.objectContaining({
+        amount: 2_000,
+        packageId: 'growth',
+        phoneNumber: '+250788000000',
+        provider: 'mtn',
+        status: 'failed',
+        completedAt: '2026-06-08T10:01:00.000Z',
+      }),
+    ]);
   });
 
   test('completed ride deducts exactly once and duplicate completion does not double-deduct', () => {

@@ -2,6 +2,15 @@ import type { DriverProfile } from '@/types';
 
 export type DriverRidePackageId = 'launch_starter' | 'growth';
 export type DriverEntitlementAuthority = 'local_prototype' | 'backend';
+export type MobileMoneyPackageProvider = 'mtn' | 'airtel';
+export type DriverPackagePurchaseStatus =
+  | 'idle'
+  | 'pending'
+  | 'processing'
+  | 'successful'
+  | 'failed'
+  | 'cancelled'
+  | 'expired';
 
 export interface DriverRidePackage {
   id: DriverRidePackageId;
@@ -23,6 +32,17 @@ export interface PackageActivation {
   authority: DriverEntitlementAuthority;
 }
 
+export interface DriverPackagePurchase {
+  packageId: DriverRidePackageId;
+  amount: number;
+  provider: MobileMoneyPackageProvider;
+  phoneNumber: string;
+  transactionId: string;
+  status: DriverPackagePurchaseStatus;
+  createdAt: string;
+  completedAt?: string;
+}
+
 export interface DriverCreditTransaction {
   id: string;
   type: 'credit' | 'debit';
@@ -39,6 +59,7 @@ export interface DriverEntitlement {
   remainingRideCredits: number;
   activations: PackageActivation[];
   creditTransactions: DriverCreditTransaction[];
+  purchaseHistory: DriverPackagePurchase[];
   updatedAt: string;
   authority: DriverEntitlementAuthority;
 }
@@ -71,9 +92,18 @@ export const EMPTY_DRIVER_ENTITLEMENT: DriverEntitlement = {
   remainingRideCredits: 0,
   activations: [],
   creditTransactions: [],
+  purchaseHistory: [],
   updatedAt: '',
   authority: 'local_prototype',
 };
+
+const normalizeEntitlement = (entitlement: DriverEntitlement | null | undefined): DriverEntitlement => ({
+  ...EMPTY_DRIVER_ENTITLEMENT,
+  ...(entitlement ?? {}),
+  activations: entitlement?.activations ?? [],
+  creditTransactions: entitlement?.creditTransactions ?? [],
+  purchaseHistory: entitlement?.purchaseHistory ?? [],
+});
 
 export const getActiveRideCredits = (entitlement: DriverEntitlement | null | undefined) =>
   Math.max(0, entitlement?.remainingRideCredits ?? 0);
@@ -103,7 +133,7 @@ export const getRideCreditBalanceMessage = (entitlement: DriverEntitlement | nul
 };
 
 export const getRideCreditProgress = (entitlement: DriverEntitlement | null | undefined) => {
-  const current = entitlement ?? EMPTY_DRIVER_ENTITLEMENT;
+  const current = normalizeEntitlement(entitlement);
   const totalGranted = current.activations.reduce((total, activation) => total + activation.creditsGranted, 0);
   const remaining = getActiveRideCredits(current);
   return {
@@ -119,7 +149,7 @@ export function activatePackage(
   packageId: DriverRidePackageId,
   now = new Date().toISOString(),
 ): { entitlement: DriverEntitlement; activation: PackageActivation } {
-  const current = entitlement ?? EMPTY_DRIVER_ENTITLEMENT;
+  const current = normalizeEntitlement(entitlement);
   const ridePackage = DRIVER_RIDE_PACKAGES[packageId];
   if (ridePackage.launchOffer && hasUsedLaunchOffer(current)) {
     throw new Error('Launch Starter Package has already been used');
@@ -145,6 +175,7 @@ export function activatePackage(
   return {
     activation,
     entitlement: {
+      ...current,
       activePackageId: packageId,
       remainingRideCredits: getActiveRideCredits(current) + ridePackage.totalCredits,
       activations: [...current.activations, activation],
@@ -155,12 +186,109 @@ export function activatePackage(
   };
 }
 
+export function createPackagePurchase(
+  entitlement: DriverEntitlement | null | undefined,
+  input: {
+    packageId: DriverRidePackageId;
+    provider: MobileMoneyPackageProvider;
+    phoneNumber: string;
+  },
+  now = new Date().toISOString(),
+): { entitlement: DriverEntitlement; purchase: DriverPackagePurchase } {
+  const current = normalizeEntitlement(entitlement);
+  const ridePackage = DRIVER_RIDE_PACKAGES[input.packageId];
+  if (ridePackage.currentPriceRwf <= 0) {
+    throw new Error('This package does not require Mobile Money confirmation.');
+  }
+
+  const purchase: DriverPackagePurchase = {
+    packageId: input.packageId,
+    amount: ridePackage.currentPriceRwf,
+    provider: input.provider,
+    phoneNumber: input.phoneNumber,
+    transactionId: `momo-package:${input.packageId}:${now}`,
+    status: 'pending',
+    createdAt: now,
+  };
+
+  return {
+    purchase,
+    entitlement: {
+      ...current,
+      purchaseHistory: [...current.purchaseHistory, purchase],
+      updatedAt: now,
+    },
+  };
+}
+
+export function updatePackagePurchaseStatus(
+  entitlement: DriverEntitlement | null | undefined,
+  transactionId: string,
+  status: Exclude<DriverPackagePurchaseStatus, 'idle'>,
+  now = new Date().toISOString(),
+): { entitlement: DriverEntitlement; purchase: DriverPackagePurchase; activation?: PackageActivation } {
+  const current = normalizeEntitlement(entitlement);
+  const purchase = current.purchaseHistory.find(item => item.transactionId === transactionId);
+  if (!purchase) throw new Error('Package purchase was not found.');
+
+  const finalStatuses: DriverPackagePurchaseStatus[] = ['successful', 'failed', 'cancelled', 'expired'];
+  const completedAt = finalStatuses.includes(status) ? now : purchase.completedAt;
+  const updatedPurchase: DriverPackagePurchase = { ...purchase, status, completedAt };
+  const purchaseHistory = current.purchaseHistory.map(item =>
+    item.transactionId === transactionId ? updatedPurchase : item,
+  );
+
+  let next: DriverEntitlement = {
+    ...current,
+    purchaseHistory,
+    updatedAt: now,
+  };
+
+  if (status !== 'successful') return { entitlement: next, purchase: updatedPurchase };
+
+  const idempotencyKey = `package-purchase:${transactionId}`;
+  const existingActivation = next.activations.find(activation => activation.id === `activation:${transactionId}`);
+  if (next.creditTransactions.some(transaction => transaction.idempotencyKey === idempotencyKey) && existingActivation) {
+    return { entitlement: next, purchase: updatedPurchase, activation: existingActivation };
+  }
+
+  const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+  const activation: PackageActivation = {
+    id: `activation:${transactionId}`,
+    packageId: purchase.packageId,
+    activatedAt: now,
+    pricePaidRwf: purchase.amount,
+    creditsGranted: ridePackage.totalCredits,
+    authority: 'local_prototype',
+  };
+  const transaction: DriverCreditTransaction = {
+    id: `credit:${transactionId}`,
+    type: 'credit',
+    amount: ridePackage.totalCredits,
+    createdAt: now,
+    packageActivationId: activation.id,
+    idempotencyKey,
+    authority: 'local_prototype',
+  };
+
+  next = {
+    ...next,
+    activePackageId: purchase.packageId,
+    remainingRideCredits: getActiveRideCredits(next) + ridePackage.totalCredits,
+    activations: [...next.activations, activation],
+    creditTransactions: [...next.creditTransactions, transaction],
+    updatedAt: now,
+  };
+
+  return { entitlement: next, purchase: updatedPurchase, activation };
+}
+
 export function deductCreditForCompletedRide(
   entitlement: DriverEntitlement | null | undefined,
   completedRideId: string,
   now = new Date().toISOString(),
 ): { entitlement: DriverEntitlement; deducted: boolean } {
-  const current = entitlement ?? EMPTY_DRIVER_ENTITLEMENT;
+  const current = normalizeEntitlement(entitlement);
   const idempotencyKey = `completed-ride:${completedRideId}`;
   if (current.creditTransactions.some(transaction => transaction.idempotencyKey === idempotencyKey)) {
     return { entitlement: current, deducted: false };

@@ -87,7 +87,7 @@ export function ReviewSubmissionSection({ colors, docs, form }: {
       </ReviewCard>
 
       {/* Payment */}
-      <ReviewCard icon="credit-card" title="Payment Details" cardFill={cardFill} colors={colors}>
+      <ReviewCard icon="credit-card" title="Mobile Money Details" cardFill={cardFill} colors={colors}>
         <View style={[reviewStyles.providerBadge, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor }]}>
           <Image source={PAYMENT_PROVIDER_LOGOS[form.momoProvider]} style={reviewStyles.providerLogo} resizeMode="contain" />
           <Text style={[reviewStyles.providerLabel, { color: colors.foreground }]}>{providerLabel}</Text>
@@ -96,7 +96,7 @@ export function ReviewSubmissionSection({ colors, docs, form }: {
         {form.momoCode ? <ReviewRow label="Phone Number" value={form.momoCode} separatorColor={separatorColor} colors={colors} /> : null}
         {form.merchantCode ? <ReviewRow label="Merchant Code" value={form.merchantCode} separatorColor={separatorColor} colors={colors} last={!form.momoCode} /> : null}
         {!form.momoCode && !form.merchantCode && (
-          <ReviewRow label="Payment" value="Not provided" separatorColor={separatorColor} colors={colors} last />
+          <ReviewRow label="Mobile Money Details" value="Not provided" separatorColor={separatorColor} colors={colors} last />
         )}
       </ReviewCard>
 

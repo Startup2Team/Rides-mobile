@@ -1,13 +1,26 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import type { DriverEntitlement } from '@/domain/driverRidePackages';
+import { Text } from 'react-native';
+import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import DriverPackagesScreen from '../driver-packages';
 
 const mockRouterReplace = jest.fn();
 const mockRouterBack = jest.fn();
 const mockActivatePackage = jest.fn();
+const mockCreatePackagePurchase = jest.fn();
+const mockUpdatePackagePurchaseStatus = jest.fn();
 let mockEntitlement: DriverEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+
+const successfulPurchase: DriverPackagePurchase = {
+  amount: 2_000,
+  createdAt: '2026-06-08T10:00:00.000Z',
+  packageId: 'growth',
+  phoneNumber: '+250788000000',
+  provider: 'mtn',
+  status: 'pending',
+  transactionId: 'momo-package:growth:2026-06-08T10:00:00.000Z',
+};
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -47,6 +60,7 @@ jest.mock('react-native', () => {
       flatten: (style: object) => style,
     },
     Text: host('Text'),
+    TextInput: host('TextInput'),
     TouchableOpacity: host('TouchableOpacity'),
     useColorScheme: () => 'light',
     View: host('View'),
@@ -80,6 +94,8 @@ jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     driverProfile: {
       isVerified: true,
+      momoCode: '+250788000000',
+      momoProvider: 'mtn',
       verificationStatus: 'approved',
     },
   }),
@@ -88,15 +104,18 @@ jest.mock('@/context/AuthContext', () => ({
 jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
     activatePackage: mockActivatePackage,
+    createPackagePurchase: mockCreatePackagePurchase,
     entitlement: mockEntitlement,
     isLoading: false,
     launchOfferUsed: mockEntitlement.activations.some(activation => activation.packageId === 'launch_starter'),
     rideCredits: mockEntitlement.remainingRideCredits,
+    updatePackagePurchaseStatus: mockUpdatePackagePurchaseStatus,
   }),
 }));
 
 describe('DriverPackagesScreen', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -104,58 +123,88 @@ describe('DriverPackagesScreen', () => {
     });
     mockEntitlement = EMPTY_DRIVER_ENTITLEMENT;
     mockActivatePackage.mockResolvedValue({
-      id: 'activation:growth:2026-06-08T10:00:00.000Z',
-      packageId: 'growth',
+      id: 'activation:launch_starter:2026-06-08T10:00:00.000Z',
+      packageId: 'launch_starter',
       activatedAt: '2026-06-08T10:00:00.000Z',
-      pricePaidRwf: 2_000,
-      creditsGranted: 75,
+      pricePaidRwf: 0,
+      creditsGranted: 35,
       authority: 'local_prototype',
     });
+    mockCreatePackagePurchase.mockResolvedValue(successfulPurchase);
+    mockUpdatePackagePurchaseStatus.mockImplementation(async (_transactionId: string, status: string) => ({
+      purchase: { ...successfulPurchase, status },
+      activation: status === 'successful' ? {
+        id: 'activation:momo-package:growth:2026-06-08T10:00:00.000Z',
+        packageId: 'growth',
+        activatedAt: '2026-06-08T10:01:00.000Z',
+        pricePaidRwf: 2_000,
+        creditsGranted: 75,
+        authority: 'local_prototype',
+      } : undefined,
+    }));
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
-  test('reviews a paid package before recording a local prototype purchase', async () => {
+  test('successful Mobile Money package purchase adds credits after confirmation', async () => {
     render(<DriverPackagesScreen />);
 
     fireEvent.press(screen.getByText('Review Plan'));
 
     expect(screen.getByText('Confirm package')).toBeTruthy();
-    expect(screen.getByText('Mobile Money payment will be connected here during backend integration. For now this records a local prototype purchase.')).toBeTruthy();
+    expect(screen.getByText('MTN Mobile Money')).toBeTruthy();
+    expect(screen.getByText('Airtel Money')).toBeTruthy();
+    expect(screen.getByText('Send Payment Prompt')).toBeTruthy();
     expect(mockActivatePackage).not.toHaveBeenCalled();
 
     await act(async () => {
-      fireEvent.press(screen.getByText('Record Purchase'));
+      fireEvent.press(screen.getByText('Send Payment Prompt'));
     });
 
-    await waitFor(() => expect(mockActivatePackage).toHaveBeenCalledWith('growth'));
-    expect(screen.getByText('Package confirmed')).toBeTruthy();
-    expect(screen.getByText('Growth Package added 75 ride credits to your account.')).toBeTruthy();
+    expect(mockCreatePackagePurchase).toHaveBeenCalledWith({
+      packageId: 'growth',
+      phoneNumber: '+250788000000',
+      provider: 'mtn',
+    });
+    expect(screen.getByText('Waiting for Mobile Money confirmation. Confirm the payment on your phone.')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(1900);
+    });
+
+    await waitFor(() => expect(mockUpdatePackagePurchaseStatus).toHaveBeenCalledWith(successfulPurchase.transactionId, 'successful'));
+    expect(screen.getByText('Package Activated')).toBeTruthy();
+    expect(screen.getByText('You can now go online and start receiving ride requests.')).toBeTruthy();
+    expect(screen.getByText('Credits Added: 75')).toBeTruthy();
   });
 
-  test('shows package activation history from entitlement data', () => {
+  test('shows purchase history from entitlement data', () => {
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
       activePackageId: 'growth',
       remainingRideCredits: 110,
-      activations: [
+      purchaseHistory: [
         {
-          id: 'activation:launch_starter:2026-06-07T10:00:00.000Z',
-          packageId: 'launch_starter',
-          activatedAt: '2026-06-07T10:00:00.000Z',
-          pricePaidRwf: 0,
-          creditsGranted: 35,
-          authority: 'local_prototype',
+          amount: 2_000,
+          createdAt: '2026-06-08T10:00:00.000Z',
+          completedAt: '2026-06-08T10:01:00.000Z',
+          packageId: 'growth',
+          phoneNumber: '+250788000000',
+          provider: 'mtn',
+          status: 'successful',
+          transactionId: 'momo-package:growth:2026-06-08T10:00:00.000Z',
         },
         {
-          id: 'activation:growth:2026-06-08T10:00:00.000Z',
+          amount: 2_000,
+          createdAt: '2026-06-07T10:00:00.000Z',
           packageId: 'growth',
-          activatedAt: '2026-06-08T10:00:00.000Z',
-          pricePaidRwf: 2_000,
-          creditsGranted: 75,
-          authority: 'local_prototype',
+          phoneNumber: '+250788000000',
+          provider: 'airtel',
+          status: 'failed',
+          transactionId: 'momo-package:growth:2026-06-07T10:00:00.000Z',
         },
       ],
       updatedAt: '2026-06-08T10:00:00.000Z',
@@ -163,12 +212,28 @@ describe('DriverPackagesScreen', () => {
 
     render(<DriverPackagesScreen />);
 
-    expect(screen.getByText('Package history')).toBeTruthy();
+    expect(screen.getByText('Purchase history')).toBeTruthy();
     expect(screen.getAllByText('Growth Package').length).toBeGreaterThan(1);
-    expect(screen.getByText('+75')).toBeTruthy();
+    expect(screen.getByText('Successful')).toBeTruthy();
+    expect(screen.getByText('Failed')).toBeTruthy();
     expect(screen.getAllByText('2,000 RWF').length).toBeGreaterThan(1);
-    expect(screen.getAllByText('Launch Starter Package').length).toBeGreaterThan(1);
-    expect(screen.getByText('+35')).toBeTruthy();
-    expect(screen.getAllByText('FREE').length).toBeGreaterThan(1);
+  });
+
+  test('user-facing package copy avoids misleading payment platform terms', () => {
+    render(<DriverPackagesScreen />);
+
+    fireEvent.press(screen.getByText('Review Plan'));
+
+    const renderedText = screen.UNSAFE_getAllByType(Text)
+      .map(node => String(node.props.children))
+      .join(' ')
+      .toLowerCase();
+
+    expect(renderedText).not.toContain('wallet');
+    expect(renderedText).not.toContain('withdrawal');
+    expect(renderedText).not.toContain('payout');
+    expect(renderedText).not.toContain('prototype');
+    expect(renderedText).not.toContain('backend');
+    expect(renderedText).not.toContain('simulated');
   });
 });

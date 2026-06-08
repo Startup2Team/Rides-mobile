@@ -101,7 +101,7 @@ export default function DriverProfileScreen() {
             <Text style={[styles.infoValue, { color: colors.foreground }]}>{driverProfile.city}</Text>
           </View>
           <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>MoMo Code</Text>
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Mobile Money Details</Text>
             <Text style={[styles.infoValue, { color: colors.foreground }]}>{driverProfile.momoCode}</Text>
           </View>
         </View>

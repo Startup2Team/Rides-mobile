@@ -1,16 +1,20 @@
-import React, { useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
+import { AppInput } from '@/components/AppInput';
 import { BackButton } from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
   DRIVER_RIDE_PACKAGES,
+  type DriverPackagePurchase,
+  type DriverPackagePurchaseStatus,
   type DriverRidePackage,
   type DriverRidePackageId,
+  type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
@@ -22,21 +26,37 @@ export default function DriverPackagesScreen() {
   const { driverProfile } = useAuth();
   const {
     activatePackage,
+    createPackagePurchase,
     entitlement,
     isLoading: isEntitlementLoading,
     launchOfferUsed,
     rideCredits,
+    updatePackagePurchaseStatus,
   } = useDriverEntitlement();
   const [activating, setActivating] = useState<string | null>(null);
   const [activationError, setActivationError] = useState<string | null>(null);
   const [selectedPackageId, setSelectedPackageId] = useState<DriverRidePackageId | null>(null);
   const [receipt, setReceipt] = useState<PackageActivation | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
+    driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
+  );
+  const [phoneNumber, setPhoneNumber] = useState(driverProfile?.momoCode ?? '');
+  const [paymentStatus, setPaymentStatus] = useState<DriverPackagePurchaseStatus>('idle');
+  const [activePurchase, setActivePurchase] = useState<DriverPackagePurchase | null>(null);
+  const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const selectedPackage = selectedPackageId ? DRIVER_RIDE_PACKAGES[selectedPackageId] : null;
-  const packageHistory = useMemo(
-    () => [...entitlement.activations].sort((a, b) => b.activatedAt.localeCompare(a.activatedAt)),
-    [entitlement.activations],
+  const purchaseHistory = useMemo(
+    () => [...(entitlement.purchaseHistory ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [entitlement.purchaseHistory],
   );
+
+  const clearPaymentTimers = () => {
+    paymentTimers.current.forEach(timer => clearTimeout(timer));
+    paymentTimers.current = [];
+  };
+
+  useEffect(() => () => clearPaymentTimers(), []);
 
   const handleActivate = async (ridePackage: DriverRidePackage) => {
     setActivating(ridePackage.id);
@@ -51,6 +71,73 @@ export default function DriverPackagesScreen() {
     } finally {
       setActivating(null);
     }
+  };
+
+  const handleSelectPackage = (packageId: DriverRidePackageId) => {
+    clearPaymentTimers();
+    setReceipt(null);
+    setActivationError(null);
+    setPaymentStatus('idle');
+    setActivePurchase(null);
+    setSelectedPackageId(packageId);
+  };
+
+  const schedulePaymentSuccess = (purchase: DriverPackagePurchase) => {
+    const processingTimer = setTimeout(() => {
+      setPaymentStatus('processing');
+      void updatePackagePurchaseStatus(purchase.transactionId, 'processing');
+    }, 700);
+    const successTimer = setTimeout(async () => {
+      try {
+        const result = await updatePackagePurchaseStatus(purchase.transactionId, 'successful');
+        setPaymentStatus('successful');
+        if (result.activation) {
+          setReceipt(result.activation);
+          setSelectedPackageId(null);
+        }
+      } catch (error) {
+        setPaymentStatus('failed');
+        setActivationError(error instanceof Error ? error.message : 'Payment was not completed');
+      }
+    }, 1800);
+    paymentTimers.current = [processingTimer, successTimer];
+  };
+
+  const handleSendPaymentPrompt = async (ridePackage: DriverRidePackage) => {
+    if (ridePackage.currentPriceRwf <= 0) {
+      await handleActivate(ridePackage);
+      return;
+    }
+    clearPaymentTimers();
+    setActivating(ridePackage.id);
+    setActivationError(null);
+    try {
+      const purchase = await createPackagePurchase({
+        packageId: ridePackage.id,
+        provider: selectedProvider,
+        phoneNumber,
+      });
+      setActivePurchase(purchase);
+      setPaymentStatus('pending');
+      schedulePaymentSuccess(purchase);
+    } catch (error) {
+      setPaymentStatus('failed');
+      setActivationError(error instanceof Error ? error.message : 'Payment was not completed');
+    } finally {
+      setActivating(null);
+    }
+  };
+
+  const handleChooseAnotherMethod = async () => {
+    clearPaymentTimers();
+    if (activePurchase && (paymentStatus === 'pending' || paymentStatus === 'processing')) {
+      await updatePackagePurchaseStatus(activePurchase.transactionId, 'cancelled');
+      setPaymentStatus('cancelled');
+      return;
+    }
+    setPaymentStatus('idle');
+    setActivePurchase(null);
+    setActivationError(null);
   };
 
   return <ScrollView
@@ -96,11 +183,7 @@ export default function DriverPackagesScreen() {
       loading={activating === 'launch_starter'}
       buttonTitle={launchOfferUsed ? 'Launch Offer Already Used' : 'Review Free Plan'}
       selected={selectedPackageId === 'launch_starter'}
-      onPress={() => {
-        setReceipt(null);
-        setActivationError(null);
-        setSelectedPackageId('launch_starter');
-      }}
+      onPress={() => handleSelectPackage('launch_starter')}
     />
     <PackageCard
       ridePackage={DRIVER_RIDE_PACKAGES.growth}
@@ -110,11 +193,7 @@ export default function DriverPackagesScreen() {
       unavailable={isEntitlementLoading}
       buttonTitle="Review Plan"
       selected={selectedPackageId === 'growth'}
-      onPress={() => {
-        setReceipt(null);
-        setActivationError(null);
-        setSelectedPackageId('growth');
-      }}
+      onPress={() => handleSelectPackage('growth')}
     />
 
     {selectedPackage ? (
@@ -123,14 +202,21 @@ export default function DriverPackagesScreen() {
         cardFill={cardFill}
         colors={colors}
         loading={activating === selectedPackage.id}
-        ridePackage={selectedPackage}
         onCancel={() => setSelectedPackageId(null)}
+        onChooseAnotherMethod={handleChooseAnotherMethod}
         onConfirm={() => void handleActivate(selectedPackage)}
+        onPhoneNumberChange={setPhoneNumber}
+        onProviderChange={setSelectedProvider}
+        onSendPaymentPrompt={() => void handleSendPaymentPrompt(selectedPackage)}
+        paymentStatus={paymentStatus}
+        phoneNumber={phoneNumber}
+        provider={selectedProvider}
+        ridePackage={selectedPackage}
       />
     ) : null}
 
     <PurchaseHistoryCard
-      activations={packageHistory}
+      purchases={purchaseHistory}
       cardFill={cardFill}
       colors={colors}
     />
@@ -156,10 +242,40 @@ function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading,
   </View>;
 }
 
-function ConfirmationCard({ cardFill, colors, error, loading, onCancel, onConfirm, ridePackage }: {
-  cardFill: string; colors: ReturnType<typeof useColors>; error: string | null; loading: boolean; onCancel: () => void; onConfirm: () => void; ridePackage: DriverRidePackage;
+function ConfirmationCard({
+  cardFill,
+  colors,
+  error,
+  loading,
+  onCancel,
+  onChooseAnotherMethod,
+  onConfirm,
+  onPhoneNumberChange,
+  onProviderChange,
+  onSendPaymentPrompt,
+  paymentStatus,
+  phoneNumber,
+  provider,
+  ridePackage,
+}: {
+  cardFill: string;
+  colors: ReturnType<typeof useColors>;
+  error: string | null;
+  loading: boolean;
+  onCancel: () => void;
+  onChooseAnotherMethod: () => void;
+  onConfirm: () => void;
+  onPhoneNumberChange: (value: string) => void;
+  onProviderChange: (value: MobileMoneyPackageProvider) => void;
+  onSendPaymentPrompt: () => void;
+  paymentStatus: DriverPackagePurchaseStatus;
+  phoneNumber: string;
+  provider: MobileMoneyPackageProvider;
+  ridePackage: DriverRidePackage;
 }) {
   const isFree = ridePackage.currentPriceRwf === 0;
+  const isWaiting = paymentStatus === 'pending' || paymentStatus === 'processing';
+  const isIncomplete = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'expired';
 
   return <View style={[styles.confirmationCard, { backgroundColor: cardFill, borderColor: colors.primary }]}>
     <View style={styles.sectionHeader}>
@@ -169,39 +285,108 @@ function ConfirmationCard({ cardFill, colors, error, loading, onCancel, onConfir
     <SummaryRow label="Package" value={ridePackage.name} colors={colors} />
     <SummaryRow label="Ride credits" value={`${ridePackage.totalCredits}`} colors={colors} />
     <SummaryRow label="Price today" value={isFree ? 'FREE' : `${ridePackage.currentPriceRwf.toLocaleString()} RWF`} colors={colors} strong />
-    <View style={[styles.paymentNotice, { backgroundColor: colors.muted }]}>
-      <Feather name={isFree ? 'gift' : 'smartphone'} size={17} color={colors.primary} />
-      <Text style={[styles.paymentNoticeText, { color: colors.mutedForeground }]}>
-        {isFree
-          ? 'No payment is required for this launch package.'
-          : 'Mobile Money payment will be connected here during backend integration. For now this records a local prototype purchase.'}
-      </Text>
-    </View>
+    {isFree ? (
+      <View style={[styles.paymentNotice, { backgroundColor: colors.muted }]}>
+        <Feather name="gift" size={17} color={colors.primary} />
+        <Text style={[styles.paymentNoticeText, { color: colors.mutedForeground }]}>No payment is required for this launch package.</Text>
+      </View>
+    ) : (
+      <>
+        <View style={styles.providerChoiceRow}>
+          {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
+            <ProviderOption
+              key={option}
+              colors={colors}
+              isSelected={provider === option}
+              label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+              onPress={() => onProviderChange(option)}
+            />
+          ))}
+        </View>
+        <AppInput
+          label="Mobile Money Phone Number"
+          placeholder="+250 7x xxx xxxx"
+          value={phoneNumber}
+          onChangeText={onPhoneNumberChange}
+          keyboardType="phone-pad"
+          leftIcon="smartphone"
+        />
+        {isWaiting ? (
+          <View style={[styles.paymentNotice, { backgroundColor: colors.muted }]}>
+            <Feather name="smartphone" size={17} color={colors.primary} />
+            <Text style={[styles.paymentNoticeText, { color: colors.mutedForeground }]}>
+              Waiting for Mobile Money confirmation. Confirm the payment on your phone.
+            </Text>
+          </View>
+        ) : null}
+        {isIncomplete ? (
+          <View style={[styles.paymentNotice, { backgroundColor: colors.muted }]}>
+            <Feather name="alert-circle" size={17} color={colors.destructive} />
+            <Text style={[styles.paymentNoticeText, { color: colors.mutedForeground }]}>Payment was not completed</Text>
+          </View>
+        ) : null}
+      </>
+    )}
     {error ? <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text> : null}
     <View style={styles.confirmActions}>
-      <AppButton title="Cancel" onPress={onCancel} variant="secondary" size="md" style={styles.confirmButton} />
-      <AppButton
-        title={isFree ? 'Confirm Free Plan' : 'Record Purchase'}
-        onPress={onConfirm}
-        loading={loading}
-        size="md"
-        style={styles.confirmButton}
-      />
+      {isIncomplete ? (
+        <>
+          <AppButton title="Choose Another Method" onPress={onChooseAnotherMethod} variant="secondary" size="md" style={styles.confirmButton} />
+          <AppButton title="Try Again" onPress={onSendPaymentPrompt} loading={loading} size="md" style={styles.confirmButton} />
+        </>
+      ) : (
+        <>
+          <AppButton title={isWaiting ? 'Choose Another Method' : 'Cancel'} onPress={isWaiting ? onChooseAnotherMethod : onCancel} variant="secondary" size="md" style={styles.confirmButton} />
+          <AppButton
+            title={isFree ? 'Confirm Free Plan' : 'Send Payment Prompt'}
+            onPress={isFree ? onConfirm : onSendPaymentPrompt}
+            loading={loading || isWaiting}
+            disabled={!isFree && !phoneNumber.trim()}
+            size="md"
+            style={styles.confirmButton}
+          />
+        </>
+      )}
     </View>
   </View>;
+}
+
+function ProviderOption({ colors, isSelected, label, onPress }: {
+  colors: ReturnType<typeof useColors>;
+  isSelected: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.providerOption,
+        {
+          backgroundColor: isSelected ? colors.primaryHex + '14' : colors.muted,
+          borderColor: isSelected ? colors.primary : colors.border,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Text style={[styles.providerOptionText, { color: colors.foreground }]}>{label}</Text>
+      {isSelected ? <Feather name="check-circle" size={16} color={colors.primary} /> : null}
+    </TouchableOpacity>
+  );
 }
 
 function ReceiptCard({ activation, cardFill, colors, onDashboard }: {
   activation: PackageActivation; cardFill: string; colors: ReturnType<typeof useColors>; onDashboard: () => void;
 }) {
-  const ridePackage = DRIVER_RIDE_PACKAGES[activation.packageId];
-
   return <View style={[styles.receiptCard, { backgroundColor: cardFill, borderColor: colors.primary }]}>
     <View style={styles.receiptIcon}><Feather name="check" size={20} color="#fff" /></View>
     <View style={{ flex: 1 }}>
-      <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package confirmed</Text>
+      <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package Activated</Text>
       <Text style={[styles.receiptText, { color: colors.mutedForeground }]}>
-        {ridePackage.name} added {activation.creditsGranted} ride credits to your account.
+        You can now go online and start receiving ride requests.
+      </Text>
+      <Text style={[styles.receiptCredits, { color: colors.foreground }]}>
+        Credits Added: {activation.creditsGranted}
       </Text>
       <Text style={[styles.receiptMeta, { color: colors.mutedForeground }]}>{formatActivationDate(activation.activatedAt)}</Text>
       <AppButton title="Go to Dashboard" onPress={onDashboard} size="sm" style={styles.receiptButton} />
@@ -209,28 +394,26 @@ function ReceiptCard({ activation, cardFill, colors, onDashboard }: {
   </View>;
 }
 
-function PurchaseHistoryCard({ activations, cardFill, colors }: {
-  activations: PackageActivation[]; cardFill: string; colors: ReturnType<typeof useColors>;
+function PurchaseHistoryCard({ purchases, cardFill, colors }: {
+  purchases: DriverPackagePurchase[]; cardFill: string; colors: ReturnType<typeof useColors>;
 }) {
   return <View style={[styles.historyCard, { backgroundColor: cardFill }]}>
     <View style={styles.sectionHeader}>
       <Feather name="clock" size={18} color={colors.primary} />
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Package history</Text>
+      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Purchase history</Text>
     </View>
-    {activations.length === 0 ? (
-      <Text style={[styles.emptyHistory, { color: colors.mutedForeground }]}>No package purchases yet.</Text>
-    ) : activations.map(activation => {
-      const ridePackage = DRIVER_RIDE_PACKAGES[activation.packageId];
-      return <View key={activation.id} style={[styles.historyRow, { borderTopColor: colors.border }]}>
+    {purchases.length === 0 ? (
+      <Text style={[styles.emptyHistory, { color: colors.mutedForeground }]}>No purchase history yet.</Text>
+    ) : purchases.map(purchase => {
+      const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+      return <View key={purchase.transactionId} style={[styles.historyRow, { borderTopColor: colors.border }]}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.historyName, { color: colors.foreground }]}>{ridePackage.name}</Text>
-          <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>{formatActivationDate(activation.activatedAt)}</Text>
+          <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>{formatActivationDate(purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}</Text>
         </View>
         <View style={styles.historyTotals}>
-          <Text style={[styles.historyCredits, { color: colors.foreground }]}>+{activation.creditsGranted}</Text>
-          <Text style={[styles.historyPrice, { color: colors.mutedForeground }]}>
-            {activation.pricePaidRwf === 0 ? 'FREE' : `${activation.pricePaidRwf.toLocaleString()} RWF`}
-          </Text>
+          <Text style={[styles.historyCredits, { color: colors.foreground }]}>{formatPurchaseStatus(purchase.status)}</Text>
+          <Text style={[styles.historyPrice, { color: colors.mutedForeground }]}>{purchase.amount.toLocaleString()} RWF</Text>
         </View>
       </View>;
     })}
@@ -244,6 +427,16 @@ function SummaryRow({ colors, label, strong = false, value }: {
     <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{label}</Text>
     <Text style={[strong ? styles.summaryValueStrong : styles.summaryValue, { color: colors.foreground }]}>{value}</Text>
   </View>;
+}
+
+function formatPurchaseStatus(status: DriverPackagePurchaseStatus) {
+  if (status === 'successful') return 'Successful';
+  if (status === 'cancelled') return 'Cancelled';
+  if (status === 'expired') return 'Expired';
+  if (status === 'processing') return 'Processing';
+  if (status === 'pending') return 'Pending';
+  if (status === 'failed') return 'Failed';
+  return 'Idle';
 }
 
 function formatActivationDate(value: string) {
@@ -288,6 +481,9 @@ const styles = StyleSheet.create({
   summaryValueStrong: { flex: 1, textAlign: 'right', fontSize: 17, fontFamily: 'Inter_700Bold' },
   paymentNotice: { flexDirection: 'row', gap: 9, padding: 12, borderRadius: 12 },
   paymentNoticeText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  providerChoiceRow: { flexDirection: 'row', gap: 10 },
+  providerOption: { flex: 1, minHeight: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  providerOptionText: { flex: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   errorText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
   confirmActions: { flexDirection: 'row', gap: 10 },
   confirmButton: { flex: 1 },
@@ -295,6 +491,7 @@ const styles = StyleSheet.create({
   receiptIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#22C55E', alignItems: 'center', justifyContent: 'center' },
   receiptTitle: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   receiptText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19, marginTop: 3 },
+  receiptCredits: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 8 },
   receiptMeta: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 6 },
   receiptButton: { alignSelf: 'flex-start', marginTop: 12 },
   historyCard: { marginHorizontal: 16, marginTop: 2, borderRadius: 18, padding: 18, gap: 12 },
@@ -305,5 +502,4 @@ const styles = StyleSheet.create({
   historyTotals: { alignItems: 'flex-end' },
   historyCredits: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   historyPrice: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
-  prototype: { marginHorizontal: 22, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 17, textAlign: 'center' },
 });

@@ -120,7 +120,7 @@ export default function DriverStats() {
         />
         <StatRow label="Rides Completed" value={String(activitySummary.completedRidesToday)} icon="navigation" />
         <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
-        <StatRow label="Payment Setup" value={paymentTarget} icon="smartphone" />
+        <StatRow label="Mobile Money Details" value={paymentTarget} icon="smartphone" />
       </View>
 
       {/* Overall */}
@@ -164,7 +164,7 @@ export default function DriverStats() {
       <View style={[styles.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
         <Feather name="info" size={16} color={colors.mutedForeground} />
         <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-          Activity earnings reflect agreed fares from completed rides only. They are not an official payout ledger until backend wallet integration is available.
+          Activity Earnings reflect agreed fares from completed rides only. Customers pay drivers directly through Mobile Money or cash; Rides does not hold these funds.
         </Text>
       </View>
 

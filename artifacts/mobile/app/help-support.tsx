@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
     q: 'What payment methods are accepted?',
-    a: 'We accept MTN Mobile Money, Airtel Money, and cash. You can manage payment methods in your profile.',
+    a: 'Customers pay drivers directly using MTN Mobile Money, Airtel Money, or cash.',
   },
   {
     q: 'How do I report a safety issue?',
@@ -36,7 +36,7 @@ const FAQS = [
   },
   {
     q: 'How are driver ratings calculated?',
-    a: 'You can rate a completed trip in the app. Rating history and driver averages will become authoritative after backend review storage is connected.',
+    a: 'You can rate a completed trip in the app. Driver averages are based on submitted trip ratings.',
   },
 ];
 
