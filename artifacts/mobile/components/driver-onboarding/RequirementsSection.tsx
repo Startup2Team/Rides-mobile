@@ -16,7 +16,7 @@ export function RequirementsSection({ acceptedTerms, colors, errors, form, setAc
 }) {
   return <View style={styles.section}>
     <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Setup</Text>
-    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Add a phone number, merchant code, or both to receive your earnings.</Text>
+    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Add a phone number, merchant code, or both for future payout setup.</Text>
     <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Payment Provider</Text>
     <View style={styles.providerRow}>{(['mtn', 'airtel'] as const).map(provider => <TouchableOpacity key={provider} style={[styles.providerCard, { backgroundColor: form.momoProvider === provider ? colors.primaryHex + '15' : colors.card, borderColor: form.momoProvider === provider ? colors.primary : colors.border }]} onPress={() => update('momoProvider', provider)}>
       <Image source={PAYMENT_PROVIDER_LOGOS[provider]} style={styles.providerLogo} resizeMode="contain" />

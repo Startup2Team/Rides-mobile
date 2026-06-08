@@ -293,7 +293,7 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText("Today's Earnings")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Activity Earnings')).toBeTruthy());
 
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
     expect(screen.getByText('Completed Today')).toBeTruthy();
@@ -306,7 +306,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText("Today's Earnings")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Activity Earnings')).toBeTruthy());
 
     expect(screen.getByText('0 RWF')).toBeTruthy();
     expect(screen.getByText('Completed Today')).toBeTruthy();

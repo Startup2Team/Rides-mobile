@@ -95,14 +95,14 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
         <StatRow
-          label="Today's Earnings"
+          label="Activity Earnings Today"
           value={formatRwf(activitySummary.todayEarningsRwf)}
           icon="dollar-sign"
           color={colors.primaryHex}
         />
         <StatRow label="Rides Completed" value={String(activitySummary.completedRidesToday)} icon="navigation" />
         <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
-        <StatRow label="Payment Target" value={paymentTarget} icon="smartphone" />
+        <StatRow label="Payment Setup" value={paymentTarget} icon="smartphone" />
       </View>
 
       {/* Overall */}
@@ -117,7 +117,7 @@ export default function DriverStats() {
           note={acceptanceRateNote}
         />
         <StatRow
-          label="Total Earnings"
+          label="Activity Earnings Total"
           value={formatRwf(activitySummary.allTimeEarningsRwf)}
           icon="trending-up"
           color={colors.primaryHex}
@@ -145,7 +145,7 @@ export default function DriverStats() {
       <View style={[styles.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
         <Feather name="info" size={16} color={colors.mutedForeground} />
         <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-          Earnings reflect agreed fares from completed rides only. Rides without an agreed fare are counted, but do not add earnings.
+          Activity earnings reflect agreed fares from completed rides only. They are not an official payout ledger until backend wallet integration is available.
         </Text>
       </View>
 

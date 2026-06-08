@@ -251,7 +251,7 @@ export default function DriverDashboard() {
             <Text style={[styles.activityValue, { color: colors.foreground }]}>
               {formatRwf(activitySummary.todayEarningsRwf)}
             </Text>
-            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Today's Earnings</Text>
+            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Activity Earnings</Text>
           </View>
           <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
           <View style={styles.activityStat}>

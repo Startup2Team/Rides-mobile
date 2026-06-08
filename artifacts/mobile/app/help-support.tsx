@@ -36,7 +36,7 @@ const FAQS = [
   },
   {
     q: 'How are driver ratings calculated?',
-    a: 'Ratings are averaged from all customer reviews. Drivers below 4.0 are reviewed by our team.',
+    a: 'You can rate a completed trip in the app. Rating history and driver averages will become authoritative after backend review storage is connected.',
   },
 ];
 
