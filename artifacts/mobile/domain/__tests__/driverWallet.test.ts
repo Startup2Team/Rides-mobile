@@ -1,8 +1,13 @@
 import {
   buildCompletedRideEarningIdempotencyKey,
+  buildDriverRatingIdempotencyKey,
+  formatDriverRatingSummary,
+  getDriverRatingSummary,
   hasEarningForCompletedRide,
+  hasRatingForCompletedRide,
   summarizeDriverWalletBalance,
   type DriverEarningLedgerEntry,
+  type DriverRating,
 } from '../driverWallet';
 
 function entry(overrides: Partial<DriverEarningLedgerEntry>): DriverEarningLedgerEntry {
@@ -18,6 +23,22 @@ function entry(overrides: Partial<DriverEarningLedgerEntry>): DriverEarningLedge
     collectionMethod: 'platform_collected',
     payoutStatus: 'pending',
     idempotencyKey: buildCompletedRideEarningIdempotencyKey('ride-1'),
+    authority: 'local_prototype',
+    ...overrides,
+  };
+}
+
+function rating(overrides: Partial<DriverRating>): DriverRating {
+  return {
+    id: 'rating-1',
+    rideId: 'ride-1',
+    driverId: 'driver-1',
+    customerId: 'customer-1',
+    stars: 5,
+    reviewText: 'Great trip',
+    moderationStatus: 'published',
+    createdAt: '2026-06-08T10:01:00.000Z',
+    idempotencyKey: buildDriverRatingIdempotencyKey('ride-1'),
     authority: 'local_prototype',
     ...overrides,
   };
@@ -55,5 +76,23 @@ describe('driver wallet contract helpers', () => {
     expect(balance.paidRwf).toBe(3000);
     expect(balance.cashCollectedRwf).toBe(1500);
     expect(balance.activityGrossRwf).toBe(7500);
+  });
+
+  test('prevents duplicate ratings for one completed ride', () => {
+    expect(buildDriverRatingIdempotencyKey('ride-123')).toBe('driver-rating:completed-ride:ride-123');
+    expect(hasRatingForCompletedRide([rating({ rideId: 'ride-123' })], 'ride-123')).toBe(true);
+    expect(hasRatingForCompletedRide([rating({ rideId: 'ride-abc' })], 'ride-123')).toBe(false);
+  });
+
+  test('calculates and formats driver rating averages', () => {
+    const summary = getDriverRatingSummary([
+      rating({ id: 'rating-1', rideId: 'ride-1', stars: 5 }),
+      rating({ id: 'rating-2', rideId: 'ride-2', stars: 4 }),
+      rating({ id: 'rating-3', rideId: 'ride-3', driverId: 'driver-2', stars: 1 }),
+    ], 'driver-1');
+
+    expect(summary).toEqual({ averageRating: 4.5, ratingCount: 2 });
+    expect(formatDriverRatingSummary(summary)).toBe('4.5 (2)');
+    expect(formatDriverRatingSummary(getDriverRatingSummary([], 'driver-1'))).toBe('No ratings yet');
   });
 });

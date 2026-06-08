@@ -74,7 +74,7 @@ export interface DriverRating {
   id: string;
   rideId: string;
   driverId: string;
-  customerId: string;
+  customerId?: string;
   stars: DriverRatingStars;
   reviewText?: string;
   moderationStatus: DriverRatingModerationStatus;
@@ -82,6 +82,11 @@ export interface DriverRating {
   updatedAt?: string;
   idempotencyKey: string;
   authority: DriverWalletAuthority;
+}
+
+export interface DriverRatingSummary {
+  averageRating: number | null;
+  ratingCount: number;
 }
 
 export interface DriverPerformanceMetrics {
@@ -110,6 +115,32 @@ export function buildCompletedRideEarningIdempotencyKey(rideId: string) {
 export function hasEarningForCompletedRide(entries: DriverEarningLedgerEntry[], rideId: string) {
   const key = buildCompletedRideEarningIdempotencyKey(rideId);
   return entries.some(entry => entry.rideId === rideId || entry.idempotencyKey === key);
+}
+
+export function buildDriverRatingIdempotencyKey(rideId: string) {
+  return `driver-rating:completed-ride:${rideId}`;
+}
+
+export function hasRatingForCompletedRide(ratings: DriverRating[], rideId: string) {
+  const key = buildDriverRatingIdempotencyKey(rideId);
+  return ratings.some(rating => rating.rideId === rideId || rating.idempotencyKey === key);
+}
+
+export function getDriverRatingSummary(ratings: DriverRating[], driverId: string): DriverRatingSummary {
+  const driverRatings = ratings.filter(rating => rating.driverId === driverId);
+  if (driverRatings.length === 0) {
+    return { averageRating: null, ratingCount: 0 };
+  }
+  const total = driverRatings.reduce((sum, rating) => sum + rating.stars, 0);
+  return {
+    averageRating: Math.round((total / driverRatings.length) * 10) / 10,
+    ratingCount: driverRatings.length,
+  };
+}
+
+export function formatDriverRatingSummary(summary: DriverRatingSummary) {
+  if (summary.ratingCount === 0 || summary.averageRating === null) return 'No ratings yet';
+  return `${summary.averageRating.toFixed(1)} (${summary.ratingCount})`;
 }
 
 export function summarizeDriverWalletBalance({

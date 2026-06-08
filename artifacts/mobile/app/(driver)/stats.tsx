@@ -8,6 +8,10 @@ import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
 import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
+import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
+
+const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
 function StatRow({
   label,
@@ -41,14 +45,28 @@ function StatRow({
 export default function DriverStats() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { driverProfile } = useAuth();
+  const { user, driverProfile } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { rideHistory, loadHistory } = useRide();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+  const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
 
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadRatingSummary() {
+      const stored = await loadStoredDriverRatings();
+      const summary = user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
+      if (!cancelled) setRatingSummary(summary);
+    }
+    void loadRatingSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const dp = driverProfile ?? {
     dailyRides: 0,
@@ -109,6 +127,7 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>ALL TIME</Text>
         <StatRow label="Total Rides" value={String(dp.completedRides)} icon="award" />
+        <StatRow label="Rating" value={formatDriverRatingSummary(ratingSummary)} icon="star" color={colors.primaryHex} />
         <StatRow
           label="Acceptance Rate"
           value={acceptanceRateValue}

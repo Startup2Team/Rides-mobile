@@ -7,7 +7,11 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { VEHICLE_LABELS } from '@/types';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
+
+const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
 export default function DriverProfileScreen() {
   const colors = useColors();
@@ -15,6 +19,20 @@ export default function DriverProfileScreen() {
   const { user, driverProfile, logout, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+  const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadRatingSummary() {
+      const stored = await loadStoredDriverRatings();
+      const summary = user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
+      if (!cancelled) setRatingSummary(summary);
+    }
+    void loadRatingSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleSwitchToCustomer = () => {
     Alert.alert('Switch Mode', 'Switch to customer mode?', [
@@ -57,6 +75,9 @@ export default function DriverProfileScreen() {
           <Feather name="zap" size={12} color={colors.primary} />
           <Text style={[styles.driverBadgeText, { color: colors.primary }]}>Verified Driver</Text>
         </View>
+        <Text style={[styles.ratingSummary, { color: colors.mutedForeground }]}>
+          {formatDriverRatingSummary(ratingSummary)}
+        </Text>
       </View>
 
       {/* Vehicle info */}
@@ -148,6 +169,7 @@ const styles = StyleSheet.create({
   phone: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   driverBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
   driverBadgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  ratingSummary: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   vehicleCard: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   cardTitle: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8, padding: 14, paddingBottom: 8 },
   infoRow: {

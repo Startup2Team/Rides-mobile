@@ -139,6 +139,22 @@ const driverCreditTransactionSchema = z.object({
   authority: z.enum(['local_prototype', 'backend']),
 });
 
+const driverRatingSchema = z.object({
+  id: z.string(),
+  rideId: z.string(),
+  driverId: z.string(),
+  customerId: z.string().optional(),
+  stars: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  reviewText: z.string().optional(),
+  moderationStatus: z.enum(['pending', 'published', 'hidden', 'flagged']),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  idempotencyKey: z.string(),
+  authority: z.enum(['local_prototype', 'backend']),
+});
+
+export const driverRatingsSchema = z.array(driverRatingSchema);
+
 export const driverEntitlementSchema = z.object({
   activePackageId: driverRidePackageIdSchema.nullable(),
   remainingRideCredits: z.number().int().nonnegative(),
