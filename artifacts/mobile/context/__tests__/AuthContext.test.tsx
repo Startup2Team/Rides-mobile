@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { SENSITIVE_STORAGE_KEYS, STORAGE_KEYS } from '@/constants/storage';
+import { loadStoredDriverProfile } from '@/persistence/authPersistence';
 import { getSecureStorageKey, saveSecureStorage } from '@/persistence/secureStorage';
 import { AuthProvider, useAuth } from '../AuthContext';
 import type { DriverProfile } from '@/types';
@@ -64,6 +65,48 @@ describe('AuthProvider secure logout cleanup', () => {
       await expect(SecureStore.getItemAsync(getSecureStorageKey(key))).resolves.toBeNull();
       await expect(AsyncStorage.getItem(key)).resolves.toBeNull();
     }
+  });
+});
+
+describe('setDriverOnline', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
+    jest.restoreAllMocks();
+    const originalConsoleError = console.error;
+    jest.spyOn(console, 'error').mockImplementation((...args) => {
+      if (String(args[0]).includes('react-test-renderer is deprecated')) return;
+      originalConsoleError(...args);
+    });
+  });
+
+  test('uses driverProfile.isOnline as the profile-backed online source', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.saveDriverProfile(baseProfile);
+    });
+    await act(async () => {
+      await result.current.setDriverOnline(true);
+    });
+
+    expect(result.current.driverProfile?.isOnline).toBe(true);
+
+    await expect(loadStoredDriverProfile()).resolves.toMatchObject({
+      data: expect.objectContaining({ isOnline: true }),
+    });
+  });
+
+  test('does nothing if no driverProfile exists yet', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.setDriverOnline(true);
+    });
+
+    expect(result.current.driverProfile).toBeNull();
   });
 });
 

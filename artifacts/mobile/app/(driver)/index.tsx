@@ -34,11 +34,10 @@ export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { user, driverProfile, saveDriverProfile } = useAuth();
+  const { user, driverProfile, saveDriverProfile, setDriverOnline } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const { pendingRequest, simulateIncomingRideRequest, acceptRideRequest, declineRideRequest } = useRide();
 
-  const [isOnline, setIsOnline] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
@@ -55,6 +54,7 @@ export default function DriverDashboard() {
 
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
+  const isOnline = driverProfile?.isOnline === true;
 
   // Location
   useEffect(() => {
@@ -148,8 +148,7 @@ export default function DriverDashboard() {
       Animated.timing(onlineScale, { toValue: 0.93, duration: 80, useNativeDriver: true }),
       Animated.spring(onlineScale, { toValue: 1, useNativeDriver: true, bounciness: 12 }),
     ]).start();
-    setIsOnline(next);
-    if (driverProfile) saveDriverProfile({ ...driverProfile, isOnline: next });
+    void setDriverOnline(next);
   };
 
   const recenterMap = () => {

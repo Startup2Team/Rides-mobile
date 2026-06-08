@@ -25,6 +25,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
+  setDriverOnline: (isOnline: boolean) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
 }
@@ -82,6 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveStoredDriverProfile(profile);
   }, []);
 
+  const setDriverOnline = useCallback(async (isOnline: boolean) => {
+    const prev = driverProfileRef.current;
+    if (!prev || prev.isOnline === isOnline) return;
+    const updated: DriverProfile = { ...prev, isOnline };
+    setDriverProfile(updated);
+    await saveStoredDriverProfile(updated);
+  }, []);
+
   const switchMode = useCallback(async (mode: AppMode) => {
     if (!userRef.current) return;
     if (mode === 'driver' && !canAccessDriverMode(driverProfileRef.current)) return;
@@ -116,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     updateUser,
     saveDriverProfile,
+    setDriverOnline,
     switchMode,
     recordCompletedRide,
   }), [
@@ -125,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     recordCompletedRide,
     saveDriverProfile,
+    setDriverOnline,
     switchMode,
     updateUser,
     user,
