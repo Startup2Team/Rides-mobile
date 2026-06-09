@@ -106,8 +106,7 @@ export function ReviewSubmissionSection({ colors, docs, form }: {
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={[reviewStyles.noticeTitle, { color: colors.primary }]}>What happens next?</Text>
           <Text style={[reviewStyles.noticeText, { color: colors.mutedForeground }]}>
-            Our team will review your application within 10–15 minutes. You'll receive a notification once it's approved or if any corrections are needed.
-          </Text>
+            Our team will review your application as quickly as possible. You'll receive a notification once it's approved or if any corrections are needed. </Text>
         </View>
       </View>
     </View>

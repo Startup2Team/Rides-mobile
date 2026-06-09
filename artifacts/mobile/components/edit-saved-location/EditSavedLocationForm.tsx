@@ -144,6 +144,14 @@ export function EditSavedLocationForm({
       <View style={styles.content}>
         <View style={styles.actions}>
           <TouchableOpacity
+            style={[styles.actionSecondary, { backgroundColor: colors.muted, borderColor: colors.border }]}
+            onPress={onUseGps}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.foreground} />
+            <Text style={[styles.actionText, { color: colors.foreground }]}>Use GPS</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.actionPrimary, { backgroundColor: colors.primary }]}
             onPress={onSave}
             activeOpacity={0.85}
@@ -153,14 +161,6 @@ export function EditSavedLocationForm({
           >
             <Feather name="check" size={16} color={colors.primaryForeground} />
             <Text style={[styles.actionText, { color: colors.primaryForeground }]}>Save changes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionSecondary, { backgroundColor: colors.muted, borderColor: colors.border }]}
-            onPress={onUseGps}
-            activeOpacity={0.85}
-          >
-            <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.foreground} />
-            <Text style={[styles.actionText, { color: colors.foreground }]}>Use GPS</Text>
           </TouchableOpacity>
         </View>
 

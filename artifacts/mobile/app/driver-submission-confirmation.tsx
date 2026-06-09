@@ -27,14 +27,14 @@ const STEPS = [
   {
     icon: 'search' as const,
     label: 'Under review',
-    desc: 'Our team is verifying your info — usually 10–15 min.',
+    desc: 'Our verification team is reviewing your information and documents.',
     done: false,
     active: true,
   },
   {
     icon: 'check-circle' as const,
     label: 'Approved & ready',
-    desc: "You'll be notified and can start driving right away.",
+    desc: "You'll receive a notification once your application has been approved or if additional information is required.",
     done: false,
   },
 ];
@@ -110,8 +110,7 @@ export default function DriverSubmissionConfirmation() {
         <Animated.View style={[styles.heroText, { opacity: contentOpacity, transform: [{ translateY: contentSlide }] }]}>
           <Text style={[styles.heroTitle, { color: colors.foreground }]}>Application Submitted!</Text>
           <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-            Your application has been received. We'll verify your details shortly.
-          </Text>
+           Your application has been received successfully. </Text>
         </Animated.View>
       </LinearGradient>
 

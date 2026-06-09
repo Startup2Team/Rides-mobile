@@ -21,10 +21,13 @@ export function RideActionsSection({
 }) {
   return (
     <View style={styles.actions}>
-      {(isArriving || isArrived) && <AppButton title={isArriving ? 'Call driver' : 'Call'} icon="phone" variant="call" size="sm" onPress={onCall} iconOnly={!isArriving} style={isArriving ? styles.wide : undefined} />}
-      {isArriving && <AppButton title="Cancel" icon="x" variant="dangerPlain" size="sm" iconOnly onPress={onCancelArriving} accessibilityLabel="Cancel ride" />}
+      {isArriving && <>
+        <AppButton title="Cancel" icon="x" variant="dangerPlain" size="sm" iconOnly onPress={onCancelArriving} accessibilityLabel="Cancel ride" />
+        <AppButton title="Call driver" icon="phone" variant="call" size="sm" onPress={onCall} style={styles.wide} />
+      </>}
       {isArrived && <>
         <AppButton title="Cancel Ride" icon="x" variant="dangerPlain" size="sm" labelFontSize={14} onPress={onCancelArrived} style={styles.wide} />
+        <AppButton title="Call" icon="phone" variant="call" size="sm" labelFontSize={14} onPress={onCall} style={styles.wide} />
         <AppButton title="Start Journey" size="sm" labelFontSize={14} onPress={onStartJourney} style={styles.wide} />
       </>}
       {isInProgress && <>

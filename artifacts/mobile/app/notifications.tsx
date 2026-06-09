@@ -199,11 +199,11 @@ export default function NotificationsScreen() {
       'Delete notification',
       'Are you sure you want to delete this notification?',
       [
-        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           onPress: () => deleteNotification(id),
         },
+        { text: 'Cancel', style: 'cancel' },
       ],
       { cancelable: true },
     );

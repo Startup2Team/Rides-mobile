@@ -53,8 +53,8 @@ export function useRideActions({
       '🆘 Emergency',
       `Driver: ${currentRide?.driver?.name ?? 'Unknown'}\nPlate: ${currentRide?.driver?.plateNumber ?? 'Unknown'}\n\nWhat do you need?`,
       [
-        { text: 'Call Police (112)', onPress: () => Linking.openURL('tel:112') },
         { text: 'Dismiss', style: 'cancel' },
+        { text: 'Call Police (112)', onPress: () => Linking.openURL('tel:112') },
       ],
     );
   }, [currentRide?.driver?.name, currentRide?.driver?.plateNumber]);
@@ -71,8 +71,8 @@ export function useRideActions({
     handleComplete: () => setCompleteModalVisible(true),
     handleEmergencyEnd: () => {
       Alert.alert('End Journey', 'End this journey early?', [
-        { text: 'Cancel', style: 'cancel' },
         { text: 'End Journey', onPress: navigateToRating },
+        { text: 'Cancel', style: 'cancel' },
       ]);
     },
     handleSOS,

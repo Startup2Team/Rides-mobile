@@ -56,6 +56,7 @@ export default function DriverDashboard() {
   const requestSessionRef = useRef(timers.currentSession());
   const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownValueRef = useRef(15);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
   const mapRef = useRef<MapView | null>(null);
@@ -116,12 +117,17 @@ export default function DriverDashboard() {
       simulateIncomingRideRequest();
       setShowRequest(true);
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
+      countdownValueRef.current = 15;
       setCountdown(15);
       countdownRef.current = timers.scheduleInterval(() => {
-        setCountdown(c => {
-          if (c <= 1) { timers.clearInterval(countdownRef.current); countdownRef.current = null; handleDecline(); return 0; }
-          return c - 1;
-        });
+        const nextCountdown = Math.max(0, countdownValueRef.current - 1);
+        countdownValueRef.current = nextCountdown;
+        setCountdown(nextCountdown);
+        if (nextCountdown <= 0) {
+          timers.clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          handleDecline();
+        }
       }, 1000, session);
     }, 5000, session);
     return clearRequestTimers;
@@ -336,16 +342,6 @@ export default function DriverDashboard() {
             </View>
           </View>
 
-          <View style={[styles.farePanel, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-            <View>
-              <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Suggested fare</Text>
-              <Text style={[styles.fareValue, { color: colors.foreground }]}>{request.suggestedFare.toLocaleString()} RWF</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: colors.primaryHex + '18', borderColor: colors.primaryHex + '30', borderWidth: 1 }]}>
-              <Text style={[styles.badgeText, { color: colors.primary }]}>Negotiable</Text>
-            </View>
-          </View>
-
           <View style={styles.requestRoute}>
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
@@ -518,15 +514,6 @@ const styles = StyleSheet.create({
   requestTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', marginTop: 2 },
   countdown: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   countdownText: { fontSize: 17, fontFamily: 'Inter_700Bold', color: '#fff' },
-  farePanel: {
-    borderRadius: 14, padding: 14,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-    ...Platform.select({ ios: { borderCurve: 'continuous' } }),
-  },
-  fareLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  fareValue: { fontSize: 22, fontFamily: 'Inter_700Bold', marginTop: 2 },
-  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  badgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   requestRoute: { gap: 6 },
   routeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   routeDot: { width: 11, height: 11, borderRadius: 6, flexShrink: 0 },

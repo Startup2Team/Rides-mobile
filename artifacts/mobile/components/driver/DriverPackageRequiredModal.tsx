@@ -35,11 +35,11 @@ export function DriverPackageRequiredModal({
           <Text style={[styles.text, { color: colors.mutedForeground }]}>
             1 completed ride uses 1 ride credit. Cancellations and declined requests do not use credits.
           </Text>
-          <TouchableOpacity style={[styles.primary, { backgroundColor: colors.primary }]} onPress={onViewPackages} activeOpacity={0.85}>
-            <Text style={styles.primaryText}>View Packages</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={onClose} activeOpacity={0.7}>
             <Text style={[styles.secondaryText, { color: colors.primary }]}>Not Now</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.primary, { backgroundColor: colors.primary }]} onPress={onViewPackages} activeOpacity={0.85}>
+            <Text style={styles.primaryText}>View Packages</Text>
           </TouchableOpacity>
         </View>
       </View>

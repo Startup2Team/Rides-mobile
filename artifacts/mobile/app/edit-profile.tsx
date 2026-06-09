@@ -105,8 +105,8 @@ export default function EditProfileScreen() {
       'Delete Account',
       'This will permanently delete your account and all ride history. This cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
         { text: 'Delete Forever', onPress: () => {} },
+        { text: 'Cancel', style: 'cancel' },
       ],
     );
   };
