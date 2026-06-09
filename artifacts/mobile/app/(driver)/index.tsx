@@ -1,8 +1,9 @@
-import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import {
   Animated,
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -24,17 +25,34 @@ import { canDriverGoOnline } from '@/utils/driverVerification';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
-import { DriverCreditDashboardCard } from '@/components/driver/DriverCreditDashboardCard';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
+import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
+const CTA_AVATAR_SIZE = 34;
+const CTA_AVATAR_INSET = 5;
+const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
+const CTA_PILL_PADDING_RIGHT = 6;
+const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
+
+const DASHBOARD_CAMPAIGNS = [
+  {
+    id: 'growth-package',
+    eyebrow: 'Growth Package',
+    title: '75 Ride Credits',
+    description: 'Most Popular Plan',
+    icon: 'trending-up' as const,
+  },
+];
 
 export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { user, driverProfile, saveDriverProfile, setDriverOnline } = useAuth();
+  const { user, driverProfile, saveDriverProfile, setDriverOnline, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const {
     pendingRequest,
@@ -49,6 +67,7 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const timers = useScreenTimerManager();
   const requestSessionRef = useRef(timers.currentSession());
@@ -62,6 +81,18 @@ export default function DriverDashboard() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const isOnline = driverProfile?.isOnline === true;
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void loadStoredProfileImage().then(stored => {
+        if (active) setProfileImage(stored.data);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   // Location
   useEffect(() => {
@@ -176,15 +207,23 @@ export default function DriverDashboard() {
   };
 
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
+  const driverInitial = user?.name?.trim().charAt(0).toUpperCase() || 'D';
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
-  const dailyDecisionCount = (driverProfile?.dailyRides ?? 0) + (driverProfile?.dailyDeclines ?? 0);
-  const acceptanceRateText = dailyDecisionCount > 0 ? `${driverProfile?.acceptanceRate ?? 0}%` : '—';
   const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
-  const remainingCreditsText = isEntitlementLoading ? '—' : String(activitySummary.remainingRideCredits);
+  const remainingCreditsText = isEntitlementLoading ? '-' : String(activitySummary.remainingRideCredits);
+  const statusLabel = isOnline ? 'Online' : 'Offline';
+  const statusDescription = isOnline ? 'Accepting rides' : 'Not accepting rides';
+  const showNoCreditsWarning = !isEntitlementLoading && activitySummary.remainingRideCredits === 0;
+  const activeCampaign = DASHBOARD_CAMPAIGNS[0];
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
-    ? 'Unknown — to be negotiated'
+    ? 'Unknown - to be negotiated'
     : request?.destination.address;
+
+  const handleSwitchToCustomer = async () => {
+    await switchMode('customer');
+    router.replace('/(tabs)');
+  };
 
   return (
     <View style={styles.root}>
@@ -226,55 +265,117 @@ export default function DriverDashboard() {
         )}
       </MapView>
 
-      {/* ── Top floating bar ── */}
-      <View style={[styles.topBar, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12 }]}>
-        <View style={[styles.topCard, { backgroundColor: cardFill }]}>
-          <View style={styles.topCardLeft}>
-            <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.mutedForeground }]} />
-            <View>
-              <Text style={[styles.topGreeting, { color: colors.foreground }]}>Hi, {driverName}</Text>
-              <Text style={[styles.topSub, { color: colors.mutedForeground }]}>
-                {driverProfile ? VEHICLE_LABELS[driverProfile.vehicleType] : 'Driver'} · {isOnline ? 'Accepting rides' : 'Not accepting rides'}
+      {/* Top dashboard overlay */}
+      <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : 0 }]}>
+        <View style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]} testID="driver-status-card">
+          <View style={styles.statusHeader}>
+            <View style={styles.statusIdentity}>
+              <Text style={[styles.statusGreeting, { color: colors.foreground }]}>Hi, {driverName}</Text>
+              <Text style={[styles.statusVehicle, { color: colors.mutedForeground }]}>
+                {driverProfile ? VEHICLE_LABELS[driverProfile.vehicleType] : 'Driver'} Driver
               </Text>
+              <View style={styles.statusPillRow}>
+                <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.primary }]} />
+                <Text style={[styles.statusText, { color: colors.foreground }]}>{statusLabel}</Text>
+                <Text style={[styles.statusMutedText, { color: colors.mutedForeground }]}>{statusDescription}</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.switchModeQuickAction,
+                {
+                  width: DRIVER_CTA_PILL_WIDTH,
+                  backgroundColor: colors.primary,
+                  shadowOpacity: isDark ? 0.4 : 0.22,
+                },
+              ]}
+              onPress={handleSwitchToCustomer}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Switch to Customer"
+            >
+              <View style={styles.switchModeAvatarInset}>
+                <View style={styles.switchModeAvatarFrame}>
+                  {profileImage ? (
+                    <Image
+                      key={profileImage}
+                      source={{ uri: profileImage }}
+                      style={styles.switchModeAvatarImage}
+                    />
+                  ) : (
+                    <Text style={styles.switchModeAvatarText}>{driverInitial}</Text>
+                  )}
+                </View>
+              </View>
+              <View style={[styles.switchModeLabelSlot, { width: CTA_LABEL_SLOT_WIDTH }]}>
+                <Text style={[styles.switchModeQuickActionText, { color: colors.primaryForeground }]} numberOfLines={1}>
+                  Customer Mode
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.statusDivider, { backgroundColor: colors.border }]} />
+
+          <Text style={[styles.activityTitle, { color: colors.foreground }]}>Today's Activity</Text>
+          <View style={styles.activityGrid}>
+            <View style={styles.activityStat}>
+              <Text style={[styles.activityValue, { color: colors.foreground }]}>
+                {formatRwf(activitySummary.todayEarningsRwf)}
+              </Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Activity Earnings</Text>
+            </View>
+            <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.activityStat}>
+              <Text style={[styles.activityValue, { color: colors.foreground }]}>
+                {activitySummary.completedRidesToday}
+              </Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Completed Today</Text>
+            </View>
+            <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.activityStat}>
+              <Text style={[styles.activityValue, { color: colors.foreground }]}>{remainingCreditsText}</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Ride Credits</Text>
             </View>
           </View>
-          <View style={styles.topStats}>
-            <View style={styles.topStat}>
-              <Text style={[styles.topStatValue, { color: colors.foreground }]}>{driverProfile?.dailyRides ?? 0}</Text>
-              <Text style={[styles.topStatLabel, { color: colors.mutedForeground }]}>rides</Text>
+
+          {showNoCreditsWarning && (
+            <View style={[styles.noCreditsPanel, { backgroundColor: colors.destructiveHex + '10', borderColor: colors.destructiveHex + '30' }]}>
+              <View style={styles.noCreditsCopy}>
+                <View style={styles.noCreditsTitleRow}>
+                  <Feather name="alert-triangle" size={16} color={colors.destructive} />
+                  <Text style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Ride Credits</Text>
+                </View>
+                <Text style={[styles.noCreditsText, { color: colors.mutedForeground }]}>
+                  Choose a package to start receiving ride requests.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.viewPackagesButton, { backgroundColor: colors.primary }]}
+                onPress={() => router.push('/driver-packages')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.viewPackagesButtonText, { color: colors.primaryForeground }]}>View Packages</Text>
+              </TouchableOpacity>
             </View>
-            <View style={[styles.topStatDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.topStat}>
-              <Text style={[styles.topStatValue, { color: colors.foreground }]}>{acceptanceRateText}</Text>
-              <Text style={[styles.topStatLabel, { color: colors.mutedForeground }]}>rate</Text>
-            </View>
-          </View>
+          )}
         </View>
-        <View style={[styles.activityCard, { backgroundColor: cardFill }]}>
-          <View style={styles.activityStat}>
-            <Text style={[styles.activityValue, { color: colors.foreground }]}>
-              {formatRwf(activitySummary.todayEarningsRwf)}
-            </Text>
-            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Activity Earnings</Text>
+
+        <TouchableOpacity
+          style={[styles.campaignCard, { backgroundColor: cardFill }]}
+          onPress={() => router.push('/driver-packages')}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.campaignIcon, { backgroundColor: colors.primaryHex + '16' }]}>
+            <Feather name={activeCampaign.icon} size={20} color={colors.primary} />
           </View>
-          <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.activityStat}>
-            <Text style={[styles.activityValue, { color: colors.foreground }]}>
-              {activitySummary.completedRidesToday}
-            </Text>
-            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Completed Today</Text>
+          <View style={styles.campaignCopy}>
+            <Text style={[styles.campaignEyebrow, { color: colors.primary }]}>{activeCampaign.eyebrow}</Text>
+            <Text style={[styles.campaignTitle, { color: colors.foreground }]}>{activeCampaign.title}</Text>
+            <Text style={[styles.campaignDescription, { color: colors.mutedForeground }]}>{activeCampaign.description}</Text>
           </View>
-          <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.activityStat}>
-            <Text style={[styles.activityValue, { color: colors.foreground }]}>{remainingCreditsText}</Text>
-            <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Ride Credits</Text>
-          </View>
-        </View>
-        <DriverCreditDashboardCard
-          entitlement={entitlement}
-          isLoading={isEntitlementLoading}
-          onViewPackages={() => router.push('/driver-packages')}
-        />
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </TouchableOpacity>
       </View>
 
       {/* ── Map controls ── */}
@@ -359,7 +460,7 @@ export default function DriverDashboard() {
             </View>
             <View style={[styles.metaChip, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
               <Feather name="clock" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.mutedForeground }]}>~{request.duration ?? '—'} min</Text>
+              <Text style={[styles.metaText, { color: colors.mutedForeground }]}>~{request.duration ?? '-'} min</Text>
             </View>
           </View>
 
@@ -397,16 +498,11 @@ const darkMapStyle = [
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Top bar
-  topBar: { position: 'absolute', top: 0, left: 16, right: 16, zIndex: 10 },
-  topCard: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+  // Top dashboard
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  statusCard: {
+    borderRadius: 0,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -414,23 +510,111 @@ const styles = StyleSheet.create({
     elevation: 8,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  topCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  statusHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  statusIdentity: { flex: 1, minWidth: 0 },
+  statusGreeting: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  statusVehicle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  statusPillRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' },
   onlineDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  topGreeting: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  topSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 1 },
-  topStats: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  topStat: { alignItems: 'center' },
-  topStatValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  topStatLabel: { fontSize: 10, fontFamily: 'Inter_400Regular' },
-  topStatDivider: { width: 1, height: 24 },
-  activityCard: {
-    marginTop: 8,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+  statusText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  statusMutedText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  switchModeQuickAction: {
+    height: BUTTON_HEIGHT.sm,
+    borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm),
+    paddingRight: CTA_PILL_PADDING_RIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    flexShrink: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 14,
+    elevation: 6,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+      default: {},
+    }),
+  },
+  switchModeAvatarInset: {
+    marginLeft: CTA_AVATAR_INSET,
+    marginVertical: CTA_AVATAR_INSET,
+    flexShrink: 0,
+  },
+  switchModeAvatarFrame: {
+    width: CTA_AVATAR_SIZE,
+    height: CTA_AVATAR_SIZE,
+    borderRadius: CTA_AVATAR_SIZE / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.28,
+    shadowRadius: 3,
+    elevation: 4,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+      default: {},
+    }),
+  },
+  switchModeAvatarImage: {
+    width: CTA_AVATAR_SIZE,
+    height: CTA_AVATAR_SIZE,
+  },
+  switchModeAvatarText: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+  },
+  switchModeLabelSlot: {
+    justifyContent: 'center',
+    minWidth: 0,
+    paddingLeft: 3,
+  },
+  switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
+  statusDivider: { height: 1, marginVertical: 12 },
+  activityTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 10 },
+  activityGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activityStat: { flex: 1, alignItems: 'center', minWidth: 0 },
+  activityValue: { fontSize: 15, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  activityLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 3 },
+  activityDivider: { width: 1, height: 30 },
+  noCreditsPanel: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  noCreditsCopy: { flex: 1, minWidth: 0 },
+  noCreditsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  noCreditsTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  noCreditsText: { fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17, marginTop: 3 },
+  viewPackagesButton: {
+    minHeight: 36,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewPackagesButtonText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  campaignCard: {
+    marginTop: 8,
+    marginHorizontal: 8,
+    borderRadius: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
@@ -438,10 +622,11 @@ const styles = StyleSheet.create({
     elevation: 6,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  activityStat: { flex: 1, alignItems: 'center', minWidth: 0 },
-  activityValue: { fontSize: 15, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  activityLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 3 },
-  activityDivider: { width: 1, height: 28 },
+  campaignIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  campaignCopy: { flex: 1, minWidth: 0 },
+  campaignEyebrow: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
+  campaignTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', marginTop: 1 },
+  campaignDescription: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 },
 
   // Map controls
   mapControls: { position: 'absolute', right: 16, gap: 10 },

@@ -65,6 +65,7 @@ jest.mock('react-native', () => {
     },
     Text: host('Text'),
     TouchableOpacity: host('TouchableOpacity'),
+    Image: host('Image'),
     useColorScheme: () => 'light',
     View: host('View'),
   };
@@ -75,7 +76,14 @@ jest.mock('expo-router', () => ({
     push: jest.fn(),
     replace: jest.fn(),
   },
+  useFocusEffect: (effect: () => void | (() => void)) => effect(),
 }));
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { LinearGradient: (props: object) => <View {...props} /> };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -107,6 +115,10 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
 
 jest.mock('@/persistence/driverRatingPersistence', () => ({
   loadStoredDriverRatings: jest.fn(() => Promise.resolve({ data: mockRatings, source: 'current' })),
+}));
+
+jest.mock('@/persistence/profilePersistence', () => ({
+  loadStoredProfileImage: jest.fn(() => Promise.resolve({ data: null, source: 'missing' })),
 }));
 
 describe('DriverProfileScreen rating summary', () => {

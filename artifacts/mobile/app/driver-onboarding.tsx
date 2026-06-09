@@ -23,6 +23,7 @@ import { useDriverOnboardingValidation } from '@/hooks/driver-onboarding/useDriv
 import type { DriverProfile } from '@/types';
 import { buildDraftDriverProfile, buildPendingDriverProfile, formFromDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
 import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, saveStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
+import { saveStoredProfileImage } from '@/persistence/profilePersistence';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -96,6 +97,7 @@ export default function DriverOnboarding() {
     setLoading(true);
     await saveStoredDriverOnboardingDraft({ form, docs, selfieUri, acceptedTerms, step, updatedAt: new Date().toISOString() });
     await saveDriverProfile(buildDraftDriverProfile(form, selfieUri));
+    if (selfieUri) await saveStoredProfileImage(selfieUri);
     setLoading(false);
     router.replace('/(tabs)');
   };
@@ -105,6 +107,7 @@ export default function DriverOnboarding() {
     setLoading(true);
     const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
+    if (selfieUri) await saveStoredProfileImage(selfieUri);
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
     setLoading(false);

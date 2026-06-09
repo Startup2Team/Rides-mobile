@@ -28,7 +28,7 @@ export default function EditProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, updateUser } = useAuth();
+  const { user, driverProfile, updateUser, saveDriverProfile } = useAuth();
   const { showToast } = useToast();
 
   const [name, setName] = useState(user?.name ?? '');
@@ -74,6 +74,9 @@ export default function EditProfileScreen() {
       const asset = result.assets[0];
       setProfileImage(asset.uri);
       await saveStoredProfileImage(asset.uri);
+      if (driverProfile) {
+        await saveDriverProfile({ ...driverProfile, profileImage: asset.uri });
+      }
       showToast('Photo updated', 'info');
     }
   };

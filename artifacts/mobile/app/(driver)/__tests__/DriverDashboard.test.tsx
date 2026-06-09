@@ -15,6 +15,8 @@ import { saveSecureStorage } from '@/persistence/secureStorage';
 import type { DriverProfile, Ride, User } from '@/types';
 import DriverDashboard from '../index';
 
+let mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
@@ -48,7 +50,7 @@ jest.mock('react-native', () => {
 });
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn() },
 }));
 
 jest.mock('@expo/vector-icons', () => {
@@ -66,7 +68,7 @@ jest.mock('expo-location', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => mockSafeAreaInsets,
 }));
 
 jest.mock('react-native-maps', () => {
@@ -91,13 +93,6 @@ jest.mock('@/components/VehicleMapMarker', () => ({
   VehicleMapMarker: () => {
     const { Text } = require('react-native');
     return <Text>Vehicle marker</Text>;
-  },
-}));
-
-jest.mock('@/components/driver/DriverCreditDashboardCard', () => ({
-  DriverCreditDashboardCard: ({ isLoading }: { isLoading: boolean }) => {
-    const { Text } = require('react-native');
-    return <Text>{isLoading ? 'Credits loading' : 'Credits ready'}</Text>;
   },
 }));
 
@@ -186,6 +181,7 @@ describe('DriverDashboard online state', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
+    mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
     const originalConsoleError = console.error;
@@ -222,7 +218,7 @@ describe('DriverDashboard online state', () => {
   test('persists online toggles and clears pending request timers when going offline', async () => {
     await seedDriverState();
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Credits ready')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Ride Credits')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
     await waitFor(() => expect(screen.getByText(/Accepting rides/)).toBeTruthy());
@@ -247,7 +243,7 @@ describe('DriverDashboard online state', () => {
       profile: { ...baseProfile, verificationStatus: 'pending_review', isVerified: false },
     });
     const pendingView = render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Credits ready')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Ride Credits')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(screen.getByText(/Not accepting rides/)).toBeTruthy();
@@ -261,7 +257,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ withCredits: false });
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Credits ready')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No Ride Credits')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(router.push).toHaveBeenCalledWith('/driver-packages');
@@ -295,6 +291,8 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('Ride Credits')).toBeTruthy();
     expect(screen.getByText('35')).toBeTruthy();
     expect(screen.queryByText('13,400 RWF')).toBeNull();
+    expect(screen.queryByText('Acceptance Rate')).toBeNull();
+    expect(screen.queryByText('rate')).toBeNull();
   });
 
   test('does not count customer history as driver activity earnings', async () => {
@@ -323,5 +321,46 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('0 RWF')).toBeTruthy();
     expect(screen.getByText('Completed Today')).toBeTruthy();
     expect(screen.getByText('Ride Credits')).toBeTruthy();
+  });
+
+  test('keeps edge-to-edge status card content below a notch safe area', async () => {
+    mockSafeAreaInsets = { top: 44, right: 0, bottom: 0, left: 0 };
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Hi, Test')).toBeTruthy());
+
+    expect(screen.getByTestId('driver-status-card').props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ paddingTop: 58 }),
+      ]),
+    );
+  });
+
+  test('shows inline no-credit warning and package promotion on the dashboard', async () => {
+    await seedDriverState({ withCredits: false });
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('No Ride Credits')).toBeTruthy());
+
+    expect(screen.getByText('Choose a package to start receiving ride requests.')).toBeTruthy();
+    expect(screen.getByText('View Packages')).toBeTruthy();
+    expect(screen.getByText('Growth Package')).toBeTruthy();
+    expect(screen.getByText('75 Ride Credits')).toBeTruthy();
+    expect(screen.getByText('Most Popular Plan')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('View Packages'));
+    expect(router.push).toHaveBeenCalledWith('/driver-packages');
+  });
+
+  test('switches directly back to customer mode from dashboard quick action', async () => {
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Switch to Customer')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Switch to Customer'));
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'));
   });
 });
