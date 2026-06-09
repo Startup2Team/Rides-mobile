@@ -79,7 +79,7 @@ export default function DriverStats() {
   const dailyDecisionCount = dp.dailyRides + (dp.dailyDeclines ?? 0);
   const acceptanceRateValue = dailyDecisionCount > 0 ? `${dp.acceptanceRate}%` : 'No data';
   const acceptanceRateNote = dailyDecisionCount > 0 ? undefined : 'After your first ride decision';
-  const activitySummary = getDriverActivitySummary({ driverProfile, entitlement, rideHistory });
+  const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
 
   return (

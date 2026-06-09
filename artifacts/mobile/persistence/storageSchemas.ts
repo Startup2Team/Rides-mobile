@@ -217,6 +217,7 @@ export const rideSchema = z.object({
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
   driverId: z.string().optional(),
+  driverName: z.string().optional(),
   driver: mockDriverSchema.optional(),
   vehicleType: vehicleTypeSchema,
   pickup: rideLocationSchema,

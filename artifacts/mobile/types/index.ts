@@ -120,6 +120,7 @@ export interface Ride {
   customerName?: string;
   customerPhone?: string;
   driverId?: string;
+  driverName?: string;
   driver?: MockDriver;
   vehicleType: VehicleType;
   pickup: RideLocation;

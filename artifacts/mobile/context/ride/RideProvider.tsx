@@ -285,13 +285,28 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }, JOURNEY_TRACKING_INTERVAL_MS);
   }, [timers]);
 
-  const completeRide = useCallback((source: 'customer' | 'driver' = 'customer') => {
+  const completeRide = useCallback((
+    source: 'customer' | 'driver' = 'customer',
+    driverIdentity?: { driverId?: string; driverName?: string; vehicleType?: VehicleType },
+  ) => {
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
     setCurrentRide(prev => {
       if (!prev) return null;
-      const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
+      const driverOwnedFields = source === 'driver' && driverIdentity?.driverId
+        ? {
+            driverId: driverIdentity.driverId,
+            ...(driverIdentity.driverName ? { driverName: driverIdentity.driverName } : {}),
+            ...(driverIdentity.vehicleType ? { vehicleType: driverIdentity.vehicleType } : {}),
+          }
+        : {};
+      const completed = {
+        ...prev,
+        ...driverOwnedFields,
+        status: 'completed' as RideStatus,
+        completedAt: new Date().toISOString(),
+      };
       setRideHistory(hist => [completed, ...hist]);
       void appendRideHistory(completed).catch(error => {
         reportOperationalFailure('ride.history.persist', error, { status: completed.status });

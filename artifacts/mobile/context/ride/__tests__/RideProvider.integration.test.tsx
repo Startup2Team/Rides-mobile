@@ -261,4 +261,30 @@ describe('RideProvider lifecycle orchestration', () => {
       status: 'completed',
     }));
   });
+
+  test('stamps active driver identity when a driver completes a ride', async () => {
+    const { result } = renderRideProvider();
+
+    act(() => result.current.simulateIncomingRideRequest());
+    act(() => result.current.acceptRideRequest());
+    act(() => result.current.riderAcceptWithFare(3500));
+    act(() => result.current.completeRide('driver', {
+      driverId: 'driver-1',
+      driverName: 'Test Driver',
+      vehicleType: 'moto',
+    }));
+
+    expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
+      driverId: 'driver-1',
+      driverName: 'Test Driver',
+      status: 'completed',
+      vehicleType: 'moto',
+    }));
+
+    await flushPromises();
+    expect((await loadRideHistory())?.[0]).toEqual(expect.objectContaining({
+      driverId: 'driver-1',
+      driverName: 'Test Driver',
+    }));
+  });
 });

@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
 import { RideProvider } from '@/context/RideContext';
@@ -97,13 +98,6 @@ jest.mock('@/components/driver/DriverCreditDashboardCard', () => ({
   DriverCreditDashboardCard: ({ isLoading }: { isLoading: boolean }) => {
     const { Text } = require('react-native');
     return <Text>{isLoading ? 'Credits loading' : 'Credits ready'}</Text>;
-  },
-}));
-
-jest.mock('@/components/driver/DriverPackageRequiredModal', () => ({
-  DriverPackageRequiredModal: ({ visible }: { visible: boolean }) => {
-    const { Text } = require('react-native');
-    return visible ? <Text>Package required</Text> : null;
   },
 }));
 
@@ -270,7 +264,7 @@ describe('DriverDashboard online state', () => {
     await waitFor(() => expect(screen.getByText('Credits ready')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
-    await waitFor(() => expect(screen.getByText('Package required')).toBeTruthy());
+    expect(router.push).toHaveBeenCalledWith('/driver-packages');
     expect(screen.getByText(/Not accepting rides/)).toBeTruthy();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
@@ -282,10 +276,11 @@ describe('DriverDashboard online state', () => {
       profile: { ...baseProfile, completedRides: 4, dailyRides: 2, earningsTotal: 20000 },
     });
     await saveSecureStorage(STORAGE_KEYS.rideHistory, [
-      completedRide({ id: 'today-real-fare', agreedFare: 3500 }),
-      completedRide({ id: 'today-no-agreed-fare', agreedFare: undefined }),
+      completedRide({ id: 'today-real-fare', driverId: 'driver-1', agreedFare: 3500 }),
+      completedRide({ id: 'today-no-agreed-fare', driverId: 'driver-1', agreedFare: undefined }),
       completedRide({
         id: 'yesterday-real-fare',
+        driverId: 'driver-1',
         agreedFare: 9900,
         createdAt: '2026-06-07T09:00:00.000Z',
         completedAt: '2026-06-07T09:20:00.000Z',
@@ -300,6 +295,23 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('Ride Credits')).toBeTruthy();
     expect(screen.getByText('35')).toBeTruthy();
     expect(screen.queryByText('13,400 RWF')).toBeNull();
+  });
+
+  test('does not count customer history as driver activity earnings', async () => {
+    await seedDriverState();
+    await saveSecureStorage(STORAGE_KEYS.rideHistory, [
+      completedRide({ id: 'customer-history', customerId: 'driver-1', agreedFare: 3500 }),
+      completedRide({ id: 'other-driver-history', driverId: 'driver-2', agreedFare: 4200 }),
+      completedRide({ id: 'legacy-history', agreedFare: 1900 }),
+    ]);
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Activity Earnings')).toBeTruthy());
+
+    expect(screen.getByText('0 RWF')).toBeTruthy();
+    expect(screen.queryByText('3,500 RWF')).toBeNull();
+    expect(screen.queryByText('4,200 RWF')).toBeNull();
+    expect(screen.queryByText('1,900 RWF')).toBeNull();
   });
 
   test('shows zero activity clearly when no completed ride data exists', async () => {

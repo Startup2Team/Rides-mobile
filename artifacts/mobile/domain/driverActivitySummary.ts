@@ -25,20 +25,26 @@ export function formatRwf(amount: number) {
 }
 
 export function getDriverActivitySummary({
+  driverId,
   driverProfile,
   entitlement,
   rideHistory,
   now = new Date(),
 }: {
+  driverId?: string | null;
   driverProfile: DriverProfile | null | undefined;
   entitlement: DriverEntitlement | null | undefined;
   rideHistory: Ride[];
   now?: Date;
 }) {
-  const completedToday = rideHistory.filter(ride => isCompletedRide(ride) && isSameLocalDay(ride.completedAt, now));
-  const completedRidesToday = typeof driverProfile?.dailyRides === 'number'
-    ? Math.max(0, driverProfile.dailyRides)
-    : completedToday.length;
+  const completedToday = driverId
+    ? rideHistory.filter(ride =>
+        ride.driverId === driverId &&
+        isCompletedRide(ride) &&
+        isSameLocalDay(ride.completedAt, now),
+      )
+    : [];
+  const completedRidesToday = completedToday.length;
 
   return {
     todayEarningsRwf: completedToday.reduce((total, ride) => total + realFare(ride), 0),

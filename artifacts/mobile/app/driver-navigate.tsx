@@ -81,7 +81,7 @@ export default function DriverNavigateScreen() {
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
-  const { recordCompletedRide } = useAuth();
+  const { driverProfile, recordCompletedRide, user } = useAuth();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [showReroute, setShowReroute] = useState(false);
@@ -268,8 +268,13 @@ export default function DriverNavigateScreen() {
         text: 'Complete',
         onPress: () => {
           const fare = currentRide?.agreedFare ?? 0;
-          completeRide('driver');
-          void recordCompletedRide(fare);
+          const driverId = user?.id;
+          completeRide('driver', {
+            driverId,
+            driverName: user?.name,
+            vehicleType: driverProfile?.vehicleType,
+          });
+          if (driverId) void recordCompletedRide(fare);
           router.replace('/(driver)');
         },
       },

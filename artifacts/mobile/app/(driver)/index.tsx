@@ -25,7 +25,6 @@ import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
 import { DriverCreditDashboardCard } from '@/components/driver/DriverCreditDashboardCard';
-import { DriverPackageRequiredModal } from '@/components/driver/DriverPackageRequiredModal';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
@@ -50,7 +49,6 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [showPackageRequired, setShowPackageRequired] = useState(false);
 
   const timers = useScreenTimerManager();
   const requestSessionRef = useRef(timers.currentSession());
@@ -155,7 +153,7 @@ export default function DriverDashboard() {
     const next = !isOnline;
     if (next && isEntitlementLoading) return;
     if (next && canDriverGoOnline(driverProfile) && !canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
-      setShowPackageRequired(true);
+      router.push('/driver-packages');
       return;
     }
     if (next && !canDriverGoOnline(driverProfile)) {
@@ -181,7 +179,7 @@ export default function DriverDashboard() {
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
   const dailyDecisionCount = (driverProfile?.dailyRides ?? 0) + (driverProfile?.dailyDeclines ?? 0);
   const acceptanceRateText = dailyDecisionCount > 0 ? `${driverProfile?.acceptanceRate ?? 0}%` : '—';
-  const activitySummary = getDriverActivitySummary({ driverProfile, entitlement, rideHistory });
+  const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
   const remainingCreditsText = isEntitlementLoading ? '—' : String(activitySummary.remainingRideCredits);
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
@@ -386,15 +384,6 @@ export default function DriverDashboard() {
         </Animated.View>
       )}
 
-      <DriverPackageRequiredModal
-        visible={showPackageRequired}
-        bottomInset={insets.bottom}
-        onClose={() => setShowPackageRequired(false)}
-        onViewPackages={() => {
-          setShowPackageRequired(false);
-          router.push('/driver-packages');
-        }}
-      />
     </View>
   );
 }
