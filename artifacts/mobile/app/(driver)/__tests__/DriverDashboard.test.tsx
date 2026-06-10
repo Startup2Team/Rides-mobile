@@ -39,6 +39,7 @@ jest.mock('react-native', () => {
       View: host('AnimatedView'),
       timing: jest.fn(animation),
       spring: jest.fn(animation),
+      parallel: jest.fn(() => animation()),
       sequence: jest.fn(() => animation()),
     },
     Dimensions: { get: () => ({ width: 390, height: 844 }) },

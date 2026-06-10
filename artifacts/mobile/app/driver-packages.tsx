@@ -19,6 +19,10 @@ import {
 } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
 
+function formatRwf(amount: number) {
+  return `${amount.toLocaleString('en-RW')} RWF`;
+}
+
 export default function DriverPackagesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -233,8 +237,8 @@ function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading,
       {selected ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
     </View>
     <View style={styles.priceRow}>
-      {ridePackage.currentPriceRwf === 0 ? <><Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{ridePackage.normalPriceRwf.toLocaleString()} RWF</Text><Text style={[styles.freePrice, { color: colors.primary }]}>FREE</Text></>
-        : <Text style={[styles.freePrice, { color: colors.foreground }]}>{ridePackage.currentPriceRwf.toLocaleString()} RWF</Text>}
+      {ridePackage.currentPriceRwf === 0 ? <><Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.normalPriceRwf)}</Text><Text style={[styles.freePrice, { color: colors.primary }]}>FREE</Text></>
+        : <Text style={[styles.freePrice, { color: colors.foreground }]}>{formatRwf(ridePackage.currentPriceRwf)}</Text>}
     </View>
     <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.totalCredits} completed rides</Text>
     <Text style={[styles.creditBreakdown, { color: colors.mutedForeground }]}>{ridePackage.includedRides} included + {ridePackage.bonusRides} bonus rides</Text>
@@ -284,7 +288,7 @@ function ConfirmationCard({
     </View>
     <SummaryRow label="Package" value={ridePackage.name} colors={colors} />
     <SummaryRow label="Ride credits" value={`${ridePackage.totalCredits}`} colors={colors} />
-    <SummaryRow label="Price today" value={isFree ? 'FREE' : `${ridePackage.currentPriceRwf.toLocaleString()} RWF`} colors={colors} strong />
+    <SummaryRow label="Price today" value={isFree ? 'FREE' : formatRwf(ridePackage.currentPriceRwf)} colors={colors} strong />
     {isFree ? (
       <View style={[styles.paymentNotice, { backgroundColor: colors.muted }]}>
         <Feather name="gift" size={17} color={colors.primary} />
@@ -413,7 +417,7 @@ function PurchaseHistoryCard({ purchases, cardFill, colors }: {
         </View>
         <View style={styles.historyTotals}>
           <Text style={[styles.historyCredits, { color: colors.foreground }]}>{formatPurchaseStatus(purchase.status)}</Text>
-          <Text style={[styles.historyPrice, { color: colors.mutedForeground }]}>{purchase.amount.toLocaleString()} RWF</Text>
+          <Text style={[styles.historyPrice, { color: colors.mutedForeground }]}>{formatRwf(purchase.amount)}</Text>
         </View>
       </View>;
     })}
