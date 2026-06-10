@@ -25,6 +25,12 @@ jest.mock('react-native', () => {
     constructor(initialValue: number) {
       this.value = initialValue;
     }
+    setValue(nextValue: number) {
+      this.value = nextValue;
+    }
+    stopAnimation(callback?: (value: number) => void) {
+      callback?.(this.value);
+    }
   }
   const animation = () => ({ start: (callback?: () => void) => callback?.() });
   return {
@@ -36,6 +42,17 @@ jest.mock('react-native', () => {
       sequence: jest.fn(() => animation()),
     },
     Dimensions: { get: () => ({ width: 390, height: 844 }) },
+    Image: host('Image'),
+    PanResponder: {
+      create: (config: Record<string, (...args: unknown[]) => unknown>) => ({
+        panHandlers: {
+          onResponderGrant: config.onPanResponderGrant,
+          onResponderMove: config.onPanResponderMove,
+          onResponderRelease: config.onPanResponderRelease,
+          onResponderTerminate: config.onPanResponderTerminate,
+        },
+      }),
+    },
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
     StyleSheet: {
       absoluteFill: {},
@@ -51,6 +68,10 @@ jest.mock('react-native', () => {
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(effect, [effect]);
+  },
 }));
 
 jest.mock('@expo/vector-icons', () => {
@@ -353,13 +374,34 @@ describe('DriverDashboard online state', () => {
     expect(router.push).toHaveBeenCalledWith('/driver-packages');
   });
 
-  test('switches directly back to customer mode from dashboard quick action', async () => {
+  test('requires sliding the profile avatar far enough to switch to customer mode', async () => {
     await seedDriverState();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Switch to Customer')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Slide to Customer')).toBeTruthy());
 
-    fireEvent.press(screen.getByText('Switch to Customer'));
+    const dragHandle = screen.getByTestId('switch-mode-avatar-drag-handle');
+
+    fireEvent(dragHandle, 'responderGrant', {}, { dx: 0, dy: 0 });
+    fireEvent(dragHandle, 'responderMove', {}, { dx: 50, dy: 0 });
+    fireEvent(dragHandle, 'responderRelease', {}, { dx: 50, dy: 0 });
+
+    expect(router.replace).not.toHaveBeenCalledWith('/(tabs)');
+
+    fireEvent(dragHandle, 'responderGrant', {}, { dx: 0, dy: 0 });
+    fireEvent(dragHandle, 'responderMove', {}, { dx: 120, dy: 0 });
+    fireEvent(dragHandle, 'responderRelease', {}, { dx: 120, dy: 0 });
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'));
+  });
+
+  test('keeps accessibility activation fallback for switching to customer mode', async () => {
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+    const switchCta = await screen.findByLabelText('Slide to switch to customer mode');
+
+    fireEvent(switchCta, 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'));
   });

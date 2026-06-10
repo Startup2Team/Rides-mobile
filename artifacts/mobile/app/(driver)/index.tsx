@@ -4,9 +4,11 @@ import * as Location from 'expo-location';
 import {
   Animated,
   Image,
+  PanResponder,
   Platform,
   StyleSheet,
   Text,
+  type LayoutChangeEvent,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -37,6 +39,7 @@ const CTA_AVATAR_INSET = 5;
 const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
 const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
+const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 
 const DASHBOARD_CAMPAIGNS = [
   {
@@ -74,9 +77,13 @@ export default function DriverDashboard() {
   const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownValueRef = useRef(15);
+  const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
+  const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
+  const switchModeLabelOpacity = useRef(new Animated.Value(1)).current;
   const mapRef = useRef<MapView | null>(null);
+  const [isSwitchingMode, setIsSwitchingMode] = useState(false);
 
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
@@ -220,10 +227,112 @@ export default function DriverDashboard() {
     ? 'Unknown - to be negotiated'
     : request?.destination.address;
 
-  const handleSwitchToCustomer = async () => {
-    await switchMode('customer');
-    router.replace('/(tabs)');
-  };
+  const getSwitchModeSlideEnd = useCallback(() => (
+    Math.max(
+      0,
+      switchModeTrackWidthRef.current - CTA_AVATAR_SIZE - (CTA_AVATAR_INSET * 2) - CTA_PILL_PADDING_RIGHT,
+    )
+  ), []);
+
+  const isSwitchModeAvatarStart = useCallback((locationX: number | undefined) => (
+    typeof locationX === 'number' && locationX >= 0 && locationX <= CTA_AVATAR_INSET + CTA_AVATAR_SIZE
+  ), []);
+
+  const setSwitchModeSlideValue = useCallback((nextX: number) => {
+    const slideEnd = getSwitchModeSlideEnd();
+    const fadeDistance = Math.max(1, slideEnd * 0.35);
+    switchModeAvatarSlide.setValue(nextX);
+    switchModeLabelOpacity.setValue(Math.max(0, 1 - (nextX / fadeDistance)));
+  }, [getSwitchModeSlideEnd, switchModeAvatarSlide, switchModeLabelOpacity]);
+
+  const animateSwitchAvatarToStart = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(switchModeAvatarSlide, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 8,
+        speed: 18,
+      }),
+      Animated.timing(switchModeLabelOpacity, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [switchModeAvatarSlide, switchModeLabelOpacity]);
+
+  const handleSwitchToCustomer = useCallback(async () => {
+    if (isSwitchingMode) return;
+    setIsSwitchingMode(true);
+    Animated.parallel([
+      Animated.timing(switchModeAvatarSlide, {
+        toValue: getSwitchModeSlideEnd(),
+        duration: 240,
+        useNativeDriver: true,
+      }),
+      Animated.timing(switchModeLabelOpacity, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      void (async () => {
+        await switchMode('customer');
+        router.replace('/(tabs)');
+        switchModeAvatarSlide.setValue(0);
+        switchModeLabelOpacity.setValue(1);
+        setIsSwitchingMode(false);
+      })();
+    });
+  }, [getSwitchModeSlideEnd, isSwitchingMode, switchMode, switchModeAvatarSlide, switchModeLabelOpacity]);
+
+  const handleSwitchModeCtaLayout = useCallback((event: LayoutChangeEvent) => {
+    switchModeTrackWidthRef.current = event.nativeEvent.layout.width;
+  }, []);
+
+  const switchModePanResponder = React.useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: event =>
+        !isSwitchingMode && isSwitchModeAvatarStart(event.nativeEvent.locationX),
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        !isSwitchingMode && Math.abs(gestureState.dx) > 2 && Math.abs(gestureState.dx) >= Math.abs(gestureState.dy),
+      onPanResponderGrant: () => {
+        if (isSwitchingMode) return;
+        switchModeAvatarSlide.stopAnimation();
+        switchModeLabelOpacity.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (isSwitchingMode) return;
+        const slideEnd = getSwitchModeSlideEnd();
+        const nextX = Math.min(slideEnd, Math.max(0, gestureState.dx));
+        setSwitchModeSlideValue(nextX);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (isSwitchingMode) return;
+        const slideEnd = getSwitchModeSlideEnd();
+        const threshold = slideEnd * CTA_SLIDE_THRESHOLD_RATIO;
+        if (gestureState.dx >= threshold) {
+          void handleSwitchToCustomer();
+          return;
+        }
+        animateSwitchAvatarToStart();
+      },
+      onPanResponderTerminate: () => {
+        if (!isSwitchingMode) animateSwitchAvatarToStart();
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+    [
+      animateSwitchAvatarToStart,
+      getSwitchModeSlideEnd,
+      handleSwitchToCustomer,
+      isSwitchingMode,
+      isSwitchModeAvatarStart,
+      setSwitchModeSlideValue,
+      switchModeAvatarSlide,
+      switchModeLabelOpacity,
+    ],
+  );
 
   return (
     <View style={styles.root}>
@@ -280,7 +389,7 @@ export default function DriverDashboard() {
                 <Text style={[styles.statusMutedText, { color: colors.mutedForeground }]}>{statusDescription}</Text>
               </View>
             </View>
-            <TouchableOpacity
+            <View
               style={[
                 styles.switchModeQuickAction,
                 {
@@ -289,13 +398,26 @@ export default function DriverDashboard() {
                   shadowOpacity: isDark ? 0.4 : 0.22,
                 },
               ]}
-              onPress={handleSwitchToCustomer}
-              activeOpacity={0.75}
+              onLayout={handleSwitchModeCtaLayout}
               accessibilityRole="button"
-              accessibilityLabel="Switch to Customer"
+              accessibilityLabel="Slide to switch to customer mode"
+              accessibilityActions={[{ name: 'activate', label: 'Switch to customer mode' }]}
+              onAccessibilityAction={event => {
+                if (event.nativeEvent.actionName === 'activate') void handleSwitchToCustomer();
+              }}
+              onAccessibilityTap={() => void handleSwitchToCustomer()}
+              {...switchModePanResponder.panHandlers}
             >
-              <View style={styles.switchModeAvatarInset}>
-                <View style={styles.switchModeAvatarFrame}>
+              <View
+                style={styles.switchModeAvatarInset}
+                testID="switch-mode-avatar-drag-handle"
+              >
+                <Animated.View
+                  style={[
+                    styles.switchModeAvatarFrame,
+                    { transform: [{ translateX: switchModeAvatarSlide }] },
+                  ]}
+                >
                   {profileImage ? (
                     <Image
                       key={profileImage}
@@ -305,14 +427,19 @@ export default function DriverDashboard() {
                   ) : (
                     <Text style={styles.switchModeAvatarText}>{driverInitial}</Text>
                   )}
-                </View>
+                </Animated.View>
               </View>
-              <View style={[styles.switchModeLabelSlot, { width: CTA_LABEL_SLOT_WIDTH }]}>
+              <Animated.View
+                style={[
+                  styles.switchModeLabelSlot,
+                  { width: CTA_LABEL_SLOT_WIDTH, opacity: switchModeLabelOpacity },
+                ]}
+              >
                 <Text style={[styles.switchModeQuickActionText, { color: colors.primaryForeground }]} numberOfLines={1}>
-                  Customer Mode
+                  Slide to Customer
                 </Text>
-              </View>
-            </TouchableOpacity>
+              </Animated.View>
+            </View>
           </View>
 
           <View style={[styles.statusDivider, { backgroundColor: colors.border }]} />
