@@ -5,17 +5,32 @@ import { VEHICLE_MAP_IMAGE_SIZE, VEHICLE_MAP_MARKER_IMAGES } from '@/constants/v
 import type { VehicleType } from '@/types';
 
 interface VehicleMapMarkerProps {
+  compact?: boolean;
   type: VehicleType;
   rotationDeg?: number;
   style?: ViewStyle;
 }
 
 /** Map marker artwork — expo-image for faithful colors vs source PNGs. */
-export function VehicleMapMarker({ type, rotationDeg, style }: VehicleMapMarkerProps) {
-  const dimensions = VEHICLE_MAP_IMAGE_SIZE[type];
+export function VehicleMapMarker({ compact = false, type, rotationDeg, style }: VehicleMapMarkerProps) {
+  const baseDimensions = VEHICLE_MAP_IMAGE_SIZE[type];
+  const dimensions = compact
+    ? { width: baseDimensions.width * 0.55, height: baseDimensions.height * 0.55 }
+    : baseDimensions;
 
   return (
-    <View style={[styles.wrap, style]} accessibilityIgnoresInvertColors>
+    <View
+      style={[
+        styles.wrap,
+        compact && {
+          alignItems: 'flex-start',
+          width: dimensions.width,
+          height: dimensions.height,
+        },
+        style,
+      ]}
+      accessibilityIgnoresInvertColors
+    >
       <Image
         source={VEHICLE_MAP_MARKER_IMAGES[type]}
         style={[
