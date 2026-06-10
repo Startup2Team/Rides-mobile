@@ -174,7 +174,6 @@ export default function DriverSubmissionConfirmation() {
           </View>
         )}
 
-      
       </Animated.View>
 
       {/* ── Actions pinned to bottom ── */}
