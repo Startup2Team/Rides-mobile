@@ -8,16 +8,14 @@ interface VehicleMapMarkerProps {
   type: VehicleType;
   rotationDeg?: number;
   style?: ViewStyle;
-  /** When true, reduces opacity so non-selected vehicle types recede on the map. */
-  dimmed?: boolean;
 }
 
 /** Map marker artwork — expo-image for faithful colors vs source PNGs. */
-export function VehicleMapMarker({ type, rotationDeg, style, dimmed }: VehicleMapMarkerProps) {
+export function VehicleMapMarker({ type, rotationDeg, style }: VehicleMapMarkerProps) {
   const dimensions = VEHICLE_MAP_IMAGE_SIZE[type];
 
   return (
-    <View style={[styles.wrap, dimmed && styles.dimmed, style]} accessibilityIgnoresInvertColor>
+    <View style={[styles.wrap, style]} accessibilityIgnoresInvertColors>
       <Image
         source={VEHICLE_MAP_MARKER_IMAGES[type]}
         style={[
@@ -25,7 +23,7 @@ export function VehicleMapMarker({ type, rotationDeg, style, dimmed }: VehicleMa
           rotationDeg != null ? { transform: [{ rotate: `${rotationDeg}deg` }] } : null,
         ]}
         contentFit="contain"
-        accessibilityIgnoresInvertColor
+        accessibilityIgnoresInvertColors
       />
     </View>
   );
@@ -37,8 +35,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 76,
     height: 76,
-  },
-  dimmed: {
-    opacity: 0.35,
   },
 });

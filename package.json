@@ -11,6 +11,8 @@
   "private": true,
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "expo": "~54.0.35",
+    "expo-router": "~6.0.24",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",

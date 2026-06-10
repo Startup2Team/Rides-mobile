@@ -1,5 +1,4 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,14 +21,11 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
-import { NegotiationMessage, RideStatus, VEHICLE_LABELS } from '@/types';
+import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-
-const RIDE_FLOW_STATUSES: RideStatus[] = ['confirmed', 'arriving', 'arrived', 'in_progress'];
 
 const MAX_OFFERS = 3;
 const WARNING = '#FF9500';
-const GOLD = '#F5A623';
 const INPUT_DOCK_HEIGHT = 64;
 const DRIVER_TYPING_DELAY_MS = 450;
 
@@ -216,7 +212,6 @@ export default function NegotiationScreen() {
   const lastDriverOffer = [...driverOffers].pop();
   const lastMsg = negotiation[negotiation.length - 1];
   const customerLimitReached = customerOffers.length >= MAX_OFFERS;
-  const previousRideStatusRef = useRef<RideStatus | null>(null);
   const isAwaitingDriverReply =
     currentRide?.status === 'negotiating' &&
     lastMsg?.sender === 'customer' &&
@@ -263,7 +258,7 @@ export default function NegotiationScreen() {
     return {
       tone: 'neutral' as const,
       title: 'Fare negotiation',
-      hint: 'Waiting for the driver to send their fare offer',
+      hint: 'Send an offer below when the driver responds',
     };
   }, [customerLimitReached, showDriverTyping, lastDriverOffer?.amount]);
   const offerPlaceholder = customerOffers.length === 0
@@ -272,33 +267,7 @@ export default function NegotiationScreen() {
       ? 'Final offer'
       : 'Counter offer';
 
-  // Customer can only counter after the driver has proposed. The driver always
-  // sets the first price — customers don't know the market rates. Counter is
-  // blocked when: no driver offer exists yet, customer just replied (waiting for
-  // driver's next move), or the 3-offer limit is reached.
   const canCounter = !!lastDriverOffer && lastMsg?.sender === 'driver' && !customerLimitReached;
-
-  useEffect(() => {
-    const status = currentRide?.status ?? null;
-    const previous = previousRideStatusRef.current;
-
-    if (!currentRide || status === 'cancelled') {
-      router.replace('/(tabs)');
-      previousRideStatusRef.current = status;
-      return;
-    }
-
-    const enteringRideFlow =
-      status !== null &&
-      RIDE_FLOW_STATUSES.includes(status) &&
-      previous === 'negotiating';
-
-    if (enteringRideFlow) {
-      router.replace('/ride');
-    }
-
-    previousRideStatusRef.current = status;
-  }, [currentRide?.status, currentRide]);
 
   useEffect(() => {
     if (lastMsg?.sender !== 'customer') {
@@ -344,11 +313,7 @@ export default function NegotiationScreen() {
     setPendingOfferAmount(amount);
     setOfferText('');
     setCounterLoading(true);
-    // Clear loading as soon as the API call settles (success or error). The
-    // optimistic update already hides the input dock at this point, so the
-    // spinner is only visible for the brief round-trip to the server — never
-    // permanently stuck waiting for a socket event that may never arrive.
-    counterOffer(amount).finally(() => setCounterLoading(false));
+    counterOffer(amount);
   };
 
   const handleSendCounter = () => {
@@ -604,13 +569,13 @@ export default function NegotiationScreen() {
             style={customerLimitReached ? styles.actionFlexWide : styles.actionFlexNarrow}
           />
           <AppButton
-            title={lastDriverOffer && lastMsg?.sender === 'driver' ? 'Accept fare' : 'Waiting'}
+            title={lastDriverOffer ? 'Accept fare' : 'Waiting'}
             icon="check"
             variant="primary"
             size="sm"
             compact
             onPress={() => setShowAcceptModal(true)}
-            disabled={!lastDriverOffer || lastMsg?.sender !== 'driver'}
+            disabled={!lastDriverOffer}
             style={styles.actionFlexPrimary}
           />
         </View>
@@ -705,7 +670,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
-  ratingWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 2 },
   iconButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   statusBanner: { minHeight: 46, borderRadius: 14, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },

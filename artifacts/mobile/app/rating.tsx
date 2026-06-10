@@ -76,7 +76,7 @@ export default function RatingScreen() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const { currentRide, rideHistory, clearCurrentRide } = useRide();
+  const { currentRide, rideHistory, completeRide } = useRide();
   const params = useLocalSearchParams<{
     rideId?: string;
     driverName?: string;
@@ -117,12 +117,14 @@ export default function RatingScreen() {
   }, [params.driverPhoto, ratedRide?.driver]);
 
   const finalizeRide = () => {
-    if (finalizedRideRef.current) return;
+    if (finalizedRideRef.current || !currentRide) return;
     finalizedRideRef.current = true;
-    // The driver already called POST /complete server-side — just clear local state.
-    // Calling completeRide() here would hit a driver-only endpoint with the
-    // customer JWT and return 403.
-    clearCurrentRide();
+    completeRide();
+  };
+
+  const returnToHome = () => {
+    router.replace('/(tabs)');
+    queueMicrotask(finalizeRide);
   };
 
   const finishAndExit = async () => {
@@ -135,13 +137,11 @@ export default function RatingScreen() {
       if (isAvailable) await StoreReview.requestReview();
     }
 
-    finalizeRide();
-    router.replace('/(tabs)');
+    returnToHome();
   };
 
   const exitToHome = () => {
-    finalizeRide();
-    router.replace('/(tabs)');
+    returnToHome();
   };
 
   const handleStarPress = (n: number) => {

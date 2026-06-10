@@ -1,10 +1,9 @@
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { BackButton } from '@/components/BackButton';
 import { AppButton } from '@/components/AppButton';
 import {
@@ -17,17 +16,13 @@ import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
+import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
-import * as driverRideService from '@/services/driverRides';
 
 const WAIT_LIMIT_SECONDS = 180;
 const ARRIVAL_UNLOCK_KM = 1;
-/** Distance from destination at which to proactively re-enter the matching pool. */
-const PRE_COMPLETE_KM = 0.5;
-/** How often to send GPS updates to the backend while navigating (ms). */
-const GPS_SEND_INTERVAL_MS = 5000;
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
@@ -82,18 +77,18 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 
 export default function DriverNavigateScreen() {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const { currentRide, markArrived, startJourney, completeRide, cancelRide, sendWsLocationUpdate } = useRide();
   const { showToast } = useToast();
-  const [driverPos, setDriverPos] = useState(KIGALI_CENTER);
-  const [waitSeconds, setWaitSeconds] = useState(WAIT_LIMIT_SECONDS);
+  const insets = useSafeAreaInsets();
+  const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
+  const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitClockTick, setWaitClockTick] = useState(0);
-  const [transitioning, setTransitioning] = useState(false);
+  const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
-  const waitRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const enRouteSentRef = useRef(false);
-  const preCompleteSentRef = useRef(false);
+  const timers = useScreenTimerManager();
+  const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rerouteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const phase = currentRide?.status === 'in_progress'
     ? 'inprogress'
@@ -101,109 +96,93 @@ export default function DriverNavigateScreen() {
       ? 'waiting'
       : 'pickup';
   const target = phase === 'inprogress' ? currentRide?.destination : currentRide?.pickup;
-  const [navigationOrigin, setNavigationOrigin] = useState(KIGALI_CENTER);
+  const [navigationOrigin, setNavigationOrigin] = useState(driverLocation ?? KIGALI_CENTER);
 
   const { route, loading: routeLoading } = useRoute(
     currentRide ? navigationOrigin : null,
     target ? { latitude: target.latitude, longitude: target.longitude } : null,
   );
 
-  // ── Guard: redirect if ride is gone ───────────────────────────────────────
-  // router.navigate (not replace) pops everything above the existing '(driver)'
-  // base route and returns to it. router.replace fails with "not handled" when
-  // the target is already below the current route in the root Stack.
   useEffect(() => {
-    if (!currentRide) router.navigate('/(driver)');
-  }, [currentRide]);
-
-  // ── Real-device GPS tracking ───────────────────────────────────────────────
-  useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-    let sendTimer: ReturnType<typeof setInterval> | null = null;
-    let latestCoords: { latitude: number; longitude: number } | null = null;
-
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-
-      subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 5 },
-        loc => {
-          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-          latestCoords = coords;
-          setDriverPos(coords);
-        },
-      );
-
-      // Throttle WS sends to once every GPS_SEND_INTERVAL_MS to avoid flooding.
-      sendTimer = setInterval(() => {
-        if (latestCoords) {
-          sendWsLocationUpdate(latestCoords.latitude, latestCoords.longitude);
-        }
-      }, GPS_SEND_INTERVAL_MS);
-    })();
-
-    return () => {
-      subscription?.remove();
-      if (sendTimer) clearInterval(sendTimer);
-    };
-  }, [sendWsLocationUpdate]);
-
-  // ── Trigger CONFIRMED → DRIVER_EN_ROUTE once on mount ─────────────────────
-  useEffect(() => {
-    if (!currentRide?.id || enRouteSentRef.current) return;
-    if (currentRide.status === 'confirmed' || currentRide.status === 'arriving') {
-      enRouteSentRef.current = true;
-      driverRideService.markEnRoute(currentRide.id).catch(() => {
-        // If the transition already happened (e.g. app restart mid-ride), that's fine.
-        enRouteSentRef.current = false;
-      });
+    if (!currentRide && driverLocation) {
+      setDriverPos(driverLocation);
+      setNavigationOrigin(driverLocation);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRide?.id]);
+  }, [currentRide, driverLocation]);
 
-  // ── Reset navigationOrigin when phase changes ──────────────────────────────
   useEffect(() => {
     if (!target || !currentRide) return;
+
     const origin = phase === 'inprogress' ? currentRide.pickup : driverPos;
     setNavigationOrigin(origin);
     fittedMapPhaseRef.current = null;
-    preCompleteSentRef.current = false;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
-  // ── Pre-complete: re-enter matching pool when nearly at destination ─────────
-  // When the driver is within PRE_COMPLETE_KM of the destination during an
-  // active trip, call SetAvailability so they can receive the next ride request
-  // before tapping "Complete". This prevents dead time between rides.
-  const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
   useEffect(() => {
-    if (phase !== 'inprogress' || preCompleteSentRef.current) return;
-    if (distanceToTargetKm > 0 && distanceToTargetKm <= PRE_COMPLETE_KM && currentRide?.id) {
-      preCompleteSentRef.current = true;
-      // Fire-and-forget — don't block the UI if this fails.
-      driverRideService.setDriverAvailability(true).catch(() => {});
-    }
-  }, [phase, distanceToTargetKm, currentRide?.id]);
+    timers.clearInterval(moveRef.current);
+    moveRef.current = null;
+    if (!route || route.coordinates.length === 0 || phase === 'waiting') return;
 
-  useEffect(() => {
-    if (phase !== 'waiting') {
-      if (waitRef.current) clearInterval(waitRef.current);
-      return;
-    }
+    let step = 0;
+    setDriverPos(route.coordinates[0]);
 
-    const elapsed = currentRide?.waitStartedAt
-      ? Math.floor((Date.now() - new Date(currentRide.waitStartedAt).getTime()) / 1000)
-      : 0;
-    setWaitSeconds(Math.max(WAIT_LIMIT_SECONDS - elapsed, 0));
-    waitRef.current = setInterval(() => {
-      setWaitSeconds(prev => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    moveRef.current = timers.scheduleInterval(() => {
+      step = Math.min(step + 1, route.coordinates.length - 1);
+      setDriverPos(route.coordinates[step]);
+
+      if (step >= route.coordinates.length - 1) {
+        timers.clearInterval(moveRef.current);
+        moveRef.current = null;
+      }
+    }, 1500);
 
     return () => {
-      if (waitRef.current) clearInterval(waitRef.current);
+      timers.clearInterval(moveRef.current);
+      moveRef.current = null;
     };
-  }, [phase, currentRide?.waitStartedAt]);
+  }, [phase, route, timers]);
+
+  useEffect(() => {
+    timers.clearInterval(waitClockRef.current);
+    waitClockRef.current = null;
+    if (phase !== 'waiting') return;
+    waitClockRef.current = timers.scheduleInterval(() => setWaitClockTick(tick => tick + 1), 1000);
+    return () => {
+      timers.clearInterval(waitClockRef.current);
+      waitClockRef.current = null;
+    };
+  }, [phase, timers]);
+
+  const pickupWait = useMemo(() => {
+    if (phase !== 'waiting' || !currentRide?.waitStartedAt) {
+      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
+    }
+    const startedMs = new Date(currentRide.waitStartedAt).getTime();
+    if (Number.isNaN(startedMs)) {
+      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
+    }
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
+    const remainingSeconds = Math.max(WAIT_LIMIT_SECONDS - elapsed, 0);
+    const lateSeconds = Math.max(elapsed - WAIT_LIMIT_SECONDS, 0);
+    return { remainingSeconds, lateSeconds, isLate: lateSeconds > 0 };
+  }, [currentRide?.waitStartedAt, phase, waitClockTick]);
+
+  useEffect(() => {
+    timers.clearTimeout(rerouteRef.current);
+    rerouteRef.current = null;
+    if (phase !== 'inprogress') {
+      setShowReroute(false);
+      return;
+    }
+    rerouteRef.current = timers.scheduleTimeout(() => {
+      rerouteRef.current = null;
+      setShowReroute(true);
+    }, 5000);
+    return () => {
+      timers.clearTimeout(rerouteRef.current);
+      rerouteRef.current = null;
+    };
+  }, [phase, timers]);
 
   useEffect(() => {
     if (!mapRef.current || !target || !currentRide) return;
@@ -220,62 +199,30 @@ export default function DriverNavigateScreen() {
     fittedMapPhaseRef.current = phase;
   }, [currentRide, driverPos, phase, target]);
 
-  // Tick the pickupWait clock every second while waiting so the useMemo below recomputes.
-  useEffect(() => {
-    if (phase !== 'waiting') return;
-    const interval = setInterval(() => setWaitClockTick(tick => tick + 1), 1000);
-    return () => clearInterval(interval);
-  }, [phase]);
-
-  // ── Derived values that use hooks — MUST be before any early return ──────────
-  // React requires hooks to be called unconditionally on every render.
-  // pickupPinCoordinate / destinationPinCoordinate use optional chaining so
-  // they are safe before the currentRide guard.
-  const pickupWait = useMemo(() => {
-    if (phase !== 'waiting' || !currentRide?.waitStartedAt) {
-      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
-    }
-    const startedMs = new Date(currentRide.waitStartedAt).getTime();
-    if (Number.isNaN(startedMs)) {
-      return { remainingSeconds: WAIT_LIMIT_SECONDS, lateSeconds: 0, isLate: false };
-    }
-    const elapsed = Math.max(0, Math.floor((Date.now() - startedMs) / 1000));
-    const remainingSeconds = Math.max(WAIT_LIMIT_SECONDS - elapsed, 0);
-    const lateSeconds = Math.max(elapsed - WAIT_LIMIT_SECONDS, 0);
-    return { remainingSeconds, lateSeconds, isLate: lateSeconds > 0 };
-  }, [currentRide?.waitStartedAt, phase, waitClockTick]);
-
-  const pickupPinCoordinate = currentRide?.pickup ?? KIGALI_CENTER;
-  const destinationPinCoordinate = currentRide?.destination ?? KIGALI_CENTER;
-
-  const remainingRoute = useMemo(() => {
-    if (!route) return null;
-    const slice = getRemainingRouteCoordinates(route.coordinates, driverPos);
-    const endPin = phase === 'inprogress' ? destinationPinCoordinate : pickupPinCoordinate;
-    return routePolylineThroughPinTips(slice, null, endPin);
-  }, [destinationPinCoordinate, driverPos, phase, pickupPinCoordinate, route]);
-
-  const vehicleRotationDeg = useMemo(() => {
-    if (!currentRide || !remainingRoute || remainingRoute.length < 2) return 0;
-    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
-    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
-  }, [currentRide, remainingRoute]);
-
   if (!currentRide) return null;
 
+  const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
+  const etaMin = target ? Math.round(distanceToTargetKm * 3 + 1) : 0;
   const canMarkArrived = phase !== 'pickup' || distanceToTargetKm <= ARRIVAL_UNLOCK_KM;
   const pickupDistanceText = formatDistance(distanceToTargetKm);
-  const routeEtaText = route && !routeLoading ? formatDuration(route.durationSeconds) : '--';
 
   const phaseLabel =
     phase === 'pickup' ? 'Heading to pickup' :
     phase === 'waiting' ? 'Waiting for customer' :
     'Heading to destination';
 
-  const formatWait = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+  const formatWaitCountdown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+  };
+
+  const formatWaitLate = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    if (mins === 0) return `${remainingSecs} sec`;
+    if (remainingSecs === 0) return `${mins} min`;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
   };
 
   const handleCall = () => {
@@ -295,17 +242,17 @@ export default function DriverNavigateScreen() {
   const handleCancelRide = () => {
     Alert.alert(
       'Cancel Ride',
-      waitSeconds === 0
-        ? 'Customer has not arrived. You may cancel this ride.'
+      pickupWait.isLate
+        ? `Customer is ${formatWaitLate(pickupWait.lateSeconds)} late. You may cancel this ride.`
         : 'Cancel this ride and return to the queue?',
       [
         { text: 'Back', style: 'cancel' },
         {
           text: 'Cancel Ride',
           onPress: () => {
-            cancelRide(true);
+            cancelRide();
             showToast('Ride cancelled', 'info');
-            router.navigate('/(driver)');
+            router.replace('/(driver)');
           },
         },
       ]
@@ -317,18 +264,9 @@ export default function DriverNavigateScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Complete',
-        onPress: async () => {
-          setTransitioning(true);
-          try {
-            await completeRide();
-          } catch {
-            // Logged by the API interceptor — safe to swallow here.
-          } finally {
-            setTransitioning(false);
-          }
-          // Navigation is deferred to the !currentRide useEffect guard above —
-          // avoids a double router.navigate race when setCurrentRide(null) and
-          // the explicit call both fire in the same render cycle.
+        onPress: () => {
+          completeRide();
+          router.replace('/(driver)');
         },
       },
     ]);
@@ -341,8 +279,22 @@ export default function DriverNavigateScreen() {
     ]);
   };
 
-  const timerExpired = waitSeconds === 0;
   const isCustomerLate = pickupWait.isLate;
+  const pickupPinCoordinate = currentRide?.pickup ?? KIGALI_CENTER;
+  const destinationPinCoordinate = currentRide?.destination ?? KIGALI_CENTER;
+
+  const remainingRoute = useMemo(() => {
+    if (!route) return null;
+    const slice = getRemainingRouteCoordinates(route.coordinates, driverPos);
+    const endPin = phase === 'inprogress' ? destinationPinCoordinate : pickupPinCoordinate;
+    return routePolylineThroughPinTips(slice, null, endPin);
+  }, [destinationPinCoordinate, driverPos, phase, pickupPinCoordinate, route]);
+
+  const vehicleRotationDeg = useMemo(() => {
+    if (!remainingRoute || remainingRoute.length < 2) return 0;
+    const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
+    return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
+  }, [currentRide.vehicleType, remainingRoute]);
 
   return (
     <View style={styles.container}>
@@ -388,7 +340,7 @@ export default function DriverNavigateScreen() {
           <Text style={[styles.topPhase, { color: colors.primary }]}>{phaseLabel}</Text>
           {phase !== 'waiting' && (
             <Text style={[styles.topEta, { color: colors.foreground }]}>
-              ETA: {routeEtaText}
+              ETA: {route && !routeLoading ? formatDuration(route.durationSeconds) : `${etaMin} min`}
             </Text>
           )}
         </View>
@@ -401,9 +353,18 @@ export default function DriverNavigateScreen() {
         <View style={[styles.turnCard, { backgroundColor: colors.card, borderColor: colors.border, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 82 }]}>
           <MaterialCommunityIcons name="navigation" size={24} color={colors.primary} style={{ transform: [{ rotate: '45deg' }] }} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.turnText, { color: colors.foreground }]}>Follow current route to destination</Text>
-            <Text style={[styles.turnSubtext, { color: colors.mutedForeground }]}>Navigation powered by live route data</Text>
+            <Text style={[styles.turnText, { color: colors.foreground }]}>In 400m, continue on the fastest route</Text>
+            <Text style={[styles.turnSubtext, { color: colors.mutedForeground }]}>Turn-by-turn navigation active</Text>
           </View>
+        </View>
+      )}
+
+      {showReroute && (
+        <View style={[styles.rerouteBanner, { backgroundColor: colors.primary, top: insets.top + (Platform.OS === 'web' ? 67 : 0) + 152 }]}>
+          <Text style={[styles.rerouteText, { color: colors.primaryForeground }]}>Faster route available</Text>
+          <TouchableOpacity style={styles.rerouteBtn} onPress={() => setShowReroute(false)}>
+            <Text style={[styles.rerouteBtnText, { color: colors.primaryForeground }]}>Reroute</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -445,7 +406,7 @@ export default function DriverNavigateScreen() {
               <View style={[styles.metricBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA</Text>
                 <Text style={[styles.metricValue, { color: colors.foreground }]}>
-                  {routeEtaText}
+                  {route && !routeLoading ? formatDuration(route.durationSeconds) : `${etaMin} min`}
                 </Text>
               </View>
               <View style={[styles.metricBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -469,7 +430,7 @@ export default function DriverNavigateScreen() {
             <Feather name="user" size={20} color={colors.foreground} />
           </View>
           <View style={styles.customerInfo}>
-            <Text style={[styles.customerName, { color: colors.foreground }]}>{currentRide.customerName ?? '--'}</Text>
+            <Text style={[styles.customerName, { color: colors.foreground }]}>{currentRide.customerName ?? 'Customer'}</Text>
             <Text style={[styles.fareText, { color: colors.primary }]}>
               Agreed: {currentRide.agreedFare?.toLocaleString() ?? '-'} RWF
             </Text>
@@ -487,23 +448,8 @@ export default function DriverNavigateScreen() {
         {phase === 'pickup' && (
           <AppButton
             title={canMarkArrived ? 'I Have Arrived' : `Arrive closer (${pickupDistanceText})`}
-            onPress={async () => {
-              if (transitioning) return;
-              setTransitioning(true);
-              try {
-                await markArrived();
-              } catch (err: any) {
-                const msg =
-                  err?.response?.data?.message ??
-                  err?.message ??
-                  'Could not mark arrival. Please try again.';
-                showToast(msg, 'error');
-              } finally {
-                setTransitioning(false);
-              }
-            }}
-            loading={transitioning}
-            disabled={!canMarkArrived || transitioning}
+            onPress={markArrived}
+            disabled={!canMarkArrived}
             fullWidth
             size="lg"
           />
@@ -512,44 +458,42 @@ export default function DriverNavigateScreen() {
         {phase === 'waiting' && (
           <View style={styles.waitingBlock}>
             <View style={[styles.timerBox, {
-              backgroundColor: timerExpired ? colors.destructive + '15' : colors.primaryHex + '15',
-              borderColor: timerExpired ? colors.destructive + '40' : colors.primaryHex + '30',
+              backgroundColor: isCustomerLate ? colors.destructive : colors.primaryHex + '15',
+              borderColor: isCustomerLate ? colors.destructive : colors.primaryHex + '30',
             }]}>
-              <Feather name="clock" size={18} color={timerExpired ? colors.destructive : colors.primary} />
-              <Text style={[styles.timerLabel, { color: colors.mutedForeground }]}>Time remaining</Text>
-              <Text style={[styles.timerValue, { color: timerExpired ? colors.destructive : colors.primary }]}>{formatWait(waitSeconds)}</Text>
+              <Feather
+                name={isCustomerLate ? 'alert-circle' : 'clock'}
+                size={18}
+                color={isCustomerLate ? colors.destructiveForeground : colors.primary}
+              />
+              <Text style={[styles.timerLabel, { color: isCustomerLate ? colors.destructiveForeground + 'CC' : colors.mutedForeground }]}>
+                {isCustomerLate ? 'Customer late' : 'Time remaining'}
+              </Text>
+              <Text style={[styles.timerValue, { color: isCustomerLate ? colors.destructiveForeground : colors.primary }]}>
+                {isCustomerLate
+                  ? formatWaitLate(pickupWait.lateSeconds)
+                  : formatWaitCountdown(pickupWait.remainingSeconds)}
+              </Text>
             </View>
-            {timerExpired && (
+            {isCustomerLate && (
               <Text style={[styles.cancelPrompt, { color: colors.destructive }]}>
-                Customer has not arrived. You may cancel this ride.
+                Customer is {formatWaitLate(pickupWait.lateSeconds)} late. You may cancel this ride.
               </Text>
             )}
             <View style={styles.waitingActions}>
-              <AppButton
-              title="Start Journey"
-              onPress={async () => {
-                if (transitioning) return;
-                setTransitioning(true);
-                try { await startJourney(); }
-                finally { setTransitioning(false); }
-              }}
-              loading={transitioning}
-              disabled={transitioning}
-              style={{ flex: 1 }}
-              size="lg"
-            />
+              <AppButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
               <TouchableOpacity
                 style={[
                   styles.cancelRideBtn,
                   {
-                    backgroundColor: timerExpired ? colors.destructive + '20' : colors.muted,
-                    borderColor: timerExpired ? colors.destructive : colors.border,
+                    backgroundColor: isCustomerLate ? colors.destructiveHex + '20' : colors.muted,
+                    borderColor: isCustomerLate ? colors.destructive : colors.border,
                   },
                 ]}
                 onPress={handleCancelRide}
               >
-                <Feather name="x" size={16} color={timerExpired ? colors.destructive : colors.foreground} />
-                <Text style={[styles.cancelRideBtnText, { color: timerExpired ? colors.destructive : colors.foreground }]}>Cancel Ride</Text>
+                <Feather name="x" size={16} color={isCustomerLate ? colors.destructive : colors.foreground} />
+                <Text style={[styles.cancelRideBtnText, { color: isCustomerLate ? colors.destructive : colors.foreground }]}>Cancel Ride</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -558,20 +502,13 @@ export default function DriverNavigateScreen() {
         {phase === 'inprogress' && (
           <View style={styles.waitingActions}>
             <TouchableOpacity
-              style={[styles.cancelRideBtn, { backgroundColor: colors.destructive + '15', borderColor: colors.destructive }]}
+              style={[styles.cancelRideBtn, { backgroundColor: colors.destructiveHex + '15', borderColor: colors.destructive }]}
               onPress={handleEmergencyEnd}
             >
               <Feather name="alert-octagon" size={16} color={colors.destructive} />
               <Text style={[styles.cancelRideBtnText, { color: colors.destructive }]}>End Journey</Text>
             </TouchableOpacity>
-            <AppButton
-              title="Complete Ride"
-              onPress={handleCompleteRide}
-              loading={transitioning}
-              disabled={transitioning}
-              style={{ flex: 1 }}
-              size="lg"
-            />
+            <AppButton title="Complete Ride" onPress={handleCompleteRide} style={{ flex: 1 }} size="lg" />
           </View>
         )}
       </View>
@@ -627,7 +564,6 @@ const styles = StyleSheet.create({
   rerouteText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   rerouteBtn: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   rerouteBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  pinMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   bottomCard: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,

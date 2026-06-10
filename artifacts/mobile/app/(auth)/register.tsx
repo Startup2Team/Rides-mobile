@@ -26,13 +26,6 @@ import { register, toE164 } from '@/services/auth';
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
   { name: 'Uganda', code: 'UG', dialCode: '+256', flag: '🇺🇬', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
-  { name: 'Kenya', code: 'KE', dialCode: '+254', flag: '🇰🇪', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
-  { name: 'Tanzania', code: 'TZ', dialCode: '+255', flag: '🇹🇿', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
-  { name: 'Burundi', code: 'BI', dialCode: '+257', flag: '🇧🇮', example: 'XX XXX XXX', minLength: 8, maxLength: 8 },
-  { name: 'DR Congo', code: 'CD', dialCode: '+243', flag: '🇨🇩', example: '8XX XXX XXX', minLength: 9, maxLength: 9 },
-  { name: 'United States', code: 'US', dialCode: '+1', flag: '🇺🇸', example: 'XXX XXX XXXX', minLength: 10, maxLength: 10 },
-  { name: 'United Kingdom', code: 'GB', dialCode: '+44', flag: '🇬🇧', example: '7XXX XXXXXX', minLength: 10, maxLength: 10 },
-  { name: 'France', code: 'FR', dialCode: '+33', flag: '🇫🇷', example: 'X XX XX XX XX', minLength: 9, maxLength: 9 },
 ];
 
 function getCountryFlag(code: string) {

@@ -1,6 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '@/constants/storage';
-import type { DriverProfile, MockDriver } from '@/types';
+import { loadStoredDriverProfile } from '@/persistence/authPersistence';
+import type { MockDriver } from '@/types';
 
 /** True for local picker URIs or non-placeholder remote uploads. */
 export function isUploadedProfileImageUri(uri: string | undefined | null): uri is string {
@@ -28,10 +27,8 @@ export function resolveDriverProfileImage(
 /** Driver selfie saved during onboarding (demo until API returns per-driver photos). */
 export async function loadRegisteredDriverPhotoUri(): Promise<string | undefined> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.driverProfile);
-    if (!raw) return undefined;
-    const profile = JSON.parse(raw) as Pick<DriverProfile, 'profileImage'>;
-    return resolveDriverProfileImage(profile);
+    const profile = await loadStoredDriverProfile();
+    return resolveDriverProfileImage(profile.data);
   } catch {
     return undefined;
   }

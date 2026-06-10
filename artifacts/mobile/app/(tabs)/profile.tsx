@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -20,9 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
-import { STORAGE_KEYS } from '@/constants/storage';
-
-const PROFILE_IMAGE_KEY = STORAGE_KEYS.profileImage;
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
 function MenuItem({
   icon,
@@ -71,7 +68,7 @@ export default function ProfileScreen() {
   const isDark = scheme === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile, logout, switchMode, loadCustomerProfile } = useAuth();
+  const { user, driverProfile, logout, switchMode } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   /** iOS grouped inset list — elevated fill, no card outline */
@@ -83,15 +80,13 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      // Refresh profile data from GET /customer/profile every time the tab is opened.
-      loadCustomerProfile();
-      AsyncStorage.getItem(PROFILE_IMAGE_KEY).then(uri => {
-        if (active) setProfileImage(uri);
+      loadStoredProfileImage().then(stored => {
+        if (active) setProfileImage(stored.data);
       });
       return () => {
         active = false;
       };
-    }, [loadCustomerProfile]),
+    }, []),
   );
 
   const handleSwitchToDriver = () => {
@@ -103,13 +98,8 @@ export default function ProfileScreen() {
         {
           text: 'Switch',
           onPress: async () => {
-            try {
-              await switchMode('driver');
-              router.replace('/(driver)');
-            } catch {
-              // switchMode already shows an Alert for all known error codes.
-              // This catch prevents any residual rejection from becoming unhandled.
-            }
+            await switchMode('driver');
+            router.replace('/(driver)');
           },
         },
       ]);
@@ -122,7 +112,7 @@ export default function ProfileScreen() {
       {
         text: 'Log Out',
         onPress: async () => {
-          try { await logout(); } catch {}
+          await logout();
           router.replace('/(auth)/welcome');
         },
       },

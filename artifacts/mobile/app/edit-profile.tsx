@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -23,9 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 
-import { STORAGE_KEYS } from '@/constants/storage';
-
-const PROFILE_IMAGE_KEY = STORAGE_KEYS.profileImage;
+import { loadStoredProfileImage, saveStoredProfileImage } from '@/persistence/profilePersistence';
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -41,8 +38,8 @@ export default function EditProfileScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(PROFILE_IMAGE_KEY).then(uri => {
-      if (uri) setProfileImage(uri);
+    loadStoredProfileImage().then(stored => {
+      if (stored.data) setProfileImage(stored.data);
     });
   }, []);
 
@@ -76,7 +73,7 @@ export default function EditProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       setProfileImage(asset.uri);
-      await AsyncStorage.setItem(PROFILE_IMAGE_KEY, asset.uri);
+      await saveStoredProfileImage(asset.uri);
       showToast('Photo updated', 'info');
     }
   };
@@ -224,7 +221,7 @@ export default function EditProfileScreen() {
 
         {/* Danger zone */}
         <TouchableOpacity
-          style={[styles.dangerRow, { borderColor: colors.destructive + '40' }]}
+          style={[styles.dangerRow, { borderColor: colors.destructiveHex + '40' }]}
           activeOpacity={0.7}
           onPress={handleDeleteAccount}
         >

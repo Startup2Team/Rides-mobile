@@ -16,9 +16,8 @@ import { VEHICLE_LABELS } from '@/types';
 export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching, isMatchingPaused } = useRide();
+  const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching } = useRide();
   const { showToast } = useToast();
-  const isCancellingRef = useRef(false);
 
   const pulseA = useRef(new Animated.Value(0)).current;
   const pulseB = useRef(new Animated.Value(0)).current;
@@ -48,23 +47,7 @@ export default function SearchingScreen() {
     startPulse(pulseC, 1000);
   }, [pulseA, pulseB, pulseC]);
 
-  useEffect(() => {
-    if (
-      (currentRide?.status === 'negotiating' || currentRide?.status === 'driver_assigned') &&
-      !isMatchingPaused
-    ) {
-      router.replace('/negotiation');
-    } else if (!isCancellingRef.current && (!currentRide || currentRide.status === 'cancelled')) {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(tabs)');
-      }
-    }
-  }, [currentRide?.status, isMatchingPaused]);
-
   const finishCancelSearch = () => {
-    isCancellingRef.current = true;
     cancelRide();
     showToast('Search cancelled', 'info');
     if (router.canGoBack()) {
@@ -98,10 +81,10 @@ export default function SearchingScreen() {
 
   const destinationLabel = useMemo(() => {
     const destination = currentRide?.destination;
-    if (!destination) return '--';
+    if (!destination) return 'Destination';
     return destination.locationType === 'generic'
       ? 'To be confirmed in chat'
-      : destination.address ?? '--';
+      : destination.address ?? 'Destination';
   }, [currentRide?.destination]);
 
   const vehicleType = currentRide?.vehicleType ?? 'moto';
@@ -151,7 +134,7 @@ export default function SearchingScreen() {
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
               <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-                {currentRide.pickup.address ?? '--'}
+                {currentRide.pickup.address ?? 'Pickup'}
               </Text>
             </View>
             <View style={[styles.routeLine, { backgroundColor: colors.border }]} />

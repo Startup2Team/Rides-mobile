@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -104,16 +104,6 @@ export default function DriverNegotiationScreen() {
   const suggestedFare = currentRide?.suggestedFare ?? 0;
   const acceptAmount = lastCustomerOffer?.amount;
 
-  useEffect(() => {
-    if (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') {
-      router.replace('/driver-navigate');
-    }
-    if (!currentRide || currentRide.status === 'cancelled') {
-      // navigate (not replace) pops back to the existing (driver) base route.
-      router.navigate('/(driver)');
-    }
-  }, [currentRide?.status]);
-
   const sendOffer = (amount: number) => {
     if (!amount || amount <= 0 || !canSendOffer) return;
     setOfferText('');
@@ -135,7 +125,7 @@ export default function DriverNegotiationScreen() {
   const handleDecline = () => {
     Alert.alert('Decline ride', 'Decline this negotiation? The request will return to the pool.', [
       { text: 'Back', style: 'cancel' },
-      { text: 'Decline', onPress: () => { cancelRide(); router.navigate('/(driver)'); } },
+      { text: 'Decline', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
     ]);
   };
 
@@ -170,10 +160,10 @@ export default function DriverNegotiationScreen() {
             </View>
             <View style={styles.identityText}>
               <Text style={[styles.title, { color: colors.foreground }]}>
-                {currentRide.customerName ?? '--'}
+                {currentRide.customerName ?? 'Customer'}
               </Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {VEHICLE_LABELS[currentRide.vehicleType]} request · {currentRide.distance} km
+                {VEHICLE_LABELS[currentRide.vehicleType]} request · {currentRide.distance} km · {currentRide.duration} min
               </Text>
             </View>
           </View>
@@ -186,7 +176,7 @@ export default function DriverNegotiationScreen() {
           <View style={styles.routeRow}>
             <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
             <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
-              {currentRide.pickup.address ?? '--'}
+              {currentRide.pickup.address ?? 'Pickup'}
             </Text>
           </View>
           <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
@@ -194,8 +184,8 @@ export default function DriverNegotiationScreen() {
             <View style={[styles.routeDot, { backgroundColor: currentRide.destination.locationType === 'generic' ? WARNING : colors.destructive }]} />
             <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
               {currentRide.destination.locationType === 'generic'
-                ? `${currentRide.destination.address ?? '--'} (to confirm)`
-                : currentRide.destination.address ?? '--'}
+                ? `${currentRide.destination.address ?? 'Unknown'} (to confirm)`
+                : currentRide.destination.address ?? 'Destination'}
             </Text>
           </View>
           {currentRide.destination.locationType === 'generic' && (
@@ -236,7 +226,7 @@ export default function DriverNegotiationScreen() {
 
       <View style={[styles.actionPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 10) }]}>
         {driverLimitReached && (
-          <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '12' }]}>
+          <View style={[styles.limitBanner, { backgroundColor: colors.destructiveHex + '12' }]}>
             <Feather name="alert-circle" size={15} color={colors.destructive} />
             <Text style={[styles.limitText, { color: colors.destructive }]}>Offer limit reached. Use Call to continue.</Text>
           </View>

@@ -75,7 +75,7 @@ export function AppButton({
     secondary: colors.muted,
     plain: 'transparent',
     danger: colors.destructive,
-    dangerPlain: colors.destructive + '14',
+    dangerPlain: colors.destructiveHex + '14',
     ghost: 'transparent',
     call: colors.call,
     decline: colors.muted,
