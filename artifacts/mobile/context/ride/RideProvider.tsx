@@ -92,34 +92,32 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const picked = pickMockDriver(vehicleType);
     const initialMessages = buildInitialNegotiationMessages(pickup, destination);
 
-    void buildDriverWithUploadedPhoto(picked).then(driver => {
-      if (!timers.isActive(session) || isMatchingPausedRef.current) return;
+    const driver = buildDriverWithUploadedPhoto(picked);
 
-      setDriverLocation(driver.location);
+    setDriverLocation(driver.location);
 
-      setCancelledSearchDraft(null);
+    setCancelledSearchDraft(null);
 
-      setCurrentRide(prev => {
-        if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
-        return {
-          ...prev,
-          status: 'negotiating',
-          driver,
-          driverId: driver.id,
-          negotiation: initialMessages,
-        };
-      });
-
-      driverOfferTimeoutRef.current = timers.scheduleTimeout(() => {
-        driverOfferTimeoutRef.current = null;
-        if (isMatchingPausedRef.current) return;
-        setCurrentRide(prev => {
-          if (!prev || prev.status !== 'negotiating') return prev;
-          const driverMsg = buildInitialDriverOffer(vehicleType, dist);
-          return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
-        });
-      }, DRIVER_OFFER_DELAY_MS, session);
+    setCurrentRide(prev => {
+      if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
+      return {
+        ...prev,
+        status: 'negotiating',
+        driver,
+        driverId: driver.id,
+        negotiation: initialMessages,
+      };
     });
+
+    driverOfferTimeoutRef.current = timers.scheduleTimeout(() => {
+      driverOfferTimeoutRef.current = null;
+      if (isMatchingPausedRef.current) return;
+      setCurrentRide(prev => {
+        if (!prev || prev.status !== 'negotiating') return prev;
+        const driverMsg = buildInitialDriverOffer(vehicleType, dist);
+        return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
+      });
+    }, DRIVER_OFFER_DELAY_MS, session);
   }, [timers]);
 
   const scheduleDriverMatch = useCallback((

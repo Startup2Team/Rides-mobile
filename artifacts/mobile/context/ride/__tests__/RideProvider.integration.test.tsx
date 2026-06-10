@@ -17,7 +17,10 @@ import { loadRideHistory } from '../ridePersistence';
 import type { RideLocation } from '@/types';
 
 jest.mock('@/utils/driverProfileImage', () => ({
-  buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
+  buildDriverWithUploadedPhoto: jest.fn(driver => {
+    const { profileImage: _unused, ...withoutProfileImage } = driver;
+    return withoutProfileImage;
+  }),
 }));
 
 const pickup: RideLocation = {
@@ -56,6 +59,7 @@ async function createAndMatchRide(result: ReturnType<typeof renderRideProvider>[
   });
   expect(result.current.currentRide?.status).toBe('negotiating');
   expect(result.current.currentRide?.driver?.vehicleType).toBe('moto');
+  expect(result.current.currentRide?.driver?.profileImage).toBeUndefined();
 }
 
 function renderRideProvider() {
@@ -112,6 +116,7 @@ describe('RideProvider lifecycle orchestration', () => {
       status: 'negotiating',
       driverId: expect.any(String),
     }));
+    expect(result.current.currentRide?.driver?.profileImage).toBeUndefined();
     expect(result.current.driverLocation).toEqual(result.current.currentRide?.driver?.location);
     expect(result.current.cancelledSearchDraft).toBeNull();
 

@@ -1,4 +1,3 @@
-import { loadStoredDriverProfile } from '@/persistence/authPersistence';
 import type { MockDriver } from '@/types';
 
 /** True for local picker URIs or non-placeholder remote uploads. */
@@ -24,22 +23,9 @@ export function resolveDriverProfileImage(
   return isUploadedProfileImageUri(driver.profileImage) ? driver.profileImage.trim() : undefined;
 }
 
-/** Driver selfie saved during onboarding (demo until API returns per-driver photos). */
-export async function loadRegisteredDriverPhotoUri(): Promise<string | undefined> {
-  try {
-    const profile = await loadStoredDriverProfile();
-    return resolveDriverProfileImage(profile.data);
-  } catch {
-    return undefined;
-  }
-}
-
-export async function buildDriverWithUploadedPhoto(picked: MockDriver): Promise<MockDriver> {
+export function buildDriverWithUploadedPhoto(picked: MockDriver): MockDriver {
   const fromRide = resolveDriverProfileImage(picked);
   if (fromRide) return { ...picked, profileImage: fromRide };
-
-  const registered = await loadRegisteredDriverPhotoUri();
-  if (registered) return { ...picked, profileImage: registered };
 
   const { profileImage: _unused, ...withoutPlaceholder } = picked;
   return withoutPlaceholder;
