@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
@@ -13,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { STORAGE_KEYS } from '@/constants/storage';
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
 export type ProfileAvatarCircleProps = {
   size?: number;
@@ -43,8 +42,8 @@ export function ProfileAvatarCircle({
     useCallback(() => {
       if (!useStoredProfile) return undefined;
       let active = true;
-      void AsyncStorage.getItem(STORAGE_KEYS.profileImage).then(uri => {
-        if (active) setStoredProfileImage(uri);
+      void loadStoredProfileImage().then(stored => {
+        if (active) setStoredProfileImage(stored.data);
       });
       return () => {
         active = false;

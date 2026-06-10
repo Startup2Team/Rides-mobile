@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, {
   createContext,
   useCallback,
@@ -7,7 +6,11 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { MAX_SAVED_LOCATIONS, SAVED_LOCATIONS_KEY } from '@/constants/savedLocations';
+import { MAX_SAVED_LOCATIONS } from '@/constants/savedLocations';
+import {
+  loadStoredSavedLocations,
+  saveStoredSavedLocations,
+} from '@/persistence/savedLocationsPersistence';
 import { RideLocation, SavedLocation } from '@/types';
 
 interface SavedLocationsContextValue {
@@ -25,16 +28,9 @@ export function SavedLocationsProvider({ children }: { children: React.ReactNode
   const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(SAVED_LOCATIONS_KEY);
-    if (!raw) {
-      setSavedPlaces([]);
-      setLoaded(true);
-      return;
-    }
-
     try {
-      const parsed = JSON.parse(raw) as SavedLocation[];
-      setSavedPlaces(Array.isArray(parsed) ? parsed : []);
+      const stored = await loadStoredSavedLocations();
+      setSavedPlaces(stored.data ?? []);
     } catch {
       setSavedPlaces([]);
     } finally {
@@ -48,7 +44,7 @@ export function SavedLocationsProvider({ children }: { children: React.ReactNode
 
   const persistSavedPlaces = useCallback(async (next: SavedLocation[]) => {
     setSavedPlaces(next);
-    await AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
+    await saveStoredSavedLocations(next);
   }, []);
 
   const saveLocation = useCallback(async (location: RideLocation, label: string) => {
@@ -63,7 +59,7 @@ export function SavedLocationsProvider({ children }: { children: React.ReactNode
 
     setSavedPlaces(current => {
       const next = [saved, ...current.filter(place => place.label !== cleanLabel)].slice(0, MAX_SAVED_LOCATIONS);
-      void AsyncStorage.setItem(SAVED_LOCATIONS_KEY, JSON.stringify(next));
+      void saveStoredSavedLocations(next);
       return next;
     });
     return true;

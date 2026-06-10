@@ -1,4 +1,11 @@
 import { Coords } from '@/types';
+import { reportOperationalFailure } from '@/observability/monitoring';
+import {
+  fetchWithResilience,
+  isAbortedNetworkRequest,
+  NetworkRequestError,
+  parseJsonResponse,
+} from '@/services/networkRequest';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
 /** Required by OpenStreetMap Nominatim usage policy (https://operations.osmfoundation.org/policies/nominatim/). */
@@ -9,6 +16,7 @@ const RWANDA_BBOX = '28.85,-2.84,30.90,-1.04';
 /** Nominatim viewbox: left, top, right, bottom (lon/lat). */
 const RWANDA_VIEWBOX = '28.85,-1.04,30.90,-2.84';
 const RWANDA_CENTER: Coords = { latitude: -1.9441, longitude: 30.0619 };
+export const GEOCODING_TIMEOUT_MS = 8_000;
 
 /** Kigali grid / street codes (KG 185 ST, KK 123 AV, etc.). */
 const KIGALI_GRID_CODE = /\b(KG|KK|KN|KC|KR|GF|NY|NYA)\b/i;
@@ -68,6 +76,7 @@ interface NominatimResult {
 interface GeocodeFetchOptions {
   types?: string;
   limit?: number;
+  signal?: AbortSignal;
 }
 
 export function isMapboxConfigured(): boolean {
@@ -256,11 +265,44 @@ function dedupeSuggestions(items: GeocodeSuggestion[]): GeocodeSuggestion[] {
   });
 }
 
-async function waitForNominatimSlot(): Promise<void> {
+function waitWithSignal(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(
+        new NetworkRequestError({
+          kind: 'aborted',
+          service: 'nominatim',
+          operation: 'geocoding',
+        }),
+      );
+      return;
+    }
+
+    const finish = () => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    };
+    const timer = setTimeout(finish, delayMs);
+    const abort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      reject(
+        new NetworkRequestError({
+          kind: 'aborted',
+          service: 'nominatim',
+          operation: 'geocoding',
+        }),
+      );
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+async function waitForNominatimSlot(signal?: AbortSignal): Promise<void> {
   const elapsed = Date.now() - nominatimLastRequestAt;
   const waitMs = Math.max(0, 1100 - elapsed);
   if (waitMs > 0) {
-    await new Promise(resolve => setTimeout(resolve, waitMs));
+    await waitWithSignal(waitMs, signal);
   }
   nominatimLastRequestAt = Date.now();
 }
@@ -269,8 +311,11 @@ async function waitForNominatimSlot(): Promise<void> {
  * OpenStreetMap search — best coverage for Kigali hotels, cafés, and grid addresses.
  * Same data source as most labels on the Mapbox map style.
  */
-async function fetchNominatimSearch(query: string): Promise<GeocodeSuggestion[]> {
-  await waitForNominatimSlot();
+async function fetchNominatimSearch(
+  query: string,
+  signal?: AbortSignal,
+): Promise<GeocodeSuggestion[]> {
+  await waitForNominatimSlot(signal);
 
   const params = new URLSearchParams({
     q: query,
@@ -283,12 +328,20 @@ async function fetchNominatimSearch(query: string): Promise<GeocodeSuggestion[]>
   });
 
   const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': NOMINATIM_USER_AGENT, Accept: 'application/json' },
-  });
-  if (!res.ok) return [];
+  const res = await fetchWithResilience(
+    url,
+    {
+      headers: { 'User-Agent': NOMINATIM_USER_AGENT, Accept: 'application/json' },
+      signal,
+    },
+    {
+      service: 'nominatim',
+      operation: 'geocoding',
+      timeoutMs: GEOCODING_TIMEOUT_MS,
+    },
+  );
 
-  const json = (await res.json()) as NominatimResult[];
+  const json = await parseJsonResponse<NominatimResult[]>(res, 'nominatim', 'geocoding');
   return json.map(mapNominatimResult);
 }
 
@@ -311,10 +364,22 @@ async function fetchSearchBoxForward(
   if (options?.types) params.set('types', options.types);
 
   const url = `https://api.mapbox.com/search/searchbox/v1/forward?${params.toString()}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
+  const res = await fetchWithResilience(
+    url,
+    { signal: options?.signal },
+    {
+      service: 'mapbox',
+      operation: 'searchbox-geocoding',
+      timeoutMs: GEOCODING_TIMEOUT_MS,
+      retries: 1,
+    },
+  );
 
-  const json = (await res.json()) as { features?: SearchBoxFeature[] };
+  const json = await parseJsonResponse<{ features?: SearchBoxFeature[] }>(
+    res,
+    'mapbox',
+    'searchbox-geocoding',
+  );
   return (json.features ?? []).map(mapSearchBoxFeature);
 }
 
@@ -341,10 +406,22 @@ async function fetchLegacyGeocode(
     `${encodeURIComponent(query)}.json` +
     `?${params.toString()}`;
 
-  const res = await fetch(url);
-  if (!res.ok) return [];
+  const res = await fetchWithResilience(
+    url,
+    { signal: options?.signal },
+    {
+      service: 'mapbox',
+      operation: 'legacy-geocoding',
+      timeoutMs: GEOCODING_TIMEOUT_MS,
+      retries: 1,
+    },
+  );
 
-  const json = (await res.json()) as { features?: LegacyGeocodeFeature[] };
+  const json = await parseJsonResponse<{ features?: LegacyGeocodeFeature[] }>(
+    res,
+    'mapbox',
+    'legacy-geocoding',
+  );
   return (json.features ?? []).map(mapLegacyFeature);
 }
 
@@ -356,44 +433,92 @@ async function fetchLegacyGeocode(
 export async function geocodeAddress(
   query: string,
   proximity?: Coords,
+  options?: { signal?: AbortSignal },
 ): Promise<GeocodeSuggestion[]> {
   if (!query || query.length < 2) return [];
 
-  const nearby = proximity ?? RWANDA_CENTER;
-  const trimmed = query.trim();
-  const streetAddress = isStreetAddressQuery(trimmed);
+  try {
+    const nearby = proximity ?? RWANDA_CENTER;
+    const trimmed = query.trim();
+    const streetAddress = isStreetAddressQuery(trimmed);
+    const providerFailures: unknown[] = [];
 
-  const nominatimQueries = streetAddress
-    ? buildAddressSearchQueries(trimmed)
-    : [trimmed];
+    const nominatimQueries = streetAddress
+      ? buildAddressSearchQueries(trimmed)
+      : [trimmed];
 
-  const nominatimResults: GeocodeSuggestion[] = [];
-  for (const q of nominatimQueries.slice(0, streetAddress ? 2 : 1)) {
-    const batch = await fetchNominatimSearch(q);
-    nominatimResults.push(...batch);
-  }
-
-  const mapboxTasks: Promise<GeocodeSuggestion[]>[] = [];
-  if (MAPBOX_TOKEN) {
-    mapboxTasks.push(
-      fetchSearchBoxForward(trimmed, nearby),
-      fetchLegacyGeocode(trimmed, nearby, { limit: 8 }),
-    );
-    if (streetAddress) {
-      mapboxTasks.push(
-        fetchLegacyGeocode(`${trimmed}, Kigali`, nearby, {
-          types: 'address,street,place',
-          limit: 6,
-        }),
+    const nominatimResults: GeocodeSuggestion[] = [];
+    for (const q of nominatimQueries.slice(0, streetAddress ? 2 : 1)) {
+      const batch = await fetchProviderFallback(
+        () => fetchNominatimSearch(q, options?.signal),
+        providerFailures,
       );
+      nominatimResults.push(...batch);
     }
+
+    const mapboxTasks: Promise<GeocodeSuggestion[]>[] = [];
+    if (MAPBOX_TOKEN) {
+      mapboxTasks.push(
+        fetchProviderFallback(
+          () => fetchSearchBoxForward(trimmed, nearby, { signal: options?.signal }),
+          providerFailures,
+        ),
+        fetchProviderFallback(
+          () => fetchLegacyGeocode(trimmed, nearby, { limit: 8, signal: options?.signal }),
+          providerFailures,
+        ),
+      );
+      if (streetAddress) {
+        mapboxTasks.push(
+          fetchProviderFallback(
+            () =>
+              fetchLegacyGeocode(`${trimmed}, Kigali`, nearby, {
+                types: 'address,street,place',
+                limit: 6,
+                signal: options?.signal,
+              }),
+            providerFailures,
+          ),
+        );
+      }
+    }
+
+    const mapboxBatches = mapboxTasks.length > 0 ? await Promise.all(mapboxTasks) : [];
+    const mapboxFiltered = mapboxBatches
+      .flat()
+      .filter(item => !isLowQualityMapboxHit(trimmed, item));
+
+    const merged = dedupeSuggestions([...nominatimResults, ...mapboxFiltered]);
+    if (merged.length === 0 && providerFailures.length > 0) {
+      reportSanitizedGeocodingFailure(providerFailures[0]);
+    }
+    return rankForQuery(trimmed, merged).slice(0, 12);
+  } catch (error) {
+    if (isAbortedNetworkRequest(error)) throw error;
+    reportSanitizedGeocodingFailure(error);
+    throw error;
   }
+}
 
-  const mapboxBatches = mapboxTasks.length > 0 ? await Promise.all(mapboxTasks) : [];
-  const mapboxFiltered = mapboxBatches
-    .flat()
-    .filter(item => !isLowQualityMapboxHit(trimmed, item));
+function reportSanitizedGeocodingFailure(error: unknown) {
+  reportOperationalFailure('map.geocoding.search', error, {
+    service: error instanceof NetworkRequestError ? error.service : 'unknown',
+    operation: error instanceof NetworkRequestError ? error.operation : 'geocoding',
+    kind: error instanceof NetworkRequestError ? error.kind : 'unknown',
+    status: error instanceof NetworkRequestError ? error.status : undefined,
+    attempt: error instanceof NetworkRequestError ? error.attempt : undefined,
+  });
+}
 
-  const merged = dedupeSuggestions([...nominatimResults, ...mapboxFiltered]);
-  return rankForQuery(trimmed, merged).slice(0, 12);
+async function fetchProviderFallback(
+  request: () => Promise<GeocodeSuggestion[]>,
+  failures: unknown[],
+): Promise<GeocodeSuggestion[]> {
+  try {
+    return await request();
+  } catch (error) {
+    if (isAbortedNetworkRequest(error)) throw error;
+    failures.push(error);
+    return [];
+  }
 }

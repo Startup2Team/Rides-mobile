@@ -19,8 +19,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { APP_NAME } from '@/constants/branding';
+import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
+import { type DriverRatingStars } from '@/domain/driverWallet';
+import { reportOperationalFailure } from '@/observability/monitoring';
+import { buildLocalDriverRating, saveDriverRatingOnce } from '@/persistence/driverRatingPersistence';
 import {
   isUploadedProfileImageUri,
   resolveDriverProfileImage,
@@ -76,6 +80,7 @@ export default function RatingScreen() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { currentRide, rideHistory, completeRide } = useRide();
   const params = useLocalSearchParams<{
     rideId?: string;
@@ -89,6 +94,7 @@ export default function RatingScreen() {
   const [stars, setStars] = useState(0);
   const [review, setReview] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const ratingSavedRef = useRef(false);
 
   const driverName = params.driverName ?? 'your driver';
   const finalizedRideRef = useRef(false);
@@ -122,23 +128,46 @@ export default function RatingScreen() {
     completeRide();
   };
 
+  const returnToHome = () => {
+    router.replace('/(tabs)');
+    queueMicrotask(finalizeRide);
+  };
+
+  const persistRating = async () => {
+    if (ratingSavedRef.current || stars < 1 || stars > 5) return;
+    const driverId = ratedRide?.driverId ?? ratedRide?.driver?.id;
+    if (!ratedRide?.id || !driverId) return;
+
+    try {
+      await saveDriverRatingOnce(buildLocalDriverRating({
+        comment: review,
+        customerId: ratedRide.customerId ?? user?.id,
+        driverId,
+        rideId: ratedRide.id,
+        stars: stars as DriverRatingStars,
+      }));
+      ratingSavedRef.current = true;
+    } catch (error) {
+      reportOperationalFailure('driver.rating.persist', error, { rideId: ratedRide.id, driverId });
+    }
+  };
+
   const finishAndExit = async () => {
     if (submitting) return;
     setSubmitting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await persistRating();
 
     if (rideHistory.length >= 3) {
       const isAvailable = await StoreReview.isAvailableAsync();
       if (isAvailable) await StoreReview.requestReview();
     }
 
-    finalizeRide();
-    router.replace('/(tabs)');
+    returnToHome();
   };
 
   const exitToHome = () => {
-    finalizeRide();
-    router.replace('/(tabs)');
+    returnToHome();
   };
 
   const handleStarPress = (n: number) => {

@@ -10,7 +10,7 @@ import { useColors } from '@/hooks/useColors';
 
 function NativeTabLayout() {
   return (
-    <NativeTabs>
+    <NativeTabs disableTransparentOnScrollEdge>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'map', selected: 'map.fill' }} />
         <Label>Home</Label>

@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -104,15 +104,6 @@ export default function DriverNegotiationScreen() {
   const suggestedFare = currentRide?.suggestedFare ?? 0;
   const acceptAmount = lastCustomerOffer?.amount;
 
-  useEffect(() => {
-    if (currentRide?.status === 'confirmed' || currentRide?.status === 'arriving') {
-      router.replace('/driver-navigate');
-    }
-    if (!currentRide || currentRide.status === 'cancelled') {
-      router.replace('/(driver)');
-    }
-  }, [currentRide?.status]);
-
   const sendOffer = (amount: number) => {
     if (!amount || amount <= 0 || !canSendOffer) return;
     setOfferText('');
@@ -133,8 +124,8 @@ export default function DriverNegotiationScreen() {
 
   const handleDecline = () => {
     Alert.alert('Decline ride', 'Decline this negotiation? The request will return to the pool.', [
-      { text: 'Back', style: 'cancel' },
       { text: 'Decline', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
+      { text: 'Back', style: 'cancel' },
     ]);
   };
 
@@ -235,7 +226,7 @@ export default function DriverNegotiationScreen() {
 
       <View style={[styles.actionPanel, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 10) }]}>
         {driverLimitReached && (
-          <View style={[styles.limitBanner, { backgroundColor: colors.destructive + '12' }]}>
+          <View style={[styles.limitBanner, { backgroundColor: colors.destructiveHex + '12' }]}>
             <Feather name="alert-circle" size={15} color={colors.destructive} />
             <Text style={[styles.limitText, { color: colors.destructive }]}>Offer limit reached. Use Call to continue.</Text>
           </View>

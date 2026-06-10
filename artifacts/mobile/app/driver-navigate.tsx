@@ -13,9 +13,11 @@ import {
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
+import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { KIGALI_CENTER, VehicleType } from '@/types';
@@ -76,14 +78,19 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 
 export default function DriverNavigateScreen() {
   const colors = useColors();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
+  const { driverProfile, recordCompletedRide, user } = useAuth();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
+  const timers = useScreenTimerManager();
   const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rerouteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const phase = currentRide?.status === 'in_progress'
     ? 'inprogress'
@@ -97,10 +104,6 @@ export default function DriverNavigateScreen() {
     currentRide ? navigationOrigin : null,
     target ? { latitude: target.latitude, longitude: target.longitude } : null,
   );
-
-  useEffect(() => {
-    if (!currentRide) router.replace('/(driver)');
-  }, [currentRide]);
 
   useEffect(() => {
     if (!currentRide && driverLocation) {
@@ -118,31 +121,39 @@ export default function DriverNavigateScreen() {
   }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
   useEffect(() => {
-    if (moveRef.current) clearInterval(moveRef.current);
+    timers.clearInterval(moveRef.current);
+    moveRef.current = null;
     if (!route || route.coordinates.length === 0 || phase === 'waiting') return;
 
     let step = 0;
     setDriverPos(route.coordinates[0]);
 
-    moveRef.current = setInterval(() => {
+    moveRef.current = timers.scheduleInterval(() => {
       step = Math.min(step + 1, route.coordinates.length - 1);
       setDriverPos(route.coordinates[step]);
 
-      if (step >= route.coordinates.length - 1 && moveRef.current) {
-        clearInterval(moveRef.current);
+      if (step >= route.coordinates.length - 1) {
+        timers.clearInterval(moveRef.current);
+        moveRef.current = null;
       }
     }, 1500);
 
     return () => {
-      if (moveRef.current) clearInterval(moveRef.current);
+      timers.clearInterval(moveRef.current);
+      moveRef.current = null;
     };
-  }, [phase, route]);
+  }, [phase, route, timers]);
 
   useEffect(() => {
+    timers.clearInterval(waitClockRef.current);
+    waitClockRef.current = null;
     if (phase !== 'waiting') return;
-    const interval = setInterval(() => setWaitClockTick(tick => tick + 1), 1000);
-    return () => clearInterval(interval);
-  }, [phase]);
+    waitClockRef.current = timers.scheduleInterval(() => setWaitClockTick(tick => tick + 1), 1000);
+    return () => {
+      timers.clearInterval(waitClockRef.current);
+      waitClockRef.current = null;
+    };
+  }, [phase, timers]);
 
   const pickupWait = useMemo(() => {
     if (phase !== 'waiting' || !currentRide?.waitStartedAt) {
@@ -159,13 +170,21 @@ export default function DriverNavigateScreen() {
   }, [currentRide?.waitStartedAt, phase, waitClockTick]);
 
   useEffect(() => {
+    timers.clearTimeout(rerouteRef.current);
+    rerouteRef.current = null;
     if (phase !== 'inprogress') {
       setShowReroute(false);
       return;
     }
-    const timer = setTimeout(() => setShowReroute(true), 5000);
-    return () => clearTimeout(timer);
-  }, [phase]);
+    rerouteRef.current = timers.scheduleTimeout(() => {
+      rerouteRef.current = null;
+      setShowReroute(true);
+    }, 5000);
+    return () => {
+      timers.clearTimeout(rerouteRef.current);
+      rerouteRef.current = null;
+    };
+  }, [phase, timers]);
 
   useEffect(() => {
     if (!mapRef.current || !target || !currentRide) return;
@@ -181,8 +200,6 @@ export default function DriverNavigateScreen() {
     });
     fittedMapPhaseRef.current = phase;
   }, [currentRide, driverPos, phase, target]);
-
-  if (!currentRide) return null;
 
   const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
   const etaMin = target ? Math.round(distanceToTargetKm * 3 + 1) : 0;
@@ -209,15 +226,17 @@ export default function DriverNavigateScreen() {
   };
 
   const handleCall = () => {
-    if (!currentRide.customerPhone) return;
-    Linking.openURL(`tel:${currentRide.customerPhone}`).catch(() =>
+    const phone = currentRide?.customerPhone;
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`).catch(() =>
       Alert.alert('Cannot call', 'Unable to open the phone dialler.')
     );
   };
 
   const handleMessage = () => {
-    if (!currentRide.customerPhone) return;
-    Linking.openURL(`sms:${currentRide.customerPhone}`).catch(() =>
+    const phone = currentRide?.customerPhone;
+    if (!phone) return;
+    Linking.openURL(`sms:${phone}`).catch(() =>
       Alert.alert('Cannot message', 'Unable to open messages.')
     );
   };
@@ -229,7 +248,6 @@ export default function DriverNavigateScreen() {
         ? `Customer is ${formatWaitLate(pickupWait.lateSeconds)} late. You may cancel this ride.`
         : 'Cancel this ride and return to the queue?',
       [
-        { text: 'Back', style: 'cancel' },
         {
           text: 'Cancel Ride',
           onPress: () => {
@@ -238,6 +256,7 @@ export default function DriverNavigateScreen() {
             router.replace('/(driver)');
           },
         },
+        { text: 'Back', style: 'cancel' },
       ]
     );
   };
@@ -248,7 +267,14 @@ export default function DriverNavigateScreen() {
       {
         text: 'Complete',
         onPress: () => {
-          completeRide();
+          const fare = currentRide?.agreedFare ?? 0;
+          const driverId = user?.id;
+          completeRide('driver', {
+            driverId,
+            driverName: user?.name,
+            vehicleType: driverProfile?.vehicleType,
+          });
+          if (driverId) void recordCompletedRide(fare);
           router.replace('/(driver)');
         },
       },
@@ -257,8 +283,8 @@ export default function DriverNavigateScreen() {
 
   const handleEmergencyEnd = () => {
     Alert.alert('End Journey', 'End this journey early?', [
-      { text: 'Back', style: 'cancel' },
       { text: 'End Journey', onPress: handleCompleteRide },
+      { text: 'Back', style: 'cancel' },
     ]);
   };
 
@@ -274,10 +300,12 @@ export default function DriverNavigateScreen() {
   }, [destinationPinCoordinate, driverPos, phase, pickupPinCoordinate, route]);
 
   const vehicleRotationDeg = useMemo(() => {
-    if (!remainingRoute || remainingRoute.length < 2) return 0;
+    if (!currentRide || !remainingRoute || remainingRoute.length < 2) return 0;
     const bearing = getBearingDegrees(remainingRoute[0], remainingRoute[1]);
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[currentRide.vehicleType];
-  }, [currentRide.vehicleType, remainingRoute]);
+  }, [currentRide, remainingRoute]);
+
+  if (!currentRide) return null;
 
   return (
     <View style={styles.container}>
@@ -464,12 +492,11 @@ export default function DriverNavigateScreen() {
               </Text>
             )}
             <View style={styles.waitingActions}>
-              <AppButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
               <TouchableOpacity
                 style={[
                   styles.cancelRideBtn,
                   {
-                    backgroundColor: isCustomerLate ? colors.destructive + '20' : colors.muted,
+                    backgroundColor: isCustomerLate ? colors.destructiveHex + '20' : colors.muted,
                     borderColor: isCustomerLate ? colors.destructive : colors.border,
                   },
                 ]}
@@ -478,6 +505,7 @@ export default function DriverNavigateScreen() {
                 <Feather name="x" size={16} color={isCustomerLate ? colors.destructive : colors.foreground} />
                 <Text style={[styles.cancelRideBtnText, { color: isCustomerLate ? colors.destructive : colors.foreground }]}>Cancel Ride</Text>
               </TouchableOpacity>
+              <AppButton title="Start Journey" onPress={startJourney} style={{ flex: 1 }} size="lg" />
             </View>
           </View>
         )}
@@ -485,7 +513,7 @@ export default function DriverNavigateScreen() {
         {phase === 'inprogress' && (
           <View style={styles.waitingActions}>
             <TouchableOpacity
-              style={[styles.cancelRideBtn, { backgroundColor: colors.destructive + '15', borderColor: colors.destructive }]}
+              style={[styles.cancelRideBtn, { backgroundColor: colors.destructiveHex + '15', borderColor: colors.destructive }]}
               onPress={handleEmergencyEnd}
             >
               <Feather name="alert-octagon" size={16} color={colors.destructive} />
