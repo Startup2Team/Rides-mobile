@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -27,9 +26,10 @@ import {
   DRIVER_CTA_PILL_WIDTH,
   DRIVER_CTA_ROTATION_MS,
 } from '@/constants/homeDriverCta';
-import { STORAGE_KEYS } from '@/constants/storage';
 import { useColors } from '@/hooks/useColors';
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
+import type { DriverVerificationStatus } from '@/types';
 
 const AVATAR_SIZE = 44;
 const CTA_AVATAR_SIZE = 34;
@@ -45,8 +45,7 @@ export type HomeTopHeaderProps = {
   locationText: string;
   locLoading: boolean;
   profileInitial: string;
-  /** When true, show standard profile avatar and full location card (no driver CTA). */
-  isRegisteredDriver: boolean;
+  driverVerificationStatus: DriverVerificationStatus;
 };
 
 /** Shared caption size for CTA label and compact location line. */
@@ -61,7 +60,7 @@ export function HomeTopHeader({
   locationText,
   locLoading,
   profileInitial,
-  isRegisteredDriver,
+  driverVerificationStatus,
 }: HomeTopHeaderProps) {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
@@ -72,8 +71,15 @@ export function HomeTopHeader({
   const rotationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageIndexRef = useRef(0);
 
-  const ctaMessage = DRIVER_CTA_MESSAGES[messageIndex];
-  const showDriverCta = !isRegisteredDriver;
+  const ctaMessage = driverVerificationStatus === 'pending_review'
+    ? 'In Review'
+    : driverVerificationStatus === 'rejected'
+      ? 'Update application'
+      : driverVerificationStatus === 'approved'
+        ? 'Driver Mode'
+        : driverVerificationStatus === 'draft'
+          ? 'Continue application'
+          : DRIVER_CTA_MESSAGES[messageIndex];
   const headerLocationLine = formatHomeHeaderLocation(locationText, locLoading);
 
   const advanceMessageIndex = useCallback(() => {
@@ -112,8 +118,8 @@ export function HomeTopHeader({
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void AsyncStorage.getItem(STORAGE_KEYS.profileImage).then(uri => {
-        if (active) setProfileImage(uri);
+      void loadStoredProfileImage().then(stored => {
+        if (active) setProfileImage(stored.data);
       });
       return () => {
         active = false;
@@ -123,7 +129,7 @@ export function HomeTopHeader({
 
   useFocusEffect(
     useCallback(() => {
-      if (isRegisteredDriver) {
+      if (driverVerificationStatus !== 'not_started') {
         return undefined;
       }
 
@@ -135,7 +141,7 @@ export function HomeTopHeader({
           rotationTimerRef.current = null;
         }
       };
-    }, [isRegisteredDriver, rotateCtaMessage]),
+    }, [driverVerificationStatus, rotateCtaMessage]),
   );
 
   const renderAvatar = (size: number, embeddedInCta = false) => {
@@ -182,17 +188,14 @@ export function HomeTopHeader({
   };
 
   const handleDriverCtaPress = () => {
-    router.push('/driver-onboarding');
-  };
-
-  const handleProfilePress = () => {
-    router.push('/(tabs)/profile');
+    if (driverVerificationStatus === 'pending_review') router.push('/driver-submission-confirmation');
+    else if (driverVerificationStatus === 'approved') router.push('/(driver)');
+    else router.push('/driver-onboarding');
   };
 
   return (
     <View style={[styles.topBar, { paddingTop }]}>
-      {showDriverCta ? (
-        <Pressable
+      <Pressable
           onPress={handleDriverCtaPress}
           style={[
             styles.driverCtaPill,
@@ -204,7 +207,7 @@ export function HomeTopHeader({
           ]}
           accessibilityRole="button"
           accessibilityLabel={ctaMessage}
-          accessibilityHint="Opens driver onboarding"
+          accessibilityHint="Opens driver application or driver mode"
         >
           <View style={styles.ctaAvatarInset}>
             {renderAvatar(CTA_AVATAR_SIZE, true)}
@@ -222,23 +225,6 @@ export function HomeTopHeader({
             </Animated.Text>
           </View>
         </Pressable>
-      ) : (
-        <Pressable
-          onPress={handleProfilePress}
-          style={[
-            styles.profileOnlyBtn,
-            {
-              backgroundColor: colors.card,
-              shadowOpacity: isDark ? 0.35 : 0.2,
-            },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-        >
-          {renderAvatar(AVATAR_SIZE)}
-        </Pressable>
-      )}
-
       <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.card }]}>
         <View style={styles.locationRowCompact}>
           <Feather name="map-pin" size={16} color={colors.primary} />

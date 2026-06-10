@@ -13,12 +13,12 @@ export function VehicleTypeIcon({ type, selected = false }: VehicleTypeIconProps
   const dimensions = VEHICLE_CHIP_IMAGE_SIZE[type];
 
   return (
-    <View style={styles.wrap} accessibilityIgnoresInvertColor>
+    <View style={styles.wrap} accessibilityIgnoresInvertColors>
       <Image
         source={VEHICLE_MARKER_IMAGES[type]}
         style={[dimensions, selected ? styles.selected : styles.unselected]}
         contentFit="contain"
-        accessibilityIgnoresInvertColor
+        accessibilityIgnoresInvertColors
       />
     </View>
   );

@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -12,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
@@ -20,9 +19,8 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
-import { STORAGE_KEYS } from '@/constants/storage';
-
-const PROFILE_IMAGE_KEY = STORAGE_KEYS.profileImage;
+import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
 
 function MenuItem({
   icon,
@@ -79,12 +77,13 @@ export default function ProfileScreen() {
   const separatorColor = isDark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
   const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
+  const driverAction = getDriverApplicationAction(driverProfile);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      AsyncStorage.getItem(PROFILE_IMAGE_KEY).then(uri => {
-        if (active) setProfileImage(uri);
+      loadStoredProfileImage().then(stored => {
+        if (active) setProfileImage(stored.data);
       });
       return () => {
         active = false;
@@ -93,9 +92,7 @@ export default function ProfileScreen() {
   );
 
   const handleSwitchToDriver = () => {
-    if (!driverProfile) {
-      router.push('/driver-onboarding');
-    } else {
+    if (canAccessDriverMode(driverProfile)) {
       Alert.alert('Switch to Driver Mode', 'Switch to driver dashboard?', [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -106,7 +103,9 @@ export default function ProfileScreen() {
           },
         },
       ]);
+      return;
     }
+    router.push(driverAction.route);
   };
 
   const handleLogout = () => {
@@ -156,26 +155,26 @@ export default function ProfileScreen() {
         ) : null}
       </TouchableOpacity>
 
-      {!driverProfile && (
+      {!canAccessDriverMode(driverProfile) && (
         <TouchableOpacity
           style={[styles.driverBanner, { backgroundColor: cardFill }]}
           onPress={handleSwitchToDriver}
           activeOpacity={0.6}
         >
-          <View style={[styles.driverBannerIcon, { backgroundColor: colors.primaryHex + '22' }]}>
-            <Feather name="zap" size={20} color={colors.primary} />
+          <View style={styles.driverBannerIcon}>
+            <MaterialCommunityIcons name="steering" size={30} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.bannerTitle, { color: colors.foreground }]}>Join as Driver</Text>
+            <Text style={[styles.bannerTitle, { color: colors.foreground }]}>{driverAction.label}</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
-              Earn money driving on {APP_NAME}
+              {driverAction.label === 'In Review' ? 'Review usually takes 5–10 minutes' : `Earn money driving on ${APP_NAME}`}
             </Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
         </TouchableOpacity>
       )}
 
-      {driverProfile && (
+      {canAccessDriverMode(driverProfile) && (
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
           <MenuItem
             icon="navigation"
@@ -292,6 +291,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 20,
     paddingVertical: 16,
+    minHeight: 52,
     borderRadius: 14,
     gap: 14,
     ...Platform.select({
@@ -299,9 +299,7 @@ const styles = StyleSheet.create({
     }),
   },
   driverBannerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -15,7 +15,7 @@ export function VehicleMapMarker({ type, rotationDeg, style }: VehicleMapMarkerP
   const dimensions = VEHICLE_MAP_IMAGE_SIZE[type];
 
   return (
-    <View style={[styles.wrap, style]} accessibilityIgnoresInvertColor>
+    <View style={[styles.wrap, style]} accessibilityIgnoresInvertColors>
       <Image
         source={VEHICLE_MAP_MARKER_IMAGES[type]}
         style={[
@@ -23,7 +23,7 @@ export function VehicleMapMarker({ type, rotationDeg, style }: VehicleMapMarkerP
           rotationDeg != null ? { transform: [{ rotate: `${rotationDeg}deg` }] } : null,
         ]}
         contentFit="contain"
-        accessibilityIgnoresInvertColor
+        accessibilityIgnoresInvertColors
       />
     </View>
   );

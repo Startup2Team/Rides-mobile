@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchRoute, RouteResult } from '@/services/mapbox';
 import { Coords } from '@/types';
+import { reportOperationalFailure } from '@/observability/monitoring';
+import { isAbortedNetworkRequest, NetworkRequestError } from '@/services/networkRequest';
 
 interface UseRouteResult {
   route: RouteResult | null;
+  routeKey: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -11,7 +14,7 @@ interface UseRouteResult {
 const routeCache = new Map<string, RouteResult>();
 const MAX_ROUTE_CACHE_SIZE = 20;
 
-function getRouteKey(origin: Coords, destination: Coords) {
+export function getRouteKey(origin: Coords, destination: Coords) {
   return [
     origin.latitude.toFixed(4),
     origin.longitude.toFixed(4),
@@ -37,6 +40,7 @@ function cacheRoute(key: string, route: RouteResult) {
  */
 export function useRoute(origin: Coords | null, destination: Coords | null): UseRouteResult {
   const [route, setRoute] = useState<RouteResult | null>(null);
+  const [routeKey, setRouteKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastKey = useRef<string | null>(null);
@@ -45,6 +49,7 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     if (!origin || !destination) {
       // Clear route and reset key so next open re-fetches
       setRoute(null);
+      setRouteKey(null);
       lastKey.current = null;
       return;
     }
@@ -57,33 +62,47 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     const cachedRoute = routeCache.get(key);
     if (cachedRoute) {
       setRoute(cachedRoute);
+      setRouteKey(key);
       setLoading(false);
       setError(null);
       return;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setRoute(null);
+    setRouteKey(null);
 
-    fetchRoute(origin, destination)
+    fetchRoute(origin, destination, { signal: controller.signal })
       .then(result => {
         if (!cancelled) {
           cacheRoute(key, result);
           setRoute(result);
+          setRouteKey(key);
           setLoading(false);
         }
       })
       .catch(err => {
-        if (!cancelled) {
+        if (!cancelled && !isAbortedNetworkRequest(err)) {
           console.warn('[useRoute] fetch failed:', err?.message);
+          reportOperationalFailure('map.route.fetch', err, {
+            service: err instanceof NetworkRequestError ? err.service : 'mapbox',
+            operation: err instanceof NetworkRequestError ? err.operation : 'directions',
+            kind: err instanceof NetworkRequestError ? err.kind : 'unknown',
+            status: err instanceof NetworkRequestError ? err.status : undefined,
+            attempt: err instanceof NetworkRequestError ? err.attempt : undefined,
+          });
           setError(err instanceof Error ? err.message : 'Route fetch failed');
           setLoading(false);
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [
     origin?.latitude,
     origin?.longitude,
@@ -91,5 +110,5 @@ export function useRoute(origin: Coords | null, destination: Coords | null): Use
     destination?.longitude,
   ]);
 
-  return { route, loading, error };
+  return { route, routeKey, loading, error };
 }

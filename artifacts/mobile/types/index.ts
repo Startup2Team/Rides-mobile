@@ -1,5 +1,6 @@
 export type VehicleType = 'moto' | 'rifani' | 'cab' | 'fuso' | 'hilux';
 export type AppMode = 'customer' | 'driver';
+export type DriverVerificationStatus = 'not_started' | 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type LocationType = 'precise' | 'generic';
 
 export type RideStatus =
@@ -47,13 +48,30 @@ export interface User {
   createdAt: string;
 }
 
+export type PaymentProvider = 'mtn' | 'airtel' | 'cash';
+
+export interface PaymentMethod {
+  id: string;
+  provider: PaymentProvider;
+  label: string;
+  phoneNumber?: string;
+  isDefault: boolean;
+}
+
 export interface DriverProfile {
+  verificationStatus?: Exclude<DriverVerificationStatus, 'not_started'>;
   vehicleType: VehicleType;
   plateNumber: string;
   licenseNumber: string;
+  nationalId?: string;
+  licenseExpiryDate?: string;
+  insuranceExpiryDate?: string;
+  authorizationExpiryDate?: string;
   province: string;
   district: string;
   sector: string;
+  cell?: string;
+  village?: string;
   city?: string;
   momoCode: string;
   merchantCode?: string;
@@ -71,6 +89,7 @@ export interface DriverProfile {
   earningsTotal: number;
   passengerSeats?: number;
   loadCapacityKg?: number;
+  rejectionReason?: string;
 }
 
 export interface NegotiationMessage {
@@ -101,6 +120,7 @@ export interface Ride {
   customerName?: string;
   customerPhone?: string;
   driverId?: string;
+  driverName?: string;
   driver?: MockDriver;
   vehicleType: VehicleType;
   pickup: RideLocation;

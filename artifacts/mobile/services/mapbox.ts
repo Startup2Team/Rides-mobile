@@ -1,9 +1,15 @@
 import polyline from '@mapbox/polyline';
 import { Coords } from '@/types';
+import {
+  fetchWithResilience,
+  NetworkRequestError,
+  parseJsonResponse,
+} from '@/services/networkRequest';
 
 // pk.* tokens are public client tokens — safe to embed in the bundle.
 // process.env.EXPO_PUBLIC_* is inlined by Metro at build time from .env
 const TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
+export const MAPBOX_ROUTE_TIMEOUT_MS = 12_000;
 export interface RouteResult {
   coordinates: Coords[];
   distanceMeters: number;
@@ -13,8 +19,15 @@ export interface RouteResult {
 export async function fetchRoute(
   origin: Coords,
   destination: Coords,
+  options?: { signal?: AbortSignal },
 ): Promise<RouteResult> {
-  if (!TOKEN) throw new Error('EXPO_PUBLIC_MAPBOX_TOKEN is not set');
+  if (!TOKEN) {
+    throw new NetworkRequestError({
+      kind: 'configuration',
+      service: 'mapbox',
+      operation: 'directions',
+    });
+  }
 
   const url =
     `https://api.mapbox.com/directions/v5/mapbox/driving/` +
@@ -22,14 +35,29 @@ export async function fetchRoute(
     `${destination.longitude},${destination.latitude}` +
     `?geometries=polyline6&overview=full&access_token=${TOKEN}`;
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Mapbox Directions error ${res.status}: ${body}`);
-  }
+  const res = await fetchWithResilience(
+    url,
+    { signal: options?.signal },
+    {
+      service: 'mapbox',
+      operation: 'directions',
+      timeoutMs: MAPBOX_ROUTE_TIMEOUT_MS,
+      retries: 1,
+    },
+  );
 
-  const json = await res.json();
-  if (!json.routes?.length) throw new Error('No route found between these locations');
+  const json = await parseJsonResponse<{ routes?: {
+    geometry: string;
+    distance: number;
+    duration: number;
+  }[] }>(res, 'mapbox', 'directions');
+  if (!json.routes?.length) {
+    throw new NetworkRequestError({
+      kind: 'invalid-response',
+      service: 'mapbox',
+      operation: 'directions',
+    });
+  }
 
   const route = json.routes[0];
 
