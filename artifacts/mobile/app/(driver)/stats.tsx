@@ -4,8 +4,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import { useRide } from '@/context/RideContext';
+import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
+import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 
-function StatRow({ label, value, icon, color }: { label: string; value: string; icon: keyof typeof Feather.glyphMap; color?: string }) {
+const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
+
+function StatRow({
+  label,
+  value,
+  icon,
+  color,
+  note,
+}: {
+  label: string;
+  value: string;
+  icon: keyof typeof Feather.glyphMap;
+  color?: string;
+  note?: string;
+}) {
   const colors = useColors();
   const iconColor = color ?? colors.primaryHex;
   return (
@@ -13,7 +33,10 @@ function StatRow({ label, value, icon, color }: { label: string; value: string; 
       <View style={[styles.statIcon, { backgroundColor: iconColor + '20' }]}>
         <Feather name={icon} size={18} color={iconColor} />
       </View>
-      <Text style={[styles.statLabel, { color: colors.foreground }]}>{label}</Text>
+      <View style={styles.statLabelGroup}>
+        <Text style={[styles.statLabel, { color: colors.foreground }]}>{label}</Text>
+        {note ? <Text style={[styles.statNote, { color: colors.mutedForeground }]}>{note}</Text> : null}
+      </View>
       <Text style={[styles.statValue, { color: color ?? colors.foreground }]}>{value}</Text>
     </View>
   );
@@ -22,18 +45,41 @@ function StatRow({ label, value, icon, color }: { label: string; value: string; 
 export default function DriverStats() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { driverProfile } = useAuth();
+  const { user, driverProfile } = useAuth();
+  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
+  const { rideHistory, loadHistory } = useRide();
+  const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+  const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+
+  React.useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadRatingSummary() {
+      const stored = await loadStoredDriverRatings();
+      const summary = user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
+      if (!cancelled) setRatingSummary(summary);
+    }
+    void loadRatingSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const dp = driverProfile ?? {
     dailyRides: 0,
     completedRides: 0,
-    acceptanceRate: 95,
+    acceptanceRate: 0,
     dailyDeclines: 0,
     earningsTotal: 0,
   };
-  const todayGross = dp.dailyRides * 2800;
-  const platformFee = Math.round(todayGross * 0.15);
-  const todayPayout = todayGross - platformFee;
+
+  const dailyDecisionCount = dp.dailyRides + (dp.dailyDeclines ?? 0);
+  const acceptanceRateValue = dailyDecisionCount > 0 ? `${dp.acceptanceRate}%` : 'No data';
+  const acceptanceRateNote = dailyDecisionCount > 0 ? undefined : 'After your first ride decision';
+  const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
 
   return (
@@ -48,23 +94,54 @@ export default function DriverStats() {
     >
       <Text style={[styles.title, { color: colors.foreground }]}>Driver Statistics</Text>
 
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>RIDE PACKAGE</Text>
+        <StatRow
+          label="Active Plan"
+          value={isEntitlementLoading ? 'Checking...' : activePackage?.name ?? 'No active package'}
+          icon="layers"
+        />
+        <StatRow
+          label="Remaining Credits"
+          value={isEntitlementLoading ? 'Checking...' : String(rideCredits)}
+          icon="navigation"
+          color={rideCredits <= 10 ? colors.destructiveHex : colors.primaryHex}
+        />
+      </View>
+
       {/* Today */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
-        <StatRow label="Rides Completed" value={String(dp.dailyRides)} icon="navigation" />
+        <StatRow
+          label="Activity Earnings Today"
+          value={formatRwf(activitySummary.todayEarningsRwf)}
+          icon="dollar-sign"
+          color={colors.primaryHex}
+        />
+        <StatRow label="Rides Completed" value={String(activitySummary.completedRidesToday)} icon="navigation" />
         <StatRow label="Rides Declined" value={String(dp.dailyDeclines ?? 0)} icon="x" color={colors.destructiveHex} />
-        <StatRow label="Gross Earnings" value={`${todayGross.toLocaleString()} RWF`} icon="dollar-sign" color={colors.primaryHex} />
-        <StatRow label="Platform Fee" value={`-${platformFee.toLocaleString()} RWF`} icon="percent" />
-        <StatRow label="Today's Payout" value={`${todayPayout.toLocaleString()} RWF`} icon="credit-card" color={colors.primaryHex} />
-        <StatRow label="Payment Target" value={paymentTarget} icon="smartphone" />
+        <StatRow label="Mobile Money Details" value={paymentTarget} icon="smartphone" />
       </View>
 
       {/* Overall */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>ALL TIME</Text>
         <StatRow label="Total Rides" value={String(dp.completedRides)} icon="award" />
-        <StatRow label="Acceptance Rate" value={`${dp.acceptanceRate}%`} icon="check-circle" color={colors.primaryHex} />
-        <StatRow label="Total Earnings" value={`${(dp.earningsTotal ?? 0).toLocaleString()} RWF`} icon="trending-up" color={colors.primaryHex} />
+        <StatRow label="Rating" value={formatDriverRatingSummary(ratingSummary)} icon="star" color={colors.primaryHex} />
+        <StatRow
+          label="Acceptance Rate"
+          value={acceptanceRateValue}
+          icon="check-circle"
+          color={colors.primaryHex}
+          note={acceptanceRateNote}
+        />
+        <StatRow
+          label="Activity Earnings Total"
+          value={formatRwf(activitySummary.allTimeEarningsRwf)}
+          icon="trending-up"
+          color={colors.primaryHex}
+          note="From completed rides"
+        />
       </View>
 
       {/* Priority system */}
@@ -81,6 +158,14 @@ export default function DriverStats() {
               : `${10 - (dp.dailyDeclines ?? 0)} more declines before priority is reduced.`}
           </Text>
         </View>
+      </View>
+
+      {/* Earnings disclaimer */}
+      <View style={[styles.infoCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <Feather name="info" size={16} color={colors.mutedForeground} />
+        <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+          Activity Earnings reflect agreed fares from completed rides only. Customers pay drivers directly through Mobile Money or cash; Rides does not hold these funds.
+        </Text>
       </View>
 
       {/* Policy reminder */}
@@ -108,7 +193,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  statLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  statLabelGroup: { flex: 1 },
+  statLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+  statNote: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
   statValue: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   priorityRow: { padding: 16, gap: 12 },
   priorityBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 100 },

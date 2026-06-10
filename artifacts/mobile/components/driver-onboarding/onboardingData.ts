@@ -1,11 +1,12 @@
 import type { VehicleType } from '@/types';
 
-export const ONBOARDING_STEPS = ['Personal Info', 'Vehicle Info', 'Documents', 'Payment'];
+export const ONBOARDING_STEPS = ['Personal', 'Vehicle', 'Documents', 'Payment', 'Review'];
 
 export const DOCUMENTS = [
-  { key: 'license', label: "Driver's Licence", hint: 'Front and back faces — JPEG or PNG' },
-  { key: 'insurance', label: 'Vehicle Insurance document', hint: 'Front face required — JPEG, PNG or PDF' },
-  { key: 'authorization', label: 'Vehicle Authorization / Inspection certificate', hint: 'Front face required — JPEG, PNG or PDF' },
+  { key: 'license', label: "Driver's Licence", hint: 'Front and back images required - JPEG or PNG' },
+  { key: 'nationalId', label: 'National ID', hint: 'Front and back images required - JPEG or PNG' },
+  { key: 'insurance', label: 'Vehicle Insurance document', hint: 'Front image required - JPEG or PNG' },
+  { key: 'authorization', label: 'Vehicle Authorization / Inspection certificate', hint: 'Front and back images required - JPEG or PNG' },
 ] as const;
 
 export const VEHICLE_QUESTIONS: Record<VehicleType, { field: string; label: string; placeholder: string }[]> = {

@@ -108,7 +108,6 @@ export function useSavedLocationEditor({
       `Delete "${location.label}"?`,
       'This saved place will be removed from your list. This cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
@@ -116,6 +115,7 @@ export function useSavedLocationEditor({
             void performDeleteSavedLocation(location);
           },
         },
+        { text: 'Cancel', style: 'cancel' },
       ],
     );
   }, [performDeleteSavedLocation]);

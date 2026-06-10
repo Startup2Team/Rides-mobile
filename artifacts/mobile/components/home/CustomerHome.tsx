@@ -33,6 +33,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
 import { useToast } from '@/context/ToastContext';
+import { getDriverVerificationStatus } from '@/utils/driverVerification';
 import {
   formatReverseGeocodeAddress,
   getCoordDistance,
@@ -755,7 +756,7 @@ export default function CustomerHome() {
           locationText={currentLocationAddress}
           locLoading={locLoading}
           profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
-          isRegisteredDriver={Boolean(driverProfile)}
+          driverVerificationStatus={getDriverVerificationStatus(driverProfile)}
         />
       ) : null}
 

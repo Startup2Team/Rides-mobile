@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
+const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
+const driverRidePackageIdSchema = z.enum(['launch_starter', 'growth']);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',
@@ -49,12 +51,19 @@ export const paymentMethodsSchema = z.array(z.object({
 export const profileImageSchema = z.string();
 
 export const driverProfileSchema = z.object({
+  verificationStatus: driverVerificationStatusSchema.optional(),
   vehicleType: vehicleTypeSchema,
   plateNumber: z.string(),
   licenseNumber: z.string(),
+  nationalId: z.string().optional(),
+  licenseExpiryDate: z.string().optional(),
+  insuranceExpiryDate: z.string().optional(),
+  authorizationExpiryDate: z.string().optional(),
   province: z.string(),
   district: z.string(),
   sector: z.string(),
+  cell: z.string().optional(),
+  village: z.string().optional(),
   city: z.string().optional(),
   momoCode: z.string(),
   merchantCode: z.string().optional(),
@@ -72,7 +81,110 @@ export const driverProfileSchema = z.object({
   earningsTotal: z.number(),
   passengerSeats: z.number().optional(),
   loadCapacityKg: z.number().optional(),
+  rejectionReason: z.string().optional(),
 }).passthrough();
+
+const documentFacesSchema = z.tuple([z.string().nullable(), z.string().nullable()]);
+
+export const driverOnboardingDraftSchema = z.object({
+  form: z.object({
+    vehicleType: vehicleTypeSchema,
+    plateNumber: z.string(),
+    licenseNumber: z.string(),
+    nationalId: z.string(),
+    licenseExpiryDate: z.string(),
+    insuranceExpiryDate: z.string(),
+    authorizationExpiryDate: z.string(),
+    dob: z.string(),
+    province: z.string(),
+    district: z.string(),
+    sector: z.string(),
+    cell: z.string(),
+    village: z.string(),
+    momoProvider: z.enum(['mtn', 'airtel']),
+    momoCode: z.string(),
+    merchantCode: z.string(),
+    passengerSeats: z.string(),
+    loadCapacityKg: z.string(),
+  }),
+  docs: z.object({
+    license: documentFacesSchema,
+    nationalId: documentFacesSchema,
+    insurance: documentFacesSchema,
+    authorization: documentFacesSchema,
+  }),
+  selfieUri: z.string().nullable(),
+  acceptedTerms: z.boolean(),
+  step: z.number().int().min(0).max(4),
+  updatedAt: z.string(),
+});
+
+const packageActivationSchema = z.object({
+  id: z.string(),
+  packageId: driverRidePackageIdSchema,
+  activatedAt: z.string(),
+  pricePaidRwf: z.number().nonnegative(),
+  creditsGranted: z.number().int().positive(),
+  authority: z.enum(['local_prototype', 'backend']),
+});
+
+const driverPackagePurchaseStatusSchema = z.enum([
+  'idle',
+  'pending',
+  'processing',
+  'successful',
+  'failed',
+  'cancelled',
+  'expired',
+]);
+
+const driverPackagePurchaseSchema = z.object({
+  packageId: driverRidePackageIdSchema,
+  amount: z.number().nonnegative(),
+  provider: z.enum(['mtn', 'airtel']),
+  phoneNumber: z.string(),
+  transactionId: z.string(),
+  status: driverPackagePurchaseStatusSchema,
+  createdAt: z.string(),
+  completedAt: z.string().optional(),
+});
+
+const driverCreditTransactionSchema = z.object({
+  id: z.string(),
+  type: z.enum(['credit', 'debit']),
+  amount: z.number().int(),
+  createdAt: z.string(),
+  packageActivationId: z.string().optional(),
+  completedRideId: z.string().optional(),
+  idempotencyKey: z.string(),
+  authority: z.enum(['local_prototype', 'backend']),
+});
+
+const driverRatingSchema = z.object({
+  id: z.string(),
+  rideId: z.string(),
+  driverId: z.string(),
+  customerId: z.string().optional(),
+  stars: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  reviewText: z.string().optional(),
+  moderationStatus: z.enum(['pending', 'published', 'hidden', 'flagged']),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  idempotencyKey: z.string(),
+  authority: z.enum(['local_prototype', 'backend']),
+});
+
+export const driverRatingsSchema = z.array(driverRatingSchema);
+
+export const driverEntitlementSchema = z.object({
+  activePackageId: driverRidePackageIdSchema.nullable(),
+  remainingRideCredits: z.number().int().nonnegative(),
+  activations: z.array(packageActivationSchema),
+  creditTransactions: z.array(driverCreditTransactionSchema),
+  purchaseHistory: z.array(driverPackagePurchaseSchema),
+  updatedAt: z.string(),
+  authority: z.enum(['local_prototype', 'backend']),
+});
 
 const negotiationMessageSchema = z.object({
   id: z.string(),
@@ -105,6 +217,7 @@ export const rideSchema = z.object({
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
   driverId: z.string().optional(),
+  driverName: z.string().optional(),
   driver: mockDriverSchema.optional(),
   vehicleType: vehicleTypeSchema,
   pickup: rideLocationSchema,

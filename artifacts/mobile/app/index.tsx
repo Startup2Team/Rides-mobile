@@ -2,9 +2,10 @@ import { Redirect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { canAccessDriverMode } from '@/utils/driverVerification';
 
 export default function Index() {
-  const { user, isLoading } = useAuth();
+  const { user, driverProfile, isLoading } = useAuth();
   const colors = useColors();
 
   if (isLoading) {
@@ -16,6 +17,6 @@ export default function Index() {
   }
 
   if (!user) return <Redirect href="/(auth)/welcome" />;
-  if (user.mode === 'driver') return <Redirect href="/(driver)" />;
+  if (user.mode === 'driver' && canAccessDriverMode(driverProfile)) return <Redirect href="/(driver)" />;
   return <Redirect href="/(tabs)" />;
 }

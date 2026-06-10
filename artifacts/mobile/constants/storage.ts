@@ -3,6 +3,9 @@ export type StorageClassification = 'sensitive' | 'internal' | 'cacheable';
 export const STORAGE_KEYS = {
   user: '@rides_user',
   driverProfile: '@rides_driver_profile',
+  driverOnboardingDraft: '@rides_driver_onboarding_draft',
+  driverEntitlement: '@rides_driver_entitlement',
+  driverRatings: '@rides_driver_ratings',
   rideHistory: '@rides_history',
   profileImage: '@rides_profile_image',
   paymentMethods: '@rides_payment_methods',
@@ -18,6 +21,9 @@ export const STORAGE_CLASSIFICATION = {
   sensitive: [
     STORAGE_KEYS.user,
     STORAGE_KEYS.driverProfile,
+    STORAGE_KEYS.driverOnboardingDraft,
+    STORAGE_KEYS.driverEntitlement,
+    STORAGE_KEYS.driverRatings,
     STORAGE_KEYS.rideHistory,
     STORAGE_KEYS.profileImage,
     STORAGE_KEYS.paymentMethods,

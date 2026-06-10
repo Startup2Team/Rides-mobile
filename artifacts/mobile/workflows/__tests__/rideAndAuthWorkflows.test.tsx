@@ -155,7 +155,7 @@ function DriverRideWorkflow() {
       <Pressable onPress={() => ride.riderAcceptWithFare(5_000)}><Text>Accept fare</Text></Pressable>
       <Pressable onPress={ride.markArrived}><Text>Mark arrived</Text></Pressable>
       <Pressable onPress={ride.startJourney}><Text>Start journey</Text></Pressable>
-      <Pressable onPress={ride.completeRide}><Text>Complete ride</Text></Pressable>
+      <Pressable onPress={() => ride.completeRide('driver')}><Text>Complete ride</Text></Pressable>
     </View>
   );
 }
@@ -177,6 +177,26 @@ function AuthWorkflow() {
       <Text testID="auth-user">{auth.user?.name ?? 'signed-out'}</Text>
       <Text testID="auth-mode">{auth.user?.mode ?? 'none'}</Text>
       <Pressable onPress={() => void auth.login(user)}><Text>Login</Text></Pressable>
+      <Pressable onPress={() => void auth.saveDriverProfile({
+        vehicleType: 'moto',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: '1234567890123456',
+        province: 'City of Kigali',
+        district: 'Gasabo',
+        sector: 'Kacyiru',
+        momoCode: '250788000000',
+        momoProvider: 'mtn',
+        dob: '01/01/1990',
+        verificationStatus: 'approved',
+        isOnline: false,
+        isVerified: true,
+        acceptanceRate: 100,
+        completedRides: 0,
+        dailyRides: 0,
+        dailyDeclines: 0,
+        policyAccepted: true,
+        earningsTotal: 0,
+      })}><Text>Approve driver</Text></Pressable>
       <Pressable onPress={() => void auth.switchMode('driver')}><Text>Switch driver</Text></Pressable>
       <Pressable onPress={() => void auth.switchMode('customer')}><Text>Switch customer</Text></Pressable>
       <Pressable onPress={() => void auth.logout()}><Text>Logout</Text></Pressable>
@@ -252,6 +272,7 @@ describe('critical rendered ride and auth workflows', () => {
     await waitFor(() => expect(screen.getByTestId('auth-user').props.children).toBe('Test Customer'));
     expect(screen.getByTestId('auth-mode').props.children).toBe('customer');
 
+    fireEvent.press(screen.getByText('Approve driver'));
     fireEvent.press(screen.getByText('Switch driver'));
     await waitFor(() => expect(screen.getByTestId('auth-mode').props.children).toBe('driver'));
 

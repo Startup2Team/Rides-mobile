@@ -100,7 +100,6 @@ export default function PaymentMethodsScreen() {
       return;
     }
     Alert.alert('Remove method', `Remove ${method?.label}?`, [
-      { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         onPress: async () => {
@@ -108,6 +107,7 @@ export default function PaymentMethodsScreen() {
           showToast('Payment method removed', 'error');
         },
       },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 

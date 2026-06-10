@@ -6,7 +6,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import 'react-native-reanimated';
@@ -16,12 +16,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
+import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
+import { useAuth } from '@/context/AuthContext';
+import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -29,8 +32,16 @@ initializeMonitoring();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const pathname = usePathname();
+  const { driverProfile } = useAuth();
   useRideFlowNavigation();
   useDriverFlowNavigation();
+
+  useEffect(() => {
+    if (isProtectedDriverPath(pathname) && !canAccessDriverMode(driverProfile)) {
+      router.replace('/driver-submission-confirmation');
+    }
+  }, [driverProfile, pathname]);
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
@@ -44,6 +55,8 @@ function RootLayoutNav() {
       <Stack.Screen name="ride" options={{ animation: 'none' }} />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="driver-onboarding" />
+      <Stack.Screen name="driver-submission-confirmation" />
+      <Stack.Screen name="driver-packages" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />
       <Stack.Screen
@@ -93,17 +106,19 @@ export default function RootLayout() {
       >
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <RideProvider>
-              <ToastProvider>
-                <SavedLocationsProvider>
-                  <GestureHandlerRootView style={{ flex: 1 }}>
-                    <KeyboardProvider>
-                      <RootLayoutNav />
-                    </KeyboardProvider>
-                  </GestureHandlerRootView>
-                </SavedLocationsProvider>
-              </ToastProvider>
-            </RideProvider>
+            <DriverEntitlementProvider>
+              <RideProvider>
+                <ToastProvider>
+                  <SavedLocationsProvider>
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                      <KeyboardProvider>
+                        <RootLayoutNav />
+                      </KeyboardProvider>
+                    </GestureHandlerRootView>
+                  </SavedLocationsProvider>
+                </ToastProvider>
+              </RideProvider>
+            </DriverEntitlementProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
