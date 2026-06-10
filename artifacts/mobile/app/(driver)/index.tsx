@@ -81,7 +81,6 @@ export default function DriverDashboard() {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
-  const switchModeLabelOpacity = useRef(new Animated.Value(1)).current;
   const mapRef = useRef<MapView | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
 
@@ -239,52 +238,34 @@ export default function DriverDashboard() {
   ), []);
 
   const setSwitchModeSlideValue = useCallback((nextX: number) => {
-    const slideEnd = getSwitchModeSlideEnd();
-    const fadeDistance = Math.max(1, slideEnd * 0.35);
     switchModeAvatarSlide.setValue(nextX);
-    switchModeLabelOpacity.setValue(Math.max(0, 1 - (nextX / fadeDistance)));
-  }, [getSwitchModeSlideEnd, switchModeAvatarSlide, switchModeLabelOpacity]);
+  }, [switchModeAvatarSlide]);
 
   const animateSwitchAvatarToStart = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(switchModeAvatarSlide, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 8,
-        speed: 18,
-      }),
-      Animated.timing(switchModeLabelOpacity, {
-        toValue: 1,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [switchModeAvatarSlide, switchModeLabelOpacity]);
+    Animated.spring(switchModeAvatarSlide, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 8,
+      speed: 18,
+    }).start();
+  }, [switchModeAvatarSlide]);
 
   const handleSwitchToCustomer = useCallback(async () => {
     if (isSwitchingMode) return;
     setIsSwitchingMode(true);
-    Animated.parallel([
-      Animated.timing(switchModeAvatarSlide, {
-        toValue: getSwitchModeSlideEnd(),
-        duration: 240,
-        useNativeDriver: true,
-      }),
-      Animated.timing(switchModeLabelOpacity, {
-        toValue: 0,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    Animated.timing(switchModeAvatarSlide, {
+      toValue: getSwitchModeSlideEnd(),
+      duration: 240,
+      useNativeDriver: true,
+    }).start(() => {
       void (async () => {
         await switchMode('customer');
         router.replace('/(tabs)');
         switchModeAvatarSlide.setValue(0);
-        switchModeLabelOpacity.setValue(1);
         setIsSwitchingMode(false);
       })();
     });
-  }, [getSwitchModeSlideEnd, isSwitchingMode, switchMode, switchModeAvatarSlide, switchModeLabelOpacity]);
+  }, [getSwitchModeSlideEnd, isSwitchingMode, switchMode, switchModeAvatarSlide]);
 
   const handleSwitchModeCtaLayout = useCallback((event: LayoutChangeEvent) => {
     switchModeTrackWidthRef.current = event.nativeEvent.layout.width;
@@ -299,7 +280,6 @@ export default function DriverDashboard() {
       onPanResponderGrant: () => {
         if (isSwitchingMode) return;
         switchModeAvatarSlide.stopAnimation();
-        switchModeLabelOpacity.stopAnimation();
       },
       onPanResponderMove: (_, gestureState) => {
         if (isSwitchingMode) return;
@@ -330,9 +310,23 @@ export default function DriverDashboard() {
       isSwitchModeAvatarStart,
       setSwitchModeSlideValue,
       switchModeAvatarSlide,
-      switchModeLabelOpacity,
     ],
   );
+
+  const switchModeLabelMaskScale = typeof switchModeAvatarSlide.interpolate === 'function'
+    ? switchModeAvatarSlide.interpolate({
+      inputRange: [0, CTA_LABEL_SLOT_WIDTH],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    })
+    : 0;
+  const switchModeLabelMaskTranslateX = typeof switchModeAvatarSlide.interpolate === 'function'
+    ? switchModeAvatarSlide.interpolate({
+      inputRange: [0, CTA_LABEL_SLOT_WIDTH],
+      outputRange: [-CTA_LABEL_SLOT_WIDTH / 2, 0],
+      extrapolate: 'clamp',
+    })
+    : -CTA_LABEL_SLOT_WIDTH / 2;
 
   return (
     <View style={styles.root}>
@@ -432,12 +426,25 @@ export default function DriverDashboard() {
               <Animated.View
                 style={[
                   styles.switchModeLabelSlot,
-                  { width: CTA_LABEL_SLOT_WIDTH, opacity: switchModeLabelOpacity },
+                  { width: CTA_LABEL_SLOT_WIDTH },
                 ]}
+                pointerEvents="none"
               >
                 <Text style={[styles.switchModeQuickActionText, { color: colors.primaryForeground }]} numberOfLines={1}>
                   Slide to Customer
                 </Text>
+                <Animated.View
+                  style={[
+                    styles.switchModeLabelMask,
+                    {
+                      backgroundColor: colors.primary,
+                      transform: [
+                        { translateX: switchModeLabelMaskTranslateX },
+                        { scaleX: switchModeLabelMaskScale },
+                      ],
+                    },
+                  ]}
+                />
               </Animated.View>
             </View>
           </View>
@@ -665,6 +672,8 @@ const styles = StyleSheet.create({
     marginLeft: CTA_AVATAR_INSET,
     marginVertical: CTA_AVATAR_INSET,
     flexShrink: 0,
+    zIndex: 3,
+    elevation: 8,
   },
   switchModeAvatarFrame: {
     width: CTA_AVATAR_SIZE,
@@ -680,7 +689,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.28,
     shadowRadius: 3,
-    elevation: 4,
+    zIndex: 3,
+    elevation: 8,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
@@ -699,8 +709,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 0,
     paddingLeft: 3,
+    overflow: 'hidden',
+    position: 'relative',
+    zIndex: 1,
   },
-  switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
+  switchModeLabelMask: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: CTA_LABEL_SLOT_WIDTH,
+    zIndex: 2,
+  },
+  switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16, zIndex: 1 },
   statusDivider: { height: 1, marginVertical: 12 },
   activityTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 10 },
   activityGrid: {

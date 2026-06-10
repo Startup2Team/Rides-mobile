@@ -3,16 +3,19 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Animated as RNAnimated,
   Image,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  type LayoutChangeEvent,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
-import Animated, {
+import Reanimated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -26,6 +29,7 @@ import {
   DRIVER_CTA_PILL_WIDTH,
   DRIVER_CTA_ROTATION_MS,
 } from '@/constants/homeDriverCta';
+import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
@@ -38,6 +42,7 @@ const PILL_HEIGHT = BUTTON_HEIGHT.sm;
 const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
 const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
+const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const FADE_HALF_MS = DRIVER_CTA_FADE_MS / 2;
 
 export type HomeTopHeaderProps = {
@@ -46,6 +51,7 @@ export type HomeTopHeaderProps = {
   locLoading: boolean;
   profileInitial: string;
   driverVerificationStatus: DriverVerificationStatus;
+  canSwitchToDriverMode: boolean;
 };
 
 /** Shared caption size for CTA label and compact location line. */
@@ -61,22 +67,29 @@ export function HomeTopHeader({
   locLoading,
   profileInitial,
   driverVerificationStatus,
+  canSwitchToDriverMode,
 }: HomeTopHeaderProps) {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
+  const { switchMode } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [messageIndex, setMessageIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const messageOpacity = useSharedValue(1);
   const rotationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageIndexRef = useRef(0);
+  const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
+  const switchModeAvatarSlide = useRef(new RNAnimated.Value(0)).current;
 
   const ctaMessage = driverVerificationStatus === 'pending_review'
     ? 'In Review'
     : driverVerificationStatus === 'rejected'
       ? 'Update application'
-      : driverVerificationStatus === 'approved'
-        ? 'Driver Mode'
+      : canSwitchToDriverMode
+        ? 'Slide to Driver'
+        : driverVerificationStatus === 'approved'
+          ? 'Driver Mode'
         : driverVerificationStatus === 'draft'
           ? 'Continue application'
           : DRIVER_CTA_MESSAGES[messageIndex];
@@ -121,10 +134,12 @@ export function HomeTopHeader({
       void loadStoredProfileImage().then(stored => {
         if (active) setProfileImage(stored.data);
       });
+      switchModeAvatarSlide.setValue(0);
+      setIsSwitchingMode(false);
       return () => {
         active = false;
       };
-    }, []),
+    }, [switchModeAvatarSlide]),
   );
 
   useFocusEffect(
@@ -193,9 +208,177 @@ export function HomeTopHeader({
     else router.push('/driver-onboarding');
   };
 
+  const getSwitchModeSlideEnd = useCallback(() => (
+    Math.max(
+      0,
+      switchModeTrackWidthRef.current - CTA_AVATAR_SIZE - (CTA_AVATAR_INSET * 2) - CTA_PILL_PADDING_RIGHT,
+    )
+  ), []);
+
+  const isSwitchModeAvatarStart = useCallback((locationX: number | undefined) => (
+    typeof locationX === 'number' && locationX >= 0 && locationX <= CTA_AVATAR_INSET + CTA_AVATAR_SIZE
+  ), []);
+
+  const setSwitchModeSlideValue = useCallback((nextX: number) => {
+    switchModeAvatarSlide.setValue(nextX);
+  }, [switchModeAvatarSlide]);
+
+  const animateSwitchAvatarToStart = useCallback(() => {
+    RNAnimated.spring(switchModeAvatarSlide, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 8,
+      speed: 18,
+    }).start();
+  }, [switchModeAvatarSlide]);
+
+  const handleSwitchToDriver = useCallback(async () => {
+    if (isSwitchingMode || !canSwitchToDriverMode) return;
+    setIsSwitchingMode(true);
+    RNAnimated.timing(switchModeAvatarSlide, {
+      toValue: getSwitchModeSlideEnd(),
+      duration: 240,
+      useNativeDriver: true,
+    }).start(() => {
+      void (async () => {
+        try {
+          await switchMode('driver');
+          router.replace('/(driver)');
+        } catch {
+          switchModeAvatarSlide.setValue(0);
+          setIsSwitchingMode(false);
+        }
+      })();
+    });
+  }, [canSwitchToDriverMode, getSwitchModeSlideEnd, isSwitchingMode, switchMode, switchModeAvatarSlide]);
+
+  const handleSwitchModeCtaLayout = useCallback((event: LayoutChangeEvent) => {
+    switchModeTrackWidthRef.current = event.nativeEvent.layout.width;
+  }, []);
+
+  const switchModePanResponder = React.useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: event =>
+        canSwitchToDriverMode && !isSwitchingMode && isSwitchModeAvatarStart(event.nativeEvent.locationX),
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        canSwitchToDriverMode &&
+        !isSwitchingMode &&
+        Math.abs(gestureState.dx) > 2 &&
+        Math.abs(gestureState.dx) >= Math.abs(gestureState.dy),
+      onPanResponderGrant: () => {
+        if (isSwitchingMode) return;
+        switchModeAvatarSlide.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (isSwitchingMode) return;
+        const slideEnd = getSwitchModeSlideEnd();
+        const nextX = Math.min(slideEnd, Math.max(0, gestureState.dx));
+        setSwitchModeSlideValue(nextX);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (isSwitchingMode) return;
+        const slideEnd = getSwitchModeSlideEnd();
+        const threshold = slideEnd * CTA_SLIDE_THRESHOLD_RATIO;
+        if (gestureState.dx >= threshold) {
+          void handleSwitchToDriver();
+          return;
+        }
+        animateSwitchAvatarToStart();
+      },
+      onPanResponderTerminate: () => {
+        if (!isSwitchingMode) animateSwitchAvatarToStart();
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+    [
+      animateSwitchAvatarToStart,
+      canSwitchToDriverMode,
+      getSwitchModeSlideEnd,
+      handleSwitchToDriver,
+      isSwitchingMode,
+      isSwitchModeAvatarStart,
+      setSwitchModeSlideValue,
+      switchModeAvatarSlide,
+    ],
+  );
+
+  const switchModeLabelMaskScale = typeof switchModeAvatarSlide.interpolate === 'function'
+    ? switchModeAvatarSlide.interpolate({
+      inputRange: [0, CTA_LABEL_SLOT_WIDTH],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    })
+    : 0;
+  const switchModeLabelMaskTranslateX = typeof switchModeAvatarSlide.interpolate === 'function'
+    ? switchModeAvatarSlide.interpolate({
+      inputRange: [0, CTA_LABEL_SLOT_WIDTH],
+      outputRange: [-CTA_LABEL_SLOT_WIDTH / 2, 0],
+      extrapolate: 'clamp',
+    })
+    : -CTA_LABEL_SLOT_WIDTH / 2;
+
   return (
     <View style={[styles.topBar, { paddingTop }]}>
-      <Pressable
+      {canSwitchToDriverMode ? (
+        <View
+          style={[
+            styles.driverCtaPill,
+            {
+              width: DRIVER_CTA_PILL_WIDTH,
+              backgroundColor: colors.primary,
+              shadowOpacity: isDark ? 0.4 : 0.22,
+            },
+          ]}
+          onLayout={handleSwitchModeCtaLayout}
+          accessibilityRole="button"
+          accessibilityLabel="Slide to switch to driver mode"
+          accessibilityHint="Double tap to switch to driver mode"
+          accessibilityActions={[{ name: 'activate', label: 'Switch to driver mode' }]}
+          onAccessibilityAction={event => {
+            if (event.nativeEvent.actionName === 'activate') void handleSwitchToDriver();
+          }}
+          onAccessibilityTap={() => void handleSwitchToDriver()}
+          {...switchModePanResponder.panHandlers}
+        >
+          <View
+            style={styles.ctaAvatarInset}
+            testID="driver-mode-avatar-drag-handle"
+          >
+            <RNAnimated.View
+              style={[
+                styles.ctaAvatarSlideFrame,
+                { transform: [{ translateX: switchModeAvatarSlide }] },
+              ]}
+            >
+              {renderAvatar(CTA_AVATAR_SIZE, true)}
+            </RNAnimated.View>
+          </View>
+          <RNAnimated.View
+            style={[
+              styles.ctaLabelSlot,
+              { width: CTA_LABEL_SLOT_WIDTH },
+            ]}
+            pointerEvents="none"
+          >
+            <Text style={[styles.ctaLabel, { color: colors.primaryForeground }]} numberOfLines={1}>
+              {ctaMessage}
+            </Text>
+            <RNAnimated.View
+              style={[
+                styles.ctaLabelMask,
+                {
+                  backgroundColor: colors.primary,
+                  transform: [
+                    { translateX: switchModeLabelMaskTranslateX },
+                    { scaleX: switchModeLabelMaskScale },
+                  ],
+                },
+              ]}
+            />
+          </RNAnimated.View>
+        </View>
+      ) : (
+        <Pressable
           onPress={handleDriverCtaPress}
           style={[
             styles.driverCtaPill,
@@ -213,7 +396,7 @@ export function HomeTopHeader({
             {renderAvatar(CTA_AVATAR_SIZE, true)}
           </View>
           <View style={[styles.ctaLabelSlot, { width: CTA_LABEL_SLOT_WIDTH }]}>
-            <Animated.Text
+            <Reanimated.Text
               style={[
                 styles.ctaLabel,
                 ctaLabelAnimatedStyle,
@@ -222,9 +405,10 @@ export function HomeTopHeader({
               numberOfLines={1}
             >
               {ctaMessage}
-            </Animated.Text>
+            </Reanimated.Text>
           </View>
         </Pressable>
+      )}
       <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.card }]}>
         <View style={styles.locationRowCompact}>
           <Feather name="map-pin" size={16} color={colors.primary} />
@@ -289,6 +473,12 @@ const styles = StyleSheet.create({
     marginLeft: CTA_AVATAR_INSET,
     marginVertical: CTA_AVATAR_INSET,
     flexShrink: 0,
+    zIndex: 3,
+    elevation: 8,
+  },
+  ctaAvatarSlideFrame: {
+    zIndex: 3,
+    elevation: 8,
   },
   /** Thin white ring + shadow so the photo reads on the blue CTA. */
   ctaAvatarFrame: {
@@ -300,7 +490,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.28,
     shadowRadius: 3,
-    elevation: 4,
+    zIndex: 3,
+    elevation: 8,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
@@ -310,9 +501,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 0,
     paddingLeft: 3,
+    overflow: 'hidden',
+    position: 'relative',
+    zIndex: 1,
+  },
+  ctaLabelMask: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: CTA_LABEL_SLOT_WIDTH,
+    zIndex: 2,
   },
   ctaLabel: {
     ...HEADER_CAPTION_TEXT,
+    zIndex: 1,
   },
   profileOnlyBtn: {
     width: AVATAR_SIZE,
