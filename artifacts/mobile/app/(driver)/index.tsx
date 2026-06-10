@@ -4,10 +4,13 @@ import * as Location from 'expo-location';
 import {
   Animated,
   Image,
+  Linking,
   PanResponder,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  type ImageSourcePropType,
   type LayoutChangeEvent,
   TouchableOpacity,
   useColorScheme,
@@ -21,15 +24,18 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
-import { KIGALI_CENTER, VEHICLE_LABELS } from '@/types';
+import { KIGALI_CENTER } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
+import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
@@ -40,14 +46,41 @@ const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
 const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
+const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
+const MAP_VISIBLE_LATITUDE_OFFSET = 0.0035;
+const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
 
-const DASHBOARD_CAMPAIGNS = [
+function visibleDriverRegion(location: typeof KIGALI_CENTER) {
+  return {
+    ...location,
+    latitude: location.latitude + MAP_VISIBLE_LATITUDE_OFFSET,
+    ...MAP_VISIBLE_DELTA,
+  };
+}
+
+const DASHBOARD_ADS: Array<{
+  id: string;
+  accessibilityLabel: string;
+  image: ImageSourcePropType;
+  url: string;
+}> = [
   {
-    id: 'growth-package',
-    eyebrow: 'Growth Package',
-    title: '75 Ride Credits',
-    description: 'Most Popular Plan',
-    icon: 'trending-up' as const,
+    id: 'airtel',
+    accessibilityLabel: 'Open Airtel advertisement',
+    image: require('../../assets/ads/airtel.png'),
+    url: 'https://www.airtel.co.rw/',
+  },
+  {
+    id: 'bk',
+    accessibilityLabel: 'Open Bank of Kigali advertisement',
+    image: require('../../assets/ads/bk.png'),
+    url: 'https://www.bk.rw/',
+  },
+  {
+    id: 'jibu',
+    accessibilityLabel: 'Open Jibu advertisement',
+    image: require('../../assets/ads/jibu.png'),
+    url: 'https://jibuco.com/',
   },
 ];
 
@@ -71,8 +104,13 @@ export default function DriverDashboard() {
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  const [adCarouselWidth, setAdCarouselWidth] = useState(0);
 
   const timers = useScreenTimerManager();
+  const adCarouselRef = useRef<ScrollView>(null);
+  const autoAdIndexRef = useRef(0);
+  const adLoopResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSessionRef = useRef(timers.currentSession());
   const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -94,10 +132,15 @@ export default function DriverDashboard() {
       void loadStoredProfileImage().then(stored => {
         if (active) setProfileImage(stored.data);
       });
+      void loadStoredDriverRatings().then(stored => {
+        if (active) {
+          setRatingSummary(user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY);
+        }
+      });
       return () => {
         active = false;
       };
-    }, []),
+    }, [user?.id]),
   );
 
   // Location
@@ -130,9 +173,34 @@ export default function DriverDashboard() {
     void loadHistory();
   }, [loadHistory]);
 
+  useEffect(() => {
+    if (adCarouselWidth <= 0 || DASHBOARD_ADS.length <= 1) return;
+
+    const interval = setInterval(() => {
+      const nextIndex = autoAdIndexRef.current + 1;
+      autoAdIndexRef.current = nextIndex;
+      adCarouselRef.current?.scrollTo({ x: nextIndex * adCarouselWidth, animated: true });
+
+      if (nextIndex === DASHBOARD_ADS.length) {
+        adLoopResetRef.current = setTimeout(() => {
+          autoAdIndexRef.current = 0;
+          adCarouselRef.current?.scrollTo({ x: 0, animated: false });
+        }, 450);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      if (adLoopResetRef.current) {
+        clearTimeout(adLoopResetRef.current);
+        adLoopResetRef.current = null;
+      }
+    };
+  }, [adCarouselWidth]);
+
   // Recenter on location
   useEffect(() => {
-    mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
+    mapRef.current?.animateToRegion(visibleDriverRegion(driverLocation), 350);
   }, [driverLocation]);
 
   // Ride request simulation
@@ -205,11 +273,19 @@ export default function DriverDashboard() {
   };
 
   const recenterMap = () => {
-    mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
+    mapRef.current?.animateToRegion(visibleDriverRegion(driverLocation), 350);
   };
 
   const cycleMapType = () => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
+  };
+
+  const openAdWebsite = (url: string) => {
+    void Linking.openURL(url);
+  };
+
+  const onAdCarouselLayout = (event: LayoutChangeEvent) => {
+    setAdCarouselWidth(event.nativeEvent.layout.width);
   };
 
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
@@ -218,9 +294,11 @@ export default function DriverDashboard() {
   const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
   const remainingCreditsText = isEntitlementLoading ? '-' : String(activitySummary.remainingRideCredits);
   const statusLabel = isOnline ? 'Online' : 'Offline';
-  const statusDescription = isOnline ? 'Accepting rides' : 'Not accepting rides';
+  const isVerified = driverProfile?.isVerified === true;
+  const ratingLabel = ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
+    ? ratingSummary.averageRating.toFixed(1)
+    : '0.0';
   const showNoCreditsWarning = !isEntitlementLoading && activitySummary.remainingRideCredits === 0;
-  const activeCampaign = DASHBOARD_CAMPAIGNS[0];
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
     ? 'Unknown - to be negotiated'
@@ -337,7 +415,7 @@ export default function DriverDashboard() {
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
         mapType={mapType}
-        initialRegion={{ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }}
+        initialRegion={visibleDriverRegion(driverLocation)}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
         showsUserLocation={false}
         showsMyLocationButton={false}
@@ -372,15 +450,33 @@ export default function DriverDashboard() {
       <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : 0 }]}>
         <View style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]} testID="driver-status-card">
           <View style={styles.statusHeader}>
-            <View style={styles.statusIdentity}>
-              <Text style={[styles.statusGreeting, { color: colors.foreground }]}>Hi, {driverName}</Text>
-              <Text style={[styles.statusVehicle, { color: colors.mutedForeground }]}>
-                {driverProfile ? VEHICLE_LABELS[driverProfile.vehicleType] : 'Driver'} Driver
-              </Text>
-              <View style={styles.statusPillRow}>
-                <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.primary }]} />
-                <Text style={[styles.statusText, { color: colors.foreground }]}>{statusLabel}</Text>
-                <Text style={[styles.statusMutedText, { color: colors.mutedForeground }]}>{statusDescription}</Text>
+            <View style={styles.statusIdentity} testID="driver-identity-block">
+              <View style={styles.greetingRow}>
+                <Text style={[styles.statusGreeting, { color: colors.foreground }]} numberOfLines={1}>
+                  Hi, {driverName}
+                </Text>
+                {isVerified && (
+                  <VerifiedBadge
+                    testID="driver-verified-badge"
+                  />
+                )}
+              </View>
+              <View style={styles.identityChipRow}>
+                <View style={styles.identityItem}>
+                  <VehicleMapMarker compact type={activeVehicleType} />
+                </View>
+                <View style={[styles.metadataSeparator, { backgroundColor: colors.border }]} />
+                <View style={styles.identityItem}>
+                  <MaterialCommunityIcons name="star" size={14} color={colors.star} />
+                  <Text style={[styles.identityChipText, { color: colors.foreground }]}>{ratingLabel}</Text>
+                </View>
+                <View style={[styles.metadataSeparator, { backgroundColor: colors.border }]} />
+                <View style={styles.identityItem} testID="driver-header-status">
+                  <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.primaryHex }]} />
+                  <Text style={[styles.identityChipText, { color: isOnline ? colors.successHex : colors.mutedForeground }]}>
+                    {statusLabel}
+                  </Text>
+                </View>
               </View>
             </View>
             <View
@@ -449,27 +545,25 @@ export default function DriverDashboard() {
             </View>
           </View>
 
-          <View style={[styles.statusDivider, { backgroundColor: colors.border }]} />
-
           <Text style={[styles.activityTitle, { color: colors.foreground }]}>Today's Activity</Text>
           <View style={styles.activityGrid}>
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
                 {formatRwf(activitySummary.todayEarningsRwf)}
               </Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Activity Earnings</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings</Text>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
                 {activitySummary.completedRidesToday}
               </Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Completed Today</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Trips</Text>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>{remainingCreditsText}</Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Ride Credits</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Credits Left</Text>
             </View>
           </View>
 
@@ -495,25 +589,33 @@ export default function DriverDashboard() {
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.campaignCard, { backgroundColor: cardFill }]}
-          onPress={() => router.push('/driver-packages')}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.campaignIcon, { backgroundColor: colors.primaryHex + '16' }]}>
-            <Feather name={activeCampaign.icon} size={20} color={colors.primary} />
-          </View>
-          <View style={styles.campaignCopy}>
-            <Text style={[styles.campaignEyebrow, { color: colors.primary }]}>{activeCampaign.eyebrow}</Text>
-            <Text style={[styles.campaignTitle, { color: colors.foreground }]}>{activeCampaign.title}</Text>
-            <Text style={[styles.campaignDescription, { color: colors.mutedForeground }]}>{activeCampaign.description}</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        <View style={[styles.adCard, { backgroundColor: cardFill }]} onLayout={onAdCarouselLayout}>
+          <ScrollView
+            ref={adCarouselRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.adCarousel}
+          >
+            {[...DASHBOARD_ADS, DASHBOARD_ADS[0]].map((ad, index) => (
+              <TouchableOpacity
+                key={`${ad.id}-${index}`}
+                style={[styles.adSlide, { width: Math.max(adCarouselWidth, 1) }]}
+                onPress={() => openAdWebsite(ad.url)}
+                activeOpacity={0.9}
+                accessibilityRole="link"
+                accessibilityLabel={ad.accessibilityLabel}
+                testID={index < DASHBOARD_ADS.length ? `dashboard-ad-${ad.id}` : 'dashboard-ad-loop-first'}
+              >
+                <Image source={ad.image} style={styles.adImage} resizeMode="cover" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
 
       {/* ── Map controls ── */}
-      <View style={[styles.mapControls, { bottom: tabBarHeight + 16 }]}>
+      <View style={[styles.mapControls, { bottom: tabBarHeight - 8 }]}>
         <TouchableOpacity style={[styles.mapBtn, { backgroundColor: cardFill }]} onPress={cycleMapType} activeOpacity={0.8}>
           <MaterialCommunityIcons
             name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
@@ -644,14 +746,21 @@ const styles = StyleSheet.create({
     elevation: 8,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  statusHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  statusIdentity: { flex: 1, minWidth: 0 },
-  statusGreeting: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  statusVehicle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  statusPillRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' },
-  onlineDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  statusText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  statusMutedText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  statusIdentity: { flex: 1, minWidth: 0, height: BUTTON_HEIGHT.sm, justifyContent: 'space-between' },
+  statusGreeting: { fontSize: 17, lineHeight: 20, fontFamily: 'Inter_700Bold', flexShrink: 1 },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 },
+  identityChipRow: { height: 22, flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
+  identityItem: {
+    height: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  identityChipText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  metadataSeparator: { width: 3, height: 3, borderRadius: 2, flexShrink: 0 },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
   switchModeQuickAction: {
     height: BUTTON_HEIGHT.sm,
     borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm),
@@ -723,14 +832,14 @@ const styles = StyleSheet.create({
   },
   switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16, zIndex: 1 },
   statusDivider: { height: 1, marginVertical: 12 },
-  activityTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 10 },
+  activityTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 18, marginBottom: 10 },
   activityGrid: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   activityStat: { flex: 1, alignItems: 'center', minWidth: 0 },
-  activityValue: { fontSize: 15, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  activityValue: { fontSize: 19, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   activityLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 3 },
   activityDivider: { width: 1, height: 30 },
   noCreditsPanel: {
@@ -754,27 +863,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewPackagesButtonText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  campaignCard: {
-    marginTop: 8,
-    marginHorizontal: 8,
+  adCard: {
+    marginTop: 4,
+    marginHorizontal: 6,
     borderRadius: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    height: 128,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 8,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  campaignIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  campaignCopy: { flex: 1, minWidth: 0 },
-  campaignEyebrow: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
-  campaignTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', marginTop: 1 },
-  campaignDescription: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 },
+  adCarousel: { flex: 1 },
+  adSlide: { height: 128 },
+  adImage: { width: '100%', height: '100%' },
 
   // Map controls
   mapControls: { position: 'absolute', right: 16, gap: 10 },
