@@ -15,6 +15,7 @@ import {
 } from '@/persistence/authPersistence';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
+import { canAccessDriverMode } from '@/utils/driverVerification';
 
 interface AuthContextType {
   user: User | null;
@@ -24,7 +25,9 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
+  setDriverOnline: (isOnline: boolean) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
+  recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,7 +37,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const userRef = useRef(user);
+  const driverProfileRef = useRef(driverProfile);
   userRef.current = user;
+  driverProfileRef.current = driverProfile;
 
   useEffect(() => {
     loadStoredData();
@@ -78,11 +83,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveStoredDriverProfile(profile);
   }, []);
 
+  const setDriverOnline = useCallback(async (isOnline: boolean) => {
+    const prev = driverProfileRef.current;
+    if (!prev || prev.isOnline === isOnline) return;
+    const updated: DriverProfile = { ...prev, isOnline };
+    setDriverProfile(updated);
+    await saveStoredDriverProfile(updated);
+  }, []);
+
   const switchMode = useCallback(async (mode: AppMode) => {
     if (!userRef.current) return;
+    if (mode === 'driver' && !canAccessDriverMode(driverProfileRef.current)) return;
     const updated = { ...userRef.current, mode };
     setUser(updated);
     await saveStoredUser(updated);
+  }, []);
+
+  const recordCompletedRide = useCallback(async (agreedFare?: number | null) => {
+    const prev = driverProfileRef.current;
+    if (!prev) return;
+    const completedRides = (prev.completedRides ?? 0) + 1;
+    const dailyRides = (prev.dailyRides ?? 0) + 1;
+    const completedFare = typeof agreedFare === 'number' && Number.isFinite(agreedFare)
+      ? Math.max(0, agreedFare)
+      : 0;
+    const earningsTotal = (prev.earningsTotal ?? 0) + completedFare;
+    const totalDecisions = dailyRides + (prev.dailyDeclines ?? 0);
+    const acceptanceRate = totalDecisions > 0
+      ? Math.round((dailyRides / totalDecisions) * 100)
+      : prev.acceptanceRate;
+    const updated: DriverProfile = { ...prev, completedRides, dailyRides, earningsTotal, acceptanceRate };
+    setDriverProfile(updated);
+    await saveStoredDriverProfile(updated);
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
@@ -93,13 +125,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     updateUser,
     saveDriverProfile,
+    setDriverOnline,
     switchMode,
+    recordCompletedRide,
   }), [
     driverProfile,
     isLoading,
     login,
     logout,
+    recordCompletedRide,
     saveDriverProfile,
+    setDriverOnline,
     switchMode,
     updateUser,
     user,

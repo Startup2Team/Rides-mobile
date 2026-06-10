@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import DriverOnboarding from '@/app/driver-onboarding';
 
 jest.mock('react-native', () => {
@@ -108,6 +108,14 @@ jest.mock('@/components/driver-onboarding/RequirementsSection', () => ({
   },
 }));
 
+jest.mock('@/components/driver-onboarding/ReviewSubmissionSection', () => ({
+  ReviewSubmissionSection: () => {
+    const React = require('react');
+    const { Text } = require('react-native');
+    return <Text>Review Application</Text>;
+  },
+}));
+
 jest.mock('@/hooks/driver-onboarding/useDriverDocumentUpload', () => {
   const { INITIAL_DRIVER_DOCUMENTS } = require('@/hooks/driver-onboarding/onboardingTypes');
   return {
@@ -134,9 +142,10 @@ describe('driver onboarding rendered validation workflow', () => {
     jest.restoreAllMocks();
   });
 
-  test('blocks progression and renders required personal-information errors', () => {
+  test('blocks progression and renders required personal-information errors', async () => {
     render(<DriverOnboarding />);
 
+    await waitFor(() => expect(screen.getByTestId('onboarding-step').props.children).toBe(0));
     expect(screen.getByTestId('onboarding-step').props.children).toBe(0);
     fireEvent.press(screen.getByText('Continue'));
 

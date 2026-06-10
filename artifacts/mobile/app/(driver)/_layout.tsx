@@ -1,16 +1,19 @@
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/context/AuthContext';
+import { canAccessDriverMode } from '@/utils/driverVerification';
 
 function NativeDriverTabs() {
   return (
-    <NativeTabs>
+    <NativeTabs disableTransparentOnScrollEdge>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'car', selected: 'car.fill' }} />
         <Label>Dashboard</Label>
@@ -85,6 +88,8 @@ function ClassicDriverTabs() {
 }
 
 export default function DriverTabLayout() {
+  const { driverProfile } = useAuth();
+  if (!canAccessDriverMode(driverProfile)) return <Redirect href="/driver-submission-confirmation" />;
   if (isLiquidGlassAvailable()) return <NativeDriverTabs />;
   return <ClassicDriverTabs />;
 }

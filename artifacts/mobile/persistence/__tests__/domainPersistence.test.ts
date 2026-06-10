@@ -12,6 +12,16 @@ import {
   loadStoredSavedLocations,
   saveStoredSavedLocations,
 } from '../savedLocationsPersistence';
+import {
+  loadStoredDriverOnboardingDraft,
+  removeStoredDriverOnboardingDraft,
+  saveStoredDriverOnboardingDraft,
+} from '../driverOnboardingPersistence';
+import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM } from '@/hooks/driver-onboarding/onboardingTypes';
+import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { buildDriverRatingIdempotencyKey, type DriverRating } from '@/domain/driverWallet';
+import { loadStoredDriverEntitlement, saveStoredDriverEntitlement } from '../driverEntitlementPersistence';
+import { buildLocalDriverRating, loadStoredDriverRatings, saveDriverRatingOnce } from '../driverRatingPersistence';
 import { loadVersionedStorage, saveVersionedStorage } from '../versionedStorage';
 import { rideHistorySchema } from '../storageSchemas';
 import type { DriverProfile, SavedLocation, User } from '@/types';
@@ -52,6 +62,19 @@ const savedLocation: SavedLocation = {
   latitude: -1.94,
   longitude: 30.06,
   locationType: 'precise',
+};
+
+const driverRating: DriverRating = {
+  id: 'rating:ride-1:driver-1',
+  rideId: 'ride-1',
+  driverId: 'driver-1',
+  customerId: 'customer-1',
+  stars: 5,
+  reviewText: 'Careful driver',
+  moderationStatus: 'published',
+  createdAt: '2026-06-08T10:00:00.000Z',
+  idempotencyKey: buildDriverRatingIdempotencyKey('ride-1'),
+  authority: 'local_prototype',
 };
 
 describe('domain persistence validation', () => {
@@ -107,6 +130,67 @@ describe('domain persistence validation', () => {
     await expect(loadStoredSavedLocations()).resolves.toEqual({
       data: [savedLocation],
       source: 'current',
+    });
+  });
+
+  test('persists and removes a driver onboarding draft', async () => {
+    const draft = {
+      form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalId: '1199080012345678' },
+      docs: INITIAL_DRIVER_DOCUMENTS,
+      selfieUri: 'file:///selfie.jpg',
+      acceptedTerms: false,
+      step: 2,
+      updatedAt: '2026-06-07T12:00:00.000Z',
+    };
+    await saveStoredDriverOnboardingDraft(draft);
+    await expect(loadStoredDriverOnboardingDraft()).resolves.toEqual({ data: draft, source: 'current' });
+    await removeStoredDriverOnboardingDraft();
+    await expect(loadStoredDriverOnboardingDraft()).resolves.toEqual({ data: null, source: 'missing' });
+  });
+
+  test('persists driver ride entitlement and credit ledger securely', async () => {
+    const entitlement = activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'growth').entitlement;
+    await saveStoredDriverEntitlement(entitlement);
+    await expect(loadStoredDriverEntitlement()).resolves.toEqual({ data: entitlement, source: 'current' });
+    await expect(AsyncStorage.getItem(STORAGE_KEYS.driverEntitlement)).resolves.toBeNull();
+  });
+
+  test('saves a local driver rating securely', async () => {
+    const rating = buildLocalDriverRating({
+      comment: ' Careful driver ',
+      customerId: 'customer-1',
+      driverId: 'driver-1',
+      now: '2026-06-08T10:00:00.000Z',
+      rideId: 'ride-1',
+      stars: 5,
+    });
+
+    await expect(saveDriverRatingOnce(rating)).resolves.toEqual({ rating, saved: true });
+    await expect(loadStoredDriverRatings()).resolves.toEqual({ data: [rating], source: 'current' });
+    await expect(AsyncStorage.getItem(STORAGE_KEYS.driverRatings)).resolves.toBeNull();
+    expect(rating).toMatchObject({
+      rideId: 'ride-1',
+      driverId: 'driver-1',
+      customerId: 'customer-1',
+      stars: 5,
+      reviewText: 'Careful driver',
+      createdAt: '2026-06-08T10:00:00.000Z',
+    });
+  });
+
+  test('does not save duplicate ratings for the same completed ride', async () => {
+    await expect(saveDriverRatingOnce(driverRating)).resolves.toEqual({ rating: driverRating, saved: true });
+
+    const duplicate = {
+      ...driverRating,
+      id: 'rating:ride-1:driver-1:duplicate',
+      stars: 1,
+      reviewText: 'Duplicate',
+    } satisfies DriverRating;
+
+    await expect(saveDriverRatingOnce(duplicate)).resolves.toEqual({ rating: driverRating, saved: false });
+    await expect(loadStoredDriverRatings()).resolves.toMatchObject({
+      data: [driverRating],
     });
   });
 });

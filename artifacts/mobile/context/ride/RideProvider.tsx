@@ -49,10 +49,12 @@ import {
   NEGOTIATION_RESPONSE_DELAY_MS,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
+import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
 export function RideProvider({ children }: { children: React.ReactNode }) {
+  const driverEntitlement = useOptionalDriverEntitlement();
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [cancelledSearchDraft, setCancelledSearchDraft] = useState<BookingFormDraft | null>(null);
   const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
@@ -283,21 +285,39 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }, JOURNEY_TRACKING_INTERVAL_MS);
   }, [timers]);
 
-  const completeRide = useCallback(() => {
+  const completeRide = useCallback((
+    source: 'customer' | 'driver' = 'customer',
+    driverIdentity?: { driverId?: string; driverName?: string; vehicleType?: VehicleType },
+  ) => {
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
     setCurrentRide(prev => {
       if (!prev) return null;
-      const completed = { ...prev, status: 'completed' as RideStatus, completedAt: new Date().toISOString() };
+      const driverOwnedFields = source === 'driver' && driverIdentity?.driverId
+        ? {
+            driverId: driverIdentity.driverId,
+            ...(driverIdentity.driverName ? { driverName: driverIdentity.driverName } : {}),
+            ...(driverIdentity.vehicleType ? { vehicleType: driverIdentity.vehicleType } : {}),
+          }
+        : {};
+      const completed = {
+        ...prev,
+        ...driverOwnedFields,
+        status: 'completed' as RideStatus,
+        completedAt: new Date().toISOString(),
+      };
       setRideHistory(hist => [completed, ...hist]);
       void appendRideHistory(completed).catch(error => {
         reportOperationalFailure('ride.history.persist', error, { status: completed.status });
       });
+      if (source === 'driver') {
+        void driverEntitlement?.deductCreditForCompletedRide(completed.id);
+      }
       return null;
     });
     setDriverLocation(null);
-  }, [timers]);
+  }, [driverEntitlement, timers]);
 
   const acceptRideRequest = useCallback(() => {
     if (!pendingRequestRef.current) return;
