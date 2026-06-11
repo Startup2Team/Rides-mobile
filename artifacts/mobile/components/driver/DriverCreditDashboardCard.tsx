@@ -29,16 +29,16 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
 
   if (progress.remaining === 0) {
     return (
-      <View style={[styles.zeroCard, { backgroundColor: cardFill, borderColor: colors.destructiveHex + '45' }]}>
-        <View style={[styles.zeroIcon, { backgroundColor: colors.destructiveHex + '14' }]}>
-          <Feather name="alert-circle" size={18} color={colors.destructive} />
+      <View style={[styles.zeroCard, { backgroundColor: cardFill, borderColor: colors.successHex + '45' }]}>
+        <View style={[styles.zeroIcon, { backgroundColor: colors.successHex + '14' }]}>
+          <Feather name="layers" size={17} color={colors.success} />
         </View>
         <View style={styles.content}>
           <Text style={[styles.title, { color: colors.foreground }]}>No ride credits</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{message}</Text>
         </View>
         <TouchableOpacity style={[styles.action, { backgroundColor: colors.primary }]} onPress={onViewPackages} activeOpacity={0.8}>
-          <Text style={styles.actionText}>View Packages</Text>
+          <Text style={[styles.actionText, { color: colors.primaryForeground }]}>View Packages</Text>
         </TouchableOpacity>
       </View>
     );
@@ -82,17 +82,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 16,
     borderWidth: 1,
-    padding: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  zeroIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  zeroIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
   title: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   description: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, marginTop: 2 },
-  action: { paddingHorizontal: 12, height: 34, borderRadius: 17, justifyContent: 'center' },
-  actionText: { color: '#fff', fontSize: 11, fontFamily: 'Inter_700Bold' },
+  action: { paddingHorizontal: 10, height: 30, borderRadius: 15, justifyContent: 'center' },
+  actionText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
   progressCard: { marginTop: 8, borderRadius: 16, padding: 12, gap: 9 },
   progressHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eyebrow: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.6 },
