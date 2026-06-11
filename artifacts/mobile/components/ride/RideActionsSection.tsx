@@ -5,7 +5,7 @@ import type { useColors } from '@/hooks/useColors';
 
 export function RideActionsSection({
   colors, isArrived, isArriving, isInProgress, onCall, onCancelArrived, onCancelArriving,
-  onComplete, onEmergency, onSOS, onStartJourney,
+  onEmergency, onSOS,
 }: {
   colors: ReturnType<typeof useColors>;
   isArrived: boolean;
@@ -14,11 +14,13 @@ export function RideActionsSection({
   onCall: () => void;
   onCancelArrived: () => void;
   onCancelArriving: () => void;
-  onComplete: () => void;
   onEmergency: () => void;
   onSOS: () => void;
-  onStartJourney: () => void;
 }) {
+  // The driver drives the state machine (start/complete on their screen); the
+  // customer's screen only watches and is moved forward by WebSocket events.
+  // So the customer has no Start Journey / Complete Ride buttons — only Cancel,
+  // Call, and the in-ride safety controls.
   return (
     <View style={styles.actions}>
       {isArriving && <>
@@ -28,12 +30,10 @@ export function RideActionsSection({
       {isArrived && <>
         <AppButton title="Cancel Ride" icon="x" variant="dangerPlain" size="sm" labelFontSize={14} onPress={onCancelArrived} style={styles.wide} />
         <AppButton title="Call" icon="phone" variant="call" size="sm" labelFontSize={14} onPress={onCall} style={styles.wide} />
-        <AppButton title="Start Journey" size="sm" labelFontSize={14} onPress={onStartJourney} style={styles.wide} />
       </>}
       {isInProgress && <>
         <TouchableOpacity style={[styles.sos, { backgroundColor: colors.destructive }]} onPress={onSOS} accessibilityLabel="Emergency SOS" accessibilityRole="button"><Text style={styles.sosText}>SOS</Text></TouchableOpacity>
-        <AppButton title="Emergency" icon="alert-octagon" variant="dangerPlain" size="sm" iconOnly onPress={onEmergency} accessibilityLabel="Report emergency" />
-        <AppButton title="Complete Ride" onPress={onComplete} style={styles.wide} />
+        <AppButton title="Emergency" icon="alert-octagon" variant="dangerPlain" size="sm" onPress={onEmergency} accessibilityLabel="Report emergency" style={styles.wide} />
       </>}
     </View>
   );

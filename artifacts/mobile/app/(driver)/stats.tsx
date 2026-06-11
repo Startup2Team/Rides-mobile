@@ -10,6 +10,14 @@ import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
+import {
+  getDailyEarnings,
+  getWeeklyEarnings,
+  getDriverStats,
+  type DailyEarnings,
+  type WeeklyEarnings,
+  type DriverStats,
+} from '@/services/driverRides';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -50,10 +58,28 @@ export default function DriverStats() {
   const { rideHistory, loadHistory } = useRide();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  // Authoritative figures from the backend (earnings + lifetime stats). Local
+  // values are kept only as a fallback while these load or if the call fails.
+  const [daily, setDaily] = React.useState<DailyEarnings | null>(null);
+  const [weekly, setWeekly] = React.useState<WeeklyEarnings | null>(null);
+  const [serverStats, setServerStats] = React.useState<DriverStats | null>(null);
 
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [d, w, s] = await Promise.all([getDailyEarnings(), getWeeklyEarnings(), getDriverStats()]);
+        if (!cancelled) { setDaily(d); setWeekly(w); setServerStats(s); }
+      } catch {
+        // Offline / not yet a driver — fall back to local values below.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -113,9 +139,15 @@ export default function DriverStats() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
         <StatRow
-          label="Activity Earnings Today"
-          value={formatRwf(activitySummary.todayEarningsRwf)}
+          label="Earnings Today"
+          value={formatRwf(daily?.total_rwf ?? activitySummary.todayEarningsRwf)}
           icon="dollar-sign"
+          color={colors.primaryHex}
+        />
+        <StatRow
+          label="Earnings (last 7 days)"
+          value={formatRwf(weekly?.total_rwf ?? activitySummary.allTimeEarningsRwf)}
+          icon="trending-up"
           color={colors.primaryHex}
         />
         <StatRow label="Rides Completed" value={String(activitySummary.completedRidesToday)} icon="navigation" />
@@ -126,21 +158,20 @@ export default function DriverStats() {
       {/* Overall */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>ALL TIME</Text>
-        <StatRow label="Total Rides" value={String(dp.completedRides)} icon="award" />
+        <StatRow label="Total Rides" value={String(serverStats?.total_rides ?? dp.completedRides)} icon="award" />
         <StatRow label="Rating" value={formatDriverRatingSummary(ratingSummary)} icon="star" color={colors.primaryHex} />
         <StatRow
           label="Acceptance Rate"
-          value={acceptanceRateValue}
+          value={serverStats ? `${Math.round(serverStats.acceptance_rate)}%` : acceptanceRateValue}
           icon="check-circle"
           color={colors.primaryHex}
-          note={acceptanceRateNote}
+          note={serverStats ? undefined : acceptanceRateNote}
         />
         <StatRow
-          label="Activity Earnings Total"
-          value={formatRwf(activitySummary.allTimeEarningsRwf)}
-          icon="trending-up"
+          label="Completion Rate"
+          value={serverStats ? `${Math.round(serverStats.completion_rate)}%` : 'No data'}
+          icon="flag"
           color={colors.primaryHex}
-          note="From completed rides"
         />
       </View>
 

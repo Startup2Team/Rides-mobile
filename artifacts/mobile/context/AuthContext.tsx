@@ -16,6 +16,8 @@ import {
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
+import { api } from '@/services/api';
+import { API_TO_LEGACY_VEHICLE } from '@/services/vehicleTypes';
 
 interface AuthContextType {
   user: User | null;
@@ -28,6 +30,8 @@ interface AuthContextType {
   setDriverOnline: (isOnline: boolean) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
+  /** Hydrate the driver profile from the backend (GET /driver/profile). */
+  loadDriverProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -83,6 +87,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveStoredDriverProfile(profile);
   }, []);
 
+  // Pulls the authoritative driver profile from the backend and maps it to the
+  // local shape. Called after login (driver roles) so an approved driver like
+  // pac is recognised without re-running onboarding. No-op for customer-only
+  // accounts (the endpoint 403/404s and we keep the existing state).
+  const loadDriverProfile = useCallback(async () => {
+    try {
+      const { data: d } = await api.get('/driver/profile');
+      const apiType = String(d?.transport_type ?? '') as keyof typeof API_TO_LEGACY_VEHICLE;
+      const approved = d?.approval_status === 'APPROVED';
+      const verificationStatus: DriverProfile['verificationStatus'] = approved
+        ? 'approved'
+        : d?.approval_status === 'REJECTED'
+          ? 'rejected'
+          : 'pending_review';
+      const profile: DriverProfile = {
+        verificationStatus,
+        vehicleType: (API_TO_LEGACY_VEHICLE[apiType] ?? 'moto') as DriverProfile['vehicleType'],
+        plateNumber: d?.vehicle_plate ?? '',
+        licenseNumber: d?.license_number ?? '',
+        province: d?.province ?? '',
+        district: d?.district ?? '',
+        sector: d?.sector ?? '',
+        city: d?.city ?? '',
+        momoCode: d?.momo_pay_code ?? '',
+        momoProvider: d?.momo_provider === 'airtel' ? 'airtel' : 'mtn',
+        dob: d?.date_of_birth ?? '',
+        isOnline: d?.is_online ?? false,
+        isVerified: approved,
+        acceptanceRate: Number(d?.acceptance_rate ?? 0),
+        completedRides: Number(d?.total_rides ?? 0),
+        dailyRides: 0,
+        dailyDeclines: 0,
+        policyAccepted: d?.policy_accepted ?? false,
+        earningsTotal: 0,
+      };
+      setDriverProfile(profile);
+      await saveStoredDriverProfile(profile);
+    } catch {
+      // Customer-only account or offline — keep existing state.
+    }
+  }, []);
+
   const setDriverOnline = useCallback(async (isOnline: boolean) => {
     const prev = driverProfileRef.current;
     if (!prev || prev.isOnline === isOnline) return;
@@ -128,9 +174,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setDriverOnline,
     switchMode,
     recordCompletedRide,
+    loadDriverProfile,
   }), [
     driverProfile,
     isLoading,
+    loadDriverProfile,
     login,
     logout,
     recordCompletedRide,

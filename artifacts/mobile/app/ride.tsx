@@ -17,7 +17,6 @@ import { useRideActions } from '@/hooks/ride/useRideActions';
 import { useRideStatus } from '@/hooks/ride/useRideStatus';
 import { DriverInfoCard } from '@/components/ride/DriverInfoCard';
 import { RideActionsSection } from '@/components/ride/RideActionsSection';
-import { RideCompleteModal } from '@/components/ride/RideCompleteModal';
 import { RideHeader } from '@/components/ride/RideHeader';
 import { RideStatusSection } from '@/components/ride/RideStatusSection';
 import {
@@ -86,7 +85,7 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
+  const { currentRide, driverLocation, cancelRide } = useRide();
   const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
@@ -106,15 +105,11 @@ export default function RideScreen() {
   const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
     useRideStatus(currentRide);
   const {
-    completeModalVisible,
-    confirmCompleteRide,
     handleCallDriver,
     handleCancelArrived,
     handleCancelArriving,
-    handleComplete,
     handleEmergencyEnd,
     handleSOS,
-    hideCompleteModal,
   } = useRideActions({ cancelRide, currentRide, showToast });
 
   const { route: driverToPickupRoute } = useRoute(
@@ -127,7 +122,7 @@ export default function RideScreen() {
 
   const liveDriverCoords = useDriverTracking({
     enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
-    routeCoordinates: driverNavigationRoute,
+    target: driverLocation,
     stepCount: isArriving ? 10 : 24,
   });
 
@@ -368,15 +363,15 @@ export default function RideScreen() {
         mapType={mapType}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
-        {mapDriverLocation && (
+        {mapDriverLocation ? (
           <Marker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <VehicleMapMarker
               type={currentRide.vehicleType}
               rotationDeg={vehicleRotationDeg}
             />
           </Marker>
-        )}
-        {!isInProgress && pickupPinCoordinate && (
+        ) : null}
+        {!isInProgress && pickupPinCoordinate ? (
           <Marker
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -385,8 +380,8 @@ export default function RideScreen() {
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
-        )}
-        {(isArrived || isInProgress) && destinationPinCoordinate && (
+        ) : null}
+        {(isArrived || isInProgress) && destinationPinCoordinate ? (
           <Marker
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -395,7 +390,7 @@ export default function RideScreen() {
           >
             <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
-        )}
+        ) : null}
         {isArriving && remainingDriverToPickupRoute ? (
           <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
         ) : null}
@@ -480,14 +475,10 @@ export default function RideScreen() {
           onCall={handleCallDriver}
           onCancelArrived={handleCancelArrived}
           onCancelArriving={handleCancelArriving}
-          onComplete={handleComplete}
           onEmergency={handleEmergencyEnd}
           onSOS={handleSOS}
-          onStartJourney={startJourney}
         />
       </View>
-
-      <RideCompleteModal colors={colors} visible={completeModalVisible} onClose={hideCompleteModal} onConfirm={confirmCompleteRide} />
     </View>
   );
 }

@@ -11,6 +11,9 @@ const PROACTIVE_REFRESH_S = 90;
 export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 15000,
+  // ngrok's free tier serves an HTML interstitial to unrecognised clients;
+  // this header tells it to pass the request straight through to the backend.
+  headers: { 'ngrok-skip-browser-warning': 'true' },
 });
 
 // ── JWT expiry helpers ────────────────────────────────────────────────────────

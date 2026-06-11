@@ -10,17 +10,20 @@ import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useNegotiationActions } from '@/hooks/negotiation/useNegotiationActions';
 import { useNegotiationState } from '@/hooks/negotiation/useNegotiationState';
+import { useMinFare } from '@/hooks/negotiation/useMinFare';
 
 export default function NegotiationScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, counterOffer, acceptDriverOffer, declineDriverOffer } = useRide();
   const state = useNegotiationState(currentRide);
+  const minFare = useMinFare(currentRide?.vehicleType);
   const actions = useNegotiationActions({
     canCounter: state.canCounter,
     counterOffer,
     currentRide,
     declineDriverOffer,
+    minFare,
     offerText: state.offerText,
     setCounterLoading: state.setCounterLoading,
     setOfferText: state.setOfferText,
@@ -60,6 +63,7 @@ export default function NegotiationScreen() {
       <NegotiationInputDock
         acceptDriverOffer={acceptDriverOffer}
         actionPanelOffset={state.actionPanelOffset}
+        canAccept={state.canAccept}
         canCounter={state.canCounter}
         counterLoading={state.counterLoading}
         customerLimitReached={state.customerLimitReached}

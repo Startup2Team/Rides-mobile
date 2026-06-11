@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AppButton } from '@/components/AppButton';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
+import { useMinFare } from '@/hooks/negotiation/useMinFare';
 import { NegotiationMessage, VEHICLE_LABELS } from '@/types';
 
 const MAX_OFFERS = 3;
@@ -103,9 +104,20 @@ export default function DriverNegotiationScreen() {
   const canSendOffer = !driverLimitReached;
   const suggestedFare = currentRide?.suggestedFare ?? 0;
   const acceptAmount = lastCustomerOffer?.amount;
+  const minFare = useMinFare(currentRide?.vehicleType);
+  // Accept only when the latest offer is the customer's AND it meets the
+  // minimum fare — otherwise accepting would 400 with BELOW_MIN_FARE.
+  const canAccept =
+    currentRide?.status === 'negotiating' &&
+    lastOffer?.sender === 'customer' &&
+    (minFare === 0 || (acceptAmount ?? 0) >= minFare);
 
   const sendOffer = (amount: number) => {
     if (!amount || amount <= 0 || !canSendOffer) return;
+    if (minFare > 0 && amount < minFare) {
+      Alert.alert('Fare too low', `The minimum fare for this ride is ${minFare.toLocaleString()} RWF.`);
+      return;
+    }
     setOfferText('');
     sendDriverOffer(amount);
   };
@@ -133,6 +145,10 @@ export default function DriverNegotiationScreen() {
     const amount = parseInt(manualAmount.replace(/\D/g, ''), 10);
     if (isNaN(amount) || amount <= 0) {
       setManualError('Please enter a valid amount');
+      return;
+    }
+    if (minFare > 0 && amount < minFare) {
+      setManualError(`Minimum fare is ${minFare.toLocaleString()} RWF`);
       return;
     }
     setShowManualModal(false);
@@ -274,7 +290,7 @@ export default function DriverNegotiationScreen() {
             variant="primary"
             size="sm"
             onPress={() => setShowAcceptModal(true)}
-            disabled={!acceptAmount}
+            disabled={!canAccept}
             style={styles.actionFlexPrimary}
           />
         </View>

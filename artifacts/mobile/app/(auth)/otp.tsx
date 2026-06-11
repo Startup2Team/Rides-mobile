@@ -31,7 +31,7 @@ export default function OTPScreen() {
     phone: string; name: string; email: string; mode: string; length?: string; dev_otp?: string;
   }>();
   const normalizedPhone = normalizePhoneParam(phone);
-  const { login } = useAuth();
+  const { login, loadDriverProfile } = useAuth();
 
   const otpLength = length === '4' ? 4 : 6;
   const [code, setCode] = useState<string[]>(Array(otpLength).fill(''));
@@ -145,6 +145,11 @@ export default function OTPScreen() {
         isDriver: authData.role_state !== 'CUSTOMER_ONLY',
         createdAt: new Date().toISOString(),
       });
+      // Driver accounts: hydrate the approved profile from the backend so the
+      // app recognises them as a rider instead of restarting onboarding.
+      if (authData.role_state !== 'CUSTOMER_ONLY') {
+        await loadDriverProfile();
+      }
       router.replace(authData.role_state === 'CUSTOMER_ONLY' ? '/(tabs)' : '/(driver)');
     } catch (err: any) {
       const backendMsg = err?.response?.data?.error?.message;

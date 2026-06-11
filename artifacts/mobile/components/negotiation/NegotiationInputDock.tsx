@@ -12,6 +12,7 @@ import { styles } from './negotiationStyles';
 export function NegotiationInputDock({
   acceptDriverOffer,
   actionPanelOffset,
+  canAccept,
   canCounter,
   counterLoading,
   customerLimitReached,
@@ -30,6 +31,7 @@ export function NegotiationInputDock({
 }: {
   acceptDriverOffer: () => void;
   actionPanelOffset: number;
+  canAccept: boolean;
   canCounter: boolean;
   counterLoading: boolean;
   customerLimitReached: boolean;
@@ -118,7 +120,7 @@ export function NegotiationInputDock({
               size="sm"
               compact
               onPress={() => setShowAcceptModal(true)}
-              disabled={!lastDriverOffer}
+              disabled={!canAccept}
               style={styles.actionFlexPrimary}
             />
           </View>
