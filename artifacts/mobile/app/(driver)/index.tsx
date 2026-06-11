@@ -47,13 +47,11 @@ const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
-const MAP_VISIBLE_LATITUDE_OFFSET = 0.0035;
 const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
 
 function visibleDriverRegion(location: typeof KIGALI_CENTER) {
   return {
     ...location,
-    latitude: location.latitude + MAP_VISIBLE_LATITUDE_OFFSET,
     ...MAP_VISIBLE_DELTA,
   };
 }
