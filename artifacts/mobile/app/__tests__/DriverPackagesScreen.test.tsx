@@ -79,6 +79,18 @@ jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
 }));
 
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { BlurView: (props: object) => <View {...props} /> };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { LinearGradient: (props: object) => <View {...props} /> };
+});
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -181,7 +193,7 @@ describe('DriverPackagesScreen', () => {
     expect(screen.getByText('Credits Added: 75')).toBeTruthy();
   });
 
-  test('shows purchase history from entitlement data', () => {
+  test('keeps purchase history off the package page', () => {
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
       activePackageId: 'growth',
@@ -212,11 +224,20 @@ describe('DriverPackagesScreen', () => {
 
     render(<DriverPackagesScreen />);
 
-    expect(screen.getByText('Purchase history')).toBeTruthy();
-    expect(screen.getAllByText('Growth Package').length).toBeGreaterThan(1);
-    expect(screen.getByText('Successful')).toBeTruthy();
-    expect(screen.getByText('Failed')).toBeTruthy();
-    expect(screen.getAllByText('2,000 RWF').length).toBeGreaterThan(1);
+    expect(screen.queryByText('Purchase history')).toBeNull();
+    expect(screen.queryByText('Successful')).toBeNull();
+    expect(screen.queryByText('Failed')).toBeNull();
+  });
+
+  test('shows launch package as free now', () => {
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('FREE NOW')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Review Free Plan'));
+
+    expect(screen.getAllByText('FREE NOW').length).toBeGreaterThan(1);
+    expect(screen.getByText('No payment is required for this launch package now. It may become a paid package later.')).toBeTruthy();
   });
 
   test('user-facing package copy avoids misleading payment platform terms', () => {

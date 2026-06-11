@@ -10,6 +10,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  type ImageSourcePropType,
   type LayoutChangeEvent,
   TouchableOpacity,
   useColorScheme,
@@ -44,6 +45,18 @@ const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const FADE_HALF_MS = DRIVER_CTA_FADE_MS / 2;
+const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
+  require('../assets/images/dashboard/verified_badge.png'),
+  require('../assets/ads/dashboard/airtel.jpg'),
+  require('../assets/ads/dashboard/bk.jpg'),
+  require('../assets/ads/dashboard/jibu.jpg'),
+];
+
+function prefetchImageSource(source: ImageSourcePropType) {
+  if (typeof Image.resolveAssetSource !== 'function' || typeof Image.prefetch !== 'function') return;
+  const uri = Image.resolveAssetSource(source)?.uri;
+  if (uri) void Image.prefetch(uri).catch(() => {});
+}
 
 export type HomeTopHeaderProps = {
   paddingTop: number;
@@ -71,8 +84,8 @@ export function HomeTopHeader({
 }: HomeTopHeaderProps) {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
-  const { switchMode } = useAuth();
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const { driverProfile, switchMode } = useAuth();
+  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
   const [messageIndex, setMessageIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
@@ -128,18 +141,27 @@ export function HomeTopHeader({
     };
   }, []);
 
+  useEffect(() => {
+    if (!canSwitchToDriverMode) return;
+    DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
+  }, [canSwitchToDriverMode]);
+
+  useEffect(() => {
+    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
+  }, [driverProfile?.profileImage]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data);
+        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
       });
       switchModeAvatarSlide.setValue(0);
       setIsSwitchingMode(false);
       return () => {
         active = false;
       };
-    }, [switchModeAvatarSlide]),
+    }, [driverProfile?.profileImage, switchModeAvatarSlide]),
   );
 
   useFocusEffect(

@@ -65,22 +65,32 @@ const DASHBOARD_ADS: Array<{
   {
     id: 'airtel',
     accessibilityLabel: 'Open Airtel advertisement',
-    image: require('../../assets/ads/airtel.png'),
+    image: require('../../assets/ads/dashboard/airtel.jpg'),
     url: 'https://www.airtel.co.rw/',
   },
   {
     id: 'bk',
     accessibilityLabel: 'Open Bank of Kigali advertisement',
-    image: require('../../assets/ads/bk.png'),
+    image: require('../../assets/ads/dashboard/bk.jpg'),
     url: 'https://www.bk.rw/',
   },
   {
     id: 'jibu',
     accessibilityLabel: 'Open Jibu advertisement',
-    image: require('../../assets/ads/jibu.png'),
+    image: require('../../assets/ads/dashboard/jibu.jpg'),
     url: 'https://jibuco.com/',
   },
 ];
+const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
+  require('../../assets/images/dashboard/verified_badge.png'),
+  ...DASHBOARD_ADS.map(ad => ad.image),
+];
+
+function prefetchImageSource(source: ImageSourcePropType) {
+  if (typeof Image.resolveAssetSource !== 'function' || typeof Image.prefetch !== 'function') return;
+  const uri = Image.resolveAssetSource(source)?.uri;
+  if (uri) void Image.prefetch(uri).catch(() => {});
+}
 
 export default function DriverDashboard() {
   const colors = useColors();
@@ -101,7 +111,7 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
   const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
@@ -125,11 +135,19 @@ export default function DriverDashboard() {
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const isOnline = driverProfile?.isOnline === true;
 
+  useEffect(() => {
+    DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
+  }, []);
+
+  useEffect(() => {
+    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
+  }, [driverProfile?.profileImage]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data);
+        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
       });
       void loadStoredDriverRatings().then(stored => {
         if (active) {
@@ -139,7 +157,7 @@ export default function DriverDashboard() {
       return () => {
         active = false;
       };
-    }, [user?.id]),
+    }, [driverProfile?.profileImage, user?.id]),
   );
 
   // Location
