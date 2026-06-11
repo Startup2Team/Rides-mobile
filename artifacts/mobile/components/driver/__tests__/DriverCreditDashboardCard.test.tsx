@@ -30,7 +30,11 @@ jest.mock('@/hooks/useColors', () => ({
     foreground: '#111',
     mutedForeground: '#666',
     primary: '#06f',
+    primaryForeground: '#fff',
     primaryHex: '#0066ff',
+    success: '#00c853',
+    successForeground: '#000',
+    successHex: '#00c853',
   }),
 }));
 

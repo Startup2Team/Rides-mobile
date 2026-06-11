@@ -47,13 +47,11 @@ const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
-const MAP_VISIBLE_LATITUDE_OFFSET = 0.0035;
 const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
 
 function visibleDriverRegion(location: typeof KIGALI_CENTER) {
   return {
     ...location,
-    latitude: location.latitude + MAP_VISIBLE_LATITUDE_OFFSET,
     ...MAP_VISIBLE_DELTA,
   };
 }
@@ -67,22 +65,32 @@ const DASHBOARD_ADS: Array<{
   {
     id: 'airtel',
     accessibilityLabel: 'Open Airtel advertisement',
-    image: require('../../assets/ads/airtel.png'),
+    image: require('../../assets/ads/dashboard/airtel.jpg'),
     url: 'https://www.airtel.co.rw/',
   },
   {
     id: 'bk',
     accessibilityLabel: 'Open Bank of Kigali advertisement',
-    image: require('../../assets/ads/bk.png'),
+    image: require('../../assets/ads/dashboard/bk.jpg'),
     url: 'https://www.bk.rw/',
   },
   {
     id: 'jibu',
     accessibilityLabel: 'Open Jibu advertisement',
-    image: require('../../assets/ads/jibu.png'),
+    image: require('../../assets/ads/dashboard/jibu.jpg'),
     url: 'https://jibuco.com/',
   },
 ];
+const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
+  require('../../assets/images/dashboard/verified_badge.png'),
+  ...DASHBOARD_ADS.map(ad => ad.image),
+];
+
+function prefetchImageSource(source: ImageSourcePropType) {
+  if (typeof Image.resolveAssetSource !== 'function' || typeof Image.prefetch !== 'function') return;
+  const uri = Image.resolveAssetSource(source)?.uri;
+  if (uri) void Image.prefetch(uri).catch(() => {});
+}
 
 export default function DriverDashboard() {
   const colors = useColors();
@@ -103,9 +111,10 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
   const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
+  const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
 
   const timers = useScreenTimerManager();
   const adCarouselRef = useRef<ScrollView>(null);
@@ -126,11 +135,19 @@ export default function DriverDashboard() {
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const isOnline = driverProfile?.isOnline === true;
 
+  useEffect(() => {
+    DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
+  }, []);
+
+  useEffect(() => {
+    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
+  }, [driverProfile?.profileImage]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data);
+        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
       });
       void loadStoredDriverRatings().then(stored => {
         if (active) {
@@ -140,7 +157,7 @@ export default function DriverDashboard() {
       return () => {
         active = false;
       };
-    }, [user?.id]),
+    }, [driverProfile?.profileImage, user?.id]),
   );
 
   // Location
@@ -288,6 +305,10 @@ export default function DriverDashboard() {
     setAdCarouselWidth(event.nativeEvent.layout.width);
   };
 
+  const onStatusCardLayout = (event: LayoutChangeEvent) => {
+    setDashboardCardHeight(event.nativeEvent.layout.height);
+  };
+
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
   const driverInitial = user?.name?.trim().charAt(0).toUpperCase() || 'D';
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
@@ -412,7 +433,7 @@ export default function DriverDashboard() {
       {/* ── Full-screen map ── */}
       <MapView
         ref={mapRef}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, { top: dashboardCardHeight }]}
         provider={PROVIDER_DEFAULT}
         mapType={mapType}
         initialRegion={visibleDriverRegion(driverLocation)}
@@ -422,10 +443,6 @@ export default function DriverDashboard() {
       >
         <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
-            <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
-              <Text style={styles.youAreHereText}>You're Here</Text>
-            </View>
-            <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
             <VehicleMapMarker type={activeVehicleType} style={styles.driverVehicleMarker} />
           </View>
         </Marker>
@@ -448,7 +465,11 @@ export default function DriverDashboard() {
 
       {/* Top dashboard overlay */}
       <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : 0 }]}>
-        <View style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]} testID="driver-status-card">
+        <View
+          style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]}
+          onLayout={onStatusCardLayout}
+          testID="driver-status-card"
+        >
           <View style={styles.statusHeader}>
             <View style={styles.statusIdentity} testID="driver-identity-block">
               <View style={styles.greetingRow}>
@@ -568,10 +589,10 @@ export default function DriverDashboard() {
           </View>
 
           {showNoCreditsWarning && (
-            <View style={[styles.noCreditsPanel, { backgroundColor: colors.destructiveHex + '10', borderColor: colors.destructiveHex + '30' }]}>
+            <View style={[styles.noCreditsPanel, { backgroundColor: colors.successHex + '12', borderColor: colors.successHex + '35' }]}>
               <View style={styles.noCreditsCopy}>
                 <View style={styles.noCreditsTitleRow}>
-                  <Feather name="alert-triangle" size={16} color={colors.destructive} />
+                  <Feather name="layers" size={14} color={colors.success} />
                   <Text style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Ride Credits</Text>
                 </View>
                 <Text style={[styles.noCreditsText, { color: colors.mutedForeground }]}>
@@ -843,26 +864,27 @@ const styles = StyleSheet.create({
   activityLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 3 },
   activityDivider: { width: 1, height: 30 },
   noCreditsPanel: {
-    marginTop: 12,
-    borderRadius: 14,
+    marginTop: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   noCreditsCopy: { flex: 1, minWidth: 0 },
-  noCreditsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  noCreditsTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  noCreditsText: { fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17, marginTop: 3 },
+  noCreditsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  noCreditsTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  noCreditsText: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 15, marginTop: 1 },
   viewPackagesButton: {
-    minHeight: 36,
-    borderRadius: 18,
-    paddingHorizontal: 12,
+    minHeight: 30,
+    borderRadius: 15,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  viewPackagesButtonText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  viewPackagesButtonText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
   adCard: {
     marginTop: 4,
     marginHorizontal: 6,
@@ -910,19 +932,7 @@ const styles = StyleSheet.create({
 
   // Driver marker
   driverMarker: { alignItems: 'center' },
-  driverVehicleMarker: { marginTop: -14 },
-  youAreHereBubble: {
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3, shadowRadius: 4, elevation: 4,
-  },
-  youAreHereText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#fff' },
-  youAreHereTail: {
-    width: 0, height: 0,
-    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 7,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    marginBottom: -2,
-  },
+  driverVehicleMarker: {},
   pickupPin: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   // Request sheet

@@ -5,7 +5,11 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
-import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import {
+  DRIVER_RIDE_PACKAGES,
+  type DriverPackagePurchase,
+  type DriverPackagePurchaseStatus,
+} from '@/domain/driverRidePackages';
 import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
@@ -109,6 +113,8 @@ export default function DriverStats() {
         />
       </View>
 
+      <PurchaseHistoryCard purchases={entitlement.purchaseHistory} />
+
       {/* Today */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>TODAY</Text>
@@ -179,6 +185,57 @@ export default function DriverStats() {
   );
 }
 
+function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[] }) {
+  const colors = useColors();
+
+  return (
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>PURCHASE HISTORY</Text>
+      {purchases.length === 0 ? (
+        <Text style={[styles.emptyHistory, { color: colors.mutedForeground }]}>No purchase history yet.</Text>
+      ) : purchases.map(purchase => {
+        const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+        return (
+          <View key={purchase.transactionId} style={[styles.historyRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.historyLabelGroup}>
+              <Text style={[styles.historyName, { color: colors.foreground }]}>{ridePackage.name}</Text>
+              <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+                {formatHistoryDate(purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+              </Text>
+            </View>
+            <View style={styles.historyTotals}>
+              <Text style={[styles.historyStatus, { color: colors.foreground }]}>{formatPurchaseStatus(purchase.status)}</Text>
+              <Text style={[styles.historyPrice, { color: colors.mutedForeground }]}>{formatRwf(purchase.amount)}</Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function formatPurchaseStatus(status: DriverPackagePurchaseStatus) {
+  if (status === 'successful') return 'Successful';
+  if (status === 'cancelled') return 'Cancelled';
+  if (status === 'expired') return 'Expired';
+  if (status === 'processing') return 'Processing';
+  if (status === 'pending') return 'Pending';
+  if (status === 'failed') return 'Failed';
+  return 'Idle';
+}
+
+function formatHistoryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   title: { fontSize: 26, fontFamily: 'Inter_700Bold' },
@@ -197,6 +254,21 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
   statNote: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
   statValue: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  emptyHistory: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19, padding: 16, paddingTop: 8 },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  historyLabelGroup: { flex: 1 },
+  historyName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  historyMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  historyTotals: { alignItems: 'flex-end' },
+  historyStatus: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  historyPrice: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
   priorityRow: { padding: 16, gap: 12 },
   priorityBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 100 },
   priorityText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },

@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
-import { BackButton } from '@/components/BackButton';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
@@ -26,12 +26,12 @@ function formatRwf(amount: number) {
 export default function DriverPackagesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
   const { driverProfile } = useAuth();
   const {
     activatePackage,
     createPackagePurchase,
-    entitlement,
     isLoading: isEntitlementLoading,
     launchOfferUsed,
     rideCredits,
@@ -50,10 +50,6 @@ export default function DriverPackagesScreen() {
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const selectedPackage = selectedPackageId ? DRIVER_RIDE_PACKAGES[selectedPackageId] : null;
-  const purchaseHistory = useMemo(
-    () => [...(entitlement.purchaseHistory ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [entitlement.purchaseHistory],
-  );
 
   const clearPaymentTimers = () => {
     paymentTimers.current.forEach(timer => clearTimeout(timer));
@@ -144,17 +140,17 @@ export default function DriverPackagesScreen() {
     setActivationError(null);
   };
 
-  return <ScrollView
-    style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}
-    contentContainerStyle={{ paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16, paddingBottom: insets.bottom + 32 }}
-  >
-    <View style={styles.header}>
-      <BackButton onPress={() => router.back()} />
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Ride Packages</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Choose credits to receive ride requests</Text>
-      </View>
-    </View>
+  return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+    <GlassHeader
+      title="Ride Packages"
+      subtitle="Choose credits to receive ride requests"
+      onBackPress={() => router.back()}
+    />
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }}
+      scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+    >
 
     <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
       <View>
@@ -218,13 +214,8 @@ export default function DriverPackagesScreen() {
         ridePackage={selectedPackage}
       />
     ) : null}
-
-    <PurchaseHistoryCard
-      purchases={purchaseHistory}
-      cardFill={cardFill}
-      colors={colors}
-    />
-   </ScrollView>;
+   </ScrollView>
+  </View>;
 }
 
 function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading, onPress, ridePackage, selected, unavailable = false }: {
@@ -237,7 +228,7 @@ function PackageCard({ buttonTitle, cardFill, colors, disabled = false, loading,
       {selected ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
     </View>
     <View style={styles.priceRow}>
-      {ridePackage.currentPriceRwf === 0 ? <><Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.normalPriceRwf)}</Text><Text style={[styles.freePrice, { color: colors.primary }]}>FREE</Text></>
+      {ridePackage.currentPriceRwf === 0 ? <><Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.normalPriceRwf)}</Text><Text style={[styles.freePrice, { color: colors.primary }]}>FREE NOW</Text></>
         : <Text style={[styles.freePrice, { color: colors.foreground }]}>{formatRwf(ridePackage.currentPriceRwf)}</Text>}
     </View>
     <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.totalCredits} completed rides</Text>
@@ -288,11 +279,11 @@ function ConfirmationCard({
     </View>
     <SummaryRow label="Package" value={ridePackage.name} colors={colors} />
     <SummaryRow label="Ride credits" value={`${ridePackage.totalCredits}`} colors={colors} />
-    <SummaryRow label="Price today" value={isFree ? 'FREE' : formatRwf(ridePackage.currentPriceRwf)} colors={colors} strong />
+    <SummaryRow label="Price today" value={isFree ? 'FREE NOW' : formatRwf(ridePackage.currentPriceRwf)} colors={colors} strong />
     {isFree ? (
       <View style={[styles.paymentNotice, { backgroundColor: colors.muted }]}>
         <Feather name="gift" size={17} color={colors.primary} />
-        <Text style={[styles.paymentNoticeText, { color: colors.mutedForeground }]}>No payment is required for this launch package.</Text>
+        <Text style={[styles.paymentNoticeText, { color: colors.mutedForeground }]}>No payment is required for this launch package now. It may become a paid package later.</Text>
       </View>
     ) : (
       <>
@@ -398,32 +389,6 @@ function ReceiptCard({ activation, cardFill, colors, onDashboard }: {
   </View>;
 }
 
-function PurchaseHistoryCard({ purchases, cardFill, colors }: {
-  purchases: DriverPackagePurchase[]; cardFill: string; colors: ReturnType<typeof useColors>;
-}) {
-  return <View style={[styles.historyCard, { backgroundColor: cardFill }]}>
-    <View style={styles.sectionHeader}>
-      <Feather name="clock" size={18} color={colors.primary} />
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Purchase history</Text>
-    </View>
-    {purchases.length === 0 ? (
-      <Text style={[styles.emptyHistory, { color: colors.mutedForeground }]}>No purchase history yet.</Text>
-    ) : purchases.map(purchase => {
-      const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
-      return <View key={purchase.transactionId} style={[styles.historyRow, { borderTopColor: colors.border }]}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.historyName, { color: colors.foreground }]}>{ridePackage.name}</Text>
-          <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>{formatActivationDate(purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}</Text>
-        </View>
-        <View style={styles.historyTotals}>
-          <Text style={[styles.historyCredits, { color: colors.foreground }]}>{formatPurchaseStatus(purchase.status)}</Text>
-          <Text style={[styles.historyPrice, { color: colors.mutedForeground }]}>{formatRwf(purchase.amount)}</Text>
-        </View>
-      </View>;
-    })}
-  </View>;
-}
-
 function SummaryRow({ colors, label, strong = false, value }: {
   colors: ReturnType<typeof useColors>; label: string; strong?: boolean; value: string;
 }) {
@@ -431,16 +396,6 @@ function SummaryRow({ colors, label, strong = false, value }: {
     <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{label}</Text>
     <Text style={[strong ? styles.summaryValueStrong : styles.summaryValue, { color: colors.foreground }]}>{value}</Text>
   </View>;
-}
-
-function formatPurchaseStatus(status: DriverPackagePurchaseStatus) {
-  if (status === 'successful') return 'Successful';
-  if (status === 'cancelled') return 'Cancelled';
-  if (status === 'expired') return 'Expired';
-  if (status === 'processing') return 'Processing';
-  if (status === 'pending') return 'Pending';
-  if (status === 'failed') return 'Failed';
-  return 'Idle';
 }
 
 function formatActivationDate(value: string) {
@@ -457,9 +412,6 @@ function formatActivationDate(value: string) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, marginBottom: 18 },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold' },
-  subtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
   balanceCard: { marginHorizontal: 16, borderRadius: 18, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   balanceLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8 },
   balanceValue: { color: '#fff', fontSize: 40, fontFamily: 'Inter_700Bold', marginTop: 3 },
@@ -498,12 +450,4 @@ const styles = StyleSheet.create({
   receiptCredits: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 8 },
   receiptMeta: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 6 },
   receiptButton: { alignSelf: 'flex-start', marginTop: 12 },
-  historyCard: { marginHorizontal: 16, marginTop: 2, borderRadius: 18, padding: 18, gap: 12 },
-  emptyHistory: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
-  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 12, borderTopWidth: 1 },
-  historyName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  historyMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  historyTotals: { alignItems: 'flex-end' },
-  historyCredits: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  historyPrice: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
 });
