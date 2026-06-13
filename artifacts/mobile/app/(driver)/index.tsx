@@ -82,6 +82,9 @@ export default function DriverDashboard() {
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
   const switchModeLabelOpacity = useRef(new Animated.Value(1)).current;
   const mapRef = useRef<MapView | null>(null);
+  // Gate imperative map commands until the native view is committed (Fabric
+  // dispatches to an uncommitted MapView segfault — see ride.tsx).
+  const [mapReady, setMapReady] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
 
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -153,8 +156,9 @@ export default function DriverDashboard() {
 
   // Recenter on location
   useEffect(() => {
+    if (!mapReady) return;
     mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
-  }, [driverLocation]);
+  }, [driverLocation, mapReady]);
 
   // Connect the driver session (WS) and post location periodically while online
   // so the backend matching engine can find this driver and deliver requests.
@@ -242,6 +246,7 @@ export default function DriverDashboard() {
   };
 
   const recenterMap = () => {
+    if (!mapReady) return;
     mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
   };
 
@@ -378,6 +383,7 @@ export default function DriverDashboard() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
+        onMapReady={() => setMapReady(true)}
         mapType={mapType}
         initialRegion={{ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}

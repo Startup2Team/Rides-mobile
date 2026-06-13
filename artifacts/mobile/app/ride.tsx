@@ -93,6 +93,11 @@ export default function RideScreen() {
   /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
   const [arrivedDriverCoords, setArrivedDriverCoords] = useState<Coords | null>(null);
 
+  // Gate every imperative map command (fitToCoordinates) behind the native
+  // map's onMapReady. Under the New Architecture (Fabric), dispatching a command
+  // to a MapView whose native view isn't committed yet — e.g. on first mount or
+  // during a Fast Refresh reload — segfaults in uiManagerDidDispatchCommand.
+  const [mapReady, setMapReady] = useState(false);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [driverCardHeight, setDriverCardHeight] = useState(260);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
@@ -220,7 +225,7 @@ export default function RideScreen() {
   );
 
   useEffect(() => {
-    if (!mapRef.current || !currentRide) return;
+    if (!mapReady || !mapRef.current || !currentRide) return;
     const status = currentRide.status;
 
     if (status === 'arriving' && activeDriverLocation) {
@@ -271,7 +276,7 @@ export default function RideScreen() {
       });
       fittedMapStateRef.current = 'in_progress';
     }
-  }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
+  }, [activeDriverLocation, currentRide, mapFitEdgePadding, mapReady, rideRoute]);
 
   const showMapControls = isArriving || isArrived || isInProgress;
 
@@ -280,7 +285,7 @@ export default function RideScreen() {
   }, []);
 
   const recenterRideMap = useCallback(() => {
-    if (!mapRef.current || !currentRide) return;
+    if (!mapReady || !mapRef.current || !currentRide) return;
 
     const driverCoord = isArrived
       ? arrivedDriverCoords ?? driverLocation ?? currentRide.pickup
@@ -325,6 +330,7 @@ export default function RideScreen() {
     isArrived,
     liveDriverCoords,
     mapFitEdgePadding,
+    mapReady,
     rideRoute,
   ]);
 
@@ -355,6 +361,7 @@ export default function RideScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
+        onMapReady={() => setMapReady(true)}
         initialRegion={
           driverLocation
             ? { ...driverLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }

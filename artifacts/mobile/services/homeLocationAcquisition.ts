@@ -1,8 +1,12 @@
 import type { LocationObject } from 'expo-location';
 
-export const GOOD_HOME_LOCATION_ACCURACY_METERS = 40;
-export const HOME_LOCATION_MAX_ATTEMPTS = 3;
-export const HOME_LOCATION_ATTEMPT_TIMEOUT_MS = 5_000;
+// "Good enough" to stop retrying. We deliberately accept a coarse first fix so
+// the home screen stops blocking on "Finding your pickup point" quickly — the
+// live location watch then refines the pin within a second or two. Demanding a
+// tight 40m fix here made the screen hang up to 15s (3×5s) on slow/sim GPS.
+export const GOOD_HOME_LOCATION_ACCURACY_METERS = 150;
+export const HOME_LOCATION_MAX_ATTEMPTS = 2;
+export const HOME_LOCATION_ATTEMPT_TIMEOUT_MS = 4_000;
 
 type Options = {
   getCurrentPosition: () => Promise<LocationObject | null>;

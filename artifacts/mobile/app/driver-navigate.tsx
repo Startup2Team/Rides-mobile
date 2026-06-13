@@ -90,6 +90,9 @@ export default function DriverNavigateScreen() {
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
+  // Gate imperative map commands until the native view is committed (Fabric
+  // dispatches to an uncommitted MapView segfault — see ride.tsx).
+  const [mapReady, setMapReady] = useState(false);
   const fittedMapPhaseRef = useRef<string | null>(null);
   const timers = useScreenTimerManager();
   const waitClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -217,7 +220,7 @@ export default function DriverNavigateScreen() {
   }, [phase, timers]);
 
   useEffect(() => {
-    if (!mapRef.current || !target || !currentRide) return;
+    if (!mapReady || !mapRef.current || !target || !currentRide) return;
     if (fittedMapPhaseRef.current === phase) return;
 
     const coordinates = phase === 'inprogress'
@@ -229,7 +232,7 @@ export default function DriverNavigateScreen() {
       animated: true,
     });
     fittedMapPhaseRef.current = phase;
-  }, [currentRide, driverPos, phase, target]);
+  }, [currentRide, driverPos, mapReady, phase, target]);
 
   const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
   const etaMin = target ? Math.round(distanceToTargetKm * 3 + 1) : 0;
@@ -343,6 +346,7 @@ export default function DriverNavigateScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
+        onMapReady={() => setMapReady(true)}
         initialRegion={{ ...driverPos, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
         customMapStyle={darkMapStyle}
       >

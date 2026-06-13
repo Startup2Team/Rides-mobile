@@ -199,6 +199,10 @@ export default function CustomerHome() {
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
   const [isMapReady, setIsMapReady] = useState(false);
+  // Synchronous mirror of isMapReady so imperative map commands can be gated even
+  // in the same tick onMapReady fires (the state update hasn't flushed yet).
+  // Prevents Fabric segfaults from dispatching to an uncommitted MapView.
+  const isMapReadyRef = useRef(false);
 
   // Booking sheet state
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
@@ -255,7 +259,7 @@ export default function CustomerHome() {
   };
 
   const centerMapOnUser = useCallback((duration = 700, panelHeightOverride?: number) => {
-    if (!gpsLocation) return;
+    if (!isMapReadyRef.current || !gpsLocation) return;
     const panelHeight = panelHeightOverride ?? (showBooking ? bookingPanelMapInset : homePanelMapInset);
     const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     mapRef.current?.animateToRegion(
@@ -741,6 +745,7 @@ export default function CustomerHome() {
     };
   }, [homePanelMapInset, userLocation.latitude, userLocation.longitude]);
   const handleHomeMapReady = useCallback(() => {
+    isMapReadyRef.current = true;
     setIsMapReady(true);
     if (routeFitCoords.length > 1 && showBooking && destination) {
       requestAnimationFrame(() =>
