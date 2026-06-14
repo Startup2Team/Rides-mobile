@@ -123,6 +123,9 @@ export default function DriverPackagePaymentScreen() {
 
   if (!ridePackage) {
     return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+      <View style={[styles.invalidIconHalo, { backgroundColor: colors.destructiveHex + '14' }]}>
+        <Feather name="package" size={28} color={colors.destructive} />
+      </View>
       <Text style={[styles.invalidTitle, { color: colors.foreground }]}>Package not found</Text>
       <AppButton title="Choose a Package" onPress={() => router.replace('/driver-packages')} />
     </View>;
@@ -173,7 +176,7 @@ export default function DriverPackagePaymentScreen() {
           </View>
 
           {isFree ? (
-            <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} />
+            <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} tone="success" />
           ) : (
             <>
               <View style={styles.sectionHeading}>
@@ -203,12 +206,17 @@ export default function DriverPackagePaymentScreen() {
                 keyboardType="phone-pad"
                 leftIcon="smartphone"
               />
-              {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} /> : null}
-              {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} destructive /> : null}
+              {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} tone="waiting" /> : null}
+              {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} tone="error" /> : null}
             </>
           )}
 
-          {error ? <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text> : null}
+          {error ? (
+            <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
+              <Feather name="alert-triangle" size={15} color={colors.destructive} />
+              <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
+            </View>
+          ) : null}
           {isIncomplete ? (
             <View style={styles.actions}>
               <AppButton title="Choose Another Method" onPress={handleChooseAnotherMethod} variant="secondary" style={styles.actionButton} />
@@ -265,11 +273,17 @@ function ProviderOption({ colors, isSelected, label, onPress, provider, shortLab
   </TouchableOpacity>;
 }
 
-function Notice({ colors, destructive = false, icon, text }: {
-  colors: ReturnType<typeof useColors>; destructive?: boolean; icon: React.ComponentProps<typeof Feather>['name']; text: string;
+function Notice({ colors, icon, text, tone }: {
+  colors: ReturnType<typeof useColors>; icon: React.ComponentProps<typeof Feather>['name']; text: string;
+  tone: 'success' | 'waiting' | 'error';
 }) {
-  return <View style={[styles.notice, { backgroundColor: colors.muted }]}>
-    <Feather name={icon} size={17} color={destructive ? colors.destructive : colors.primary} />
+  const accent = tone === 'success' ? colors.success : tone === 'waiting' ? colors.warning : colors.destructive;
+  const accentHex = tone === 'success' ? colors.successHex : tone === 'waiting' ? colors.warningHex : colors.destructiveHex;
+
+  return <View style={[styles.notice, { backgroundColor: accentHex + '0D', borderColor: accentHex + '28' }]}>
+    <View style={[styles.noticeIcon, { backgroundColor: accentHex + '18' }]}>
+      <Feather name={icon} size={17} color={accent} />
+    </View>
     <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>{text}</Text>
   </View>;
 }
@@ -278,18 +292,25 @@ function ReceiptCard({ activation, colors }: {
   activation: PackageActivation; colors: ReturnType<typeof useColors>;
 }) {
   return <View style={[styles.paymentContent, styles.receiptCard]}>
-    <View style={styles.receiptIcon}><Feather name="check" size={24} color="#fff" /></View>
+    <View style={[styles.receiptIconHalo, { backgroundColor: colors.successHex + '18' }]}>
+      <View style={[styles.receiptIcon, { backgroundColor: colors.success }]}>
+        <Feather name="check" size={30} color="#fff" />
+      </View>
+    </View>
     <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package Activated</Text>
     <Text style={[styles.receiptText, { color: colors.mutedForeground }]}>You can now go online and start receiving ride requests.</Text>
-    <Text style={[styles.credits, { color: colors.foreground }]}>Credits Added: {activation.creditsGranted}</Text>
-    <AppButton title="Go to Dashboard" onPress={() => router.replace('/(driver)')} fullWidth size="lg" />
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Credits Added: {activation.creditsGranted}</Text>
+    <View style={styles.receiptAction}>
+      <AppButton title="Go to Dashboard" onPress={() => router.replace('/(driver)')} fullWidth size="lg" />
+    </View>
   </View>;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
-  invalidTitle: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  invalidIconHalo: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  invalidTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
   paymentScrollContent: { flexGrow: 1, justifyContent: 'center' },
   paymentContent: { marginHorizontal: 20, gap: 20 },
   summaryPanel: { gap: 10 },
@@ -317,15 +338,20 @@ const styles = StyleSheet.create({
   providerOptionSubtext: { fontSize: 10, fontFamily: 'Inter_400Regular' },
   radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioInner: { width: 10, height: 10, borderRadius: 5 },
-  notice: { flexDirection: 'row', gap: 9, padding: 12, borderRadius: 12 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, borderRadius: 14, borderWidth: 1 },
+  noticeIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   noticeText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  errorText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
+  inlineError: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  errorText: { flex: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
   actions: { flexDirection: 'row', gap: 10 },
   actionButton: { flex: 1 },
   secureNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   secureNoteText: { fontSize: 10, fontFamily: 'Inter_400Regular' },
-  receiptCard: { alignItems: 'center' },
-  receiptIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#22C55E', alignItems: 'center', justifyContent: 'center' },
-  receiptTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
-  receiptText: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20 },
+  receiptCard: { alignItems: 'center', gap: 12 },
+  receiptIconHalo: { width: 86, height: 86, borderRadius: 43, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  receiptIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  receiptTitle: { fontSize: 24, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  receiptText: { maxWidth: 290, textAlign: 'center', fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 21 },
+  receiptCredits: { fontSize: 16, fontFamily: 'Inter_700Bold', marginTop: 4 },
+  receiptAction: { width: '100%', marginTop: 12 },
 });

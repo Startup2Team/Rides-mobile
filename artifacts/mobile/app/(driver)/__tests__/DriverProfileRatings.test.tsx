@@ -73,11 +73,23 @@ jest.mock('react-native', () => {
 
 jest.mock('expo-router', () => ({
   router: {
+    back: jest.fn(),
     push: jest.fn(),
     replace: jest.fn(),
   },
   useFocusEffect: (effect: () => void | (() => void)) => effect(),
 }));
+
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(),
+}));
+
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { BlurView: (props: object) => <View {...props} /> };
+});
 
 jest.mock('expo-linear-gradient', () => {
   const React = require('react');

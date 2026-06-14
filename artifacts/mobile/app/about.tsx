@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Linking,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -56,7 +57,7 @@ export default function AboutScreen() {
           </View>
         </View>
 
-        <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.statsRow, { backgroundColor: colors.card }]}>
           {STATS.map((stat, i) => (
             <React.Fragment key={stat.label}>
               {i > 0 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
@@ -69,7 +70,7 @@ export default function AboutScreen() {
           ))}
         </View>
 
-        <View style={[styles.missionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.missionCard, { backgroundColor: colors.card }]}>
           <Text style={[styles.missionTitle, { color: colors.foreground }]}>Our Mission</Text>
           <Text style={[styles.missionText, { color: colors.mutedForeground }]}>
             To make safe, affordable, and reliable transport accessible to every Rwandan — connecting communities across the country with a tap.
@@ -77,7 +78,7 @@ export default function AboutScreen() {
         </View>
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>LEGAL</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
           {LINKS.map((link, i) => (
             <View key={link.label}>
               {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
@@ -128,10 +129,12 @@ const styles = StyleSheet.create({
   versionText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   statsRow: {
     flexDirection: 'row',
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 16,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
   },
   statItem: { flex: 1, alignItems: 'center', gap: 2 },
   statValue: { fontSize: 24, fontFamily: 'Inter_700Bold' },
@@ -139,11 +142,13 @@ const styles = StyleSheet.create({
   statSub: { fontSize: 10, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   statDivider: { width: 1, marginVertical: 4 },
   missionCard: {
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 14,
     padding: 16,
     gap: 8,
     marginBottom: 24,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
   },
   missionTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   missionText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 21 },
@@ -153,7 +158,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 10,
   },
-  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 24 },
+  card: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 24,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
+  },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
   linkRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   linkIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

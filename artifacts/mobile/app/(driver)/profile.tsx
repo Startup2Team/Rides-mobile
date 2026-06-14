@@ -1,15 +1,18 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback } from 'react';
-import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { VEHICLE_LABELS } from '@/types';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import { APP_NAME } from '@/constants/branding';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
@@ -18,11 +21,15 @@ const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingC
 export default function DriverProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const headerMetrics = useGlassHeaderMetrics();
+  const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, logout, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
+  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const pageBackground = isDark ? '#000000' : '#F2F2F7';
 
   useFocusEffect(
     useCallback(() => {
@@ -72,207 +79,213 @@ export default function DriverProfileScreen() {
   const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{
-        paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16,
-        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 20,
-      }}
-    >
-      <TouchableOpacity
-        style={styles.avatarSection}
-        onPress={() => router.push('/edit-profile')}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Edit profile"
+    <View style={[styles.container, { backgroundColor: pageBackground }]}>
+      <GlassHeader title="Profile" subtitle="Driver account and preferences" showBack={false} />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{
+          paddingTop: headerMetrics.contentTop,
+          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 24,
+          paddingHorizontal: 16,
+          gap: 22,
+        }}
+        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+        showsVerticalScrollIndicator={false}
       >
-        {profileImage ? (
-          <View style={styles.avatarImageShadow}>
-            <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-          </View>
-        ) : (
-          <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatar}>
-            <Text style={styles.avatarInitial}>{profileInitial}</Text>
-          </LinearGradient>
-        )}
-        <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
-        <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
-        <View style={[styles.driverBadge, { backgroundColor: colors.primaryHex + '20' }]}>
-          <Feather name="zap" size={12} color={colors.primary} />
-          <Text style={[styles.driverBadgeText, { color: colors.primary }]}>Verified Driver</Text>
-        </View>
-        <Text style={[styles.ratingSummary, { color: colors.mutedForeground }]}>
-          {formatDriverRatingSummary(ratingSummary)}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Vehicle info */}
-      {driverProfile && (
-        <View style={[styles.vehicleCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>VEHICLE INFO</Text>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Vehicle Type</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{VEHICLE_LABELS[driverProfile.vehicleType]}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Plate Number</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{driverProfile.plateNumber}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>License</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{driverProfile.licenseNumber}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>City</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{driverProfile.city}</Text>
-          </View>
-          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Mobile Money Details</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{driverProfile.momoCode}</Text>
-          </View>
-        </View>
-      )}
-
-      <TouchableOpacity
-        style={[styles.switchModeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-        onPress={handleSwitchToCustomer}
-        activeOpacity={0.75}
-      >
-        <View style={[styles.switchModeIcon, { backgroundColor: colors.primaryHex + '15' }]}>
-          <Feather name="user" size={16} color={colors.primary} />
-        </View>
-        <Text style={[styles.switchModeText, { color: colors.foreground }]}>Switch to Customer Mode</Text>
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.switchModeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-        onPress={() => router.push('/edit-profile')}
-        activeOpacity={0.75}
-      >
-        <View style={[styles.switchModeIcon, { backgroundColor: colors.primaryHex + '15' }]}>
-          <Feather name="edit-3" size={16} color={colors.primary} />
-        </View>
-        <Text style={[styles.switchModeText, { color: colors.foreground }]}>Edit Profile</Text>
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.switchModeButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-        onPress={() => router.push('/driver-packages')}
-        activeOpacity={0.75}
-      >
-        <View style={[styles.switchModeIcon, { backgroundColor: colors.primaryHex + '15' }]}>
-          <Feather name="layers" size={16} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.switchModeText, { color: colors.foreground }]}>{isEntitlementLoading ? 'Checking ride package...' : activePackage?.name ?? 'Choose Ride Package'}</Text>
-          <Text style={[styles.packageSubtext, { color: colors.mutedForeground }]}>{isEntitlementLoading ? 'Checking ride balance...' : `${rideCredits} ride credits remaining`}</Text>
-        </View>
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-      </TouchableOpacity>
-
-      <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]}>
-          <Feather name="file-text" size={18} color={colors.foreground} />
-          <Text style={[styles.menuText, { color: colors.foreground }]}>View Policy Documents</Text>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
-          <Feather name="help-circle" size={18} color={colors.foreground} />
-          <Text style={[styles.menuText, { color: colors.foreground }]}>Help & Support</Text>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}
-          onPress={handleLogout}
+          style={styles.identitySection}
+          onPress={() => router.push('/edit-profile')}
+          activeOpacity={0.72}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile"
         >
-          <Feather name="log-out" size={18} color={colors.destructive} />
-          <Text style={[styles.menuText, { color: colors.destructive }]}>Log Out</Text>
+          <View style={styles.avatarWrap}>
+            {profileImage ? (
+              <View style={styles.avatarImageShadow}>
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              </View>
+            ) : (
+              <LinearGradient colors={['#69A8F7', '#6674D8']} style={styles.avatar}>
+                <Text style={styles.avatarInitial}>{profileInitial}</Text>
+              </LinearGradient>
+            )}
+          </View>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{user?.name}</Text>
+            {driverProfile?.isVerified === true ? <VerifiedBadge /> : null}
+          </View>
+          <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
         </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+        <View style={[styles.quickStats, styles.cardShadow, { backgroundColor: cardFill }]}>
+          <QuickStat colors={colors} label="Driver Rating" value={formatDriverRatingSummary(ratingSummary)} />
+          <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
+          <QuickStat colors={colors} label="Completed Trips" value={String(driverProfile?.completedRides ?? 0)} />
+          <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
+          <QuickStat colors={colors} label="Credits Left" value={isEntitlementLoading ? '...' : String(rideCredits)} />
+        </View>
+
+        <View style={styles.section}>
+          <SectionTitle title={activePackage ? 'Active Ride Package' : 'Ride Package'} />
+          <TouchableOpacity
+            style={[styles.packageCard, styles.cardShadow, { backgroundColor: cardFill }]}
+            onPress={() => router.push('/driver-packages')}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel={activePackage ? 'Manage active ride package' : 'Explore ride packages'}
+          >
+            <Feather name="layers" size={20} color={colors.primary} />
+            <View style={styles.packageCopy}>
+              <View style={styles.packageTitleRow}>
+                <Text style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
+                  {isEntitlementLoading ? 'Checking ride package...' : activePackage?.name ?? 'No active package'}
+                </Text>
+                {!isEntitlementLoading && activePackage ? (
+                  <View style={[styles.packageStatus, { backgroundColor: colors.successHex + '16' }]}>
+                    <Text style={[styles.packageStatusText, { color: colors.successHex }]}>Active</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[styles.packageSubtext, { color: colors.mutedForeground }]}>
+                {isEntitlementLoading ? 'Loading package details...' : activePackage ? 'Manage package' : 'Explore available packages'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        {driverProfile ? (
+          <View style={styles.section}>
+            <SectionTitle title="Driver Details" />
+            <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
+              <InfoRow colors={colors} icon="truck" label="Vehicle" value={VEHICLE_LABELS[driverProfile.vehicleType]} />
+              <InfoRow colors={colors} icon="hash" label="Plate Number" value={driverProfile.plateNumber} />
+              <InfoRow colors={colors} icon="credit-card" label="License" value={driverProfile.licenseNumber} />
+              <InfoRow colors={colors} icon="map-pin" label="City" value={driverProfile.city ?? driverProfile.province} />
+              <InfoRow colors={colors} icon="smartphone" label="Mobile Money Details" value={driverProfile.momoCode} last />
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.section}>
+          <SectionTitle title="Account" />
+          <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
+            <MenuItem colors={colors} icon="edit-3" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
+            <MenuItem colors={colors} icon="file-text" label="Policy Documents" onPress={() => router.push('/driver-policy')} />
+            <MenuItem colors={colors} icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
+            <MenuItem colors={colors} icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
+            <MenuItem colors={colors} icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} last />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SectionTitle title="Mode" />
+          <TouchableOpacity
+            style={[styles.modeCard, styles.cardShadow, { backgroundColor: cardFill }]}
+            onPress={handleSwitchToCustomer}
+            activeOpacity={0.72}
+          >
+            <Feather name="user" size={20} color={colors.primary} />
+            <View style={styles.modeCopy}>
+              <Text style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</Text>
+              <Text style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.65}>
+          <Feather name="log-out" size={18} color={colors.destructive} />
+          <Text style={[styles.logoutText, { color: colors.destructive }]}>Log Out</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
+}
+
+function SectionTitle({ title }: { title: string }) {
+  const colors = useColors();
+  return <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>;
+}
+
+function QuickStat({ colors, label, value }: { colors: ReturnType<typeof useColors>; label: string; value: string }) {
+  return <View style={styles.quickStat}>
+    <Text style={[styles.quickStatValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    <Text style={[styles.quickStatLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text>
+  </View>;
+}
+
+function InfoRow({ colors, icon, label, last = false, value }: {
+  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; value?: string;
+}) {
+  return <>
+    <View style={styles.infoRow}>
+      <Feather name={icon} size={17} color={colors.primary} />
+      <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{value || 'Not set'}</Text>
+    </View>
+    {!last ? <View style={[styles.separator, { backgroundColor: colors.border }]} /> : null}
+  </>;
+}
+
+function MenuItem({ colors, icon, label, last = false, onPress }: {
+  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; onPress: () => void;
+}) {
+  return <>
+    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
+      <Feather name={icon} size={19} color={colors.foreground} />
+      <Text style={[styles.menuText, { color: colors.foreground }]}>{label}</Text>
+      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+    </TouchableOpacity>
+    {!last ? <View style={[styles.separator, { backgroundColor: colors.border }]} /> : null}
+  </>;
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  avatarSection: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24, gap: 6 },
+  identitySection: { alignItems: 'center', gap: 5, paddingTop: 2 },
+  avatarWrap: { position: 'relative', marginBottom: 8 },
   avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    backgroundColor: '#8FA8D4',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-    ...Platform.select({
-      web: { boxShadow: '0 6px 16px rgba(0,0,0,0.12)' },
-    }),
+    width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.16, shadowRadius: 12, elevation: 5,
   },
-  avatarInitial: { fontSize: 42, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 48 },
-  avatarImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-  },
+  avatarInitial: { fontSize: 43, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 50 },
+  avatarImage: { width: 96, height: 96, borderRadius: 48 },
   avatarImageShadow: {
-    marginBottom: 8,
-    borderRadius: 44,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.16,
-    shadowRadius: 8,
-    elevation: 4,
-    ...Platform.select({
-      web: { boxShadow: '0 6px 16px rgba(0,0,0,0.16)' },
-    }),
+    borderRadius: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.16, shadowRadius: 12, elevation: 5,
   },
-  name: { fontSize: 22, fontFamily: 'Inter_700Bold' },
-  phone: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  driverBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
-  driverBadgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  ratingSummary: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  vehicleCard: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
-  cardTitle: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8, padding: 14, paddingBottom: 8 },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+  name: { fontSize: 24, fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, maxWidth: '90%' },
+  phone: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  section: { gap: 10 },
+  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
+  cardShadow: {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3,
+    ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }),
   },
-  infoLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  infoValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  switchModeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 14,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 10,
-  },
-  switchModeIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  switchModeText: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  packageSubtext: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  menuSection: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1 },
-  menuText: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular' },
+  quickStats: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingVertical: 15, paddingHorizontal: 8 },
+  quickStat: { flex: 1, minWidth: 0, alignItems: 'center', gap: 4 },
+  quickStatValue: { maxWidth: '100%', fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  quickStatLabel: { maxWidth: '100%', fontSize: 9, fontFamily: 'Inter_500Medium' },
+  verticalDivider: { width: StyleSheet.hairlineWidth, height: 32 },
+  packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
+  packageCopy: { flex: 1, gap: 3 },
+  packageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  packageTitle: { flexShrink: 1, fontSize: 15, fontFamily: 'Inter_700Bold' },
+  packageSubtext: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  packageStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
+  packageStatusText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  groupedSection: { borderRadius: 20, overflow: 'hidden' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 50, paddingHorizontal: 16, paddingVertical: 12 },
+  infoLabel: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
+  infoValue: { maxWidth: '48%', textAlign: 'right', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 44 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 54, paddingHorizontal: 16, paddingVertical: 14 },
+  menuText: { flex: 1, fontSize: 15, fontFamily: 'Inter_500Medium' },
+  modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: 20, padding: 16 },
+  modeCopy: { flex: 1, gap: 3 },
+  modeTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  modeDescription: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
+  logoutText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
 });
