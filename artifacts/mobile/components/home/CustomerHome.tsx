@@ -689,11 +689,16 @@ export default function CustomerHome() {
 
   useEffect(() => {
     if (currentRide) return; // hide the ambient pool once a ride is active
+    // Only query with a REAL device GPS fix. userLocation defaults to the
+    // KIGALI_CENTER placeholder before a fix lands; querying with that posts a
+    // fake position to the backend and finds "nearby" drivers around the wrong
+    // point. gpsLocation is null until actual GPS resolves.
+    if (!gpsLocation) return;
     let active = true;
     const apiType = LEGACY_TO_API_VEHICLE[selectedVehicle as LegacyVehicleType];
     const fetchNearby = async () => {
       try {
-        const pins = await getNearbyDrivers(userLocation.latitude, userLocation.longitude, apiType);
+        const pins = await getNearbyDrivers(gpsLocation.latitude, gpsLocation.longitude, apiType);
         if (!active) return;
         setNearbyDrivers(
           // Stable key per slot (NOT based on coords). The backend anonymises
@@ -717,7 +722,7 @@ export default function CustomerHome() {
       active = false;
       clearInterval(interval);
     };
-  }, [currentRide, selectedVehicle, userLocation.latitude, userLocation.longitude]);
+  }, [currentRide, selectedVehicle, gpsLocation?.latitude, gpsLocation?.longitude]);
 
   const visibleDrivers = nearbyDrivers;
 
