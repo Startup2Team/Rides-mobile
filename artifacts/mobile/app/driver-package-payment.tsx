@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardingData';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
@@ -43,7 +44,6 @@ export default function DriverPackagePaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
   const clearPaymentTimers = () => {
     paymentTimers.current.forEach(timer => clearTimeout(timer));
@@ -136,22 +136,52 @@ export default function DriverPackagePaymentScreen() {
     <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
     <ScrollView
       style={styles.root}
-      contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={[
+        styles.paymentScrollContent,
+        { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 },
+      ]}
       scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
     >
       {receipt ? (
-        <ReceiptCard activation={receipt} cardFill={cardFill} colors={colors} />
+        <ReceiptCard activation={receipt} colors={colors} />
       ) : (
-        <View style={[styles.paymentCard, { backgroundColor: cardFill }]}>
-          <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
-          <Text style={[styles.credits, { color: colors.foreground }]}>{ridePackage.totalCredits} Ride Credits</Text>
-          <Text style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.currentPriceRwf)}</Text>
+        <View style={styles.paymentContent}>
+          <View style={styles.summaryPanel}>
+            <View style={styles.summaryHeader}>
+              <View style={[styles.summaryIcon, { backgroundColor: colors.primary }]}>
+                <Feather name="navigation" size={18} color="#fff" />
+              </View>
+              <View style={styles.summaryTitleBlock}>
+                <Text style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</Text>
+                <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
+              </View>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Ride credits</Text>
+              <Text style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.includedRides}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus credits</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRides}</Text>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryRow}>
+              <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total due</Text>
+              <Text style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.currentPriceRwf)}</Text>
+            </View>
+          </View>
 
           {isFree ? (
             <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} />
           ) : (
             <>
-              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Choose payment method</Text>
+              <View style={styles.sectionHeading}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</Text>
+                <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+                  Choose a provider and confirm the phone number that will receive the prompt.
+                </Text>
+              </View>
               <View style={styles.providerChoiceRow}>
                 {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
                   <ProviderOption
@@ -159,6 +189,8 @@ export default function DriverPackagePaymentScreen() {
                     colors={colors}
                     isSelected={selectedProvider === option}
                     label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+                    provider={option}
+                    shortLabel={option === 'mtn' ? 'MTN' : 'Airtel'}
                     onPress={() => setSelectedProvider(option)}
                   />
                 ))}
@@ -192,25 +224,44 @@ export default function DriverPackagePaymentScreen() {
               size="lg"
             />
           )}
+          {!isFree && !isWaiting ? (
+            <View style={styles.secureNote}>
+              <Feather name="lock" size={13} color={colors.mutedForeground} />
+              <Text style={[styles.secureNoteText, { color: colors.mutedForeground }]}>
+                You will confirm this payment securely on your phone.
+              </Text>
+            </View>
+          ) : null}
         </View>
       )}
     </ScrollView>
   </View>;
 }
 
-function ProviderOption({ colors, isSelected, label, onPress }: {
+function ProviderOption({ colors, isSelected, label, onPress, provider, shortLabel }: {
   colors: ReturnType<typeof useColors>; isSelected: boolean; label: string; onPress: () => void;
+  provider: MobileMoneyPackageProvider; shortLabel: string;
 }) {
   return <TouchableOpacity
+    accessibilityRole="radio"
+    accessibilityState={{ checked: isSelected }}
     style={[styles.providerOption, {
-      backgroundColor: isSelected ? colors.primaryHex + '14' : colors.muted,
+      backgroundColor: isSelected ? colors.primaryHex + '0D' : colors.surface,
       borderColor: isSelected ? colors.primary : colors.border,
     }]}
     onPress={onPress}
     activeOpacity={0.75}
   >
-    <Text style={[styles.providerOptionText, { color: colors.foreground }]}>{label}</Text>
-    {isSelected ? <Feather name="check-circle" size={16} color={colors.primary} /> : null}
+    <View style={styles.providerIcon}>
+      <Image source={PAYMENT_PROVIDER_LOGOS[provider]} style={styles.providerLogo} resizeMode="contain" />
+    </View>
+    <View style={styles.providerTextBlock}>
+      <Text style={[styles.providerOptionText, { color: colors.foreground }]}>{shortLabel}</Text>
+      <Text style={[styles.providerOptionSubtext, { color: colors.mutedForeground }]}>{label}</Text>
+    </View>
+    <View style={[styles.radioOuter, { borderColor: isSelected ? colors.primary : colors.border }]}>
+      {isSelected ? <View style={[styles.radioInner, { backgroundColor: colors.primary }]} /> : null}
+    </View>
   </TouchableOpacity>;
 }
 
@@ -223,10 +274,10 @@ function Notice({ colors, destructive = false, icon, text }: {
   </View>;
 }
 
-function ReceiptCard({ activation, cardFill, colors }: {
-  activation: PackageActivation; cardFill: string; colors: ReturnType<typeof useColors>;
+function ReceiptCard({ activation, colors }: {
+  activation: PackageActivation; colors: ReturnType<typeof useColors>;
 }) {
-  return <View style={[styles.paymentCard, { backgroundColor: cardFill }]}>
+  return <View style={[styles.paymentContent, styles.receiptCard]}>
     <View style={styles.receiptIcon}><Feather name="check" size={24} color="#fff" /></View>
     <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package Activated</Text>
     <Text style={[styles.receiptText, { color: colors.mutedForeground }]}>You can now go online and start receiving ride requests.</Text>
@@ -239,19 +290,41 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
   invalidTitle: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  paymentCard: { marginHorizontal: 16, borderRadius: 22, padding: 20, gap: 16 },
-  packageName: { fontSize: 21, fontFamily: 'Inter_700Bold' },
+  paymentScrollContent: { flexGrow: 1, justifyContent: 'center' },
+  paymentContent: { marginHorizontal: 20, gap: 20 },
+  summaryPanel: { gap: 10 },
+  summaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  summaryIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  summaryTitleBlock: { flex: 1, gap: 2 },
+  summaryEyebrow: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
+  packageName: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  summaryDivider: { height: StyleSheet.hairlineWidth },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  summaryLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  summaryValue: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  totalLabel: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   credits: { fontSize: 17, fontFamily: 'Inter_600SemiBold' },
-  price: { fontSize: 26, fontFamily: 'Inter_700Bold' },
-  inputLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  providerChoiceRow: { flexDirection: 'row', gap: 10 },
-  providerOption: { flex: 1, minHeight: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  providerOptionText: { flex: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  price: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  sectionHeading: { gap: 4 },
+  sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  sectionDescription: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
+  providerChoiceRow: { gap: 9 },
+  providerOption: { minHeight: 62, borderRadius: 15, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  providerIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  providerLogo: { width: 27, height: 27 },
+  providerTextBlock: { flex: 1, gap: 1 },
+  providerOptionText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  providerOptionSubtext: { fontSize: 10, fontFamily: 'Inter_400Regular' },
+  radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioInner: { width: 10, height: 10, borderRadius: 5 },
   notice: { flexDirection: 'row', gap: 9, padding: 12, borderRadius: 12 },
   noticeText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   errorText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
   actions: { flexDirection: 'row', gap: 10 },
   actionButton: { flex: 1 },
+  secureNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  secureNoteText: { fontSize: 10, fontFamily: 'Inter_400Regular' },
+  receiptCard: { alignItems: 'center' },
   receiptIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#22C55E', alignItems: 'center', justifyContent: 'center' },
   receiptTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
   receiptText: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20 },
