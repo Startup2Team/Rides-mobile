@@ -89,31 +89,6 @@ export default function EditProfileScreen() {
     ]);
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Before you go…',
-      'Help us improve — why are you deleting your account?',
-      [
-        { text: 'Found a better service', onPress: confirmDelete },
-        { text: 'Privacy concerns', onPress: confirmDelete },
-        { text: 'Too many issues', onPress: confirmDelete },
-        { text: 'No longer need it', onPress: confirmDelete },
-        { text: 'Keep my account', style: 'cancel' },
-      ],
-    );
-  };
-
-  const confirmDelete = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all ride history. This cannot be undone.',
-      [
-        { text: 'Delete Forever', onPress: () => {} },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
-  };
-
   const validate = () => {
     const errs: typeof errors = {};
     if (!name.trim()) errs.name = 'Name is required';
@@ -222,16 +197,6 @@ export default function EditProfileScreen() {
           </Text>
         </View>
 
-        {/* Danger zone */}
-        <TouchableOpacity
-          style={[styles.dangerRow, { borderColor: colors.destructiveHex + '40' }]}
-          activeOpacity={0.7}
-          onPress={handleDeleteAccount}
-        >
-          <Feather name="trash-2" size={16} color={colors.destructive} />
-          <Text style={[styles.dangerText, { color: colors.destructive }]}>Delete Account</Text>
-        </TouchableOpacity>
-
         <AppButton
           title={saving ? 'Saving…' : 'Save Changes'}
           onPress={handleSave}
@@ -292,15 +257,4 @@ const styles = StyleSheet.create({
   lockedText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   readOnlyValue: { fontSize: 16, fontFamily: 'Inter_400Regular' },
   phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
-  dangerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  dangerText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

@@ -26,6 +26,7 @@ export function LocationSearchOverlay({
   listTab,
   loading,
   onApplyLocation,
+  onAddSavedLocation,
   onChooseMap,
   onClear,
   onClose,
@@ -49,6 +50,7 @@ export function LocationSearchOverlay({
   listTab: LocationListTab;
   loading: boolean;
   onApplyLocation: (target: LocationSearchTarget, location: RideLocation) => void;
+  onAddSavedLocation: () => void;
   onChooseMap: () => void;
   onClear: () => void;
   onClose: () => void;
@@ -271,6 +273,7 @@ export function LocationSearchOverlay({
             recentLocations={recentLocations}
             onSelect={location => onApplyLocation(target, location)}
             onShowActions={onShowSavedLocationActions}
+            onAddSavedLocation={onAddSavedLocation}
           />
         </GlassScrollView>
       </View>

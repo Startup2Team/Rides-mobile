@@ -13,6 +13,7 @@ export function SavedLocationsSection({
   recentLocations,
   onSelect,
   onShowActions,
+  onAddSavedLocation,
 }: {
   tab: 'saved' | 'previous';
   colors: ReturnType<typeof useColors>;
@@ -21,6 +22,7 @@ export function SavedLocationsSection({
   recentLocations: RideLocation[];
   onSelect: (location: RideLocation) => void;
   onShowActions: (location: SavedLocation) => void;
+  onAddSavedLocation: () => void;
 }) {
   if (tab === 'saved') {
     return (
@@ -29,11 +31,21 @@ export function SavedLocationsSection({
           Saved locations
         </Text>
         {savedLocations.length === 0 && (
-          <View style={[styles.locationEmptyState, { backgroundColor: colors.card }]}>
+          <View style={styles.locationEmptyState}>
             <Feather name="bookmark" size={18} color={colors.mutedForeground} />
             <Text style={[styles.locationEmptyText, { color: colors.mutedForeground }]}>
-              No saved places yet. Tap "Save" on any search result.
+              Save places you use often for quicker ride requests.
             </Text>
+            <TouchableOpacity
+              style={[styles.locationEmptyAction, { backgroundColor: colors.primary }]}
+              onPress={onAddSavedLocation}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Add saved place"
+            >
+              <Feather name="plus" size={20} color={colors.primaryForeground} />
+            </TouchableOpacity>
+            <Text style={[styles.locationEmptyActionText, { color: colors.foreground }]}>Add place</Text>
           </View>
         )}
         {savedLocations.map((location, index) => (

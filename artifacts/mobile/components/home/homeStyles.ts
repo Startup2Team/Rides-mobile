@@ -442,18 +442,28 @@ export const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   locationEmptyState: {
-    minHeight: 76,
-    borderRadius: 12,
+    minHeight: 118,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    marginTop: 8,
+    paddingVertical: 14,
   },
   locationEmptyText: {
     fontSize: 13,
     fontFamily: 'Inter_500Medium',
     textAlign: 'center',
+  },
+  locationEmptyAction: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationEmptyActionText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
   },
   saveAsLocationLabels: {
     flexDirection: 'row',

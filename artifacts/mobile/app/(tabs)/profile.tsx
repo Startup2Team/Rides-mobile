@@ -175,7 +175,7 @@ export default function ProfileScreen() {
       )}
 
       {canAccessDriverMode(driverProfile) && (
-        <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+        <View style={[styles.menuSection, { backgroundColor: cardFill, marginHorizontal: 16, marginBottom: 20 }]}>
           <MenuItem
             icon="navigation"
             label="Switch to Driver Mode"
@@ -186,7 +186,9 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+      <View style={styles.sectionGroup}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Account</Text>
+        <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
         <MenuItem
           icon="user"
           label="Edit Profile"
@@ -216,20 +218,29 @@ export default function ProfileScreen() {
           icon="info"
           label={`About ${APP_NAME}`}
           onPress={() => router.push('/about')}
+          separatorColor={separatorColor}
+        />
+        <MenuItem
+          icon="settings"
+          label="Settings"
+          onPress={() => router.push('/settings')}
           showSeparator={false}
           separatorColor={separatorColor}
         />
+        </View>
       </View>
 
-      <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+      <View style={styles.sectionGroup}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Actions</Text>
+        <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
         <MenuItem
           icon="log-out"
           label="Log Out"
           onPress={handleLogout}
-          destructive
           showSeparator={false}
           separatorColor={separatorColor}
         />
+        </View>
       </View>
 
       <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
@@ -305,9 +316,9 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   bannerDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  sectionGroup: { gap: 10, marginHorizontal: 16, marginBottom: 20 },
+  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
   menuSection: {
-    marginHorizontal: 16,
-    marginBottom: 20,
     borderRadius: 14,
     overflow: 'hidden',
     ...Platform.select({

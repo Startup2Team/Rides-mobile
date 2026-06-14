@@ -75,6 +75,8 @@ function RootLayoutNav() {
       <Stack.Screen name="help-support" />
       <Stack.Screen name="privacy-security" />
       <Stack.Screen name="about" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="saved-place-selector" />
       <Stack.Screen name="ride-detail" />
     </Stack>
   );

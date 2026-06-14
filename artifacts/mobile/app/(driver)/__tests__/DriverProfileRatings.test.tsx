@@ -91,6 +91,12 @@ jest.mock('expo-blur', () => {
   return { BlurView: (props: object) => <View {...props} /> };
 });
 
+jest.mock('@/components/GlassScrollView', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { GlassScrollView: (props: { children: React.ReactNode }) => <View>{props.children}</View> };
+});
+
 jest.mock('expo-linear-gradient', () => {
   const React = require('react');
   const { View } = require('react-native');

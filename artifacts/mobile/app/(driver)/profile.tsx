@@ -1,10 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback } from 'react';
-import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, Image, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
@@ -81,16 +82,14 @@ export default function DriverProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: pageBackground }]}>
       <GlassHeader title="Profile" subtitle="Driver account and preferences" showBack={false} />
-      <ScrollView
-        style={styles.container}
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 24,
           paddingHorizontal: 16,
           gap: 22,
         }}
-        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
-        showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity
           style={styles.identitySection}
@@ -134,7 +133,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={activePackage ? 'Manage active ride package' : 'Explore ride packages'}
           >
-            <Feather name="layers" size={20} color={colors.primary} />
+            <Feather name="layers" size={20} color={colors.foreground} />
             <View style={styles.packageCopy}>
               <View style={styles.packageTitleRow}>
                 <Text style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -170,11 +169,12 @@ export default function DriverProfileScreen() {
         <View style={styles.section}>
           <SectionTitle title="Account" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-            <MenuItem colors={colors} icon="edit-3" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
+            <MenuItem colors={colors} icon="edit-2" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
             <MenuItem colors={colors} icon="file-text" label="Policy Documents" onPress={() => router.push('/driver-policy')} />
             <MenuItem colors={colors} icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
             <MenuItem colors={colors} icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
-            <MenuItem colors={colors} icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} last />
+            <MenuItem colors={colors} icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />
+            <MenuItem colors={colors} icon="settings" label="Settings" onPress={() => router.push('/settings')} last />
           </View>
         </View>
 
@@ -185,7 +185,7 @@ export default function DriverProfileScreen() {
             onPress={handleSwitchToCustomer}
             activeOpacity={0.72}
           >
-            <Feather name="user" size={20} color={colors.primary} />
+            <Feather name="repeat" size={20} color={colors.foreground} />
             <View style={styles.modeCopy}>
               <Text style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</Text>
               <Text style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</Text>
@@ -194,11 +194,18 @@ export default function DriverProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.65}>
-          <Feather name="log-out" size={18} color={colors.destructive} />
-          <Text style={[styles.logoutText, { color: colors.destructive }]}>Log Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        <View style={styles.section}>
+          <SectionTitle title="Actions" />
+          <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.65}>
+            <Feather name="log-out" size={18} color={colors.foreground} />
+            <Text style={[styles.logoutText, { color: colors.foreground }]}>Log Out</Text>
+          </TouchableOpacity>
+        </View>
+        </View>
+
+        <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
+      </GlassScrollView>
     </View>
   );
 }
@@ -220,7 +227,7 @@ function InfoRow({ colors, icon, label, last = false, value }: {
 }) {
   return <>
     <View style={styles.infoRow}>
-      <Feather name={icon} size={17} color={colors.primary} />
+      <Feather name={icon} size={17} color={colors.foreground} />
       <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</Text>
       <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{value || 'Not set'}</Text>
     </View>
@@ -265,7 +272,7 @@ const styles = StyleSheet.create({
   },
   quickStats: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingVertical: 15, paddingHorizontal: 8 },
   quickStat: { flex: 1, minWidth: 0, alignItems: 'center', gap: 4 },
-  quickStatValue: { maxWidth: '100%', fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  quickStatValue: { maxWidth: '100%', fontSize: 13, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
   quickStatLabel: { maxWidth: '100%', fontSize: 9, fontFamily: 'Inter_500Medium' },
   verticalDivider: { width: StyleSheet.hairlineWidth, height: 32 },
   packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
@@ -286,6 +293,7 @@ const styles = StyleSheet.create({
   modeCopy: { flex: 1, gap: 3 },
   modeTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   modeDescription: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14, paddingHorizontal: 16 },
   logoutText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  version: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', paddingVertical: 8 },
 });

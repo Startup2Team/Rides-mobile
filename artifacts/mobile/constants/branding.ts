@@ -9,6 +9,7 @@ export const ANDROID_PACKAGE = 'rw.rides.app';
 export const APP_SCHEME = 'rides';
 
 export const APP_DOMAIN = 'rides.rw';
+export const WEBSITE_URL = `https://${APP_DOMAIN}`;
 
 export const SUPPORT_EMAIL = `support@${APP_DOMAIN}`;
 export const SAFETY_EMAIL = `safety@${APP_DOMAIN}`;
