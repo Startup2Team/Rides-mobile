@@ -481,6 +481,15 @@ export default function DriverDashboard() {
                     testID="driver-verified-badge"
                   />
                 )}
+                <TouchableOpacity
+                  style={styles.notificationButton}
+                  onPress={() => router.push('/notifications')}
+                  activeOpacity={0.65}
+                  accessibilityRole="button"
+                  accessibilityLabel="Notifications"
+                >
+                  <Feather name="bell" size={17} color={colors.foreground} />
+                </TouchableOpacity>
               </View>
               <View style={styles.identityChipRow}>
                 <View style={styles.identityItem}>
@@ -771,6 +780,7 @@ const styles = StyleSheet.create({
   statusIdentity: { flex: 1, minWidth: 0, height: BUTTON_HEIGHT.sm, justifyContent: 'space-between' },
   statusGreeting: { fontSize: 17, lineHeight: 20, fontFamily: 'Inter_700Bold', flexShrink: 1 },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 },
+  notificationButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   identityChipRow: { height: 22, flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
   identityItem: {
     height: 22,

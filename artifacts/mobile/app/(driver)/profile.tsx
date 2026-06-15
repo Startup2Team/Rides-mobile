@@ -171,7 +171,8 @@ export default function DriverProfileScreen() {
           <SectionTitle title="Account" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
             <MenuItem colors={colors} icon="edit-2" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
-            <MenuItem colors={colors} icon="file-text" label="Policy Documents" onPress={() => router.push('/driver-policy')} />
+            <MenuItem colors={colors} icon="file-text" label="Driver Documents" onPress={() => router.push('/driver-documents')} />
+            <MenuItem colors={colors} icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
             <MenuItem colors={colors} icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
             <MenuItem colors={colors} icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
             <MenuItem colors={colors} icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />

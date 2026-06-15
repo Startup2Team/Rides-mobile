@@ -118,7 +118,8 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
       styles.packageCard,
       {
         backgroundColor: fill,
-        borderColor: selected ? colors.primary : colors.border,
+        borderColor: colors.primary,
+        borderWidth: selected ? 1.5 : 0,
         opacity: isDisabled ? 0.55 : 1,
       },
     ]}
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
   balanceValue: { color: '#fff', fontSize: 40, fontFamily: 'Inter_700Bold', marginTop: 3 },
   approvedBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
   approvedText: { color: '#fff', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  packageCard: { minHeight: 132, marginHorizontal: 16, marginBottom: 14, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 20, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  packageCard: { minHeight: 132, marginHorizontal: 16, marginBottom: 14, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 20, flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   packageContent: { flex: 1, gap: 9 },
   packageName: { fontSize: 23, fontFamily: 'Inter_700Bold', lineHeight: 29 },
   creditRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 },

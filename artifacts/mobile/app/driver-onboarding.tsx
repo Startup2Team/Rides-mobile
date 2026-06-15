@@ -24,6 +24,8 @@ import type { DriverProfile } from '@/types';
 import { buildDraftDriverProfile, buildPendingDriverProfile, formFromDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
 import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, saveStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
 import { saveStoredProfileImage } from '@/persistence/profilePersistence';
+import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
+import { saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -107,6 +109,7 @@ export default function DriverOnboarding() {
     setLoading(true);
     const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
+    await saveStoredDriverDocuments(buildInitialDriverDocuments(form, docs));
     if (selfieUri) await saveStoredProfileImage(selfieUri);
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');

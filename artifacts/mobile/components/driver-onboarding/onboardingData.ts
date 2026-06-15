@@ -6,7 +6,7 @@ export const DOCUMENTS = [
   { key: 'license', label: "Driver's Licence", hint: 'Front and back images required - JPEG or PNG' },
   { key: 'nationalId', label: 'National ID', hint: 'Front and back images required - JPEG or PNG' },
   { key: 'insurance', label: 'Vehicle Insurance document', hint: 'Front image required - JPEG or PNG' },
-  { key: 'authorization', label: 'Vehicle Authorization / Inspection certificate', hint: 'Front and back images required - JPEG or PNG' },
+  { key: 'authorization', label: 'Authorization Certificate', hint: 'Front image required - JPEG or PNG' },
 ] as const;
 
 export const VEHICLE_QUESTIONS: Record<VehicleType, { field: string; label: string; placeholder: string }[]> = {

@@ -161,6 +161,8 @@ describe('DriverProfileScreen rating summary', () => {
     render(<DriverProfileScreen />);
 
     await waitFor(() => expect(screen.getByText('No ratings yet')).toBeTruthy());
+    expect(screen.getByText('Notifications')).toBeTruthy();
+    expect(screen.getByText('Driver Documents')).toBeTruthy();
   });
 
   test('profile displays rating summary when ratings exist', async () => {

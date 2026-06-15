@@ -87,13 +87,13 @@ export default function HelpSupportScreen() {
               {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
               <TouchableOpacity style={styles.contactRow} onPress={ch.onPress} activeOpacity={0.75}>
                 <View style={styles.contactIcon}>
-                  <Feather name={ch.icon} size={18} color={colors.primary} />
+                  <Feather name={ch.icon} size={18} color="#000" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.contactLabel, { color: colors.foreground }]}>{ch.label}</Text>
                   <Text style={[styles.contactDetail, { color: colors.mutedForeground }]}>{ch.detail}</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                <Feather name="chevron-right" size={16} color="#000" />
               </TouchableOpacity>
             </View>
           ))}
@@ -113,7 +113,7 @@ export default function HelpSupportScreen() {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.faqQuestion, { color: colors.foreground, flex: 1 }]}>{faq.q}</Text>
-                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#000" />
                 </TouchableOpacity>
                 {isOpen && (
                   <View style={[styles.faqAnswer, { borderTopColor: colors.border }]}>
