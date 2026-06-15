@@ -21,13 +21,14 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
+import { leaveRidesFeedback, rateRides, shareRides } from '@/utils/communityActions';
 
 function MenuItem({
   icon,
   label,
   onPress,
   destructive = false,
-  value,
+  detail,
   showSeparator = true,
   separatorColor,
 }: {
@@ -35,7 +36,7 @@ function MenuItem({
   label: string;
   onPress: () => void;
   destructive?: boolean;
-  value?: string;
+  detail?: string;
   showSeparator?: boolean;
   separatorColor: string;
 }) {
@@ -52,10 +53,10 @@ function MenuItem({
         <View style={styles.menuIcon}>
           <Feather name={icon} size={20} color={destructive ? colors.destructive : colors.foreground} />
         </View>
-        <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>
-          {label}
-        </Text>
-        {value && <Text style={[styles.menuValue, { color: colors.mutedForeground }]}>{value}</Text>}
+        <View style={styles.menuCopy}>
+          <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</Text>
+          {detail ? <Text style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</Text> : null}
+        </View>
         {!destructive && <Feather name="chevron-right" size={18} color={colors.mutedForeground} />}
       </TouchableOpacity>
       {showSeparator && <View style={[styles.separator, { backgroundColor: separatorColor }]} />}
@@ -201,7 +202,6 @@ export default function ProfileScreen() {
           onPress={() => router.push('/payment-methods')}
           separatorColor={separatorColor}
         />
-        <MenuItem icon="phone" label="Phone" onPress={() => {}} value={user?.phone} separatorColor={separatorColor} />
         <MenuItem
           icon="shield"
           label="Privacy & Security"
@@ -212,6 +212,13 @@ export default function ProfileScreen() {
           icon="help-circle"
           label="Help & Support"
           onPress={() => router.push('/help-support')}
+          separatorColor={separatorColor}
+        />
+        <MenuItem
+          icon="alert-circle"
+          label="Report a Ride Issue"
+          detail="Driver behavior, lost items, payment, or safety concerns"
+          onPress={() => router.push('/report-ride-issue')}
           separatorColor={separatorColor}
         />
         <MenuItem
@@ -227,6 +234,34 @@ export default function ProfileScreen() {
           showSeparator={false}
           separatorColor={separatorColor}
         />
+        </View>
+      </View>
+
+      <View style={styles.sectionGroup}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Community</Text>
+        <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+          <MenuItem
+            icon="star"
+            label={`Rate ${APP_NAME}`}
+            detail="Enjoying the app? Take a moment to rate it and share your feedback."
+            onPress={() => { void rateRides(); }}
+            separatorColor={separatorColor}
+          />
+          <MenuItem
+            icon="message-square"
+            label="Leave Feedback"
+            detail="We'd love to hear from you."
+            onPress={() => { void leaveRidesFeedback(); }}
+            separatorColor={separatorColor}
+          />
+          <MenuItem
+            icon="share-2"
+            label="Share the App"
+            detail={`Invite friends and family to experience ${APP_NAME}.`}
+            onPress={() => { void shareRides(); }}
+            showSeparator={false}
+            separatorColor={separatorColor}
+          />
         </View>
       </View>
 
@@ -338,7 +373,8 @@ const styles = StyleSheet.create({
     marginLeft: 66,
   },
   menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { flex: 1, fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 22 },
-  menuValue: { fontSize: 16, fontFamily: 'Inter_400Regular', marginRight: 6, lineHeight: 22 },
+  menuCopy: { flex: 1, gap: 2 },
+  menuLabel: { fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 22 },
+  menuDetail: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
   version: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', paddingVertical: 8 },
 });

@@ -19,9 +19,6 @@ import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 
-const PHONE_CHANGE_MESSAGE = `Hi ${APP_NAME} support, I need help with: change my phone number`;
-const SUPPORT_WHATSAPP_NUMBER = '250788123456';
-
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -33,11 +30,6 @@ export default function SettingsScreen() {
 
   const openSavedPlace = (label: 'Home' | 'Work' | 'School') => {
     router.push({ pathname: '/saved-place-selector', params: { label } });
-  };
-
-  const openPhoneChangeSupport = () => {
-    const url = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(PHONE_CHANGE_MESSAGE)}`;
-    void Linking.openURL(url);
   };
 
   const confirmDelete = () => {
@@ -107,8 +99,6 @@ export default function SettingsScreen() {
 
         <Section title="Account & Support">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
-            <SettingsRow icon="phone" label="Change Phone Number" detail="Contact support on WhatsApp" onPress={openPhoneChangeSupport} />
-            <Divider />
             <SettingsRow icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
             <Divider />
             <SettingsRow icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />

@@ -182,18 +182,27 @@ export default function EditProfileScreen() {
           />
 
           {/* Phone — read-only */}
-          <View style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+          <TouchableOpacity
+            accessibilityLabel="Change Phone Number"
+            accessibilityRole="button"
+            activeOpacity={0.7}
+            onPress={() => router.push('/change-phone-number')}
+            style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}
+          >
             <View style={styles.readOnlyLabelRow}>
               <Text style={[styles.readOnlyLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
               <View style={[styles.lockedBadge, { backgroundColor: colors.border }]}>
-                <Feather name="lock" size={10} color={colors.mutedForeground} />
+                <Feather name="check-circle" size={10} color={colors.mutedForeground} />
                 <Text style={[styles.lockedText, { color: colors.mutedForeground }]}>Verified</Text>
               </View>
             </View>
-            <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
-          </View>
+            <View style={styles.phoneValueRow}>
+              <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
+              <Text style={[styles.changePhoneText, { color: colors.primary }]}>Change</Text>
+            </View>
+          </TouchableOpacity>
           <Text style={[styles.phoneHint, { color: colors.mutedForeground }]}>
-            To change your phone number, contact support.
+            A verification code will be sent before your number is updated.
           </Text>
         </View>
 
@@ -256,5 +265,7 @@ const styles = StyleSheet.create({
   },
   lockedText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   readOnlyValue: { fontSize: 16, fontFamily: 'Inter_400Regular' },
+  phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
 });

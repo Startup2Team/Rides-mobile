@@ -89,19 +89,8 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Preferences')).toBeTruthy();
     expect(screen.getByText('KG 10 Street')).toBeTruthy();
     expect(screen.getByText('Add work address')).toBeTruthy();
-    expect(screen.getByText('Change Phone Number')).toBeTruthy();
     expect(screen.getByText('Visit Our Website')).toBeTruthy();
     expect(screen.getByText('Delete Account')).toBeTruthy();
-  });
-
-  test('opens WhatsApp with the phone-change support message', () => {
-    render(<SettingsScreen />);
-
-    fireEvent.press(screen.getByLabelText('Change Phone Number'));
-
-    expect(mockOpenUrl).toHaveBeenCalledWith(
-      expect.stringContaining(encodeURIComponent('Hi Rides support, I need help with: change my phone number')),
-    );
   });
 
   test('opens the dedicated home saved-place selector', () => {

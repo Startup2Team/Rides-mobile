@@ -91,6 +91,11 @@ jest.mock('expo-blur', () => {
   return { BlurView: (props: object) => <View {...props} /> };
 });
 
+jest.mock('expo-store-review', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  requestReview: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('@/components/GlassScrollView', () => {
   const React = require('react');
   const { View } = require('react-native');

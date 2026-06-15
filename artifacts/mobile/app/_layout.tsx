@@ -72,7 +72,9 @@ function RootLayoutNav() {
       />
       <Stack.Screen name="payment-methods" />
       <Stack.Screen name="edit-profile" />
+      <Stack.Screen name="change-phone-number" />
       <Stack.Screen name="help-support" />
+      <Stack.Screen name="report-ride-issue" />
       <Stack.Screen name="privacy-security" />
       <Stack.Screen name="about" />
       <Stack.Screen name="settings" />

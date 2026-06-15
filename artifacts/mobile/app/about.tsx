@@ -28,7 +28,7 @@ const LINKS = [
 const STATS = [
   { label: 'Countries', value: '1', sub: 'Rwanda' },
   { label: 'Vehicle types', value: '4', sub: 'Moto · Cab · Hilux · Fuso' },
-  { label: 'Languages', value: '3', sub: 'EN · FR · RW' },
+  { label: 'Languages', value: '4', sub: 'EN · FR · RW · LG' },
 ];
 
 export default function AboutScreen() {

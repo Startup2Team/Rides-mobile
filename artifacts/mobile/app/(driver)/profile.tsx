@@ -16,6 +16,7 @@ import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
 import { APP_NAME } from '@/constants/branding';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { leaveRidesFeedback, rateRides, shareRides } from '@/utils/communityActions';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -195,6 +196,15 @@ export default function DriverProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <SectionTitle title="Community" />
+          <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
+            <MenuItem colors={colors} icon="star" label={`Rate ${APP_NAME}`} detail="Enjoying the app? Take a moment to rate it and share your feedback." onPress={() => { void rateRides(); }} />
+            <MenuItem colors={colors} icon="message-square" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
+            <MenuItem colors={colors} icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => { void shareRides(); }} last />
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <SectionTitle title="Actions" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.65}>
@@ -235,13 +245,16 @@ function InfoRow({ colors, icon, label, last = false, value }: {
   </>;
 }
 
-function MenuItem({ colors, icon, label, last = false, onPress }: {
-  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; onPress: () => void;
+function MenuItem({ colors, detail, icon, label, last = false, onPress }: {
+  colors: ReturnType<typeof useColors>; detail?: string; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; onPress: () => void;
 }) {
   return <>
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <Feather name={icon} size={19} color={colors.foreground} />
-      <Text style={[styles.menuText, { color: colors.foreground }]}>{label}</Text>
+      <View style={styles.menuCopy}>
+        <Text style={[styles.menuText, { color: colors.foreground }]}>{label}</Text>
+        {detail ? <Text style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</Text> : null}
+      </View>
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
     </TouchableOpacity>
     {!last ? <View style={[styles.separator, { backgroundColor: colors.border }]} /> : null}
@@ -288,7 +301,9 @@ const styles = StyleSheet.create({
   infoValue: { maxWidth: '48%', textAlign: 'right', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 44 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 54, paddingHorizontal: 16, paddingVertical: 14 },
-  menuText: { flex: 1, fontSize: 15, fontFamily: 'Inter_500Medium' },
+  menuCopy: { flex: 1, gap: 2 },
+  menuText: { fontSize: 15, fontFamily: 'Inter_500Medium' },
+  menuDetail: { fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 15 },
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: 20, padding: 16 },
   modeCopy: { flex: 1, gap: 3 },
   modeTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
