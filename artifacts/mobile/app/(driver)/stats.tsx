@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, FontAwesome } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useColors } from '@/hooks/useColors';
@@ -114,7 +114,7 @@ export default function DriverStats() {
               label="Completed Today"
               note="Completed trips today"
               value={String(activitySummary.completedRidesToday)}
-              tone="#000"
+              tone={colors.successHex}
             />
             <MetricTile
               colors={colors}
@@ -122,7 +122,7 @@ export default function DriverStats() {
               label="Acceptance Rate"
               note={acceptanceRateNote}
               value={acceptanceRateValue}
-              tone="#000"
+              tone={colors.primaryHex}
             />
             <MetricTile
               colors={colors}
@@ -130,7 +130,7 @@ export default function DriverStats() {
               label="Total Completed Trips"
               note="All-time completed trips"
               value={String(dp.completedRides)}
-              tone="#000"
+              tone={colors.primaryHex}
             />
             <MetricTile
               colors={colors}
@@ -139,7 +139,6 @@ export default function DriverStats() {
               note={ratingSummary.ratingCount > 0 ? `${ratingSummary.ratingCount} ratings` : 'No ratings yet'}
               value={ratingValue}
               tone={colors.primaryHex}
-              filled
             />
           </View>
         </View>
@@ -153,7 +152,7 @@ export default function DriverStats() {
             accessibilityRole="button"
             accessibilityLabel="View ride packages"
           >
-            <Feather name="layers" size={20} color="#000" />
+            <Feather name="layers" size={20} color={colors.primary} />
             <View style={styles.packageHeader}>
               <View style={styles.packageTitleGroup}>
                 <Text style={[styles.packageName, { color: colors.foreground }]}>
@@ -204,12 +203,12 @@ function HeroMetric({ compact = false, label, value }: { compact?: boolean; labe
   </View>;
 }
 
-function MetricTile({ colors, filled = false, icon, label, note, tone, value }: {
-  colors: ReturnType<typeof useColors>; filled?: boolean; icon: keyof typeof Feather.glyphMap; label: string; note: string; tone: string; value: string;
+function MetricTile({ colors, icon, label, note, tone, value }: {
+  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; note: string; tone: string; value: string;
 }) {
   return <View style={[styles.metricTile, styles.cardShadow, { backgroundColor: colors.card }]}>
     <View style={styles.metricTopRow}>
-      {filled ? <FontAwesome name="star" size={18} color={tone} /> : <Feather name={icon} size={18} color={tone} />}
+      <Feather name={icon} size={18} color={tone} />
       <Text style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text>
     </View>
     <Text style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
@@ -226,7 +225,7 @@ function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
   colors: ReturnType<typeof useColors>; declinesToday: number; priorityReduced: boolean;
 }) {
   return <View style={styles.performanceStatus}>
-    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={20} color="#000" />
+    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={20} color={priorityReduced ? colors.destructive : colors.primary} />
     <View style={styles.performanceStatusCopy}>
       <Text style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
         {priorityReduced ? 'Lower Priority' : 'High Priority'}
@@ -251,7 +250,7 @@ function DetailRow({ colors, icon, label, last = false, note, value }: {
   colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; note?: string; value: string;
 }) {
   return <View style={[styles.detailRow, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-    <Feather name={icon} size={18} color="#000" />
+    <Feather name={icon} size={18} color={colors.primary} />
     <View style={styles.detailLabelGroup}>
       <Text style={[styles.detailLabel, { color: colors.foreground }]}>{label}</Text>
       {note ? <Text style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</Text> : null}
@@ -269,7 +268,7 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
     <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
       {recentPurchases.length === 0 ? (
         <View style={styles.emptyHistory}>
-          <Feather name="clock" size={21} color="#000" />
+          <Feather name="clock" size={21} color={colors.mutedForeground} />
           <Text style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</Text>
         </View>
       ) : recentPurchases.map((purchase, index) => {
@@ -279,7 +278,7 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
           key={purchase.transactionId}
           style={[styles.historyRow, index < recentPurchases.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
         >
-          <Feather name="package" size={18} color="#000" />
+          <Feather name="package" size={18} color={colors.primary} />
           <View style={styles.historyLabelGroup}>
             <Text style={[styles.historyName, { color: colors.foreground }]}>{ridePackage.name}</Text>
             <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
