@@ -223,6 +223,7 @@ describe('DriverPackagesScreen', () => {
   test('shows the simplified package copy', () => {
     render(<DriverPackagesScreen />);
 
+    expect(screen.getByText('FREE NOW')).toBeTruthy();
     expect(screen.getByLabelText('30 Ride Credits + 5 Bonus Credits')).toBeTruthy();
     expect(screen.getByText('Launch Offer')).toBeTruthy();
     expect(screen.getByLabelText('60 Ride Credits + 15 Bonus Credits')).toBeTruthy();
