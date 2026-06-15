@@ -62,6 +62,28 @@ describe('driver onboarding blocking validation', () => {
     expect(errors.nationalId).toBe('National ID back image is required');
   });
 
+  test('accepts front-only insurance and authorization documents', () => {
+    const futureDate = '08/06/2030';
+    const errors = validateStep(2, {
+      docs: {
+        ...INITIAL_DRIVER_DOCUMENTS,
+        license: ['file:///licence-front.jpg', 'file:///licence-back.jpg'],
+        nationalId: ['file:///id-front.jpg', 'file:///id-back.jpg'],
+        insurance: ['file:///insurance.jpg', null],
+        authorization: ['file:///rura-authorization.jpg', null],
+      },
+      form: {
+        ...INITIAL_DRIVER_ONBOARDING_FORM,
+        licenseExpiryDate: futureDate,
+        insuranceExpiryDate: futureDate,
+        authorizationExpiryDate: futureDate,
+      },
+    });
+
+    expect(errors.insurance).toBeUndefined();
+    expect(errors.authorization).toBeUndefined();
+  });
+
   test('blocks invalid MoMo numbers', () => {
     expect(validateStep(3, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, momoCode: '250781234567' } }).momoCode)
       .toBe('Enter 07XXXXXXXX or +2507XXXXXXXX');

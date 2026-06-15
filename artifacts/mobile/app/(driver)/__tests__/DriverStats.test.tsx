@@ -80,7 +80,7 @@ jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
   const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
-  return { Feather: Icon };
+  return { Feather: Icon, FontAwesome: Icon };
 });
 
 jest.mock('@/context/AuthContext', () => ({
