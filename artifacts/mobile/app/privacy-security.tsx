@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Linking,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -69,7 +70,7 @@ export default function PrivacySecurityScreen() {
         contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
       >
         {/* Shield banner */}
-        <View style={[styles.banner, { backgroundColor: colors.primaryHex + '12', borderColor: colors.primaryHex + '30' }]}>
+        <View style={[styles.banner, { backgroundColor: colors.primaryHex + '12' }]}>
           <Feather name="shield" size={28} color={colors.primary} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.primary }]}>Your data is protected</Text>
@@ -87,7 +88,7 @@ export default function PrivacySecurityScreen() {
               </View>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{section.title}</Text>
             </View>
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.card, { backgroundColor: colors.card }]}>
               {section.items.map((item, i) => (
                 <View key={i} style={styles.itemRow}>
                   <View style={[styles.bullet, { backgroundColor: colors.primary }]} />
@@ -124,9 +125,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 14,
     marginBottom: 8,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
   },
   bannerTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
   bannerDesc: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
@@ -134,7 +137,14 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 12 },
+  card: {
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
+  },
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
   itemText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20 },

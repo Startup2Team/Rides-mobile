@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
@@ -70,6 +70,7 @@ jest.mock('react-native', () => {
 jest.mock('expo-router', () => ({
   router: {
     back: mockRouterBack,
+    push: jest.fn(),
     replace: mockRouterReplace,
   },
 }));
@@ -161,36 +162,26 @@ describe('DriverPackagesScreen', () => {
     jest.restoreAllMocks();
   });
 
-  test('successful Mobile Money package purchase adds credits after confirmation', async () => {
+  test('opens the payment page only after buying the selected package', () => {
     render(<DriverPackagesScreen />);
 
-    fireEvent.press(screen.getByText('Review Plan'));
+    fireEvent.press(screen.getByText('Growth Package'));
+    fireEvent.press(screen.getByText('Buy Selected Package'));
 
-    expect(screen.getByText('Confirm package')).toBeTruthy();
-    expect(screen.getByText('MTN Mobile Money')).toBeTruthy();
-    expect(screen.getByText('Airtel Money')).toBeTruthy();
-    expect(screen.getByText('Send Payment Prompt')).toBeTruthy();
-    expect(mockActivatePackage).not.toHaveBeenCalled();
-
-    await act(async () => {
-      fireEvent.press(screen.getByText('Send Payment Prompt'));
+    expect(require('expo-router').router.push).toHaveBeenCalledWith({
+      pathname: '/driver-package-payment',
+      params: { packageId: 'growth' },
     });
+  });
 
-    expect(mockCreatePackagePurchase).toHaveBeenCalledWith({
-      packageId: 'growth',
-      phoneNumber: '+250788000000',
-      provider: 'mtn',
-    });
-    expect(screen.getByText('Waiting for Mobile Money confirmation. Confirm the payment on your phone.')).toBeTruthy();
+  test('deselects a package when it is pressed again', () => {
+    render(<DriverPackagesScreen />);
 
-    await act(async () => {
-      jest.advanceTimersByTime(1900);
-    });
+    fireEvent.press(screen.getByText('Growth Package'));
+    fireEvent.press(screen.getByText('Growth Package'));
+    fireEvent.press(screen.getByText('Buy Selected Package'));
 
-    await waitFor(() => expect(mockUpdatePackagePurchaseStatus).toHaveBeenCalledWith(successfulPurchase.transactionId, 'successful'));
-    expect(screen.getByText('Package Activated')).toBeTruthy();
-    expect(screen.getByText('You can now go online and start receiving ride requests.')).toBeTruthy();
-    expect(screen.getByText('Credits Added: 75')).toBeTruthy();
+    expect(require('expo-router').router.push).not.toHaveBeenCalled();
   });
 
   test('keeps purchase history off the package page', () => {
@@ -229,21 +220,24 @@ describe('DriverPackagesScreen', () => {
     expect(screen.queryByText('Failed')).toBeNull();
   });
 
-  test('shows launch package as free now', () => {
+  test('shows the simplified package copy', () => {
     render(<DriverPackagesScreen />);
 
     expect(screen.getByText('FREE NOW')).toBeTruthy();
-
-    fireEvent.press(screen.getByText('Review Free Plan'));
-
-    expect(screen.getAllByText('FREE NOW').length).toBeGreaterThan(1);
-    expect(screen.getByText('No payment is required for this launch package now. It may become a paid package later.')).toBeTruthy();
+    expect(screen.getByLabelText('30 Ride Credits + 5 Bonus Credits')).toBeTruthy();
+    expect(screen.getByText('Launch Offer')).toBeTruthy();
+    expect(screen.getByLabelText('60 Ride Credits + 15 Bonus Credits')).toBeTruthy();
+    expect(screen.getByText('Most Popular Plan')).toBeTruthy();
+    expect(screen.getByText('Pro Package')).toBeTruthy();
+    expect(screen.getByLabelText('120 Ride Credits + 30 Bonus Credits')).toBeTruthy();
+    expect(screen.getByText('Best Value Plan')).toBeTruthy();
+    expect(screen.getByText('3,500 RWF')).toBeTruthy();
   });
 
   test('user-facing package copy avoids misleading payment platform terms', () => {
     render(<DriverPackagesScreen />);
 
-    fireEvent.press(screen.getByText('Review Plan'));
+    fireEvent.press(screen.getByText('Growth Package'));
 
     const renderedText = screen.UNSAFE_getAllByType(Text)
       .map(node => String(node.props.children))

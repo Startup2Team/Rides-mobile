@@ -13,12 +13,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Line, Polygon, Rect } from 'react-native-svg';
 import { useColors } from '@/hooks/useColors';
 
-const LANGUAGE_FLAGS = ['rw', 'uk'] as const;
+const LANGUAGE_FLAGS = ['rw', 'uk', 'fr', 'ug'] as const;
 type LanguageFlag = typeof LANGUAGE_FLAGS[number];
 
-const LANGUAGES: { label: string; value: LanguageFlag }[] = [
-  { label: 'Kinyarwanda', value: 'rw' },
-  { label: 'English', value: 'uk' },
+const LANGUAGES: { code: string; label: string; value: LanguageFlag }[] = [
+  { code: 'KIN', label: 'Kinyarwanda', value: 'rw' },
+  { code: 'EN', label: 'English', value: 'uk' },
+  { code: 'FR', label: 'French', value: 'fr' },
+  { code: 'LG', label: 'Luganda', value: 'ug' },
 ];
 
 function FlagPreview({ flag }: { flag: LanguageFlag }) {
@@ -50,6 +52,31 @@ function FlagPreview({ flag }: { flag: LanguageFlag }) {
     );
   }
 
+  if (flag === 'fr') {
+    return (
+      <Svg width={58} height={58} viewBox="0 0 58 58" style={styles.flagSvg}>
+        <Rect width={19.34} height={58} fill="#002395" />
+        <Rect x={19.34} width={19.34} height={58} fill="#FFFFFF" />
+        <Rect x={38.68} width={19.32} height={58} fill="#ED2939" />
+      </Svg>
+    );
+  }
+
+  if (flag === 'ug') {
+    return (
+      <Svg width={58} height={58} viewBox="0 0 58 58" style={styles.flagSvg}>
+        <Rect width={58} height={9.67} fill="#000000" />
+        <Rect y={9.67} width={58} height={9.67} fill="#FCDC04" />
+        <Rect y={19.34} width={58} height={9.67} fill="#D90000" />
+        <Rect y={29.01} width={58} height={9.67} fill="#000000" />
+        <Rect y={38.68} width={58} height={9.67} fill="#FCDC04" />
+        <Rect y={48.35} width={58} height={9.65} fill="#D90000" />
+        <Circle cx={29} cy={29} r={8.5} fill="#FFFFFF" />
+        <Circle cx={29} cy={29} r={5.8} fill="none" stroke="#D90000" strokeWidth={1} />
+      </Svg>
+    );
+  }
+
   return (
     <Svg width={58} height={58} viewBox="0 0 58 58" style={styles.flagSvg}>
       <Rect width={58} height={58} fill="#012169" />
@@ -70,7 +97,7 @@ export function LanguageSelector() {
   const insets = useSafeAreaInsets();
   const [languageFlag, setLanguageFlag] = useState<LanguageFlag>('uk');
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
-  const languageCode = languageFlag === 'rw' ? 'KIN' : 'EN';
+  const languageCode = LANGUAGES.find(language => language.value === languageFlag)?.code ?? 'EN';
 
   const openLanguageSheet = () => {
     Keyboard.dismiss();

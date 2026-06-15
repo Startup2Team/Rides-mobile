@@ -3,7 +3,7 @@ import { z } from 'zod';
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
 const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
-const driverRidePackageIdSchema = z.enum(['launch_starter', 'growth']);
+const driverRidePackageIdSchema = z.enum(['launch_starter', 'growth', 'pro']);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',

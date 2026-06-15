@@ -24,6 +24,5 @@ export function VerifiedBadge({
 const styles = StyleSheet.create({
   badge: {
     flexShrink: 0,
-    transform: [{ translateY: -1 }],
   },
 });

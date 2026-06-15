@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/BackButton';
+import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 
@@ -23,16 +24,16 @@ export default function OTPScreen() {
 
   const otpLength = length === '4' ? 4 : 6;
   const [code, setCode] = useState<string[]>(() => Array(otpLength).fill(''));
-  const [timer, setTimer] = useState(60);
+  const [expiryTimer, setExpiryTimer] = useState(OTP_VALIDITY_SECONDS);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
-    if (timer <= 0) return;
-    const t = setTimeout(() => setTimer(s => s - 1), 1000);
+    if (expiryTimer <= 0) return;
+    const t = setTimeout(() => setExpiryTimer(s => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [timer]);
+  }, [expiryTimer]);
 
   const handleInput = (val: string, idx: number) => {
     const cleaned = val.replace(/\D/g, '').slice(-1);
@@ -49,6 +50,10 @@ export default function OTPScreen() {
   };
 
   const handleVerifyCode = async (entered: string) => {
+    if (expiryTimer <= 0) {
+      setError('This code has expired. Request a new code to continue.');
+      return;
+    }
     setVerifying(true);
     await new Promise(r => setTimeout(r, 1500));
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -109,21 +114,29 @@ export default function OTPScreen() {
         </View>
 
         {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+        {expiryTimer > 0 ? (
+          <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
+            Code expires in {formatOtpTime(expiryTimer)}
+          </Text>
+        ) : null}
 
         {verifying ? (
           <Text style={[styles.verifyingText, { color: colors.primary }]}>Verifying...</Text>
         ) : null}
       </View>
 
-      <TouchableOpacity
-        disabled={timer > 0}
-        onPress={() => setTimer(60)}
-        style={styles.resend}
-      >
-        <Text style={[styles.resendText, { color: timer > 0 ? colors.mutedForeground : colors.primary }]}>
-          {timer > 0 ? `Resend in ${timer}s` : 'Resend code'}
-        </Text>
-      </TouchableOpacity>
+      {expiryTimer <= 0 ? (
+        <TouchableOpacity
+          onPress={() => {
+            setCode(Array(otpLength).fill(''));
+            setError('');
+            setExpiryTimer(OTP_VALIDITY_SECONDS);
+          }}
+          style={styles.resend}
+        >
+          <Text style={[styles.resendText, { color: colors.primary }]}>Resend code</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -149,6 +162,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   error: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  expiryText: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   verifyingText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
   resend: { alignItems: 'center' },
   resendText: { fontSize: 14, fontFamily: 'Inter_500Medium' },

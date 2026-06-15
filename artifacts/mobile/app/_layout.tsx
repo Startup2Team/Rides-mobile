@@ -57,6 +57,7 @@ function RootLayoutNav() {
       <Stack.Screen name="driver-onboarding" />
       <Stack.Screen name="driver-submission-confirmation" />
       <Stack.Screen name="driver-packages" />
+      <Stack.Screen name="driver-package-payment" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-navigate" />
       <Stack.Screen
@@ -71,9 +72,13 @@ function RootLayoutNav() {
       />
       <Stack.Screen name="payment-methods" />
       <Stack.Screen name="edit-profile" />
+      <Stack.Screen name="change-phone-number" />
       <Stack.Screen name="help-support" />
+      <Stack.Screen name="report-ride-issue" />
       <Stack.Screen name="privacy-security" />
       <Stack.Screen name="about" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="saved-place-selector" />
       <Stack.Screen name="ride-detail" />
     </Stack>
   );

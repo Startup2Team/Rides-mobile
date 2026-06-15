@@ -45,6 +45,7 @@ jest.mock('react-native', () => {
       flatten: (style: object) => style,
     },
     Text: host('Text'),
+    TouchableOpacity: host('TouchableOpacity'),
     useColorScheme: () => 'light',
     View: host('View'),
   };
@@ -53,6 +54,27 @@ jest.mock('react-native', () => {
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+jest.mock('expo-router', () => ({
+  router: { back: jest.fn() },
+}));
+
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(),
+}));
+
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { BlurView: (props: object) => <View {...props} /> };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { LinearGradient: (props: object) => <View {...props} /> };
+});
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -113,12 +135,19 @@ describe('DriverStats', () => {
 
     await waitFor(() => expect(mockLoadHistory).toHaveBeenCalled());
 
-    expect(screen.getByText('PURCHASE HISTORY')).toBeTruthy();
-    expect(screen.getAllByText('Growth Package').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Statistics')).toBeTruthy();
+    expect(screen.getByText('Track your driver performance')).toBeTruthy();
+    expect(screen.getByText("TODAY'S ACTIVITY")).toBeTruthy();
+    expect(screen.getByText('No trips completed today yet.')).toBeTruthy();
+    expect(screen.getByText('Package History')).toBeTruthy();
+    expect(screen.getByText('View Packages')).toBeTruthy();
+    expect(screen.getAllByText('Credits Left')).toHaveLength(1);
+    expect(screen.getAllByText('Growth Package')).toHaveLength(2);
     expect(screen.getByText('Successful')).toBeTruthy();
     expect(screen.getByText('Failed')).toBeTruthy();
     expect(screen.getByText(/MTN Mobile Money/)).toBeTruthy();
     expect(screen.getByText(/Airtel Money/)).toBeTruthy();
     expect(screen.getAllByText('2,000 RWF')).toHaveLength(2);
+    expect(screen.queryByText('How Stats Work')).toBeNull();
   });
 });
