@@ -194,15 +194,24 @@ const driverRatingSchema = z.object({
 
 export const driverRatingsSchema = z.array(driverRatingSchema);
 
-export const driverEntitlementSchema = z.object({
+const driverEntitlementShapeSchema = z.object({
   activePackageId: driverRidePackageIdSchema.nullable(),
   remainingRideCredits: z.number().int().nonnegative(),
+  remainingBonusRides: z.number().int().nonnegative(),
   activations: z.array(packageActivationSchema),
   creditTransactions: z.array(driverCreditTransactionSchema),
   purchaseHistory: z.array(driverPackagePurchaseSchema),
   updatedAt: z.string(),
   authority: z.enum(['local_prototype', 'backend']),
 });
+
+export const driverEntitlementSchema = z.preprocess(value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  return {
+    remainingBonusRides: 0,
+    ...value,
+  };
+}, driverEntitlementShapeSchema);
 
 const negotiationMessageSchema = z.object({
   id: z.string(),

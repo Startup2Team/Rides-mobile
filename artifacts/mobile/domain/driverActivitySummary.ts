@@ -1,5 +1,5 @@
 import type { DriverProfile, Ride } from '@/types';
-import { getActiveRideCredits, type DriverEntitlement } from './driverRidePackages';
+import { getRideBalance, type DriverEntitlement } from './driverRidePackages';
 
 function isSameLocalDay(value: string | undefined, now: Date) {
   if (!value) return false;
@@ -49,7 +49,7 @@ export function getDriverActivitySummary({
   return {
     todayEarningsRwf: completedToday.reduce((total, ride) => total + realFare(ride), 0),
     completedRidesToday,
-    remainingRideCredits: getActiveRideCredits(entitlement),
+    remainingRideCredits: getRideBalance(entitlement),
     allTimeCompletedRides: Math.max(0, driverProfile?.completedRides ?? 0),
     allTimeEarningsRwf: Math.max(0, driverProfile?.earningsTotal ?? 0),
   };

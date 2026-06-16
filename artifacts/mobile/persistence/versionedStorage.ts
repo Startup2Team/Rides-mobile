@@ -29,7 +29,7 @@ export async function saveVersionedStorage<T>(key: string, data: T) {
 
 export async function loadVersionedStorage<T>(
   key: string,
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
 ): Promise<StorageLoadResult<T>> {
   const raw = await AsyncStorage.getItem(key);
   if (!raw) return { data: null, source: 'missing' };

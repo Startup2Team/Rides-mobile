@@ -122,7 +122,12 @@ export default function DriverProfileScreen() {
           <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
           <QuickStat colors={colors} label="Completed Trips" value={String(driverProfile?.completedRides ?? 0)} />
           <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
-          <QuickStat colors={colors} label="Credits Left" value={isEntitlementLoading ? '...' : String(rideCredits)} />
+          <QuickStat
+            colors={colors}
+            label="Balance"
+            value={isEntitlementLoading ? '...' : String(rideCredits)}
+            onPress={() => router.push('/driver-packages')}
+          />
         </View>
 
         <View style={styles.section}>
@@ -226,11 +231,27 @@ function SectionTitle({ title }: { title: string }) {
   return <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>;
 }
 
-function QuickStat({ colors, label, value }: { colors: ReturnType<typeof useColors>; label: string; value: string }) {
-  return <View style={styles.quickStat}>
+function QuickStat({ colors, label, onPress, value }: {
+  colors: ReturnType<typeof useColors>; label: string; onPress?: () => void; value: string;
+}) {
+  const content = <>
     <Text style={[styles.quickStatValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
     <Text style={[styles.quickStatLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text>
-  </View>;
+  </>;
+
+  if (onPress) {
+    return <TouchableOpacity
+      style={styles.quickStat}
+      onPress={onPress}
+      activeOpacity={0.72}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${label.toLowerCase()}`}
+    >
+      {content}
+    </TouchableOpacity>;
+  }
+
+  return <View style={styles.quickStat}>{content}</View>;
 }
 
 function InfoRow({ colors, icon, label, last = false, value }: {
@@ -275,8 +296,8 @@ const styles = StyleSheet.create({
   avatarImageShadow: {
     borderRadius: 48, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.16, shadowRadius: 12, elevation: 5,
   },
-  name: { fontSize: 24, fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, maxWidth: '90%' },
+  name: { fontSize: 24, lineHeight: 29, fontFamily: 'Inter_700Bold', letterSpacing: -0.5, flexShrink: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, maxWidth: '90%', minWidth: 0 },
   phone: { fontSize: 13, fontFamily: 'Inter_400Regular' },
   section: { gap: 10 },
   sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },

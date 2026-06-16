@@ -121,7 +121,9 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
     entitlement: mockEntitlement,
     isLoading: false,
     launchOfferUsed: mockEntitlement.activations.some(activation => activation.packageId === 'launch_starter'),
+    bonusRides: mockEntitlement.remainingBonusRides,
     rideCredits: mockEntitlement.remainingRideCredits,
+    totalAvailableRides: mockEntitlement.remainingRideCredits + mockEntitlement.remainingBonusRides,
     updatePackagePurchaseStatus: mockUpdatePackagePurchaseStatus,
   }),
 }));
@@ -224,12 +226,12 @@ describe('DriverPackagesScreen', () => {
     render(<DriverPackagesScreen />);
 
     expect(screen.getByText('FREE NOW')).toBeTruthy();
-    expect(screen.getByLabelText('30 Ride Credits + 5 Bonus Credits')).toBeTruthy();
+    expect(screen.getByLabelText('30 Trips + 5 Bonus')).toBeTruthy();
     expect(screen.getByText('Launch Offer')).toBeTruthy();
-    expect(screen.getByLabelText('60 Ride Credits + 15 Bonus Credits')).toBeTruthy();
+    expect(screen.getByLabelText('60 Trips + 15 Bonus')).toBeTruthy();
     expect(screen.getByText('Most Popular Plan')).toBeTruthy();
     expect(screen.getByText('Pro Package')).toBeTruthy();
-    expect(screen.getByLabelText('120 Ride Credits + 30 Bonus Credits')).toBeTruthy();
+    expect(screen.getByLabelText('120 Trips + 30 Bonus')).toBeTruthy();
     expect(screen.getByText('Best Value Plan')).toBeTruthy();
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
   });

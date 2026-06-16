@@ -28,13 +28,17 @@ describe('DriverEntitlementProvider', () => {
     await act(async () => {
       await result.current.activatePackage('launch_starter');
     });
-    expect(result.current.rideCredits).toBe(35);
+    expect(result.current.rideCredits).toBe(30);
+    expect(result.current.bonusRides).toBe(5);
+    expect(result.current.totalAvailableRides).toBe(35);
 
     await act(async () => {
       expect(await result.current.deductCreditForCompletedRide('ride-1')).toBe(true);
       expect(await result.current.deductCreditForCompletedRide('ride-1')).toBe(false);
     });
-    expect(result.current.rideCredits).toBe(34);
+    expect(result.current.rideCredits).toBe(29);
+    expect(result.current.bonusRides).toBe(5);
+    expect(result.current.totalAvailableRides).toBe(34);
   });
 
   test('driver completion deducts one credit while cancellation deducts none', async () => {
@@ -52,7 +56,8 @@ describe('DriverEntitlementProvider', () => {
       result.current.ride.acceptRideRequest();
       result.current.ride.cancelRide();
     });
-    expect(result.current.entitlement.rideCredits).toBe(35);
+    expect(result.current.entitlement.rideCredits).toBe(30);
+    expect(result.current.entitlement.bonusRides).toBe(5);
 
     act(() => {
       result.current.ride.simulateIncomingRideRequest();
@@ -62,6 +67,7 @@ describe('DriverEntitlementProvider', () => {
       result.current.ride.startJourney();
       result.current.ride.completeRide('driver');
     });
-    await waitFor(() => expect(result.current.entitlement.rideCredits).toBe(34));
+    await waitFor(() => expect(result.current.entitlement.rideCredits).toBe(29));
+    expect(result.current.entitlement.bonusRides).toBe(5);
   });
 });

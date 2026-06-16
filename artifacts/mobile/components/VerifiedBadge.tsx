@@ -12,7 +12,7 @@ export function VerifiedBadge({
 }: VerifiedBadgeProps) {
   return (
     <Image
-      source={require('../assets/images/dashboard/verified_badge.png')}
+      source={require('../assets/images/verified badge.png')}
       style={[styles.badge, { width: size, height: size }]}
       accessibilityLabel="Verified driver"
       accessibilityIgnoresInvertColors

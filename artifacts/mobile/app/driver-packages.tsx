@@ -47,7 +47,7 @@ export default function DriverPackagesScreen() {
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader
       title="Ride Packages"
-      subtitle="Choose credits to receive ride requests"
+      subtitle="Choose a package to receive ride requests"
       onBackPress={() => router.back()}
     />
     <ScrollView
@@ -58,7 +58,7 @@ export default function DriverPackagesScreen() {
 
     <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
       <View>
-        <Text style={styles.balanceLabel}>AVAILABLE RIDE CREDITS</Text>
+        <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
         <Text style={styles.balanceValue}>{isEntitlementLoading ? '...' : rideCredits}</Text>
       </View>
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
@@ -126,11 +126,11 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
     <View style={styles.packageContent}>
       <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
       <View
-        accessibilityLabel={`${ridePackage.includedRides} Ride Credits + ${ridePackage.bonusRides} Bonus Credits`}
+        accessibilityLabel={`${ridePackage.includedRides} Trips + ${ridePackage.bonusRides} Bonus`}
         style={styles.creditRow}
       >
-        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.includedRides} Ride Credits</Text>
-        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRides} Bonus Credits</Text>
+        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.includedRides} Trips</Text>
+        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRides} Bonus</Text>
       </View>
       <Text style={[styles.planLabel, { color: colors.mutedForeground }]}>
         {ridePackage.launchOffer ? 'Launch Offer' : ridePackage.id === 'growth' ? 'Most Popular Plan' : 'Best Value Plan'}

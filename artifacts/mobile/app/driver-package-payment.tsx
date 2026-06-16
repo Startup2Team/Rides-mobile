@@ -161,11 +161,11 @@ export default function DriverPackagePaymentScreen() {
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Ride credits</Text>
+              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Trips</Text>
               <Text style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.includedRides}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus credits</Text>
+              <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus</Text>
               <Text style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRides}</Text>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
@@ -291,6 +291,8 @@ function Notice({ colors, icon, text, tone }: {
 function ReceiptCard({ activation, colors }: {
   activation: PackageActivation; colors: ReturnType<typeof useColors>;
 }) {
+  const ridePackage = DRIVER_RIDE_PACKAGES[activation.packageId];
+
   return <View style={[styles.paymentContent, styles.receiptCard]}>
     <View style={[styles.receiptIconHalo, { backgroundColor: colors.successHex + '18' }]}>
       <View style={[styles.receiptIcon, { backgroundColor: colors.success }]}>
@@ -299,7 +301,8 @@ function ReceiptCard({ activation, colors }: {
     </View>
     <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package Activated</Text>
     <Text style={[styles.receiptText, { color: colors.mutedForeground }]}>You can now go online and start receiving ride requests.</Text>
-    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Credits Added: {activation.creditsGranted}</Text>
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Balance Added: {ridePackage.includedRides}</Text>
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Added: {ridePackage.bonusRides}</Text>
     <View style={styles.receiptAction}>
       <AppButton title="Go to Dashboard" onPress={() => router.replace('/(driver)')} fullWidth size="lg" />
     </View>

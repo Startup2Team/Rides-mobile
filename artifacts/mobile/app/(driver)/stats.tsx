@@ -98,7 +98,7 @@ export default function DriverStats() {
           <View style={styles.heroMetrics}>
             <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
             <View style={styles.heroDivider} />
-            <HeroMetric label="Credits Left" value={isEntitlementLoading ? '...' : String(rideCredits)} />
+            <HeroMetric label="Balance" value={isEntitlementLoading ? '...' : String(rideCredits)} />
             <View style={styles.heroDivider} />
             <HeroMetric label="Driver Rating" value={ratingSummary.ratingCount > 0 ? ratingValue : 'No ratings yet'} compact />
           </View>
@@ -111,15 +111,15 @@ export default function DriverStats() {
             <MetricTile
               colors={colors}
               icon="check-circle"
-              label="Completed Today"
-              note="Completed trips today"
+              label="Today"
+              note="Completed trips"
               value={String(activitySummary.completedRidesToday)}
               tone={colors.successHex}
             />
             <MetricTile
               colors={colors}
               icon="percent"
-              label="Acceptance Rate"
+              label="Acceptance"
               note={acceptanceRateNote}
               value={acceptanceRateValue}
               tone={colors.primaryHex}
@@ -127,15 +127,16 @@ export default function DriverStats() {
             <MetricTile
               colors={colors}
               icon="award"
-              label="Total Completed Trips"
-              note="All-time completed trips"
+              label="All-time"
+              note="Completed trips"
               value={String(dp.completedRides)}
               tone={colors.primaryHex}
             />
             <MetricTile
               colors={colors}
               icon="star"
-              label="Driver Rating"
+              iconColor={colors.primaryHex}
+              label="Rating"
               note={ratingSummary.ratingCount > 0 ? `${ratingSummary.ratingCount} ratings` : 'No ratings yet'}
               value={ratingValue}
               tone={colors.primaryHex}
@@ -159,7 +160,7 @@ export default function DriverStats() {
                   Ride Packages
                 </Text>
                 <Text style={[styles.packageMeta, { color: colors.mutedForeground }]}>
-                  Explore ride credit options for your driving needs
+                  Explore package options for your driving needs
                 </Text>
               </View>
             </View>
@@ -203,16 +204,17 @@ function HeroMetric({ compact = false, label, value }: { compact?: boolean; labe
   </View>;
 }
 
-function MetricTile({ colors, icon, label, note, tone, value }: {
-  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; note: string; tone: string; value: string;
+function MetricTile({ colors, icon, iconColor, label, note, tone, value }: {
+  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; iconColor?: string; label: string; note: string; tone: string; value: string;
 }) {
   return <View style={[styles.metricTile, styles.cardShadow, { backgroundColor: colors.card }]}>
     <View style={styles.metricTopRow}>
-      <Feather name={icon} size={18} color={tone} />
+      {icon === 'star' && iconColor
+        ? <Text style={{ fontSize: 18, lineHeight: 22, color: iconColor }}>★</Text>
+        : <Feather name={icon} size={18} color={iconColor ?? colors.foreground} />}
       <Text style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text>
     </View>
     <Text style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-    <Text style={[styles.metricNote, { color: colors.mutedForeground }]} numberOfLines={2}>{note}</Text>
   </View>;
 }
 
@@ -345,12 +347,12 @@ const styles = StyleSheet.create({
   heroEmptyText: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: -8 },
   section: { gap: 11 },
   sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
-  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 140, minHeight: 132, borderRadius: 20, padding: 15, gap: 7 },
-  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  metricValue: { fontSize: 25, lineHeight: 30, fontFamily: 'Inter_700Bold', letterSpacing: -0.6, marginTop: 5 },
-  metricLabel: { flex: 1, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
-  metricNote: { fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 14 },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: 14, padding: 10, gap: 3 },
+  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metricValue: { fontSize: 19, lineHeight: 23, fontFamily: 'Inter_700Bold', letterSpacing: -0.5, marginTop: 2 },
+  metricLabel: { flex: 1, fontSize: 9, fontFamily: 'Inter_600SemiBold' },
+  metricNote: { fontSize: 9, fontFamily: 'Inter_400Regular', lineHeight: 13 },
   cardShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
   surface: { borderRadius: 20, overflow: 'hidden' },
   packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },

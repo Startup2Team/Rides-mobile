@@ -72,12 +72,22 @@ export default function SavedPlaceSelectorScreen() {
     router.back();
   };
 
-  const openMap = () => {
-    const initial = existing ?? KIGALI_CENTER;
-    setMapCoords({ latitude: initial.latitude, longitude: initial.longitude });
+  const openMap = async () => {
+    let coords: { latitude: number; longitude: number } = existing ?? KIGALI_CENTER;
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    } catch {}
+    setMapCoords(coords);
     setMapAddress(existing?.address ?? '');
     setMode('map');
     Keyboard.dismiss();
+    requestAnimationFrame(() => {
+      mapRef.current?.animateToRegion(
+        { ...coords, latitudeDelta: MAP_LOCATION_DELTA, longitudeDelta: MAP_LOCATION_DELTA },
+        300,
+      );
+    });
   };
 
   const syncMapAddress = async (coords: typeof KIGALI_CENTER) => {

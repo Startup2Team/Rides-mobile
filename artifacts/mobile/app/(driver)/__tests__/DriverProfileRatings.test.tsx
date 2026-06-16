@@ -132,7 +132,9 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
     entitlement: { activePackageId: null },
     isLoading: false,
+    bonusRides: 0,
     rideCredits: 0,
+    totalAvailableRides: 0,
   }),
 }));
 

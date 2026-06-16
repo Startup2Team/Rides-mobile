@@ -124,7 +124,7 @@ async function writeSecureRaw(key: string, raw: string) {
   await deleteChunks(key, previousManifest);
 }
 
-function parseSecureValue<T>(key: string, raw: string, schema: z.ZodType<T>): StorageLoadResult<T> {
+function parseSecureValue<T>(key: string, raw: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>): StorageLoadResult<T> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -154,7 +154,7 @@ export async function saveSecureStorage<T>(key: string, data: T) {
 
 export async function loadSecureStorage<T>(
   key: string,
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
 ): Promise<StorageLoadResult<T>> {
   const secureRaw = await readSecureRaw(key);
   if (secureRaw) return parseSecureValue(key, secureRaw, schema);

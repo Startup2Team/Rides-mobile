@@ -57,6 +57,7 @@ export interface DriverCreditTransaction {
 export interface DriverEntitlement {
   activePackageId: DriverRidePackageId | null;
   remainingRideCredits: number;
+  remainingBonusRides: number;
   activations: PackageActivation[];
   creditTransactions: DriverCreditTransaction[];
   purchaseHistory: DriverPackagePurchase[];
@@ -100,6 +101,7 @@ export const DRIVER_RIDE_PACKAGES: Record<DriverRidePackageId, DriverRidePackage
 export const EMPTY_DRIVER_ENTITLEMENT: DriverEntitlement = {
   activePackageId: null,
   remainingRideCredits: 0,
+  remainingBonusRides: 0,
   activations: [],
   creditTransactions: [],
   purchaseHistory: [],
@@ -110,13 +112,20 @@ export const EMPTY_DRIVER_ENTITLEMENT: DriverEntitlement = {
 const normalizeEntitlement = (entitlement: DriverEntitlement | null | undefined): DriverEntitlement => ({
   ...EMPTY_DRIVER_ENTITLEMENT,
   ...(entitlement ?? {}),
+  remainingBonusRides: entitlement?.remainingBonusRides ?? 0,
   activations: entitlement?.activations ?? [],
   creditTransactions: entitlement?.creditTransactions ?? [],
   purchaseHistory: entitlement?.purchaseHistory ?? [],
 });
 
 export const getActiveRideCredits = (entitlement: DriverEntitlement | null | undefined) =>
+  Math.max(0, (entitlement?.remainingRideCredits ?? 0) + (entitlement?.remainingBonusRides ?? 0));
+
+export const getRideBalance = (entitlement: DriverEntitlement | null | undefined) =>
   Math.max(0, entitlement?.remainingRideCredits ?? 0);
+
+export const getActiveBonusRides = (entitlement: DriverEntitlement | null | undefined) =>
+  Math.max(0, entitlement?.remainingBonusRides ?? 0);
 
 export const canDriverGoOnlineWithCredits = (
   profile: DriverProfile | null | undefined,
@@ -136,9 +145,9 @@ export const isLowRideCreditBalance = (entitlement: DriverEntitlement | null | u
 export const getRideCreditBalanceMessage = (entitlement: DriverEntitlement | null | undefined) => {
   const credits = getActiveRideCredits(entitlement);
   if (credits === 0) return 'Choose a package to start receiving ride requests.';
-  if (credits <= 2) return `Only ${credits} ride credits left. Add a package soon to keep receiving requests.`;
-  if (credits <= 5) return `Only ${credits} ride credits left. Add a package soon to keep receiving requests.`;
-  if (credits <= 10) return `${credits} ride credits left. Consider adding a package soon.`;
+  if (credits <= 2) return `Only ${credits} balance left. Add a package soon to keep receiving requests.`;
+  if (credits <= 5) return `Only ${credits} balance left. Add a package soon to keep receiving requests.`;
+  if (credits <= 10) return `${credits} balance left. Consider adding a package soon.`;
   return null;
 };
 
@@ -187,7 +196,8 @@ export function activatePackage(
     entitlement: {
       ...current,
       activePackageId: packageId,
-      remainingRideCredits: getActiveRideCredits(current) + ridePackage.totalCredits,
+      remainingRideCredits: getRideBalance(current) + ridePackage.includedRides,
+      remainingBonusRides: getActiveBonusRides(current) + ridePackage.bonusRides,
       activations: [...current.activations, activation],
       creditTransactions: [...current.creditTransactions, transaction],
       updatedAt: now,
@@ -284,7 +294,8 @@ export function updatePackagePurchaseStatus(
   next = {
     ...next,
     activePackageId: purchase.packageId,
-    remainingRideCredits: getActiveRideCredits(next) + ridePackage.totalCredits,
+    remainingRideCredits: getRideBalance(next) + ridePackage.includedRides,
+    remainingBonusRides: getActiveBonusRides(next) + ridePackage.bonusRides,
     activations: [...next.activations, activation],
     creditTransactions: [...next.creditTransactions, transaction],
     updatedAt: now,
@@ -304,6 +315,7 @@ export function deductCreditForCompletedRide(
     return { entitlement: current, deducted: false };
   }
   if (getActiveRideCredits(current) < 1) return { entitlement: current, deducted: false };
+  const deductFromBalance = getRideBalance(current) > 0;
 
   const transaction: DriverCreditTransaction = {
     id: `debit:${completedRideId}`,
@@ -318,7 +330,8 @@ export function deductCreditForCompletedRide(
     deducted: true,
     entitlement: {
       ...current,
-      remainingRideCredits: current.remainingRideCredits - 1,
+      remainingRideCredits: deductFromBalance ? current.remainingRideCredits - 1 : current.remainingRideCredits,
+      remainingBonusRides: deductFromBalance ? current.remainingBonusRides : current.remainingBonusRides - 1,
       creditTransactions: [...current.creditTransactions, transaction],
       updatedAt: now,
     },

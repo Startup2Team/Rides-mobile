@@ -4,7 +4,9 @@ import {
   createPackagePurchase as createPackagePurchaseDomain,
   deductCreditForCompletedRide as deductCreditDomain,
   EMPTY_DRIVER_ENTITLEMENT,
+  getActiveBonusRides,
   getActiveRideCredits,
+  getRideBalance,
   hasUsedLaunchOffer,
   updatePackagePurchaseStatus as updatePackagePurchaseStatusDomain,
   type DriverEntitlement,
@@ -20,6 +22,8 @@ interface DriverEntitlementContextType {
   entitlement: DriverEntitlement;
   isLoading: boolean;
   rideCredits: number;
+  bonusRides: number;
+  totalAvailableRides: number;
   launchOfferUsed: boolean;
   activatePackage: (packageId: DriverRidePackageId) => Promise<PackageActivation>;
   createPackagePurchase: (input: {
@@ -89,7 +93,9 @@ export function DriverEntitlementProvider({ children }: { children: React.ReactN
   const value = useMemo(() => ({
     entitlement,
     isLoading,
-    rideCredits: getActiveRideCredits(entitlement),
+    rideCredits: getRideBalance(entitlement),
+    bonusRides: getActiveBonusRides(entitlement),
+    totalAvailableRides: getActiveRideCredits(entitlement),
     launchOfferUsed: hasUsedLaunchOffer(entitlement),
     activatePackage,
     createPackagePurchase,
