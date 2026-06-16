@@ -18,6 +18,10 @@ import { useColors } from '@/hooks/useColors';
 import { useToast } from '@/context/ToastContext';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
+import { useAuth } from '@/context/AuthContext';
+import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { DRIVER_RIDE_PACKAGES, type DriverEntitlement } from '@/domain/driverRidePackages';
+import type { Ride } from '@/types';
 
 type NotifType = 'ride' | 'promo' | 'system' | 'safety';
 
@@ -78,6 +82,94 @@ function buildRideNotifications(rideHistory: { id: string; destination?: { addre
   }));
 }
 
+function buildDriverNotifications({
+  currentRide,
+  driverId,
+  entitlement,
+  pendingRequest,
+  rideHistory,
+  rideCredits,
+}: {
+  currentRide: Ride | null;
+  driverId?: string;
+  entitlement: DriverEntitlement;
+  pendingRequest: Ride | null;
+  rideHistory: Ride[];
+  rideCredits: number;
+}): AppNotification[] {
+  const tripNotifications = rideHistory
+    .filter(ride => ride.status === 'completed' && ride.driverId === driverId)
+    .slice(0, 5)
+    .map(ride => ({
+      id: `driver_ride_${ride.id}`,
+      type: 'ride' as const,
+      icon: 'check-circle' as const,
+      title: 'Trip completed',
+      message: `Trip to ${ride.destination?.address ?? 'destination'} completed. Ride revenue: ${ride.agreedFare?.toLocaleString() ?? '—'} RWF`,
+      time: ride.completedAt ?? ride.createdAt,
+      read: true,
+      rideId: ride.id,
+    }));
+
+  const liveTripNotifications: AppNotification[] = [];
+  if (pendingRequest) {
+    liveTripNotifications.push({
+      id: `driver_request_${pendingRequest.id}`,
+      type: 'ride',
+      icon: 'bell',
+      title: 'New ride request',
+      message: `${pendingRequest.pickup.address ?? 'Pickup'} to ${pendingRequest.destination.address ?? 'destination'}`,
+      time: pendingRequest.createdAt,
+      read: false,
+      rideId: pendingRequest.id,
+    });
+  } else if (currentRide && !['completed', 'cancelled', 'idle'].includes(currentRide.status)) {
+    liveTripNotifications.push({
+      id: `driver_active_${currentRide.id}`,
+      type: 'ride',
+      icon: 'navigation',
+      title: 'Active trip',
+      message: `${currentRide.pickup.address ?? 'Pickup'} to ${currentRide.destination.address ?? 'destination'}`,
+      time: currentRide.createdAt,
+      read: false,
+      rideId: currentRide.id,
+    });
+  }
+
+  const packageNotifications = entitlement.purchaseHistory.slice(0, 3).map(purchase => {
+    const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+    const successful = purchase.status === 'successful';
+    return {
+      id: `driver_package_${purchase.transactionId}`,
+      type: successful ? 'system' as const : 'safety' as const,
+      icon: successful ? 'package' as const : 'alert-circle' as const,
+      title: successful ? 'Ride package activated' : 'Ride package update',
+      message: successful
+        ? `${ridePackage.name} is active with ${ridePackage.totalCredits} ride credits.`
+        : `${ridePackage.name} payment status: ${purchase.status}.`,
+      time: purchase.completedAt ?? purchase.createdAt,
+      read: successful,
+    };
+  });
+
+  const creditNotifications: AppNotification[] = [];
+  if (rideCredits <= 5) {
+    creditNotifications.push({
+      id: 'driver_low_credits',
+      type: rideCredits === 0 ? 'safety' : 'system',
+      icon: 'alert-circle',
+      title: rideCredits === 0 ? 'No ride credits left' : 'Ride credits running low',
+      message: rideCredits === 0
+        ? 'View ride packages to continue receiving ride requests.'
+        : `${rideCredits} ride credits left. View packages before they run out.`,
+      time: entitlement.updatedAt || new Date().toISOString(),
+      read: false,
+    });
+  }
+
+  return [...liveTripNotifications, ...creditNotifications, ...packageNotifications, ...tripNotifications];
+}
+
 const STATIC_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'safety_1',
@@ -117,7 +209,7 @@ const STATIC_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-function EmptyState({ color, mutedColor }: { color: string; mutedColor: string }) {
+function EmptyState({ color, driverMode, mutedColor }: { color: string; driverMode: boolean; mutedColor: string }) {
   return (
     <View style={emptyStyles.wrap}>
       <View style={emptyStyles.iconCircle}>
@@ -125,7 +217,9 @@ function EmptyState({ color, mutedColor }: { color: string; mutedColor: string }
       </View>
       <Text style={[emptyStyles.title, { color }]}>No notifications yet</Text>
       <Text style={[emptyStyles.desc, { color: mutedColor }]}>
-        We'll notify you when your driver is confirmed, on the way, or has arrived.
+        {driverMode
+          ? "We'll notify you about ride requests, completed trips, and ride package updates."
+          : "We'll notify you when your driver is confirmed, on the way, or has arrived."}
       </Text>
     </View>
   );
@@ -142,8 +236,11 @@ export default function NotificationsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { rideHistory } = useRide();
+  const { user } = useAuth();
+  const { currentRide, pendingRequest, rideHistory } = useRide();
+  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { showToast } = useToast();
+  const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -155,12 +252,21 @@ export default function NotificationsScreen() {
   const halfCardSwipeThreshold = Math.max(44, (screenWidth - horizontalListPadding) / 2);
 
   useEffect(() => {
-    const rideNotifs = buildRideNotifications(rideHistory as any);
-    const merged = [...STATIC_NOTIFICATIONS, ...rideNotifs].sort(
+    const modeNotifications = driverMode
+      ? buildDriverNotifications({
+          currentRide,
+          driverId: user?.id,
+          entitlement,
+          pendingRequest,
+          rideHistory,
+          rideCredits: isEntitlementLoading ? Number.POSITIVE_INFINITY : rideCredits,
+        })
+      : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(rideHistory)];
+    const merged = modeNotifications.sort(
       (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
     );
     setNotifications(merged);
-  }, [rideHistory]);
+  }, [currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideCredits, rideHistory, user?.id]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const todayNotifications = notifications.filter(n => getDayBucket(n.time) === 'today');
@@ -217,7 +323,7 @@ export default function NotificationsScreen() {
   };
 
   const renderItem = (item: AppNotification) => {
-    const accentColor = TYPE_ICON_COLOR[item.type];
+    const accentColor = item.icon === 'check-circle' ? '#000' : TYPE_ICON_COLOR[item.type];
 
     return (
       <Swipeable
@@ -323,8 +429,10 @@ export default function NotificationsScreen() {
           ]}
           onPress={() => {
             markRead(item.id);
-            if (item.type === 'ride' && item.rideId) {
+            if (item.type === 'ride' && item.rideId && item.icon === 'check-circle') {
               router.push(`/ride-detail?rideId=${item.rideId}` as any);
+            } else if (item.title === 'Ride package activated') {
+              router.push('/(driver)/stats');
             }
           }}
           activeOpacity={0.75}
@@ -402,7 +510,7 @@ export default function NotificationsScreen() {
         ]}
       >
         {notifications.length === 0 ? (
-          <EmptyState color={colors.primaryHex} mutedColor={colors.mutedForeground} />
+          <EmptyState color={colors.primaryHex} driverMode={driverMode} mutedColor={colors.mutedForeground} />
         ) : (
           <>
             {renderSection('Today', todayNotifications)}

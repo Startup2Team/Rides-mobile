@@ -73,11 +73,34 @@ jest.mock('react-native', () => {
 
 jest.mock('expo-router', () => ({
   router: {
+    back: jest.fn(),
     push: jest.fn(),
     replace: jest.fn(),
   },
   useFocusEffect: (effect: () => void | (() => void)) => effect(),
 }));
+
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(),
+}));
+
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { BlurView: (props: object) => <View {...props} /> };
+});
+
+jest.mock('expo-store-review', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  requestReview: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('@/components/GlassScrollView', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { GlassScrollView: (props: { children: React.ReactNode }) => <View>{props.children}</View> };
+});
 
 jest.mock('expo-linear-gradient', () => {
   const React = require('react');
@@ -138,6 +161,8 @@ describe('DriverProfileScreen rating summary', () => {
     render(<DriverProfileScreen />);
 
     await waitFor(() => expect(screen.getByText('No ratings yet')).toBeTruthy());
+    expect(screen.getByText('Notifications')).toBeTruthy();
+    expect(screen.getByText('Driver Documents')).toBeTruthy();
   });
 
   test('profile displays rating summary when ratings exist', async () => {

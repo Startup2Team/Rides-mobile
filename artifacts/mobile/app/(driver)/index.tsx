@@ -4,10 +4,13 @@ import * as Location from 'expo-location';
 import {
   Animated,
   Image,
+  Linking,
   PanResponder,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  type ImageSourcePropType,
   type LayoutChangeEvent,
   TouchableOpacity,
   useColorScheme,
@@ -23,14 +26,18 @@ import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { setDriverAvailability, updateDriverLocation, getDailyEarnings, getDriverStats, type DailyEarnings, type DriverStats } from '@/services/driverRides';
 import { shouldSendLocation, IDLE_THROTTLE, type LocationSendState } from '@/utils/locationThrottle';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { KIGALI_CENTER, VEHICLE_LABELS } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
+import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
@@ -41,16 +48,51 @@ const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
 const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
+const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
+const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
 
-const DASHBOARD_CAMPAIGNS = [
+function visibleDriverRegion(location: typeof KIGALI_CENTER) {
+  return {
+    ...location,
+    ...MAP_VISIBLE_DELTA,
+  };
+}
+
+const DASHBOARD_ADS: Array<{
+  id: string;
+  accessibilityLabel: string;
+  image: ImageSourcePropType;
+  url: string;
+}> = [
   {
-    id: 'growth-package',
-    eyebrow: 'Growth Package',
-    title: '75 Ride Credits',
-    description: 'Most Popular Plan',
-    icon: 'trending-up' as const,
+    id: 'airtel',
+    accessibilityLabel: 'Open Airtel advertisement',
+    image: require('../../assets/ads/dashboard/airtel.jpg'),
+    url: 'https://www.airtel.co.rw/',
+  },
+  {
+    id: 'bk',
+    accessibilityLabel: 'Open Bank of Kigali advertisement',
+    image: require('../../assets/ads/dashboard/bk.jpg'),
+    url: 'https://www.bk.rw/',
+  },
+  {
+    id: 'jibu',
+    accessibilityLabel: 'Open Jibu advertisement',
+    image: require('../../assets/ads/dashboard/jibu.jpg'),
+    url: 'https://jibuco.com/',
   },
 ];
+const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
+  require('../../assets/images/dashboard/verified_badge.png'),
+  ...DASHBOARD_ADS.map(ad => ad.image),
+];
+
+function prefetchImageSource(source: ImageSourcePropType) {
+  if (typeof Image.resolveAssetSource !== 'function' || typeof Image.prefetch !== 'function') return;
+  const uri = Image.resolveAssetSource(source)?.uri;
+  if (uri) void Image.prefetch(uri).catch(() => {});
+}
 
 export default function DriverDashboard() {
   const colors = useColors();
@@ -71,8 +113,18 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
+  const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  const [adCarouselWidth, setAdCarouselWidth] = useState(0);
+  const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
 
+  const timers = useScreenTimerManager();
+  const adCarouselRef = useRef<ScrollView>(null);
+  const autoAdIndexRef = useRef(0);
+  const adLoopResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestSessionRef = useRef(timers.currentSession());
+  const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownValueRef = useRef(15);
   // True once we have a real device GPS fix (vs the KIGALI_CENTER placeholder).
   const hasGpsFixRef = useRef(false);
@@ -80,7 +132,6 @@ export default function DriverDashboard() {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
-  const switchModeLabelOpacity = useRef(new Animated.Value(1)).current;
   const mapRef = useRef<MapView | null>(null);
   // Gate imperative map commands until the native view is committed (Fabric
   // dispatches to an uncommitted MapView segfault — see ride.tsx).
@@ -91,16 +142,29 @@ export default function DriverDashboard() {
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const isOnline = driverProfile?.isOnline === true;
 
+  useEffect(() => {
+    DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
+  }, []);
+
+  useEffect(() => {
+    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
+  }, [driverProfile?.profileImage]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data);
+        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
+      });
+      void loadStoredDriverRatings().then(stored => {
+        if (active) {
+          setRatingSummary(user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY);
+        }
       });
       return () => {
         active = false;
       };
-    }, []),
+    }, [driverProfile?.profileImage, user?.id]),
   );
 
   // Location
@@ -154,7 +218,33 @@ export default function DriverDashboard() {
     }, []),
   );
 
-  // Recenter on location
+  // Ad carousel auto-scroll (develop dashboard UI).
+  useEffect(() => {
+    if (adCarouselWidth <= 0 || DASHBOARD_ADS.length <= 1) return;
+
+    const interval = setInterval(() => {
+      const nextIndex = autoAdIndexRef.current + 1;
+      autoAdIndexRef.current = nextIndex;
+      adCarouselRef.current?.scrollTo({ x: nextIndex * adCarouselWidth, animated: true });
+
+      if (nextIndex === DASHBOARD_ADS.length) {
+        adLoopResetRef.current = setTimeout(() => {
+          autoAdIndexRef.current = 0;
+          adCarouselRef.current?.scrollTo({ x: 0, animated: false });
+        }, 450);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      if (adLoopResetRef.current) {
+        clearTimeout(adLoopResetRef.current);
+        adLoopResetRef.current = null;
+      }
+    };
+  }, [adCarouselWidth]);
+
+  // Recenter on location (mapReady-gated to avoid the Fabric command crash).
   useEffect(() => {
     if (!mapReady) return;
     mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
@@ -254,15 +344,29 @@ export default function DriverDashboard() {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
 
+  const openAdWebsite = (url: string) => {
+    void Linking.openURL(url);
+  };
+
+  const onAdCarouselLayout = (event: LayoutChangeEvent) => {
+    setAdCarouselWidth(event.nativeEvent.layout.width);
+  };
+
+  const onStatusCardLayout = (event: LayoutChangeEvent) => {
+    setDashboardCardHeight(event.nativeEvent.layout.height);
+  };
+
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
   const driverInitial = user?.name?.trim().charAt(0).toUpperCase() || 'D';
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
   const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
   const remainingCreditsText = isEntitlementLoading ? '-' : String(activitySummary.remainingRideCredits);
   const statusLabel = isOnline ? 'Online' : 'Offline';
-  const statusDescription = isOnline ? 'Accepting rides' : 'Not accepting rides';
+  const isVerified = driverProfile?.isVerified === true;
+  const ratingLabel = ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
+    ? ratingSummary.averageRating.toFixed(1)
+    : '0.0';
   const showNoCreditsWarning = !isEntitlementLoading && activitySummary.remainingRideCredits === 0;
-  const activeCampaign = DASHBOARD_CAMPAIGNS[0];
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
     ? 'Unknown - to be negotiated'
@@ -280,52 +384,34 @@ export default function DriverDashboard() {
   ), []);
 
   const setSwitchModeSlideValue = useCallback((nextX: number) => {
-    const slideEnd = getSwitchModeSlideEnd();
-    const fadeDistance = Math.max(1, slideEnd * 0.35);
     switchModeAvatarSlide.setValue(nextX);
-    switchModeLabelOpacity.setValue(Math.max(0, 1 - (nextX / fadeDistance)));
-  }, [getSwitchModeSlideEnd, switchModeAvatarSlide, switchModeLabelOpacity]);
+  }, [switchModeAvatarSlide]);
 
   const animateSwitchAvatarToStart = useCallback(() => {
-    Animated.parallel([
-      Animated.spring(switchModeAvatarSlide, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 8,
-        speed: 18,
-      }),
-      Animated.timing(switchModeLabelOpacity, {
-        toValue: 1,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [switchModeAvatarSlide, switchModeLabelOpacity]);
+    Animated.spring(switchModeAvatarSlide, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 8,
+      speed: 18,
+    }).start();
+  }, [switchModeAvatarSlide]);
 
   const handleSwitchToCustomer = useCallback(async () => {
     if (isSwitchingMode) return;
     setIsSwitchingMode(true);
-    Animated.parallel([
-      Animated.timing(switchModeAvatarSlide, {
-        toValue: getSwitchModeSlideEnd(),
-        duration: 240,
-        useNativeDriver: true,
-      }),
-      Animated.timing(switchModeLabelOpacity, {
-        toValue: 0,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    Animated.timing(switchModeAvatarSlide, {
+      toValue: getSwitchModeSlideEnd(),
+      duration: 240,
+      useNativeDriver: true,
+    }).start(() => {
       void (async () => {
         await switchMode('customer');
         router.replace('/(tabs)');
         switchModeAvatarSlide.setValue(0);
-        switchModeLabelOpacity.setValue(1);
         setIsSwitchingMode(false);
       })();
     });
-  }, [getSwitchModeSlideEnd, isSwitchingMode, switchMode, switchModeAvatarSlide, switchModeLabelOpacity]);
+  }, [getSwitchModeSlideEnd, isSwitchingMode, switchMode, switchModeAvatarSlide]);
 
   const handleSwitchModeCtaLayout = useCallback((event: LayoutChangeEvent) => {
     switchModeTrackWidthRef.current = event.nativeEvent.layout.width;
@@ -340,7 +426,6 @@ export default function DriverDashboard() {
       onPanResponderGrant: () => {
         if (isSwitchingMode) return;
         switchModeAvatarSlide.stopAnimation();
-        switchModeLabelOpacity.stopAnimation();
       },
       onPanResponderMove: (_, gestureState) => {
         if (isSwitchingMode) return;
@@ -371,9 +456,23 @@ export default function DriverDashboard() {
       isSwitchModeAvatarStart,
       setSwitchModeSlideValue,
       switchModeAvatarSlide,
-      switchModeLabelOpacity,
     ],
   );
+
+  const switchModeLabelMaskScale = typeof switchModeAvatarSlide.interpolate === 'function'
+    ? switchModeAvatarSlide.interpolate({
+      inputRange: [0, CTA_LABEL_SLOT_WIDTH],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    })
+    : 0;
+  const switchModeLabelMaskTranslateX = typeof switchModeAvatarSlide.interpolate === 'function'
+    ? switchModeAvatarSlide.interpolate({
+      inputRange: [0, CTA_LABEL_SLOT_WIDTH],
+      outputRange: [-CTA_LABEL_SLOT_WIDTH / 2, 0],
+      extrapolate: 'clamp',
+    })
+    : -CTA_LABEL_SLOT_WIDTH / 2;
 
   return (
     <View style={styles.root}>
@@ -381,21 +480,17 @@ export default function DriverDashboard() {
       {/* ── Full-screen map ── */}
       <MapView
         ref={mapRef}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, { top: dashboardCardHeight }]}
         provider={PROVIDER_DEFAULT}
         onMapReady={() => setMapReady(true)}
         mapType={mapType}
-        initialRegion={{ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }}
+        initialRegion={visibleDriverRegion(driverLocation)}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
         showsUserLocation={false}
         showsMyLocationButton={false}
       >
         <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
-            <View style={[styles.youAreHereBubble, { backgroundColor: colors.primary }]}>
-              <Text style={styles.youAreHereText}>You're Here</Text>
-            </View>
-            <View style={[styles.youAreHereTail, { borderTopColor: colors.primary }]} />
             <VehicleMapMarker type={activeVehicleType} style={styles.driverVehicleMarker} />
           </View>
         </Marker>
@@ -418,17 +513,48 @@ export default function DriverDashboard() {
 
       {/* Top dashboard overlay */}
       <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : 0 }]}>
-        <View style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]} testID="driver-status-card">
+        <View
+          style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]}
+          onLayout={onStatusCardLayout}
+          testID="driver-status-card"
+        >
           <View style={styles.statusHeader}>
-            <View style={styles.statusIdentity}>
-              <Text style={[styles.statusGreeting, { color: colors.foreground }]}>Hi, {driverName}</Text>
-              <Text style={[styles.statusVehicle, { color: colors.mutedForeground }]}>
-                {driverProfile ? VEHICLE_LABELS[driverProfile.vehicleType] : 'Driver'} Driver
-              </Text>
-              <View style={styles.statusPillRow}>
-                <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.primary }]} />
-                <Text style={[styles.statusText, { color: colors.foreground }]}>{statusLabel}</Text>
-                <Text style={[styles.statusMutedText, { color: colors.mutedForeground }]}>{statusDescription}</Text>
+            <View style={styles.statusIdentity} testID="driver-identity-block">
+              <View style={styles.greetingRow}>
+                <Text style={[styles.statusGreeting, { color: colors.foreground }]} numberOfLines={1}>
+                  Hi, {driverName}
+                </Text>
+                {isVerified && (
+                  <VerifiedBadge
+                    testID="driver-verified-badge"
+                  />
+                )}
+                <TouchableOpacity
+                  style={styles.notificationButton}
+                  onPress={() => router.push('/notifications')}
+                  activeOpacity={0.65}
+                  accessibilityRole="button"
+                  accessibilityLabel="Notifications"
+                >
+                  <Feather name="bell" size={17} color={colors.foreground} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.identityChipRow}>
+                <View style={styles.identityItem}>
+                  <VehicleMapMarker compact type={activeVehicleType} />
+                </View>
+                <View style={[styles.metadataSeparator, { backgroundColor: colors.border }]} />
+                <View style={styles.identityItem}>
+                  <MaterialCommunityIcons name="star" size={14} color={colors.star} />
+                  <Text style={[styles.identityChipText, { color: colors.foreground }]}>{ratingLabel}</Text>
+                </View>
+                <View style={[styles.metadataSeparator, { backgroundColor: colors.border }]} />
+                <View style={styles.identityItem} testID="driver-header-status">
+                  <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.primaryHex }]} />
+                  <Text style={[styles.identityChipText, { color: isOnline ? colors.successHex : colors.mutedForeground }]}>
+                    {statusLabel}
+                  </Text>
+                </View>
               </View>
             </View>
             <View
@@ -474,17 +600,28 @@ export default function DriverDashboard() {
               <Animated.View
                 style={[
                   styles.switchModeLabelSlot,
-                  { width: CTA_LABEL_SLOT_WIDTH, opacity: switchModeLabelOpacity },
+                  { width: CTA_LABEL_SLOT_WIDTH },
                 ]}
+                pointerEvents="none"
               >
                 <Text style={[styles.switchModeQuickActionText, { color: colors.primaryForeground }]} numberOfLines={1}>
                   Slide to Customer
                 </Text>
+                <Animated.View
+                  style={[
+                    styles.switchModeLabelMask,
+                    {
+                      backgroundColor: colors.primary,
+                      transform: [
+                        { translateX: switchModeLabelMaskTranslateX },
+                        { scaleX: switchModeLabelMaskScale },
+                      ],
+                    },
+                  ]}
+                />
               </Animated.View>
             </View>
           </View>
-
-          <View style={[styles.statusDivider, { backgroundColor: colors.border }]} />
 
           <Text style={[styles.activityTitle, { color: colors.foreground }]}>Today's Activity</Text>
           <View style={styles.activityGrid}>
@@ -492,27 +629,27 @@ export default function DriverDashboard() {
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
                 {formatRwf(daily?.total_rwf ?? activitySummary.todayEarningsRwf)}
               </Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings Today</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings</Text>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
                 {serverStats?.total_rides ?? activitySummary.allTimeCompletedRides}
               </Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Total Rides</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Trips</Text>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>{remainingCreditsText}</Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Ride Credits</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Credits Left</Text>
             </View>
           </View>
 
           {showNoCreditsWarning && (
-            <View style={[styles.noCreditsPanel, { backgroundColor: colors.destructiveHex + '10', borderColor: colors.destructiveHex + '30' }]}>
+            <View style={[styles.noCreditsPanel, { backgroundColor: colors.successHex + '12', borderColor: colors.successHex + '35' }]}>
               <View style={styles.noCreditsCopy}>
                 <View style={styles.noCreditsTitleRow}>
-                  <Feather name="alert-triangle" size={16} color={colors.destructive} />
+                  <Feather name="layers" size={14} color={colors.success} />
                   <Text style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Ride Credits</Text>
                 </View>
                 <Text style={[styles.noCreditsText, { color: colors.mutedForeground }]}>
@@ -530,25 +667,33 @@ export default function DriverDashboard() {
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.campaignCard, { backgroundColor: cardFill }]}
-          onPress={() => router.push('/driver-packages')}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.campaignIcon, { backgroundColor: colors.primaryHex + '16' }]}>
-            <Feather name={activeCampaign.icon} size={20} color={colors.primary} />
-          </View>
-          <View style={styles.campaignCopy}>
-            <Text style={[styles.campaignEyebrow, { color: colors.primary }]}>{activeCampaign.eyebrow}</Text>
-            <Text style={[styles.campaignTitle, { color: colors.foreground }]}>{activeCampaign.title}</Text>
-            <Text style={[styles.campaignDescription, { color: colors.mutedForeground }]}>{activeCampaign.description}</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-        </TouchableOpacity>
+        <View style={[styles.adCard, { backgroundColor: cardFill }]} onLayout={onAdCarouselLayout}>
+          <ScrollView
+            ref={adCarouselRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.adCarousel}
+          >
+            {[...DASHBOARD_ADS, DASHBOARD_ADS[0]].map((ad, index) => (
+              <TouchableOpacity
+                key={`${ad.id}-${index}`}
+                style={[styles.adSlide, { width: Math.max(adCarouselWidth, 1) }]}
+                onPress={() => openAdWebsite(ad.url)}
+                activeOpacity={0.9}
+                accessibilityRole="link"
+                accessibilityLabel={ad.accessibilityLabel}
+                testID={index < DASHBOARD_ADS.length ? `dashboard-ad-${ad.id}` : 'dashboard-ad-loop-first'}
+              >
+                <Image source={ad.image} style={styles.adImage} resizeMode="cover" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
 
       {/* ── Map controls ── */}
-      <View style={[styles.mapControls, { bottom: tabBarHeight + 16 }]}>
+      <View style={[styles.mapControls, { bottom: tabBarHeight - 8 }]}>
         <TouchableOpacity style={[styles.mapBtn, { backgroundColor: cardFill }]} onPress={cycleMapType} activeOpacity={0.8}>
           <MaterialCommunityIcons
             name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
@@ -679,14 +824,22 @@ const styles = StyleSheet.create({
     elevation: 8,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  statusHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  statusIdentity: { flex: 1, minWidth: 0 },
-  statusGreeting: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  statusVehicle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  statusPillRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' },
-  onlineDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  statusText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  statusMutedText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  statusIdentity: { flex: 1, minWidth: 0, height: BUTTON_HEIGHT.sm, justifyContent: 'space-between' },
+  statusGreeting: { fontSize: 17, lineHeight: 20, fontFamily: 'Inter_700Bold', flexShrink: 1 },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 },
+  notificationButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  identityChipRow: { height: 22, flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
+  identityItem: {
+    height: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  identityChipText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  metadataSeparator: { width: 3, height: 3, borderRadius: 2, flexShrink: 0 },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
   switchModeQuickAction: {
     height: BUTTON_HEIGHT.sm,
     borderRadius: buttonCornerRadius(BUTTON_HEIGHT.sm),
@@ -707,6 +860,8 @@ const styles = StyleSheet.create({
     marginLeft: CTA_AVATAR_INSET,
     marginVertical: CTA_AVATAR_INSET,
     flexShrink: 0,
+    zIndex: 3,
+    elevation: 8,
   },
   switchModeAvatarFrame: {
     width: CTA_AVATAR_SIZE,
@@ -722,7 +877,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.28,
     shadowRadius: 3,
-    elevation: 4,
+    zIndex: 3,
+    elevation: 8,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
@@ -741,61 +897,68 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 0,
     paddingLeft: 3,
+    overflow: 'hidden',
+    position: 'relative',
+    zIndex: 1,
   },
-  switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
+  switchModeLabelMask: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: CTA_LABEL_SLOT_WIDTH,
+    zIndex: 2,
+  },
+  switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16, zIndex: 1 },
   statusDivider: { height: 1, marginVertical: 12 },
-  activityTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginBottom: 10 },
+  activityTitle: { fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 18, marginBottom: 10 },
   activityGrid: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   activityStat: { flex: 1, alignItems: 'center', minWidth: 0 },
-  activityValue: { fontSize: 15, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  activityValue: { fontSize: 19, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   activityLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 3 },
   activityDivider: { width: 1, height: 30 },
   noCreditsPanel: {
-    marginTop: 12,
-    borderRadius: 14,
+    marginTop: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   noCreditsCopy: { flex: 1, minWidth: 0 },
-  noCreditsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  noCreditsTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  noCreditsText: { fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17, marginTop: 3 },
+  noCreditsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  noCreditsTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  noCreditsText: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 15, marginTop: 1 },
   viewPackagesButton: {
-    minHeight: 36,
-    borderRadius: 18,
-    paddingHorizontal: 12,
+    minHeight: 30,
+    borderRadius: 15,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  viewPackagesButtonText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  campaignCard: {
-    marginTop: 8,
-    marginHorizontal: 8,
+  viewPackagesButtonText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  adCard: {
+    marginTop: 4,
+    marginHorizontal: 6,
     borderRadius: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    height: 128,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 8,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  campaignIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  campaignCopy: { flex: 1, minWidth: 0 },
-  campaignEyebrow: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
-  campaignTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', marginTop: 1 },
-  campaignDescription: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 },
+  adCarousel: { flex: 1 },
+  adSlide: { height: 128 },
+  adImage: { width: '100%', height: '100%' },
 
   // Map controls
   mapControls: { position: 'absolute', right: 16, gap: 10 },
@@ -827,19 +990,7 @@ const styles = StyleSheet.create({
 
   // Driver marker
   driverMarker: { alignItems: 'center' },
-  driverVehicleMarker: { marginTop: -14 },
-  youAreHereBubble: {
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3, shadowRadius: 4, elevation: 4,
-  },
-  youAreHereText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#fff' },
-  youAreHereTail: {
-    width: 0, height: 0,
-    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 7,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    marginBottom: -2,
-  },
+  driverVehicleMarker: {},
   pickupPin: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   // Request sheet

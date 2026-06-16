@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Linking,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -80,19 +81,19 @@ export default function HelpSupportScreen() {
       >
         {/* Contact */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CONTACT US</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
           {CONTACT_CHANNELS.map((ch, i) => (
             <View key={ch.id}>
               {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
               <TouchableOpacity style={styles.contactRow} onPress={ch.onPress} activeOpacity={0.75}>
                 <View style={styles.contactIcon}>
-                  <Feather name={ch.icon} size={18} color={colors.primary} />
+                  <Feather name={ch.icon} size={18} color="#000" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.contactLabel, { color: colors.foreground }]}>{ch.label}</Text>
                   <Text style={[styles.contactDetail, { color: colors.mutedForeground }]}>{ch.detail}</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                <Feather name="chevron-right" size={16} color="#000" />
               </TouchableOpacity>
             </View>
           ))}
@@ -100,7 +101,7 @@ export default function HelpSupportScreen() {
 
         {/* FAQs */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>FREQUENTLY ASKED</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
           {FAQS.map((faq, i) => {
             const isOpen = openFaq === i;
             return (
@@ -112,7 +113,7 @@ export default function HelpSupportScreen() {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.faqQuestion, { color: colors.foreground, flex: 1 }]}>{faq.q}</Text>
-                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#000" />
                 </TouchableOpacity>
                 {isOpen && (
                   <View style={[styles.faqAnswer, { borderTopColor: colors.border }]}>
@@ -125,7 +126,7 @@ export default function HelpSupportScreen() {
         </View>
 
         {/* Response time */}
-        <View style={[styles.infoBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.infoBox, { backgroundColor: colors.muted }]}>
          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
             Average response time: under 2 hours · Available 7 days a week, 7 AM – 10 PM
           </Text>
@@ -145,7 +146,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 24,
   },
-  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  card: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
+  },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
   contactRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
@@ -159,10 +166,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
     marginTop: 20,
     alignItems: 'flex-start',
+    ...Platform.select({
+      ios: { borderCurve: 'continuous' },
+    }),
   },
   infoText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
 });

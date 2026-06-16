@@ -6,6 +6,7 @@ import {
   isValidRwandaPlateNumber,
   normalizeRwandaPhoneNumber,
 } from '@/utils/rwandaValidation';
+import { DOCUMENTS_REQUIRING_BACK } from '@/domain/driverDocuments';
 
 export const isValidDriverLicenceNumber = (licenceNumber: string) => /^\d{16}$/.test(licenceNumber);
 export const isFutureExpiryDate = (value: string, today = new Date()) => {
@@ -50,10 +51,10 @@ export function useDriverOnboardingValidation({
       if (form.vehicleType === 'fuso' && (!form.loadCapacityKg || parseInt(form.loadCapacityKg) < 1)) errors.loadCapacityKg = 'Enter load capacity in kg';
     }
     if (step === 2) {
-      validateRequiredImages(errors, 'license', docs.license, "Driver's licence", true);
-      validateRequiredImages(errors, 'nationalId', docs.nationalId, 'National ID', true);
-      validateRequiredImages(errors, 'insurance', docs.insurance, 'Insurance document', false);
-      validateRequiredImages(errors, 'authorization', docs.authorization, 'Authorization certificate', true);
+      validateRequiredImages(errors, 'license', docs.license, "Driver's licence", DOCUMENTS_REQUIRING_BACK.includes('license'));
+      validateRequiredImages(errors, 'nationalId', docs.nationalId, 'National ID', DOCUMENTS_REQUIRING_BACK.includes('nationalId'));
+      validateRequiredImages(errors, 'insurance', docs.insurance, 'Insurance document', DOCUMENTS_REQUIRING_BACK.includes('insurance'));
+      validateRequiredImages(errors, 'authorization', docs.authorization, 'Authorization certificate', DOCUMENTS_REQUIRING_BACK.includes('authorization'));
       if (!form.licenseExpiryDate) errors.licenseExpiryDate = 'Required';
       else if (!isFutureExpiryDate(form.licenseExpiryDate)) errors.licenseExpiryDate = 'Expiry date must be in the future';
       if (!form.insuranceExpiryDate) errors.insuranceExpiryDate = 'Required';

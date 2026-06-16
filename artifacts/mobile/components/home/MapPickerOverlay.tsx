@@ -25,6 +25,8 @@ export function MapPickerOverlay({
   onCycleMapType,
   onCenterUser,
   onConfirm,
+  savedLocationConfirmTitle,
+  savedLocationHint,
 }: {
   target: MapPickerTarget | null;
   mapRef: RefObject<MapView | null>;
@@ -41,6 +43,8 @@ export function MapPickerOverlay({
   onCycleMapType: () => void;
   onCenterUser: () => void;
   onConfirm: () => void | Promise<void>;
+  savedLocationConfirmTitle?: string;
+  savedLocationHint?: string;
 }) {
   if (target === null) return null;
 
@@ -108,7 +112,7 @@ export function MapPickerOverlay({
           {target === 'pickup'
             ? 'Drag the map to set your pickup location'
             : target === 'savedLocation'
-              ? 'Drag the map to update this saved location'
+              ? savedLocationHint ?? 'Drag the map to update this saved location'
               : 'Drag the map to set your drop off location'}
         </Text>
       </View>
@@ -119,7 +123,7 @@ export function MapPickerOverlay({
             target === 'pickup'
               ? 'Confirm Pickup Location'
               : target === 'savedLocation'
-                ? 'Confirm Saved Location'
+                ? savedLocationConfirmTitle ?? 'Confirm Saved Location'
                 : 'Confirm Drop Off Location'
           }
           fullWidth

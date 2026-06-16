@@ -1,4 +1,57 @@
 import { api } from './api';
+import { LEGACY_TO_API_VEHICLE, type LegacyVehicleType } from './vehicleTypes';
+import { normalizeRwandaPlateNumber, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import type { DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
+
+/**
+ * Submit a driver application to the backend (POST /driver/apply).
+ * Maps the mobile onboarding form (camelCase, local vehicle codes) to the
+ * backend contract (snake_case, MOTO_BIKE/CAB_TAXI/…). On success the backend
+ * creates the driver_profiles row as PENDING and flips the user to DRIVER_PENDING
+ * so it shows up in the admin approval queue. A 409 means an application already
+ * exists — treated as success (already awaiting review).
+ */
+/**
+ * Convert the onboarding date-of-birth (stored as DD/MM/YYYY by the date picker)
+ * to the backend's required YYYY-MM-DD. Passes through values that are already
+ * ISO (YYYY-MM-DD or an ISO datetime).
+ */
+function toISODate(value: string): string {
+  const s = (value ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // DD/MM/YYYY
+  if (m) {
+    const [, dd, mm, yyyy] = m;
+    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  }
+  return s; // unparseable — let the backend reject it with a clear error
+}
+
+export async function applyDriver(form: DriverOnboardingForm): Promise<void> {
+  const payload = {
+    transport_type: LEGACY_TO_API_VEHICLE[form.vehicleType as LegacyVehicleType] ?? 'MOTO_BIKE',
+    vehicle_plate: normalizeRwandaPlateNumber(form.plateNumber),
+    license_number: form.licenseNumber.trim(),
+    date_of_birth: toISODate(form.dob), // DD/MM/YYYY → YYYY-MM-DD
+    // Backend requires a non-null city; Rwanda's city-level admin unit is the district.
+    city: form.district,
+    momo_pay_code: normalizeRwandaPhoneNumber(form.momoCode) ?? form.momoCode,
+    momo_provider: form.momoProvider,
+    province: form.province,
+    district: form.district,
+    sector: form.sector,
+    cell: form.cell,
+    village: form.village,
+    passenger_seats: form.passengerSeats ? parseInt(form.passengerSeats, 10) : undefined,
+    load_capacity_kg: form.loadCapacityKg ? parseInt(form.loadCapacityKg, 10) : undefined,
+  };
+  try {
+    await api.post('/driver/apply', payload);
+  } catch (err: any) {
+    if (err?.response?.status === 409) return; // already applied — awaiting review
+    throw err;
+  }
+}
 
 export async function getRideForDriver(rideId: string) {
   const { data } = await api.get(`/driver/rides/${rideId}`);

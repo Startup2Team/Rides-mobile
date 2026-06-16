@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
@@ -11,7 +11,9 @@ import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePa
 import { STORAGE_KEYS } from '@/constants/storage';
 import { saveStoredDriverProfile, saveStoredUser, loadStoredDriverProfile } from '@/persistence/authPersistence';
 import { saveStoredDriverEntitlement } from '@/persistence/driverEntitlementPersistence';
+import { saveStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { saveSecureStorage } from '@/persistence/secureStorage';
+import type { DriverRating } from '@/domain/driverWallet';
 import type { DriverProfile, Ride, User } from '@/types';
 import DriverDashboard from '../index';
 
@@ -44,6 +46,7 @@ jest.mock('react-native', () => {
     },
     Dimensions: { get: () => ({ width: 390, height: 844 }) },
     Image: host('Image'),
+    Linking: { openURL: jest.fn(() => Promise.resolve()) },
     PanResponder: {
       create: (config: Record<string, (...args: unknown[]) => unknown>) => ({
         panHandlers: {
@@ -60,6 +63,7 @@ jest.mock('react-native', () => {
       create: (styles: object) => styles,
       flatten: (style: object) => style,
     },
+    ScrollView: host('ScrollView'),
     Text: host('Text'),
     TouchableOpacity: host('TouchableOpacity'),
     useColorScheme: () => 'light',
@@ -112,9 +116,9 @@ jest.mock('react-native-maps', () => {
 });
 
 jest.mock('@/components/VehicleMapMarker', () => ({
-  VehicleMapMarker: () => {
+  VehicleMapMarker: ({ compact }: { compact?: boolean }) => {
     const { Text } = require('react-native');
-    return <Text>Vehicle marker</Text>;
+    return <Text>{compact ? 'Compact vehicle marker' : 'Vehicle marker'}</Text>;
   },
 }));
 
@@ -173,6 +177,21 @@ function completedRide(overrides: Partial<Ride>): Ride {
   };
 }
 
+function rating(overrides: Partial<DriverRating>): DriverRating {
+  return {
+    id: 'rating-1',
+    rideId: 'ride-1',
+    driverId: 'driver-1',
+    customerId: 'customer-1',
+    stars: 5,
+    moderationStatus: 'published',
+    createdAt: '2026-06-08T10:00:00.000Z',
+    idempotencyKey: 'driver-rating:completed-ride:ride-1',
+    authority: 'local_prototype',
+    ...overrides,
+  };
+}
+
 function DashboardProviders() {
   return (
     <AuthProvider>
@@ -222,7 +241,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
 
     const view = render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText(/Accepting rides/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     expect(screen.getByText('Go Offline')).toBeTruthy();
 
     act(() => {
@@ -233,23 +252,60 @@ describe('DriverDashboard online state', () => {
     view.unmount();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText(/Accepting rides/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     expect(screen.getByText('Go Offline')).toBeTruthy();
+  });
+
+  test('shows verified identity, zero-rating fallback, vehicle icon chip, and offline status pill', async () => {
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+
+    await waitFor(() => expect(screen.getByText('Hi, Test')).toBeTruthy());
+    expect(screen.getByTestId('driver-verified-badge')).toBeTruthy();
+    expect(screen.getByText('Compact vehicle marker')).toBeTruthy();
+    expect(screen.getByText('0.0')).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
+    expect(screen.getByTestId('driver-identity-block').props.style).toEqual(
+      expect.objectContaining({ height: 44 }),
+    );
+    expect(screen.getByTestId('driver-header-status').props.style).toEqual(
+      expect.not.objectContaining({ backgroundColor: expect.anything() }),
+    );
+    expect(screen.queryByText('Moto')).toBeNull();
+    expect(screen.queryByText('New Driver')).toBeNull();
+    expect(screen.queryByText('Not accepting rides')).toBeNull();
+    expect(screen.queryByText('Accepting rides')).toBeNull();
+  });
+
+  test('shows the persisted average rating and online status pill', async () => {
+    await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
+    await saveStoredDriverRatings([
+      rating({ id: 'rating-1', rideId: 'ride-1', stars: 5 }),
+      rating({ id: 'rating-2', rideId: 'ride-2', stars: 4, idempotencyKey: 'driver-rating:completed-ride:ride-2' }),
+    ]);
+
+    render(<DashboardProviders />);
+
+    await waitFor(() => expect(screen.getByText('4.5')).toBeTruthy());
+    expect(screen.getByText('Online')).toBeTruthy();
+    expect(screen.queryByText('Accepting rides')).toBeNull();
+    expect(screen.queryByText('New Driver')).toBeNull();
   });
 
   test('persists online toggles and clears pending request timers when going offline', async () => {
     await seedDriverState();
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Ride Credits')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Credits Left')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
-    await waitFor(() => expect(screen.getByText(/Accepting rides/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: true }),
     });
 
     fireEvent.press(screen.getByText('Go Offline'));
-    await waitFor(() => expect(screen.getByText(/Not accepting rides/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Offline')).toBeTruthy());
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -265,10 +321,10 @@ describe('DriverDashboard online state', () => {
       profile: { ...baseProfile, verificationStatus: 'pending_review', isVerified: false },
     });
     const pendingView = render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Ride Credits')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Credits Left')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
-    expect(screen.getByText(/Not accepting rides/)).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -283,7 +339,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(router.push).toHaveBeenCalledWith('/driver-packages');
-    expect(screen.getByText(/Not accepting rides/)).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -306,11 +362,11 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Activity Earnings')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
 
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
-    expect(screen.getByText('Completed Today')).toBeTruthy();
-    expect(screen.getByText('Ride Credits')).toBeTruthy();
+    expect(screen.getByText('Trips')).toBeTruthy();
+    expect(screen.getByText('Credits Left')).toBeTruthy();
     expect(screen.getByText('35')).toBeTruthy();
     expect(screen.queryByText('13,400 RWF')).toBeNull();
     expect(screen.queryByText('Acceptance Rate')).toBeNull();
@@ -326,7 +382,7 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Activity Earnings')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
 
     expect(screen.getByText('0 RWF')).toBeTruthy();
     expect(screen.queryByText('3,500 RWF')).toBeNull();
@@ -338,11 +394,11 @@ describe('DriverDashboard online state', () => {
     await seedDriverState();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Activity Earnings')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
 
     expect(screen.getByText('0 RWF')).toBeTruthy();
-    expect(screen.getByText('Completed Today')).toBeTruthy();
-    expect(screen.getByText('Ride Credits')).toBeTruthy();
+    expect(screen.getByText('Trips')).toBeTruthy();
+    expect(screen.getByText('Credits Left')).toBeTruthy();
   });
 
   test('keeps edge-to-edge status card content below a notch safe area', async () => {
@@ -359,7 +415,7 @@ describe('DriverDashboard online state', () => {
     );
   });
 
-  test('shows inline no-credit warning and package promotion on the dashboard', async () => {
+  test('shows inline no-credit warning and tappable advertiser carousel on the dashboard', async () => {
     await seedDriverState({ withCredits: false });
 
     render(<DashboardProviders />);
@@ -367,12 +423,15 @@ describe('DriverDashboard online state', () => {
 
     expect(screen.getByText('Choose a package to start receiving ride requests.')).toBeTruthy();
     expect(screen.getByText('View Packages')).toBeTruthy();
-    expect(screen.getByText('Growth Package')).toBeTruthy();
-    expect(screen.getByText('75 Ride Credits')).toBeTruthy();
-    expect(screen.getByText('Most Popular Plan')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-airtel')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-bk')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-jibu')).toBeTruthy();
 
     fireEvent.press(screen.getByText('View Packages'));
     expect(router.push).toHaveBeenCalledWith('/driver-packages');
+
+    fireEvent.press(screen.getByTestId('dashboard-ad-airtel'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://www.airtel.co.rw/');
   });
 
   test('requires sliding the profile avatar far enough to switch to customer mode', async () => {

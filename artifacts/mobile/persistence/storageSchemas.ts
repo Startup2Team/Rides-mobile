@@ -3,7 +3,7 @@ import { z } from 'zod';
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
 const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
-const driverRidePackageIdSchema = z.enum(['launch_starter', 'growth']);
+const driverRidePackageIdSchema = z.enum(['launch_starter', 'growth', 'pro']);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',
@@ -85,6 +85,24 @@ export const driverProfileSchema = z.object({
 }).passthrough();
 
 const documentFacesSchema = z.tuple([z.string().nullable(), z.string().nullable()]);
+
+const driverDocumentRecordSchema = z.object({
+  key: z.enum(['license', 'nationalId', 'insurance', 'authorization']),
+  faces: documentFacesSchema,
+  documentNumber: z.string().optional(),
+  expiryDate: z.string().optional(),
+  reviewStatus: z.enum(['verified', 'pending_review', 'rejected']),
+  submissionKind: z.enum(['initial', 'replacement']),
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const driverDocumentsSchema = z.object({
+  license: driverDocumentRecordSchema,
+  nationalId: driverDocumentRecordSchema,
+  insurance: driverDocumentRecordSchema,
+  authorization: driverDocumentRecordSchema,
+});
 
 export const driverOnboardingDraftSchema = z.object({
   form: z.object({

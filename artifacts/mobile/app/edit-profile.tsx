@@ -89,31 +89,6 @@ export default function EditProfileScreen() {
     ]);
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Before you go…',
-      'Help us improve — why are you deleting your account?',
-      [
-        { text: 'Found a better service', onPress: confirmDelete },
-        { text: 'Privacy concerns', onPress: confirmDelete },
-        { text: 'Too many issues', onPress: confirmDelete },
-        { text: 'No longer need it', onPress: confirmDelete },
-        { text: 'Keep my account', style: 'cancel' },
-      ],
-    );
-  };
-
-  const confirmDelete = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all ride history. This cannot be undone.',
-      [
-        { text: 'Delete Forever', onPress: () => {} },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
-  };
-
   const validate = () => {
     const errs: typeof errors = {};
     if (!name.trim()) errs.name = 'Name is required';
@@ -207,30 +182,29 @@ export default function EditProfileScreen() {
           />
 
           {/* Phone — read-only */}
-          <View style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+          <TouchableOpacity
+            accessibilityLabel="Change Phone Number"
+            accessibilityRole="button"
+            activeOpacity={0.7}
+            onPress={() => router.push('/change-phone-number')}
+            style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}
+          >
             <View style={styles.readOnlyLabelRow}>
               <Text style={[styles.readOnlyLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
               <View style={[styles.lockedBadge, { backgroundColor: colors.border }]}>
-                <Feather name="lock" size={10} color={colors.mutedForeground} />
+                <Feather name="check-circle" size={10} color={colors.mutedForeground} />
                 <Text style={[styles.lockedText, { color: colors.mutedForeground }]}>Verified</Text>
               </View>
             </View>
-            <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
-          </View>
+            <View style={styles.phoneValueRow}>
+              <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
+              <Text style={[styles.changePhoneText, { color: colors.primary }]}>Change</Text>
+            </View>
+          </TouchableOpacity>
           <Text style={[styles.phoneHint, { color: colors.mutedForeground }]}>
-            To change your phone number, contact support.
+            A verification code will be sent before your number is updated.
           </Text>
         </View>
-
-        {/* Danger zone */}
-        <TouchableOpacity
-          style={[styles.dangerRow, { borderColor: colors.destructiveHex + '40' }]}
-          activeOpacity={0.7}
-          onPress={handleDeleteAccount}
-        >
-          <Feather name="trash-2" size={16} color={colors.destructive} />
-          <Text style={[styles.dangerText, { color: colors.destructive }]}>Delete Account</Text>
-        </TouchableOpacity>
 
         <AppButton
           title={saving ? 'Saving…' : 'Save Changes'}
@@ -291,16 +265,7 @@ const styles = StyleSheet.create({
   },
   lockedText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   readOnlyValue: { fontSize: 16, fontFamily: 'Inter_400Regular' },
+  phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
-  dangerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  dangerText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

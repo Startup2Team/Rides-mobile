@@ -84,6 +84,16 @@ async function refreshOnce(): Promise<string> {
   }
 }
 
+/**
+ * Force a token refresh from app code (e.g. right after a driver is approved, so
+ * the new access token carries the updated role_state DRIVER_ACTIVE — otherwise
+ * driver-only endpoints keep 403ing with the stale DRIVER_PENDING token).
+ * Safe to call concurrently; de-duped via refreshOnce.
+ */
+export async function refreshSession(): Promise<void> {
+  await refreshOnce();
+}
+
 // ─── Request interceptor: attach JWT + proactive refresh + dev logging ────────
 //
 // Proactive refresh: if the token expires within PROACTIVE_REFRESH_S seconds we

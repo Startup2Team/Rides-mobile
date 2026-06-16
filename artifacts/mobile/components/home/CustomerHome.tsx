@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,7 +33,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
 import { useToast } from '@/context/ToastContext';
-import { getDriverVerificationStatus } from '@/utils/driverVerification';
+import { canAccessDriverMode, getDriverVerificationStatus } from '@/utils/driverVerification';
 import {
   formatReverseGeocodeAddress,
   getCoordDistance,
@@ -570,6 +570,16 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
+  const openSavedPlaceSelector = () => {
+    Alert.alert('Add saved place', 'Choose the place you want to save.', [
+      { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Home' } }) },
+      { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Work' } }) },
+      { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'School' } }) },
+      { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Other' } }) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   closePendingSaveLocationRef.current = closePendingSaveLocation;
 
   const snapFormSheetOpen = useCallback((onSnapOpen?: () => void) => {
@@ -807,6 +817,7 @@ export default function CustomerHome() {
           locLoading={locLoading}
           profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
           driverVerificationStatus={getDriverVerificationStatus(driverProfile)}
+          canSwitchToDriverMode={canAccessDriverMode(driverProfile)}
         />
       ) : null}
 
@@ -958,6 +969,7 @@ export default function CustomerHome() {
           listTab={locationListTab}
           loading={locationSearchLoading}
           onApplyLocation={applyLocation}
+          onAddSavedLocation={openSavedPlaceSelector}
           onChooseMap={handleChooseOnMap}
           onClear={clearLocationSearchText}
           onClose={closeLocationSearch}

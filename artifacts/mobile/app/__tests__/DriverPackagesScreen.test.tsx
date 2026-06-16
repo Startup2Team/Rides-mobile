@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
@@ -70,6 +70,7 @@ jest.mock('react-native', () => {
 jest.mock('expo-router', () => ({
   router: {
     back: mockRouterBack,
+    push: jest.fn(),
     replace: mockRouterReplace,
   },
 }));
@@ -78,6 +79,18 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light' },
   impactAsync: jest.fn(),
 }));
+
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { BlurView: (props: object) => <View {...props} /> };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { LinearGradient: (props: object) => <View {...props} /> };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -149,39 +162,29 @@ describe('DriverPackagesScreen', () => {
     jest.restoreAllMocks();
   });
 
-  test('successful Mobile Money package purchase adds credits after confirmation', async () => {
+  test('opens the payment page only after buying the selected package', () => {
     render(<DriverPackagesScreen />);
 
-    fireEvent.press(screen.getByText('Review Plan'));
+    fireEvent.press(screen.getByText('Growth Package'));
+    fireEvent.press(screen.getByText('Buy Selected Package'));
 
-    expect(screen.getByText('Confirm package')).toBeTruthy();
-    expect(screen.getByText('MTN Mobile Money')).toBeTruthy();
-    expect(screen.getByText('Airtel Money')).toBeTruthy();
-    expect(screen.getByText('Send Payment Prompt')).toBeTruthy();
-    expect(mockActivatePackage).not.toHaveBeenCalled();
-
-    await act(async () => {
-      fireEvent.press(screen.getByText('Send Payment Prompt'));
+    expect(require('expo-router').router.push).toHaveBeenCalledWith({
+      pathname: '/driver-package-payment',
+      params: { packageId: 'growth' },
     });
-
-    expect(mockCreatePackagePurchase).toHaveBeenCalledWith({
-      packageId: 'growth',
-      phoneNumber: '+250788000000',
-      provider: 'mtn',
-    });
-    expect(screen.getByText('Waiting for Mobile Money confirmation. Confirm the payment on your phone.')).toBeTruthy();
-
-    await act(async () => {
-      jest.advanceTimersByTime(1900);
-    });
-
-    await waitFor(() => expect(mockUpdatePackagePurchaseStatus).toHaveBeenCalledWith(successfulPurchase.transactionId, 'successful'));
-    expect(screen.getByText('Package Activated')).toBeTruthy();
-    expect(screen.getByText('You can now go online and start receiving ride requests.')).toBeTruthy();
-    expect(screen.getByText('Credits Added: 75')).toBeTruthy();
   });
 
-  test('shows purchase history from entitlement data', () => {
+  test('deselects a package when it is pressed again', () => {
+    render(<DriverPackagesScreen />);
+
+    fireEvent.press(screen.getByText('Growth Package'));
+    fireEvent.press(screen.getByText('Growth Package'));
+    fireEvent.press(screen.getByText('Buy Selected Package'));
+
+    expect(require('expo-router').router.push).not.toHaveBeenCalled();
+  });
+
+  test('keeps purchase history off the package page', () => {
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
       activePackageId: 'growth',
@@ -212,17 +215,29 @@ describe('DriverPackagesScreen', () => {
 
     render(<DriverPackagesScreen />);
 
-    expect(screen.getByText('Purchase history')).toBeTruthy();
-    expect(screen.getAllByText('Growth Package').length).toBeGreaterThan(1);
-    expect(screen.getByText('Successful')).toBeTruthy();
-    expect(screen.getByText('Failed')).toBeTruthy();
-    expect(screen.getAllByText('2,000 RWF').length).toBeGreaterThan(1);
+    expect(screen.queryByText('Purchase history')).toBeNull();
+    expect(screen.queryByText('Successful')).toBeNull();
+    expect(screen.queryByText('Failed')).toBeNull();
+  });
+
+  test('shows the simplified package copy', () => {
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('FREE NOW')).toBeTruthy();
+    expect(screen.getByLabelText('30 Ride Credits + 5 Bonus Credits')).toBeTruthy();
+    expect(screen.getByText('Launch Offer')).toBeTruthy();
+    expect(screen.getByLabelText('60 Ride Credits + 15 Bonus Credits')).toBeTruthy();
+    expect(screen.getByText('Most Popular Plan')).toBeTruthy();
+    expect(screen.getByText('Pro Package')).toBeTruthy();
+    expect(screen.getByLabelText('120 Ride Credits + 30 Bonus Credits')).toBeTruthy();
+    expect(screen.getByText('Best Value Plan')).toBeTruthy();
+    expect(screen.getByText('3,500 RWF')).toBeTruthy();
   });
 
   test('user-facing package copy avoids misleading payment platform terms', () => {
     render(<DriverPackagesScreen />);
 
-    fireEvent.press(screen.getByText('Review Plan'));
+    fireEvent.press(screen.getByText('Growth Package'));
 
     const renderedText = screen.UNSAFE_getAllByType(Text)
       .map(node => String(node.props.children))

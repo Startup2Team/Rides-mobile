@@ -1,11 +1,14 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   View,
 } from 'react-native';
+import { applyDriver } from '@/services/driverRides';
+import { refreshSession } from '@/services/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
 import { DocumentUploadSection } from '@/components/driver-onboarding/DocumentUploadSection';
@@ -24,6 +27,8 @@ import type { DriverProfile } from '@/types';
 import { buildDraftDriverProfile, buildPendingDriverProfile, formFromDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
 import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, saveStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
 import { saveStoredProfileImage } from '@/persistence/profilePersistence';
+import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
+import { saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -105,8 +110,25 @@ export default function DriverOnboarding() {
   const saveAndContinue = async () => {
     setDraftLoaded(false);
     setLoading(true);
+    // Submit to the backend FIRST — this creates the driver_profiles row and
+    // puts the rider into the admin approval queue. If it fails, stop and show
+    // the error instead of silently saving only on-device.
+    try {
+      await applyDriver(form);
+      // Sync the JWT: apply flips the user to DRIVER_PENDING server-side, but the
+      // login token is still CUSTOMER_ONLY — refresh so driver endpoints work.
+      await refreshSession();
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert(
+        'Submission failed',
+        e?.response?.data?.error?.message ?? 'Could not submit your application. Check your details and try again.',
+      );
+      return;
+    }
     const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
+    await saveStoredDriverDocuments(buildInitialDriverDocuments(form, docs));
     if (selfieUri) await saveStoredProfileImage(selfieUri);
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');

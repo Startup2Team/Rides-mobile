@@ -1,6 +1,6 @@
 import type { DriverProfile } from '@/types';
 
-export type DriverRidePackageId = 'launch_starter' | 'growth';
+export type DriverRidePackageId = 'launch_starter' | 'growth' | 'pro';
 export type DriverEntitlementAuthority = 'local_prototype' | 'backend';
 export type MobileMoneyPackageProvider = 'mtn' | 'airtel';
 export type DriverPackagePurchaseStatus =
@@ -83,6 +83,16 @@ export const DRIVER_RIDE_PACKAGES: Record<DriverRidePackageId, DriverRidePackage
     includedRides: 60,
     bonusRides: 15,
     totalCredits: 75,
+    launchOffer: false,
+  },
+  pro: {
+    id: 'pro',
+    name: 'Pro Package',
+    normalPriceRwf: 3_500,
+    currentPriceRwf: 3_500,
+    includedRides: 120,
+    bonusRides: 30,
+    totalCredits: 150,
     launchOffer: false,
   },
 };

@@ -31,6 +31,7 @@ export function getLegacyDriverPolicyRedirect(profile: DriverProfile | null | un
 export function isProtectedDriverPath(pathname: string) {
   return pathname === '/(driver)'
     || pathname.startsWith('/(driver)/')
+    || pathname === '/driver-documents'
     || pathname === '/driver-packages'
     || pathname === '/driver-negotiation'
     || pathname === '/driver-navigate';
