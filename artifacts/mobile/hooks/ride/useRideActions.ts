@@ -1,8 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import type { Ride } from '@/types';
-import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
 import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
 
 export function useRideActions({
@@ -14,23 +13,6 @@ export function useRideActions({
   currentRide: Ride | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }) {
-  const [completeModalVisible, setCompleteModalVisible] = useState(false);
-
-  const navigateToRating = useCallback(() => {
-    if (!currentRide) return;
-    const driverPhoto = resolveDriverProfileImage(currentRide.driver);
-    router.push({
-      pathname: '/rating',
-      params: {
-        rideId: currentRide.id,
-        driverName: currentRide.driver?.name ?? '',
-        ...(driverPhoto ? { driverPhoto } : {}),
-        fare: String(currentRide.agreedFare ?? 0),
-        vehicleType: currentRide.vehicleType,
-      },
-    });
-  }, [currentRide]);
-
   const doCancelRide = useCallback(() => {
     cancelRide();
     showToast('Ride cancelled', 'info');
@@ -60,22 +42,15 @@ export function useRideActions({
   }, [currentRide?.driver?.name, currentRide?.driver?.plateNumber]);
 
   return {
-    completeModalVisible,
-    confirmCompleteRide: () => {
-      setCompleteModalVisible(false);
-      navigateToRating();
-    },
     handleCallDriver,
     handleCancelArrived: () => showCancelArrivedRideAlert(doCancelRide),
     handleCancelArriving: () => showCancelArrivingRideAlert(doCancelRide),
-    handleComplete: () => setCompleteModalVisible(true),
-    handleEmergencyEnd: () => {
-      Alert.alert('End Journey', 'End this journey early?', [
-        { text: 'End Journey', onPress: navigateToRating },
+    handleEmergency: () => {
+      Alert.alert('Emergency help', 'Trip progress is controlled by your driver. What do you need?', [
+        { text: 'Call Police (112)', onPress: () => Linking.openURL('tel:112') },
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
     handleSOS,
-    hideCompleteModal: () => setCompleteModalVisible(false),
   };
 }
