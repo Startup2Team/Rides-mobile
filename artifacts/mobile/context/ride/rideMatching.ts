@@ -75,6 +75,7 @@ export function buildMockRideRequest(): Ride {
     customerId: 'mock_customer',
     customerName: 'Amina K.',
     customerPhone: '+250788000000',
+    customerRating: 4.7,
     vehicleType: 'moto',
     pickup,
     destination,

@@ -37,7 +37,7 @@ export const BOOKING_SHEET_PADDING_H = 22;
 export const BOOKING_CLOSE_EDGE_INSET = 16;
 /** Extra room so the close icon can spin during sheet drag without clipping. */
 export const BOOKING_CLOSE_ROTATION_PAD = 10;
-export const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
+export const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Church', 'Market', 'Other'];
 export const SAVE_LABEL_GAP = 8;
 export const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = BOOKING_SHEET_PADDING_H;
 export const SAVE_LABEL_CONTENT_INSET = GREETING_LEFT_INSET;
@@ -47,11 +47,12 @@ const SAVE_LABEL_AVAILABLE_WIDTH =
   - SAVE_LABEL_CONTENT_INSET * 2
   - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
 export const SAVE_LABEL_WIDTHS: Record<string, number> = {
-  Home: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
-  Work: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
-  School: SAVE_LABEL_AVAILABLE_WIDTH * 0.22,
-  Market: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
-  Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
+  Home: SAVE_LABEL_AVAILABLE_WIDTH * 0.14,
+  Work: SAVE_LABEL_AVAILABLE_WIDTH * 0.14,
+  School: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
+  Church: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
+  Market: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
+  Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
 };
 
 export const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;

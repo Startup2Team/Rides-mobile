@@ -563,6 +563,7 @@ export default function CustomerHome() {
       { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Home' } }) },
       { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Work' } }) },
       { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'School' } }) },
+      { text: 'Church', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Church' } }) },
       { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Other' } }) },
       { text: 'Cancel', style: 'cancel' },
     ]);

@@ -29,6 +29,7 @@ import {
   acceptLatestDriverOffer,
   acceptRideWithFare,
   addCustomerCounterOffer,
+  addCustomerAutoReply,
   addDriverOffer,
   respondToCustomerCounterOffer,
 } from './rideNegotiation';
@@ -247,7 +248,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const sendDriverOffer = useCallback((amount: number) => {
     if (amount <= 0) return;
     setCurrentRide(prev => addDriverOffer(prev, amount));
-  }, []);
+    timers.scheduleTimeout(() => {
+      setCurrentRide(prev => addCustomerAutoReply(prev, amount));
+    }, NEGOTIATION_RESPONSE_DELAY_MS);
+  }, [timers]);
 
   const acceptCustomerOffer = useCallback(() => {
     setCurrentRide(acceptLatestCustomerOffer);
@@ -264,7 +268,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       step++;
       setDriverLocation(prev => addTrackingNoise(prev, ARRIVING_TRACKING_NOISE));
       if (step === ARRIVING_TRACKING_STEPS) {
-        setCurrentRide(markRideArrived);
         timers.clearInterval(driverIntervalRef.current);
         driverIntervalRef.current = null;
       }

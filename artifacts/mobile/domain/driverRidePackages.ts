@@ -145,9 +145,9 @@ export const isLowRideCreditBalance = (entitlement: DriverEntitlement | null | u
 export const getRideCreditBalanceMessage = (entitlement: DriverEntitlement | null | undefined) => {
   const credits = getActiveRideCredits(entitlement);
   if (credits === 0) return 'Choose a package to start receiving ride requests.';
-  if (credits <= 2) return `Only ${credits} balance left. Add a package soon to keep receiving requests.`;
-  if (credits <= 5) return `Only ${credits} balance left. Add a package soon to keep receiving requests.`;
-  if (credits <= 10) return `${credits} balance left. Consider adding a package soon.`;
+  if (credits <= 2) return `Only ${credits} rides left. Add a package soon to keep receiving requests.`;
+  if (credits <= 5) return `Only ${credits} rides left. Add a package soon to keep receiving requests.`;
+  if (credits <= 10) return `${credits} rides left. Consider adding a package soon.`;
   return null;
 };
 

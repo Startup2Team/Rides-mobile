@@ -22,6 +22,8 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { AppButton } from '@/components/AppButton';
+import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
@@ -30,6 +32,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { KIGALI_CENTER } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
+import { showDeclineRideAlert } from '@/utils/declineRideAlert';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
@@ -294,14 +297,14 @@ export default function DriverDashboard() {
         if (nextCountdown <= 0) {
           timers.clearInterval(countdownRef.current);
           countdownRef.current = null;
-          handleDecline();
+          confirmDecline();
         }
       }, 1000, session);
     }, 5000, session);
     return clearRequestTimers;
   }, [isOnline, simulateIncomingRideRequest, timers]);
 
-  const handleDecline = () => {
+  const confirmDecline = () => {
     timers.clearInterval(countdownRef.current);
     countdownRef.current = null;
     Animated.timing(slideAnim, { toValue: 300, duration: 300, useNativeDriver: true }).start(() => {
@@ -310,6 +313,10 @@ export default function DriverDashboard() {
     });
     if (driverProfile) saveDriverProfile({ ...driverProfile, dailyDeclines: (driverProfile.dailyDeclines ?? 0) + 1 });
     declineRideRequest();
+  };
+
+  const handleDecline = () => {
+    showDeclineRideAlert(confirmDecline);
   };
 
   const handleAccept = () => {
@@ -676,10 +683,10 @@ export default function DriverDashboard() {
               onPress={() => router.push('/driver-packages')}
               activeOpacity={0.72}
               accessibilityRole="button"
-              accessibilityLabel="View ride package balance"
+              accessibilityLabel="View ride package rides"
             >
               <Text style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{remainingCreditsText}</Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Balance</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Rides</Text>
             </TouchableOpacity>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
@@ -687,10 +694,10 @@ export default function DriverDashboard() {
               onPress={() => router.push('/driver-packages')}
               activeOpacity={0.72}
               accessibilityRole="button"
-              accessibilityLabel="View ride package bonus"
+              accessibilityLabel="View ride package Bonus Rides"
             >
               <Text style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{bonusRidesText}</Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Bonus</Text>
+              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Bonus Rides</Text>
             </TouchableOpacity>
           </View>
 
@@ -699,7 +706,7 @@ export default function DriverDashboard() {
               <View style={styles.noCreditsCopy}>
                 <View style={styles.noCreditsTitleRow}>
                   <Feather name="layers" size={14} color={colors.success} />
-                  <Text style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Balance</Text>
+                  <Text style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Rides</Text>
                 </View>
                 <Text style={[styles.noCreditsText, { color: colors.mutedForeground }]}>
                   Choose a package to start receiving ride requests.
@@ -791,68 +798,59 @@ export default function DriverDashboard() {
       {/* ── Incoming ride request sheet ── */}
       {showRequest && request && (
         <Animated.View
-          style={[
-            styles.requestSheet,
-            {
-              backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-              transform: [{ translateY: slideAnim }],
-              paddingBottom: tabBarHeight + 16,
-            },
-          ]}
+          style={[styles.requestSheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + 16 }]}
         >
-          {/* Handle */}
-          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-
           <View style={styles.requestHeader}>
-            <View>
-              <Text style={[styles.requestEyebrow, { color: colors.primary }]}>Incoming Ride</Text>
-              <Text style={[styles.requestTitle, { color: colors.foreground }]}>{request.customerName ?? 'Customer'}</Text>
+            <ProfileAvatarCircle
+              size={46}
+              initial={(request.customerName ?? 'C').charAt(0).toUpperCase()}
+              imageUri={request.customerImage ?? null}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.requestEyebrow, { color: colors.mutedForeground }]}>Incoming Ride Request</Text>
+              <Text style={[styles.requestTitle, { color: colors.foreground }]} numberOfLines={1}>{request.customerName ?? 'Customer'}</Text>
             </View>
             <View style={[styles.countdown, { backgroundColor: countdown <= 5 ? colors.destructive : colors.primary }]}>
-              <Text style={styles.countdownText}>{countdown}s</Text>
+              <Text style={styles.countdownText}>{countdown}</Text>
+              <Text style={styles.countdownSub}>sec</Text>
             </View>
           </View>
-
-          <View style={styles.requestRoute}>
+          <View style={[styles.routeCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>{request.pickup.address}</Text>
+              <View style={styles.routeTextBlock}>
+                <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
+                <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{request.pickup.address}</Text>
+              </View>
             </View>
-            <View style={[styles.routeConnector, { borderColor: colors.border }]} />
+            <View style={[styles.routeConnector, { backgroundColor: colors.border }]} />
             <View style={styles.routeRow}>
               <View style={[styles.routeSquare, { backgroundColor: colors.destructive }]} />
-              <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>{requestDestinationLabel}</Text>
+              <View style={styles.routeTextBlock}>
+                <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Drop off</Text>
+                <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestDestinationLabel}</Text>
+              </View>
             </View>
           </View>
-
           <View style={styles.metaRow}>
-            <View style={[styles.metaChip, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{request.distance} km</Text>
+            <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+              <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
+              <View style={styles.metaInfoText}>
+                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Est. Time</Text>
+                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>~{request.duration ?? '-'} min</Text>
+              </View>
             </View>
-            <View style={[styles.metaChip, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-              <Feather name="clock" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.mutedForeground }]}>~{request.duration ?? '-'} min</Text>
+            <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+              <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
+              <View style={styles.metaInfoText}>
+                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Distance</Text>
+                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{request.distance} km</Text>
+              </View>
             </View>
           </View>
-
           <View style={styles.requestActions}>
-            <TouchableOpacity
-              style={[styles.reqBtn, { backgroundColor: colors.destructiveHex + '12', borderColor: colors.destructive }]}
-              onPress={handleDecline}
-              activeOpacity={0.8}
-            >
-              <Feather name="x" size={20} color={colors.destructive} />
-              <Text style={[styles.reqBtnText, { color: colors.destructive }]}>Decline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.reqBtn, { backgroundColor: colors.primary, borderColor: colors.primary, flex: 1 }]}
-              onPress={handleAccept}
-              activeOpacity={0.8}
-            >
-              <Feather name="check" size={20} color={colors.primaryForeground} />
-              <Text style={[styles.reqBtnText, { color: colors.primaryForeground }]}>Accept</Text>
-            </TouchableOpacity>
+            <AppButton variant="decline" size="md" title="Decline" icon="x" onPress={handleDecline} />
+            <AppButton variant="primary" size="md" title="Accept" icon="check" onPress={handleAccept} style={{ flex: 1 }} />
           </View>
         </Animated.View>
       )}
@@ -900,7 +898,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
-  notifDot: { position: 'absolute', top: 5, right: 5, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
+  notifDot: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
   identityChipRow: { height: 22, flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
   identityItem: {
     height: 22,
@@ -1074,26 +1072,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18, shadowRadius: 20, elevation: 20,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
-  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  requestEyebrow: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
-  requestTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', marginTop: 2 },
-  countdown: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  countdownText: { fontSize: 17, fontFamily: 'Inter_700Bold', color: '#fff' },
-  requestRoute: { gap: 6 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  routeDot: { width: 11, height: 11, borderRadius: 6, flexShrink: 0 },
-  routeSquare: { width: 11, height: 11, borderRadius: 3, flexShrink: 0 },
-  routeConnector: { height: 18, borderLeftWidth: 2, borderStyle: 'dashed', marginLeft: 5 },
-  routeText: { fontSize: 14, fontFamily: 'Inter_500Medium', flex: 1 },
-  metaRow: { flexDirection: 'row', gap: 10 },
-  metaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 32, borderRadius: 16 },
-  metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  requestActions: { flexDirection: 'row', gap: 12 },
-  reqBtn: {
-    flex: 0.45, flexDirection: 'row', height: 56,
-    borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-    gap: 8, borderWidth: 1.5,
-  },
-  reqBtnText: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  requestEyebrow: { fontSize: 11, fontFamily: 'Inter_500Medium', marginBottom: 2 },
+  requestTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  countdown: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  countdownText: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#fff', lineHeight: 20 },
+  countdownSub: { fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.75)', lineHeight: 11 },
+  fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
+  fareLabel: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
+  fareValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  routeCard: { borderRadius: 15, paddingHorizontal: 14, paddingVertical: 10, gap: 0 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
+  routeDot: { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  routeSquare: { width: 12, height: 12, borderRadius: 3, flexShrink: 0 },
+  routeConnector: { height: 1, marginLeft: 24 },
+  routeTextBlock: { flex: 1, gap: 2 },
+  routeInlineLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  routeValue: { fontSize: 15, fontFamily: 'Inter_500Medium' },
+  routeText: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
+  metaRow: { flexDirection: 'row', gap: 6 },
+  metaInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 14, gap: 5 },
+  metaInfoText: { flex: 1, gap: 2 },
+  metaInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  metaInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  requestActions: { flexDirection: 'row', gap: 10 },
 });

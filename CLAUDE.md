@@ -13,7 +13,7 @@ Every response, every change, every suggestion must reflect **world-class crafts
 ## 1. Design & Visual Craft (apply to every UI change)
 
 ### Always ask before shipping any screen or component:
-- Does this pass the **Huashu aesthetic** standard? — elegant, refined, purposeful negative space, layered depth without noise, calligraphic balance in typography
+- Does this pass the **Huashu aesthetic** standard? — elegant, refined, purposeful negative space, layered depth without noise, calligraphic Rides in typography
 - Does this reflect **impeccable quality**? — every shadow, radius, and spacing intentional; no placeholder colors, no wrong fonts, no clipped content; pixel-perfect at 1x/2x/3x
 - Does this show **taste**? — restraint, knowing what NOT to add, consistency policed across every screen
 - Is this following **native UI patterns**? — iOS: HIG, SF Symbols, Safe Areas, sheet modals, swipe-back; Android: Material 3, predictive back, edge-to-edge

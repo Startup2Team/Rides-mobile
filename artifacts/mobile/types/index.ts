@@ -119,6 +119,8 @@ export interface Ride {
   customerId: string;
   customerName?: string;
   customerPhone?: string;
+  customerImage?: string;
+  customerRating?: number;
   driverId?: string;
   driverName?: string;
   driver?: MockDriver;

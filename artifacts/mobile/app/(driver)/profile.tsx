@@ -124,7 +124,7 @@ export default function DriverProfileScreen() {
           <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
           <QuickStat
             colors={colors}
-            label="Balance"
+            label="Rides"
             value={isEntitlementLoading ? '...' : String(rideCredits)}
             onPress={() => router.push('/driver-packages')}
           />

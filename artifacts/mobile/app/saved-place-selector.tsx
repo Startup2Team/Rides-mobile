@@ -24,7 +24,7 @@ import { useLocationSearch } from '@/hooks/home/useLocationSearch';
 import { KIGALI_CENTER, type RideLocation, type SavedLocation } from '@/types';
 import { formatReverseGeocodeAddress } from '@/utils/locationUtils';
 
-type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Other';
+type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Church' | 'Other';
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 const MAP_LOCATION_DELTA = 0.012;
@@ -242,7 +242,7 @@ export default function SavedPlaceSelectorScreen() {
 }
 
 function normalizeLabel(value?: string): SavedPlaceLabel {
-  if (value === 'Work' || value === 'School' || value === 'Other') return value;
+  if (value === 'Work' || value === 'School' || value === 'Church' || value === 'Other') return value;
   return 'Home';
 }
 

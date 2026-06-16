@@ -93,6 +93,17 @@ jest.mock('expo-location', () => ({
   getCurrentPositionAsync: jest.fn(),
 }));
 
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(),
+}));
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { LinearGradient: (props: object) => <View {...props} /> };
+});
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockSafeAreaInsets,
 }));
@@ -247,7 +258,7 @@ describe('DriverDashboard online state', () => {
     act(() => {
       jest.advanceTimersByTime(5_000);
     });
-    await waitFor(() => expect(screen.getByText('Incoming Ride')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
     view.unmount();
 
@@ -296,7 +307,7 @@ describe('DriverDashboard online state', () => {
   test('persists online toggles and clears pending request timers when going offline', async () => {
     await seedDriverState();
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Balance')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Rides')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
@@ -321,7 +332,7 @@ describe('DriverDashboard online state', () => {
       profile: { ...baseProfile, verificationStatus: 'pending_review', isVerified: false },
     });
     const pendingView = render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Balance')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Rides')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(screen.getByText('Offline')).toBeTruthy();
@@ -335,7 +346,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ withCredits: false });
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('No Balance')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No Rides')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(router.push).toHaveBeenCalledWith('/driver-packages');
@@ -366,9 +377,9 @@ describe('DriverDashboard online state', () => {
 
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
     expect(screen.getByText('Trips')).toBeTruthy();
-    expect(screen.getByText('Balance')).toBeTruthy();
+    expect(screen.getByText('Rides')).toBeTruthy();
     expect(screen.getByText('30')).toBeTruthy();
-    expect(screen.getByText('Bonus')).toBeTruthy();
+    expect(screen.getByText('Bonus Rides')).toBeTruthy();
     expect(screen.getByText('5')).toBeTruthy();
     expect(screen.queryByText('13,400 RWF')).toBeNull();
     expect(screen.queryByText('Acceptance Rate')).toBeNull();
@@ -400,7 +411,7 @@ describe('DriverDashboard online state', () => {
 
     expect(screen.getByText('0 RWF')).toBeTruthy();
     expect(screen.getByText('Trips')).toBeTruthy();
-    expect(screen.getByText('Balance')).toBeTruthy();
+    expect(screen.getByText('Rides')).toBeTruthy();
   });
 
   test('keeps edge-to-edge status card content below a notch safe area', async () => {
@@ -421,7 +432,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ withCredits: false });
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('No Balance')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No Rides')).toBeTruthy());
 
     expect(screen.getByText('Choose a package to start receiving ride requests.')).toBeTruthy();
     expect(screen.getByText('View Packages')).toBeTruthy();

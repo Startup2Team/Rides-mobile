@@ -143,7 +143,7 @@ describe('DriverStats', () => {
     expect(screen.getByText('No trips completed today yet.')).toBeTruthy();
     expect(screen.getByText('Package History')).toBeTruthy();
     expect(screen.getByText('View Packages')).toBeTruthy();
-    expect(screen.getAllByText('Balance')).toHaveLength(1);
+    expect(screen.getAllByText('Rides')).toHaveLength(1);
     expect(screen.getAllByText('Growth Package')).toHaveLength(2);
     expect(screen.getByText('Successful')).toBeTruthy();
     expect(screen.getByText('Failed')).toBeTruthy();

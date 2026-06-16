@@ -36,7 +36,7 @@ describe('driver ride packages', () => {
     expect(() => activatePackage(first.entitlement, 'launch_starter')).toThrow('already been used');
   });
 
-  test('successful purchase adds package trips to balance and package bonus to bonus', () => {
+  test('successful purchase adds package Rides to Rides and package Bonus Rides to Bonus Rides', () => {
     const started = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
       packageId: 'growth',
       provider: 'mtn',
@@ -113,7 +113,7 @@ describe('driver ride packages', () => {
     expect(getActiveRideCredits(duplicate.entitlement)).toBe(34);
   });
 
-  test('completed ride uses bonus only after balance is empty', () => {
+  test('completed ride uses Bonus Rides only after rides are empty', () => {
     const entitlement = { ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 0, remainingBonusRides: 2 };
     const result = deductCreditForCompletedRide(entitlement, 'ride-1');
     expect(result.deducted).toBe(true);
@@ -122,16 +122,16 @@ describe('driver ride packages', () => {
     expect(getActiveRideCredits(result.entitlement)).toBe(1);
   });
 
-  test('cancellation does not deduct and low balance warning appears below 10', () => {
+  test('cancellation does not deduct and low rides warning appears below 10', () => {
     const entitlement = { ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 9 };
     expect(getActiveRideCredits(entitlement)).toBe(9);
     expect(isLowRideCreditBalance(entitlement)).toBe(true);
   });
 
-  test('low balance messaging escalates at 10, 5, 2, and 0 credits', () => {
-    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 10 })).toContain('10 balance left');
-    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 5 })).toContain('Only 5 balance left');
-    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 2 })).toContain('Only 2 balance left');
+  test('low rides messaging escalates at 10, 5, 2, and 0 credits', () => {
+    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 10 })).toContain('10 rides left');
+    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 5 })).toContain('Only 5 rides left');
+    expect(getRideCreditBalanceMessage({ ...EMPTY_DRIVER_ENTITLEMENT, remainingRideCredits: 2 })).toContain('Only 2 rides left');
     expect(getRideCreditBalanceMessage(EMPTY_DRIVER_ENTITLEMENT)).toBe('Choose a package to start receiving ride requests.');
   });
 });

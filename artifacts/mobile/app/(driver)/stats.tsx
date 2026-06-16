@@ -98,7 +98,7 @@ export default function DriverStats() {
           <View style={styles.heroMetrics}>
             <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
             <View style={styles.heroDivider} />
-            <HeroMetric label="Balance" value={isEntitlementLoading ? '...' : String(rideCredits)} />
+            <HeroMetric label="Rides" value={isEntitlementLoading ? '...' : String(rideCredits)} />
             <View style={styles.heroDivider} />
             <HeroMetric label="Driver Rating" value={ratingSummary.ratingCount > 0 ? ratingValue : 'No ratings yet'} compact />
           </View>

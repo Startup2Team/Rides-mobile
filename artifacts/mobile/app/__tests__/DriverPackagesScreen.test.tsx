@@ -226,12 +226,12 @@ describe('DriverPackagesScreen', () => {
     render(<DriverPackagesScreen />);
 
     expect(screen.getByText('FREE NOW')).toBeTruthy();
-    expect(screen.getByLabelText('30 Trips + 5 Bonus')).toBeTruthy();
+    expect(screen.getByLabelText('30 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('Launch Offer')).toBeTruthy();
-    expect(screen.getByLabelText('60 Trips + 15 Bonus')).toBeTruthy();
+    expect(screen.getByLabelText('60 Rides + 15 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('Most Popular Plan')).toBeTruthy();
     expect(screen.getByText('Pro Package')).toBeTruthy();
-    expect(screen.getByLabelText('120 Trips + 30 Bonus')).toBeTruthy();
+    expect(screen.getByLabelText('120 Rides + 30 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('Best Value Plan')).toBeTruthy();
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
   });

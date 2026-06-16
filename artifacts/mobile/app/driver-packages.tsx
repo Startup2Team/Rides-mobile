@@ -58,7 +58,7 @@ export default function DriverPackagesScreen() {
 
     <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
       <View>
-        <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
+        <Text style={styles.balanceLabel}>AVAILABLE RIDES</Text>
         <Text style={styles.balanceValue}>{isEntitlementLoading ? '...' : rideCredits}</Text>
       </View>
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
@@ -126,11 +126,11 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
     <View style={styles.packageContent}>
       <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
       <View
-        accessibilityLabel={`${ridePackage.includedRides} Trips + ${ridePackage.bonusRides} Bonus`}
+        accessibilityLabel={`${ridePackage.includedRides} Rides + ${ridePackage.bonusRides} Bonus Rides`}
         style={styles.creditRow}
       >
-        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.includedRides} Trips</Text>
-        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRides} Bonus</Text>
+        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.includedRides} Rides</Text>
+        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRides} Bonus Rides</Text>
       </View>
       <Text style={[styles.planLabel, { color: colors.mutedForeground }]}>
         {ridePackage.launchOffer ? 'Launch Offer' : ridePackage.id === 'growth' ? 'Most Popular Plan' : 'Best Value Plan'}

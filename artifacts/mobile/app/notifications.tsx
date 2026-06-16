@@ -146,7 +146,7 @@ function buildDriverNotifications({
       icon: successful ? 'package' as const : 'alert-circle' as const,
       title: successful ? 'Ride package activated' : 'Ride package update',
       message: successful
-        ? `${ridePackage.name} is active with ${ridePackage.totalCredits} trips.`
+        ? `${ridePackage.name} is active with ${ridePackage.totalCredits} rides.`
         : `${ridePackage.name} payment status: ${purchase.status}.`,
       time: purchase.completedAt ?? purchase.createdAt,
       read: successful,
@@ -159,10 +159,10 @@ function buildDriverNotifications({
       id: `driver_low_credits_${rideCredits}`,
       type: rideCredits === 0 ? 'safety' : 'system',
       icon: 'alert-circle',
-      title: rideCredits === 0 ? 'No balance left' : 'Balance running low',
+      title: rideCredits === 0 ? 'No rides left' : 'Rides running low',
       message: rideCredits === 0
         ? 'View ride packages to continue receiving ride requests.'
-        : `${rideCredits} balance left. View packages before it runs out.`,
+        : `${rideCredits} rides left. View packages before they run out.`,
       time: entitlement.updatedAt || new Date().toISOString(),
       read: false,
     });
