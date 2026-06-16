@@ -19,13 +19,13 @@ import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
-import { formatDistance, formatDuration, haversineKm, routePolylineThroughPinTips } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { KIGALI_CENTER, VehicleType } from '@/types';
+import { getArrivalVerification } from './driverNavigateArrival';
 
 const WAIT_LIMIT_SECONDS = 180;
-const ARRIVAL_UNLOCK_KM = 1;
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
@@ -199,10 +199,15 @@ export default function DriverNavigateScreen() {
   const etaText = route && !routeLoading
     ? formatDuration(route.durationSeconds)
     : `${Math.round(distanceToTargetKm * 3 + 1)} min`;
-  const distanceText = route
-    ? formatDistance(route.distanceMeters)
-    : formatDistance(distanceToTargetKm * 1000);
-  const canMarkArrived = true;
+  const arrivalVerification = currentRide
+    ? getArrivalVerification(driverPos, currentRide.pickup)
+    : null;
+  const canMarkArrived = arrivalVerification?.canMarkArrived ?? false;
+  const distanceText = phase === 'pickup' && arrivalVerification
+    ? arrivalVerification.distanceText
+    : route
+      ? formatDistance(route.distanceMeters)
+      : formatDistance(distanceToTargetKm * 1000);
   const isCustomerLate = pickupWait.isLate;
 
   const statusMessage =
@@ -241,9 +246,13 @@ export default function DriverNavigateScreen() {
   }, [currentRide?.customerPhone]);
 
   const handleMarkArrived = useCallback(() => {
+    if (!canMarkArrived) {
+      showToast('Move closer to the pickup location to mark arrival.', 'info');
+      return;
+    }
     fittedMapPhaseRef.current = null;
     markArrived();
-  }, [markArrived]);
+  }, [canMarkArrived, markArrived, showToast]);
 
   const handleCancelRide = () => {
     Alert.alert(
@@ -423,7 +432,9 @@ export default function DriverNavigateScreen() {
           </View>
           <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
           <View style={styles.fareItem}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Distance</Text>
+            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>
+              {phase === 'pickup' ? 'Distance to Pickup' : 'Distance'}
+            </Text>
             <Text style={[styles.fareValue, { color: colors.foreground }]}>{distanceText}</Text>
           </View>
           <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
