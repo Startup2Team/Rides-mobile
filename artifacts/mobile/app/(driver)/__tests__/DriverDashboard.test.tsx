@@ -18,6 +18,7 @@ import type { DriverProfile, Ride, User } from '@/types';
 import DriverDashboard from '../index';
 
 let mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+const mockAlert = jest.fn();
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -44,6 +45,7 @@ jest.mock('react-native', () => {
       parallel: jest.fn(() => animation()),
       sequence: jest.fn(() => animation()),
     },
+    Alert: { alert: (...args: unknown[]) => mockAlert(...args) },
     Dimensions: { get: () => ({ width: 390, height: 844 }) },
     Image: host('Image'),
     Linking: { openURL: jest.fn(() => Promise.resolve()) },
@@ -236,6 +238,9 @@ describe('DriverDashboard online state', () => {
     mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
+    mockAlert.mockImplementation((_title, _message, buttons: Array<{ onPress?: () => void }> = []) => {
+      buttons[0]?.onPress?.();
+    });
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -259,6 +264,23 @@ describe('DriverDashboard online state', () => {
       jest.advanceTimersByTime(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
+    expect(screen.getByText('Amina K.')).toBeTruthy();
+    expect(screen.getByText('4.7')).toBeTruthy();
+    expect(screen.getAllByText('Pickup').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Kimironko Market')).toBeTruthy();
+    expect(screen.getByText('Destination')).toBeTruthy();
+    expect(screen.getByText('Kigali City Tower')).toBeTruthy();
+    expect(screen.getAllByText('Pickup').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Trip Distance')).toBeTruthy();
+    expect(screen.getByText('4.46 km')).toBeTruthy();
+    expect(screen.getByText('Time')).toBeTruthy();
+    expect(screen.getByText('~18 min')).toBeTruthy();
+    expect(screen.queryByText('Accept to negotiate the fare.')).toBeNull();
+    expect(screen.queryByText('Moto')).toBeNull();
+    expect(screen.queryByText('Suggested Fare')).toBeNull();
+    expect(screen.queryByText('Estimated Fare')).toBeNull();
+    expect(screen.queryByText('Platform Fare')).toBeNull();
+    expect(screen.queryByText('Fixed Price')).toBeNull();
 
     view.unmount();
 
@@ -325,6 +347,54 @@ describe('DriverDashboard online state', () => {
       jest.advanceTimersByTime(6_000);
     });
     expect(screen.queryByText('Incoming Ride')).toBeNull();
+  });
+
+  test('accepting an incoming request routes to driver negotiation and clears the sheet', async () => {
+    await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
+    act(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+    await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Accept'));
+
+    expect(router.push).toHaveBeenCalledWith('/driver-negotiation');
+    await waitFor(() => expect(screen.queryByText('Incoming Ride Request')).toBeNull());
+  });
+
+  test('declining an incoming request clears it', async () => {
+    await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
+    act(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+    await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Decline'));
+
+    await waitFor(() => expect(screen.queryByText('Incoming Ride Request')).toBeNull());
+  });
+
+  test('countdown expiry clears the incoming request', async () => {
+    await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
+    act(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+    await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
+
+    act(() => {
+      jest.advanceTimersByTime(15_000);
+    });
+
+    await waitFor(() => expect(screen.queryByText('Incoming Ride Request')).toBeNull());
   });
 
   test('does not allow pending drivers or approved drivers with zero credits to go online', async () => {

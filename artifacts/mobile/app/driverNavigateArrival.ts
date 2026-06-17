@@ -1,7 +1,7 @@
 import type { Coords } from '@/types';
 import { haversineKm } from '@/utils/mapUtils';
 
-export const ARRIVAL_UNLOCK_KM = 1;
+export const ARRIVAL_UNLOCK_KM = 0.5;
 
 export function formatArrivalDistance(km: number) {
   const meters = Math.max(0, Math.round(km * 1000));

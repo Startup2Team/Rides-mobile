@@ -18,7 +18,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -43,6 +43,12 @@ import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
+import {
+  formatDistanceToPickup,
+  formatRequestLocation,
+  formatTripDistance,
+  formatTripDuration,
+} from '../driverRequestCard';
 
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
@@ -118,7 +124,6 @@ export default function DriverDashboard() {
     declineRideRequest,
   } = useRide();
 
-  const [showRequest, setShowRequest] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
@@ -281,12 +286,16 @@ export default function DriverDashboard() {
     };
     clearRequestTimers();
     requestSessionRef.current = timers.startSession();
-    if (!isOnline) { setShowRequest(false); setCountdown(15); return; }
+    if (!isOnline) {
+      slideAnim.setValue(300);
+      setCountdown(15);
+      declineRideRequest();
+      return;
+    }
     const session = requestSessionRef.current;
     requestTimeoutRef.current = timers.scheduleTimeout(() => {
       requestTimeoutRef.current = null;
       simulateIncomingRideRequest();
-      setShowRequest(true);
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
       countdownValueRef.current = 15;
       setCountdown(15);
@@ -302,24 +311,25 @@ export default function DriverDashboard() {
       }, 1000, session);
     }, 5000, session);
     return clearRequestTimers;
-  }, [isOnline, simulateIncomingRideRequest, timers]);
+  }, [declineRideRequest, isOnline, simulateIncomingRideRequest, slideAnim, timers]);
 
   const confirmDecline = () => {
     timers.clearInterval(countdownRef.current);
     countdownRef.current = null;
     Animated.timing(slideAnim, { toValue: 300, duration: 300, useNativeDriver: true }).start(() => {
-      setShowRequest(false);
       setCountdown(15);
+      declineRideRequest();
     });
     if (driverProfile) saveDriverProfile({ ...driverProfile, dailyDeclines: (driverProfile.dailyDeclines ?? 0) + 1 });
-    declineRideRequest();
   };
 
   const handleDecline = () => {
+    if (!pendingRequest) return;
     showDeclineRideAlert(confirmDecline);
   };
 
   const handleAccept = () => {
+    if (!pendingRequest) return;
     timers.clearInterval(countdownRef.current);
     countdownRef.current = null;
     acceptRideRequest();
@@ -396,9 +406,11 @@ export default function DriverDashboard() {
     : '0.0';
   const showNoCreditsWarning = !isEntitlementLoading && totalAvailableRides === 0;
   const request = pendingRequest;
-  const requestDestinationLabel = request?.destination.locationType === 'generic'
-    ? 'Unknown - to be negotiated'
-    : request?.destination.address;
+  const requestPickupLabel = formatRequestLocation(request?.pickup, 'Pickup unavailable');
+  const requestDestinationLabel = formatRequestLocation(request?.destination, 'Destination unavailable');
+  const requestDistanceToPickup = request ? formatDistanceToPickup(driverLocation, request.pickup) : 'Distance unavailable';
+  const requestTripDistance = formatTripDistance(request?.distance);
+  const requestTripDuration = formatTripDuration(request?.duration);
 
   const getSwitchModeSlideEnd = useCallback(() => (
     Math.max(
@@ -522,19 +534,11 @@ export default function DriverDashboard() {
           </View>
         </Marker>
         {request && (
-          <>
-            <Marker coordinate={request.pickup}>
-              <View style={[styles.pickupPin, { backgroundColor: colors.primary }]}>
-                <Feather name="user" size={12} color={colors.primaryForeground} />
-              </View>
-            </Marker>
-            <Polyline
-              coordinates={[driverLocation, request.pickup]}
-              strokeColor={colors.destructiveHex}
-              strokeWidth={3}
-              lineDashPattern={[8, 4]}
-            />
-          </>
+          <Marker coordinate={request.pickup}>
+            <View style={[styles.pickupPin, { backgroundColor: colors.primary }]}>
+              <Feather name="user" size={12} color={colors.primaryForeground} />
+            </View>
+          </Marker>
         )}
       </MapView>
 
@@ -771,7 +775,7 @@ export default function DriverDashboard() {
       </View>
 
       {/* ── Go Online / Offline button above tab bar ── */}
-      {!showRequest && (
+      {!request && (
         <View style={[styles.onlineBtnWrap, { bottom: tabBarHeight - 8 }]}>
           <Animated.View style={{ transform: [{ scale: onlineScale }] }}>
             <TouchableOpacity
@@ -796,19 +800,27 @@ export default function DriverDashboard() {
       )}
 
       {/* ── Incoming ride request sheet ── */}
-      {showRequest && request && (
+      {request && (
         <Animated.View
-          style={[styles.requestSheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + 16 }]}
+          style={[styles.requestSheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + 10 }]}
         >
           <View style={styles.requestHeader}>
             <ProfileAvatarCircle
-              size={46}
+              size={40}
               initial={(request.customerName ?? 'C').charAt(0).toUpperCase()}
               imageUri={request.customerImage ?? null}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.requestEyebrow, { color: colors.mutedForeground }]}>Incoming Ride Request</Text>
               <Text style={[styles.requestTitle, { color: colors.foreground }]} numberOfLines={1}>{request.customerName ?? 'Customer'}</Text>
+              {request.customerRating != null ? (
+                <View style={styles.requestRatingRow}>
+                  <MaterialCommunityIcons name="star" size={12} color={colors.star} />
+                  <Text style={[styles.requestRatingText, { color: colors.star }]}>
+                    {request.customerRating.toFixed(1)}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <View style={[styles.countdown, { backgroundColor: countdown <= 5 ? colors.destructive : colors.primary }]}>
               <Text style={styles.countdownText}>{countdown}</Text>
@@ -820,31 +832,38 @@ export default function DriverDashboard() {
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
               <View style={styles.routeTextBlock}>
                 <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{request.pickup.address}</Text>
+                <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestPickupLabel}</Text>
               </View>
             </View>
             <View style={[styles.routeConnector, { backgroundColor: colors.border }]} />
             <View style={styles.routeRow}>
               <View style={[styles.routeSquare, { backgroundColor: colors.destructive }]} />
               <View style={styles.routeTextBlock}>
-                <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Drop off</Text>
+                <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
                 <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestDestinationLabel}</Text>
               </View>
             </View>
           </View>
           <View style={styles.metaRow}>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
+              <MaterialCommunityIcons name="map-marker-radius" size={16} color={colors.primary} />
               <View style={styles.metaInfoText}>
-                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Est. Time</Text>
-                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>~{request.duration ?? '-'} min</Text>
+                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Pickup</Text>
+                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestDistanceToPickup}</Text>
               </View>
             </View>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
               <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
               <View style={styles.metaInfoText}>
-                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Distance</Text>
-                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{request.distance} km</Text>
+                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Trip Distance</Text>
+                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDistance}</Text>
+              </View>
+            </View>
+            <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+              <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
+              <View style={styles.metaInfoText}>
+                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Time</Text>
+                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDuration}</Text>
               </View>
             </View>
           </View>
@@ -1066,34 +1085,36 @@ const styles = StyleSheet.create({
   // Request sheet
   requestSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingTop: 12, paddingHorizontal: 20, gap: 14,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingTop: 10, paddingHorizontal: 16, gap: 9,
     shadowColor: '#000', shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.18, shadowRadius: 20, elevation: 20,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  requestEyebrow: { fontSize: 11, fontFamily: 'Inter_500Medium', marginBottom: 2 },
-  requestTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  countdown: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  countdownText: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#fff', lineHeight: 20 },
+  requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  requestEyebrow: { fontSize: 10, fontFamily: 'Inter_500Medium', marginBottom: 1 },
+  requestTitle: { fontSize: 17, fontFamily: 'Inter_700Bold' },
+  requestRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  requestRatingText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  countdown: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  countdownText: { fontSize: 17, fontFamily: 'Inter_700Bold', color: '#fff', lineHeight: 19 },
   countdownSub: { fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.75)', lineHeight: 11 },
   fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   fareLabel: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
   fareValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  routeCard: { borderRadius: 15, paddingHorizontal: 14, paddingVertical: 10, gap: 0 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
-  routeDot: { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
-  routeSquare: { width: 12, height: 12, borderRadius: 3, flexShrink: 0 },
-  routeConnector: { height: 1, marginLeft: 24 },
-  routeTextBlock: { flex: 1, gap: 2 },
-  routeInlineLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
-  routeValue: { fontSize: 15, fontFamily: 'Inter_500Medium' },
+  routeCard: { borderRadius: 13, paddingHorizontal: 12, paddingVertical: 7, gap: 0 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  routeDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  routeSquare: { width: 10, height: 10, borderRadius: 3, flexShrink: 0 },
+  routeConnector: { height: 1, marginLeft: 20 },
+  routeTextBlock: { flex: 1, gap: 1 },
+  routeInlineLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  routeValue: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   routeText: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
-  metaRow: { flexDirection: 'row', gap: 6 },
-  metaInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 14, gap: 5 },
-  metaInfoText: { flex: 1, gap: 2 },
-  metaInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  metaInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  metaRow: { flexDirection: 'row', gap: 5 },
+  metaInfoCard: { flex: 1, minHeight: 36, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 7, borderRadius: 12, gap: 4 },
+  metaInfoText: { flex: 1, gap: 1 },
+  metaInfoValue: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  metaInfoLabel: { fontSize: 8, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
   requestActions: { flexDirection: 'row', gap: 10 },
 });
