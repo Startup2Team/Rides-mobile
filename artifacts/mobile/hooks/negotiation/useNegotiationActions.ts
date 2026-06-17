@@ -7,6 +7,7 @@ export function useNegotiationActions({
   counterOffer,
   currentRide,
   declineDriverOffer,
+  minFare,
   offerText,
   setCounterLoading,
   setOfferText,
@@ -17,6 +18,7 @@ export function useNegotiationActions({
   counterOffer: (amount: number) => void;
   currentRide: Ride | null;
   declineDriverOffer: () => void;
+  minFare: number;
   offerText: string;
   setCounterLoading: (loading: boolean) => void;
   setOfferText: (text: string) => void;
@@ -25,6 +27,12 @@ export function useNegotiationActions({
 }) {
   const sendCounter = useCallback((amount: number) => {
     if (!amount || amount < 100 || !canCounter) return;
+    // Block offers below the vehicle's minimum fare — otherwise the backend
+    // accepts the proposal but the driver can never accept it (BELOW_MIN_FARE).
+    if (minFare > 0 && amount < minFare) {
+      Alert.alert('Fare too low', `The minimum fare for this ride is ${minFare.toLocaleString()} RWF.`);
+      return;
+    }
     setShowDriverTyping(false);
     setPendingOfferAmount(amount);
     setOfferText('');
@@ -33,6 +41,7 @@ export function useNegotiationActions({
   }, [
     canCounter,
     counterOffer,
+    minFare,
     setCounterLoading,
     setOfferText,
     setPendingOfferAmount,

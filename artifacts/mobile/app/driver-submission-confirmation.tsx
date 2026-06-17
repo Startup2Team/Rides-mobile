@@ -16,6 +16,7 @@ import { AppButton } from '@/components/AppButton';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { isDriverApprovalDevtoolEnabled } from '@/utils/driverDevTools';
+import { refreshSession } from '@/services/api';
 
 const STEPS = [
   {
@@ -43,7 +44,7 @@ export default function DriverSubmissionConfirmation() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { driverProfile, switchMode, saveDriverProfile } = useAuth();
+  const { driverProfile, switchMode, saveDriverProfile, loadDriverProfile } = useAuth();
 
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
@@ -74,6 +75,27 @@ export default function DriverSubmissionConfirmation() {
     __DEV__,
     process.env.EXPO_PUBLIC_ENABLE_DRIVER_APPROVAL_DEVTOOLS,
   );
+
+  // Auto-sync approval from the backend so this screen flips to "approved" on its
+  // own — no manual refresh. The login token is still CUSTOMER_ONLY after apply/
+  // approve (so GET /driver/profile would 403), so we refresh the token FIRST to
+  // sync the role (→ DRIVER_PENDING/ACTIVE), then poll while still pending.
+  useEffect(() => {
+    if (isApproved || isRejected) return;
+    let cancelled = false;
+    void refreshSession()
+      .catch(() => {})
+      .finally(() => { if (!cancelled) void loadDriverProfile(); });
+    const id = setInterval(() => { if (!cancelled) void loadDriverProfile(); }, 8000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isApproved, isRejected, loadDriverProfile]);
+
+  // Once approved, refresh the token so role_state becomes DRIVER_ACTIVE —
+  // otherwise driver-only endpoints (go online, post location) keep 403ing with
+  // the stale DRIVER_PENDING token issued at login.
+  useEffect(() => {
+    if (isApproved) void refreshSession();
+  }, [isApproved]);
 
   const handlePrimaryAction = async () => {
     if (isApproved) {

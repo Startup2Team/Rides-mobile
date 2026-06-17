@@ -19,6 +19,7 @@ import {
 } from '@/domain/driverDocuments';
 import { useColors } from '@/hooks/useColors';
 import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocumentUpload';
+import { uploadDocumentFaces } from '@/services/uploads';
 import type { DocumentKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { isFutureExpiryDate, isValidDriverLicenceNumber } from '@/hooks/driver-onboarding/useDriverOnboardingValidation';
 import { loadStoredDriverDocuments, saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
@@ -102,11 +103,26 @@ export default function DriverDocumentsScreen() {
       },
     };
     setSaving(true);
+    // Push the new photos to the backend so the admin sees the replacement.
+    // Best-effort: if the upload fails we still keep the local copy so the
+    // driver doesn't lose their work, but tell them it didn't sync.
+    let uploadFailed = false;
+    try {
+      const failures = await uploadDocumentFaces(activeKey, faces);
+      uploadFailed = failures.length > 0;
+    } catch {
+      uploadFailed = true;
+    }
     await saveStoredDriverDocuments(updated);
     setDocuments(updated);
     setActiveKey(null);
     setSaving(false);
-    Alert.alert('Submitted for review', `${DRIVER_DOCUMENT_LABELS[activeKey]} replacement was submitted. Your current verified details remain active during review.`);
+    Alert.alert(
+      uploadFailed ? 'Saved, but not synced' : 'Submitted for review',
+      uploadFailed
+        ? `${DRIVER_DOCUMENT_LABELS[activeKey]} was saved on your device but couldn’t upload. Check your connection and try again.`
+        : `${DRIVER_DOCUMENT_LABELS[activeKey]} replacement was submitted. Your current verified details remain active during review.`,
+    );
   };
 
   return (

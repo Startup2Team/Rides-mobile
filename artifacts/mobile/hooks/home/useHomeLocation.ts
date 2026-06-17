@@ -243,6 +243,16 @@ export function useHomeLocation({
       await Notifications.requestPermissionsAsync();
     };
 
+    // Safety net: never trap the user on "Finding your pickup point". If GPS
+    // hasn't resolved within this window, drop the full-screen loader and render
+    // the map on the current (fallback) location; resolveLocation and the live
+    // watch keep running and refine the pickup pin the moment a fix arrives.
+    const fallbackTimer = setTimeout(() => {
+      if (mounted) {
+        setLocationStatus(previous => (previous === 'loading' ? 'available' : previous));
+      }
+    }, 4_500);
+
     (async () => {
       try {
         if (Platform.OS === 'web') {
@@ -311,6 +321,7 @@ export function useHomeLocation({
 
     return () => {
       mounted = false;
+      clearTimeout(fallbackTimer);
       locationRequestRef.current += 1;
       stopHereLocationWatch();
     };

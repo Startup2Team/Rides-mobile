@@ -52,9 +52,12 @@ function RoutePreviewComponent({
     return () => clearInterval(interval);
   }, [coordinates]);
 
+  // Map children must be a valid element or null — never `false`. A `false`
+  // child confuses AIRMap's native subview indexing and crashes Expo Go
+  // (insertReactSubview NSRangeException), so every conditional uses a ternary.
   return (
     <>
-      {animatedCoordinates.length > 1 && (
+      {animatedCoordinates.length > 1 ? (
         <Polyline
           coordinates={animatedCoordinates}
           strokeColor={color}
@@ -62,8 +65,8 @@ function RoutePreviewComponent({
           lineCap="butt"
           lineJoin="round"
         />
-      )}
-      {showPickup && (
+      ) : null}
+      {showPickup ? (
         <Marker
           coordinate={pickup}
           anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -72,8 +75,8 @@ function RoutePreviewComponent({
         >
           <LocationMapPin variant="pickup" mapType={mapType} />
         </Marker>
-      )}
-      {showDestination && destination && (
+      ) : null}
+      {showDestination && destination ? (
         <Marker
           coordinate={destination}
           anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -82,7 +85,7 @@ function RoutePreviewComponent({
         >
           <LocationMapPin variant="destination" mapType={mapType} />
         </Marker>
-      )}
+      ) : null}
     </>
   );
 }

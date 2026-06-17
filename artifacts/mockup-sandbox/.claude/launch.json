@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mockup-sandbox",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 51901,
+      "env": {
+        "PORT": "51901",
+        "BASE_PATH": "/"
+      }
+    }
+  ]
+}

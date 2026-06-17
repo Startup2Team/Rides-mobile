@@ -11,9 +11,16 @@
   "private": true,
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "expo": "~54.0.35",
+    "expo-router": "~6.0.24",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.60.4",
+    "@tailwindcss/oxide-darwin-arm64": "^4.3.0",
+    "lightningcss-darwin-arm64": "^1.32.0"
   }
 }

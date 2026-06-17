@@ -3,53 +3,61 @@ import { Coords } from '@/types';
 
 interface UseDriverTrackingOptions {
   enabled: boolean;
-  routeCoordinates: Coords[];
-  /** How many ms between each position update. Default 1500 */
-  intervalMs?: number;
-  /** Number of visible steps to use across the route. Default 24 */
+  /** The driver's REAL location (fed by the WebSocket `driver_location` event). */
+  target: Coords | null;
+  /** Number of frames to ease across between target updates. Default 24. */
   stepCount?: number;
+  /** Milliseconds between easing frames. Default 60ms (~smooth). */
+  intervalMs?: number;
 }
 
 /**
- * Simulates a driver moving along the route polyline step by step.
- * In production replace the interval with a WebSocket message handler:
+ * Smoothly eases the rendered driver marker toward the latest REAL driver
+ * location, so it glides between WebSocket updates instead of snapping. This
+ * replaces the previous implementation, which *simulated* a driver walking
+ * along the route polyline regardless of the driver's actual position.
  *
- *   ws.onmessage = (e) => setDriverCoords(JSON.parse(e.data));
+ * A stationary driver simply stays put — no fabricated movement.
  */
 export function useDriverTracking({
   enabled,
-  routeCoordinates,
-  intervalMs = 1500,
+  target,
   stepCount = 24,
+  intervalMs = 60,
 }: UseDriverTrackingOptions): Coords | null {
-  const [driverCoords, setDriverCoords] = useState<Coords | null>(null);
-  const stepRef = useRef(0);
+  const [coords, setCoords] = useState<Coords | null>(target);
+  const fromRef = useRef<Coords | null>(target);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!enabled || routeCoordinates.length === 0) {
+    if (!enabled || !target) {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      // Keep last position when disabled so status transitions do not snap the marker.
       return;
     }
 
-    stepRef.current = 0;
-    setDriverCoords(routeCoordinates[0]);
-    const stepSize = Math.max(1, Math.ceil(routeCoordinates.length / stepCount));
+    const from = fromRef.current ?? target;
+    let step = 0;
+    if (intervalRef.current) clearInterval(intervalRef.current);
 
     intervalRef.current = setInterval(() => {
-      stepRef.current = Math.min(stepRef.current + stepSize, routeCoordinates.length - 1);
-      setDriverCoords(routeCoordinates[stepRef.current]);
-
-      if (stepRef.current >= routeCoordinates.length - 1) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
+      step += 1;
+      const t = Math.min(1, step / Math.max(1, stepCount));
+      const next: Coords = {
+        latitude: from.latitude + (target.latitude - from.latitude) * t,
+        longitude: from.longitude + (target.longitude - from.longitude) * t,
+      };
+      setCoords(next);
+      fromRef.current = next;
+      if (t >= 1 && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     }, intervalMs);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [enabled, routeCoordinates, intervalMs, stepCount]);
+  }, [enabled, target?.latitude, target?.longitude, stepCount, intervalMs]);
 
-  return driverCoords;
+  return coords;
 }

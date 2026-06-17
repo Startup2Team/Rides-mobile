@@ -1,11 +1,14 @@
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
-import { Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
+import { useToast } from '@/context/ToastContext';
+import { submitSupportTicket } from '@/services/support';
 
 const REPORT_TYPES = [
   {
@@ -13,30 +16,35 @@ const REPORT_TYPES = [
     email: SAFETY_EMAIL,
     icon: 'user-x' as const,
     label: 'Driver Behavior',
+    ticketType: 'DRIVER_BEHAVIOR',
   },
   {
     detail: 'Get help finding something left behind after a trip.',
     email: SUPPORT_EMAIL,
     icon: 'briefcase' as const,
     label: 'Lost Item',
+    ticketType: 'LOST_ITEM',
   },
   {
     detail: 'Tell us about a fare, cash, or Mobile Money concern.',
     email: SUPPORT_EMAIL,
     icon: 'credit-card' as const,
     label: 'Fare or Payment Issue',
+    ticketType: 'PAYMENT',
   },
   {
     detail: 'Report a serious concern about your safety during a trip.',
     email: SAFETY_EMAIL,
     icon: 'shield' as const,
     label: 'Safety Concern',
+    ticketType: 'SAFETY',
   },
   {
     detail: 'Share another issue connected to a recent ride.',
     email: SUPPORT_EMAIL,
     icon: 'message-circle' as const,
     label: 'Other Ride Issue',
+    ticketType: 'OTHER',
   },
 ];
 
@@ -44,8 +52,10 @@ export default function ReportRideIssueScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
+  const { showToast } = useToast();
+  const [submitting, setSubmitting] = useState<string | null>(null);
 
-  const openReport = (label: string, email: string) => {
+  const sendEmail = (label: string, email: string) => {
     const subject = `${APP_NAME} ride issue: ${label}`;
     const body = [
       `Hi ${APP_NAME} support,`,
@@ -58,6 +68,29 @@ export default function ReportRideIssueScreen() {
       'What happened:',
     ].join('\n');
     void Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
+
+  const openReport = async (label: string, email: string, ticketType: string) => {
+    setSubmitting(label);
+    try {
+      await submitSupportTicket({
+        subject: `${APP_NAME} ride issue: ${label}`,
+        type: ticketType,
+      });
+      setSubmitting(null);
+      showToast('Report submitted — our team will review it', 'info');
+      return;
+    } catch {
+      setSubmitting(null);
+      Alert.alert(
+        'Could not submit report',
+        'We couldn\'t reach our servers. Would you like to send your report via email instead?',
+        [
+          { text: 'Send Email', onPress: () => sendEmail(label, email) },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+    }
   };
 
   return (
@@ -87,7 +120,8 @@ export default function ReportRideIssueScreen() {
                   accessibilityLabel={report.label}
                   accessibilityRole="button"
                   activeOpacity={0.65}
-                  onPress={() => openReport(report.label, report.email)}
+                  disabled={submitting === report.label}
+                  onPress={() => openReport(report.label, report.email, report.ticketType)}
                   style={styles.row}
                 >
                   <View style={styles.icon}>

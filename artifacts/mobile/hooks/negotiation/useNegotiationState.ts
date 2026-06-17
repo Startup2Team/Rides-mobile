@@ -46,6 +46,13 @@ export function useNegotiationState(currentRide: Ride | null) {
   const messagesUsed = Math.min(customerOffers.length, MAX_OFFERS);
   const offersRemaining = Math.max(0, MAX_OFFERS - messagesUsed);
   const canCounter = Boolean(lastDriverOffer) && lastMessage?.sender === 'driver' && !customerLimitReached;
+  // Accept is only valid when the *latest* message is the driver's offer — i.e.
+  // it's the customer's turn. After the customer counters it's the driver's
+  // turn, so Accept is disabled (you can't accept your own proposal).
+  const canAccept =
+    currentRide?.status === 'negotiating' &&
+    lastMessage?.sender === 'driver' &&
+    lastMessage?.type === 'offer';
   const actionPanelOffset = actionPanelHeight > 0 ? actionPanelHeight : 108;
   const offerPlaceholder = customerOffers.length === 0
     ? 'Your offer'
@@ -118,6 +125,7 @@ export function useNegotiationState(currentRide: Ride | null) {
 
   return {
     actionPanelOffset,
+    canAccept,
     canCounter,
     chatStatus,
     counterLoading,

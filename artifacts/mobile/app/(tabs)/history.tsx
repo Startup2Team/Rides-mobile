@@ -126,7 +126,7 @@ export default function HistoryScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const { rideHistory, loadHistory } = useRide();
 
-  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => { loadHistory().catch(() => {}); }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

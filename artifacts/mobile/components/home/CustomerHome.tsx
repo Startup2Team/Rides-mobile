@@ -54,7 +54,6 @@ import { SaveLocationSheet } from './SaveLocationSheet';
 import { styles } from './homeStyles';
 import {
   COMPACT_PANEL_HEIGHT,
-  DRIVER_OFFSETS,
   EXPANDED_PANEL_HEIGHT,
   HOME_FLOATING_PANEL_FALLBACK_HEIGHT,
   HOME_LOCATION_DELTA,
@@ -64,6 +63,8 @@ import {
   type MapPickerTarget,
   SCREEN_HEIGHT,
 } from './homeUtils';
+import { getNearbyDrivers } from '@/services/rides';
+import { LEGACY_TO_API_VEHICLE, type LegacyVehicleType } from '@/services/vehicleTypes';
 
 export default function CustomerHome() {
   const colors = useColors();
@@ -88,6 +89,7 @@ export default function CustomerHome() {
     restoreBookingOnHomeFocus,
     clearCancelledSearchDraft,
     clearRestoreBookingOnHomeFocus,
+    initCustomerSession,
   } = useRide();
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
@@ -197,6 +199,10 @@ export default function CustomerHome() {
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
   const [isMapReady, setIsMapReady] = useState(false);
+  // Synchronous mirror of isMapReady so imperative map commands can be gated even
+  // in the same tick onMapReady fires (the state update hasn't flushed yet).
+  // Prevents Fabric segfaults from dispatching to an uncommitted MapView.
+  const isMapReadyRef = useRef(false);
 
   // Booking sheet state
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
@@ -253,7 +259,7 @@ export default function CustomerHome() {
   };
 
   const centerMapOnUser = useCallback((duration = 700, panelHeightOverride?: number) => {
-    if (!gpsLocation) return;
+    if (!isMapReadyRef.current || !gpsLocation) return;
     const panelHeight = panelHeightOverride ?? (showBooking ? bookingPanelMapInset : homePanelMapInset);
     const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     mapRef.current?.animateToRegion(
@@ -367,9 +373,15 @@ export default function CustomerHome() {
     }, [tryRestoreCancelledSearch]),
   );
 
+  // Home only needs a few recent destinations — fetch 5, not the full 20.
   useEffect(() => {
-    loadHistory();
+    loadHistory(5);
   }, [loadHistory]);
+
+  // Recover an in-progress ride (and reconnect its WS) after an app restart.
+  useEffect(() => {
+    void initCustomerSession();
+  }, [initCustomerSession]);
 
   useEffect(() => {
     if (locationStatus !== 'available' || hasCenteredOnUserRef.current || hasPreciseRouteLocations) return;
@@ -679,13 +691,50 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
-  const visibleDrivers = useMemo(() => {
-    return DRIVER_OFFSETS.map((offset, i) => ({
-      id: `nearby-driver-${i}`,
-      latitude: userLocation.latitude + offset.lat,
-      longitude: userLocation.longitude + offset.lng,
-    }));
-  }, [userLocation.latitude, userLocation.longitude]);
+  // Real nearby drivers from the backend (POST /customer/location), polled
+  // while the customer is on the home screen and not already in a ride.
+  const [nearbyDrivers, setNearbyDrivers] = useState<
+    { id: string; latitude: number; longitude: number }[]
+  >([]);
+
+  useEffect(() => {
+    if (currentRide) return; // hide the ambient pool once a ride is active
+    // Only query with a REAL device GPS fix. userLocation defaults to the
+    // KIGALI_CENTER placeholder before a fix lands; querying with that posts a
+    // fake position to the backend and finds "nearby" drivers around the wrong
+    // point. gpsLocation is null until actual GPS resolves.
+    if (!gpsLocation) return;
+    let active = true;
+    const apiType = LEGACY_TO_API_VEHICLE[selectedVehicle as LegacyVehicleType];
+    const fetchNearby = async () => {
+      try {
+        const pins = await getNearbyDrivers(gpsLocation.latitude, gpsLocation.longitude, apiType);
+        if (!active) return;
+        setNearbyDrivers(
+          // Stable key per slot (NOT based on coords). The backend anonymises
+          // and jitters approx_lat/lng every poll, so a coord-based key would
+          // remount every marker each tick — which crashes AIRMap in Expo Go
+          // (insertReactSubview NSRangeException). With a stable key the marker
+          // stays mounted and just moves.
+          pins.map((p, i) => ({
+            id: `nearby-${p.transport_type}-${i}`,
+            latitude: p.approx_lat,
+            longitude: p.approx_lng,
+          })),
+        );
+      } catch {
+        // Network/offline — keep the last known pins rather than clearing the map.
+      }
+    };
+    void fetchNearby();
+    const interval = setInterval(fetchNearby, 12000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [currentRide, selectedVehicle, gpsLocation?.latitude, gpsLocation?.longitude]);
+
+  const visibleDrivers = nearbyDrivers;
 
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
   const recentLocations = useMemo<RideLocation[]>(() => {
@@ -711,6 +760,7 @@ export default function CustomerHome() {
     };
   }, [homePanelMapInset, userLocation.latitude, userLocation.longitude]);
   const handleHomeMapReady = useCallback(() => {
+    isMapReadyRef.current = true;
     setIsMapReady(true);
     if (routeFitCoords.length > 1 && showBooking && destination) {
       requestAnimationFrame(() =>

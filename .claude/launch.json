@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "voxnet-website",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev", "--port", "5173"],
+      "port": 5173,
+      "cwd": "/Users/paccee/Pac/Voxnet/website"
+    },
+    {
+      "name": "mockup-sandbox",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/mockup-sandbox", "dev"],
+      "port": 51901,
+      "env": {
+        "PORT": "51901",
+        "BASE_PATH": "/"
+      }
+    }
+  ]
+}

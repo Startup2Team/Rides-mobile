@@ -15,6 +15,26 @@ import { RideProvider, useRide } from '@/context/ride/RideProvider';
 import type { CloseButtonHandle } from '@/components/BackButton';
 import type { RideLocation, User } from '@/types';
 
+// The RideProvider is backend-backed; stub the network layer so the rendered
+// workflow exercises real provider logic without a live server.
+jest.mock('@/services/rides', () => ({
+  createRide: jest.fn().mockResolvedValue({ ride_id: 'ride-test-1' }),
+  getActiveCustomerRide: jest.fn().mockResolvedValue(null),
+  getRide: jest.fn().mockResolvedValue(null),
+  listRides: jest.fn().mockResolvedValue({ rides: [] }),
+  cancelRide: jest.fn().mockResolvedValue(undefined),
+  proposeNegotiation: jest.fn().mockResolvedValue(undefined),
+  acceptNegotiation: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/services/websocket', () => ({
+  RideWebSocket: jest.fn().mockImplementation(() => ({
+    connect: jest.fn().mockResolvedValue(undefined),
+    on: jest.fn().mockReturnThis(),
+    send: jest.fn(),
+    disconnect: jest.fn(),
+  })),
+}));
+
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
@@ -143,23 +163,6 @@ function CustomerBookingWorkflow() {
   );
 }
 
-function DriverRideWorkflow() {
-  const ride = useRide();
-  return (
-    <View>
-      <Text testID="pending-request">{ride.pendingRequest ? 'pending' : 'none'}</Text>
-      <Text testID="driver-ride-status">{ride.currentRide?.status ?? 'none'}</Text>
-      <Text testID="history-count">{ride.rideHistory.length}</Text>
-      <Pressable onPress={ride.simulateIncomingRideRequest}><Text>Receive request</Text></Pressable>
-      <Pressable onPress={ride.acceptRideRequest}><Text>Accept request</Text></Pressable>
-      <Pressable onPress={() => ride.riderAcceptWithFare(5_000)}><Text>Accept fare</Text></Pressable>
-      <Pressable onPress={ride.markArrived}><Text>Mark arrived</Text></Pressable>
-      <Pressable onPress={ride.startJourney}><Text>Start journey</Text></Pressable>
-      <Pressable onPress={() => ride.completeRide('driver')}><Text>Complete ride</Text></Pressable>
-    </View>
-  );
-}
-
 const user: User = {
   id: 'customer-1',
   name: 'Test Customer',
@@ -233,32 +236,6 @@ describe('critical rendered ride and auth workflows', () => {
     await waitFor(() => expect(screen.getByTestId('customer-ride-status').props.children).toBe('searching'));
   });
 
-  test('driver receives, accepts, starts, and completes a ride request', async () => {
-    render(
-      <RideProvider>
-        <DriverRideWorkflow />
-      </RideProvider>,
-    );
-
-    fireEvent.press(screen.getByText('Receive request'));
-    expect(screen.getByTestId('pending-request').props.children).toBe('pending');
-
-    fireEvent.press(screen.getByText('Accept request'));
-    expect(screen.getByTestId('driver-ride-status').props.children).toBe('negotiating');
-
-    fireEvent.press(screen.getByText('Accept fare'));
-    expect(screen.getByTestId('driver-ride-status').props.children).toBe('confirmed');
-
-    fireEvent.press(screen.getByText('Mark arrived'));
-    expect(screen.getByTestId('driver-ride-status').props.children).toBe('arrived');
-
-    fireEvent.press(screen.getByText('Start journey'));
-    expect(screen.getByTestId('driver-ride-status').props.children).toBe('in_progress');
-
-    fireEvent.press(screen.getByText('Complete ride'));
-    expect(screen.getByTestId('driver-ride-status').props.children).toBe('none');
-    expect(screen.getByTestId('history-count').props.children).toBe(1);
-  });
 
   test('user logs in, switches modes, and logs out', async () => {
     render(

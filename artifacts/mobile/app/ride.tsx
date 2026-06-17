@@ -17,7 +17,6 @@ import { useRideActions } from '@/hooks/ride/useRideActions';
 import { useRideStatus } from '@/hooks/ride/useRideStatus';
 import { DriverInfoCard } from '@/components/ride/DriverInfoCard';
 import { RideActionsSection } from '@/components/ride/RideActionsSection';
-import { RideCompleteModal } from '@/components/ride/RideCompleteModal';
 import { RideHeader } from '@/components/ride/RideHeader';
 import { RideStatusSection } from '@/components/ride/RideStatusSection';
 import {
@@ -86,7 +85,7 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
+  const { currentRide, driverLocation, cancelRide } = useRide();
   const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
@@ -94,6 +93,11 @@ export default function RideScreen() {
   /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
   const [arrivedDriverCoords, setArrivedDriverCoords] = useState<Coords | null>(null);
 
+  // Gate every imperative map command (fitToCoordinates) behind the native
+  // map's onMapReady. Under the New Architecture (Fabric), dispatching a command
+  // to a MapView whose native view isn't committed yet — e.g. on first mount or
+  // during a Fast Refresh reload — segfaults in uiManagerDidDispatchCommand.
+  const [mapReady, setMapReady] = useState(false);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [driverCardHeight, setDriverCardHeight] = useState(260);
   const [arrivingRouteOrigin, setArrivingRouteOrigin] = useState(driverLocation ?? KIGALI_CENTER);
@@ -106,15 +110,11 @@ export default function RideScreen() {
   const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
     useRideStatus(currentRide);
   const {
-    completeModalVisible,
-    confirmCompleteRide,
     handleCallDriver,
     handleCancelArrived,
     handleCancelArriving,
-    handleComplete,
     handleEmergencyEnd,
     handleSOS,
-    hideCompleteModal,
   } = useRideActions({ cancelRide, currentRide, showToast });
 
   const { route: driverToPickupRoute } = useRoute(
@@ -127,7 +127,7 @@ export default function RideScreen() {
 
   const liveDriverCoords = useDriverTracking({
     enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
-    routeCoordinates: driverNavigationRoute,
+    target: driverLocation,
     stepCount: isArriving ? 10 : 24,
   });
 
@@ -225,7 +225,7 @@ export default function RideScreen() {
   );
 
   useEffect(() => {
-    if (!mapRef.current || !currentRide) return;
+    if (!mapReady || !mapRef.current || !currentRide) return;
     const status = currentRide.status;
 
     if (status === 'arriving' && activeDriverLocation) {
@@ -276,7 +276,7 @@ export default function RideScreen() {
       });
       fittedMapStateRef.current = 'in_progress';
     }
-  }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
+  }, [activeDriverLocation, currentRide, mapFitEdgePadding, mapReady, rideRoute]);
 
   const showMapControls = isArriving || isArrived || isInProgress;
 
@@ -285,7 +285,7 @@ export default function RideScreen() {
   }, []);
 
   const recenterRideMap = useCallback(() => {
-    if (!mapRef.current || !currentRide) return;
+    if (!mapReady || !mapRef.current || !currentRide) return;
 
     const driverCoord = isArrived
       ? arrivedDriverCoords ?? driverLocation ?? currentRide.pickup
@@ -330,6 +330,7 @@ export default function RideScreen() {
     isArrived,
     liveDriverCoords,
     mapFitEdgePadding,
+    mapReady,
     rideRoute,
   ]);
 
@@ -360,6 +361,7 @@ export default function RideScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
+        onMapReady={() => setMapReady(true)}
         initialRegion={
           driverLocation
             ? { ...driverLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }
@@ -368,15 +370,15 @@ export default function RideScreen() {
         mapType={mapType}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
-        {mapDriverLocation && (
+        {mapDriverLocation ? (
           <Marker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <VehicleMapMarker
               type={currentRide.vehicleType}
               rotationDeg={vehicleRotationDeg}
             />
           </Marker>
-        )}
-        {!isInProgress && pickupPinCoordinate && (
+        ) : null}
+        {!isInProgress && pickupPinCoordinate ? (
           <Marker
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -385,8 +387,8 @@ export default function RideScreen() {
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
           </Marker>
-        )}
-        {(isArrived || isInProgress) && destinationPinCoordinate && (
+        ) : null}
+        {(isArrived || isInProgress) && destinationPinCoordinate ? (
           <Marker
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -395,7 +397,7 @@ export default function RideScreen() {
           >
             <LocationMapPin variant="destination" mapType={mapType} />
           </Marker>
-        )}
+        ) : null}
         {isArriving && remainingDriverToPickupRoute ? (
           <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
         ) : null}
@@ -480,14 +482,10 @@ export default function RideScreen() {
           onCall={handleCallDriver}
           onCancelArrived={handleCancelArrived}
           onCancelArriving={handleCancelArriving}
-          onComplete={handleComplete}
           onEmergency={handleEmergencyEnd}
           onSOS={handleSOS}
-          onStartJourney={startJourney}
         />
       </View>
-
-      <RideCompleteModal colors={colors} visible={completeModalVisible} onClose={hideCompleteModal} onConfirm={confirmCompleteRide} />
     </View>
   );
 }

@@ -21,6 +21,7 @@ import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { DRIVER_RIDE_PACKAGES, type DriverEntitlement } from '@/domain/driverRidePackages';
+import { getNotifications, markNotificationRead, markAllNotificationsRead, type BackendNotification } from '@/services/notifications';
 import type { Ride } from '@/types';
 
 type NotifType = 'ride' | 'promo' | 'system' | 'safety';
@@ -170,6 +171,25 @@ function buildDriverNotifications({
   return [...liveTripNotifications, ...creditNotifications, ...packageNotifications, ...tripNotifications];
 }
 
+function mapBackendNotification(n: BackendNotification): AppNotification {
+  const typeMap: Record<string, NotifType> = {
+    ride: 'ride', promo: 'promo', system: 'system', safety: 'safety',
+  };
+  const iconMap: Record<string, keyof typeof Feather.glyphMap> = {
+    ride: 'navigation', promo: 'gift', system: 'info', safety: 'shield',
+  };
+  return {
+    id: n.id,
+    type: typeMap[n.type] ?? 'system',
+    icon: iconMap[n.type] ?? 'bell',
+    title: n.title,
+    message: n.body,
+    time: n.sent_at,
+    read: n.is_read,
+    rideId: n.data?.ride_id,
+  };
+}
+
 const STATIC_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'safety_1',
@@ -244,6 +264,7 @@ export default function NotificationsScreen() {
   const screenWidth = Dimensions.get('window').width;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [backendNotifs, setBackendNotifs] = useState<AppNotification[]>([]);
   const [swipeResetKey, setSwipeResetKey] = useState(0);
   const swipeRefs = useRef<Record<string, Swipeable | null>>({});
   const openRowId = useRef<string | null>(null);
@@ -252,7 +273,14 @@ export default function NotificationsScreen() {
   const halfCardSwipeThreshold = Math.max(44, (screenWidth - horizontalListPadding) / 2);
 
   useEffect(() => {
-    const modeNotifications = driverMode
+    getNotifications(50).then(res => {
+      const mapped = (res.notifications ?? []).map(mapBackendNotification);
+      setBackendNotifs(mapped);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const localNotifications = driverMode
       ? buildDriverNotifications({
           currentRide,
           driverId: user?.id,
@@ -261,12 +289,14 @@ export default function NotificationsScreen() {
           rideHistory,
           rideCredits: isEntitlementLoading ? Number.POSITIVE_INFINITY : rideCredits,
         })
-      : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(rideHistory)];
-    const merged = modeNotifications.sort(
+      : buildRideNotifications(rideHistory);
+    const backendIds = new Set(backendNotifs.map(n => n.id));
+    const deduped = localNotifications.filter(n => !backendIds.has(n.id));
+    const merged = [...backendNotifs, ...deduped].sort(
       (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
     );
-    setNotifications(merged);
-  }, [currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideCredits, rideHistory, user?.id]);
+    setNotifications(merged.length > 0 ? merged : STATIC_NOTIFICATIONS);
+  }, [backendNotifs, currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideCredits, rideHistory, user?.id]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const todayNotifications = notifications.filter(n => getDayBucket(n.time) === 'today');
@@ -278,11 +308,13 @@ export default function NotificationsScreen() {
     if (!hadUnread) return;
     Haptics.selectionAsync();
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    markAllNotificationsRead().catch(() => {});
     showToast('All notifications marked as read');
   };
 
   const markRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    markNotificationRead(id).catch(() => {});
   };
 
   const toggleReadState = (id: string) => {

@@ -14,7 +14,10 @@ import {
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
+import * as Location from 'expo-location';
 import { useRide } from '@/context/RideContext';
+import { markEnRoute, updateDriverLocation } from '@/services/driverRides';
+import { shouldSendLocation, TRIP_THROTTLE, type LocationSendState } from '@/utils/locationThrottle';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
@@ -80,15 +83,18 @@ export default function DriverNavigateScreen() {
   const colors = useColors();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
+  const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide, sendWsLocationUpdate } = useRide();
+  const enRouteSentRef = useRef(false);
   const { driverProfile, recordCompletedRide, user } = useAuth();
   const [driverPos, setDriverPos] = useState(driverLocation ?? KIGALI_CENTER);
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [showReroute, setShowReroute] = useState(false);
   const mapRef = useRef<MapView>(null);
+  // Gate imperative map commands until the native view is committed (Fabric
+  // dispatches to an uncommitted MapView segfault — see ride.tsx).
+  const [mapReady, setMapReady] = useState(false);
   const fittedMapPhaseRef = useRef<string | null>(null);
   const timers = useScreenTimerManager();
-  const moveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waitClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rerouteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -120,29 +126,56 @@ export default function DriverNavigateScreen() {
     fittedMapPhaseRef.current = null;
   }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
+  // Trigger CONFIRMED → DRIVER_EN_ROUTE once when the driver opens navigation.
   useEffect(() => {
-    timers.clearInterval(moveRef.current);
-    moveRef.current = null;
-    if (!route || route.coordinates.length === 0 || phase === 'waiting') return;
+    if (!currentRide?.id || enRouteSentRef.current) return;
+    if (currentRide.status === 'confirmed' || currentRide.status === 'arriving') {
+      enRouteSentRef.current = true;
+      markEnRoute(currentRide.id).catch(() => { enRouteSentRef.current = false; });
+    }
+  }, [currentRide?.id, currentRide?.status]);
 
-    let step = 0;
-    setDriverPos(route.coordinates[0]);
+  // Push the driver's position to the backend. The WS frame is cheap (one
+  // persistent socket) so we always send it for smooth customer tracking; the
+  // heavier HTTP geofence ping is throttled to ~20m / 4s.
+  const lastTripSentRef = useRef<LocationSendState | null>(null);
+  const hasGpsFixRef = useRef(false);
+  useEffect(() => {
+    // Don't broadcast the placeholder (driverLocation ?? KIGALI_CENTER) before a
+    // real GPS fix — it's ~5km off and trips the server's plausibility guard.
+    if (!currentRide?.id || !hasGpsFixRef.current) return;
+    sendWsLocationUpdate(driverPos.latitude, driverPos.longitude);
+    const now = Date.now();
+    const coords = { latitude: driverPos.latitude, longitude: driverPos.longitude };
+    if (shouldSendLocation(lastTripSentRef.current, coords, now, TRIP_THROTTLE)) {
+      lastTripSentRef.current = { lat: coords.latitude, lng: coords.longitude, sentAt: now };
+      updateDriverLocation(coords.latitude, coords.longitude).catch(() => {});
+    }
+  }, [currentRide?.id, driverPos.latitude, driverPos.longitude, sendWsLocationUpdate]);
 
-    moveRef.current = timers.scheduleInterval(() => {
-      step = Math.min(step + 1, route.coordinates.length - 1);
-      setDriverPos(route.coordinates[step]);
-
-      if (step >= route.coordinates.length - 1) {
-        timers.clearInterval(moveRef.current);
-        moveRef.current = null;
-      }
-    }, 1500);
-
+  // Track the driver's REAL device GPS. Replaces the old simulation that
+  // walked driverPos along the route polyline (which made a parked rider look
+  // like they were moving). A stationary device now simply stays put.
+  useEffect(() => {
+    if (!currentRide) return;
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted' || cancelled) return;
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 5 },
+        loc => {
+          hasGpsFixRef.current = true;
+          setDriverPos({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        },
+      );
+    })();
     return () => {
-      timers.clearInterval(moveRef.current);
-      moveRef.current = null;
+      cancelled = true;
+      sub?.remove();
     };
-  }, [phase, route, timers]);
+  }, [currentRide?.id]);
 
   useEffect(() => {
     timers.clearInterval(waitClockRef.current);
@@ -187,7 +220,7 @@ export default function DriverNavigateScreen() {
   }, [phase, timers]);
 
   useEffect(() => {
-    if (!mapRef.current || !target || !currentRide) return;
+    if (!mapReady || !mapRef.current || !target || !currentRide) return;
     if (fittedMapPhaseRef.current === phase) return;
 
     const coordinates = phase === 'inprogress'
@@ -199,7 +232,7 @@ export default function DriverNavigateScreen() {
       animated: true,
     });
     fittedMapPhaseRef.current = phase;
-  }, [currentRide, driverPos, phase, target]);
+  }, [currentRide, driverPos, mapReady, phase, target]);
 
   const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
   const etaMin = target ? Math.round(distanceToTargetKm * 3 + 1) : 0;
@@ -313,6 +346,7 @@ export default function DriverNavigateScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
+        onMapReady={() => setMapReady(true)}
         initialRegion={{ ...driverPos, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
         customMapStyle={darkMapStyle}
       >
@@ -338,7 +372,7 @@ export default function DriverNavigateScreen() {
         >
           <LocationMapPin variant="destination" mapType="standard" />
         </Marker>
-        {remainingRoute && <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />}
+        {remainingRoute ? <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} /> : null}
       </MapView>
 
       <View style={[styles.topBar, {

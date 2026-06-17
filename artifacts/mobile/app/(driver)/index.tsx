@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import {
+  Alert,
   Animated,
   Image,
   Linking,
@@ -24,9 +25,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
+import { updateDriverLocation, getDailyEarnings, getDriverStats, type DailyEarnings, type DriverStats } from '@/services/driverRides';
+import { shouldSendLocation, IDLE_THROTTLE, type LocationSendState } from '@/utils/locationThrottle';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
-import { KIGALI_CENTER } from '@/types';
+import { KIGALI_CENTER, VEHICLE_LABELS } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
@@ -97,12 +100,12 @@ export default function DriverDashboard() {
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, saveDriverProfile, setDriverOnline, switchMode } = useAuth();
-  const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const {
     pendingRequest,
     rideHistory,
     loadHistory,
-    simulateIncomingRideRequest,
+    initDriverSession,
     acceptRideRequest,
     declineRideRequest,
   } = useRide();
@@ -124,11 +127,16 @@ export default function DriverDashboard() {
   const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownValueRef = useRef(15);
+  // True once we have a real device GPS fix (vs the KIGALI_CENTER placeholder).
+  const hasGpsFixRef = useRef(false);
   const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView | null>(null);
+  // Gate imperative map commands until the native view is committed (Fabric
+  // dispatches to an uncommitted MapView segfault — see ride.tsx).
+  const [mapReady, setMapReady] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
 
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -165,6 +173,7 @@ export default function DriverDashboard() {
     let mounted = true;
     const setCoords = (coords: { latitude: number; longitude: number }) => {
       if (!mounted) return;
+      hasGpsFixRef.current = true; // we now have a real fix — safe to post it
       setDriverLocation(coords);
     };
     const resolveNativeLocation = async () => {
@@ -190,6 +199,27 @@ export default function DriverDashboard() {
     void loadHistory();
   }, [loadHistory]);
 
+  // Authoritative driver figures from the backend — the local activity summary
+  // is computed from the customer ride history, which is the wrong dataset for
+  // a driver, so it always read 0.
+  const [daily, setDaily] = useState<DailyEarnings | null>(null);
+  const [serverStats, setServerStats] = useState<DriverStats | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void (async () => {
+        try {
+          const [d, s] = await Promise.all([getDailyEarnings(), getDriverStats()]);
+          if (!cancelled) { setDaily(d); setServerStats(s); }
+        } catch {
+          // keep nulls — UI falls back to local values
+        }
+      })();
+      return () => { cancelled = true; };
+    }, []),
+  );
+
+  // Ad carousel auto-scroll (develop dashboard UI).
   useEffect(() => {
     if (adCarouselWidth <= 0 || DASHBOARD_ADS.length <= 1) return;
 
@@ -215,61 +245,76 @@ export default function DriverDashboard() {
     };
   }, [adCarouselWidth]);
 
-  // Recenter on location
+  // Recenter on location (mapReady-gated to avoid the Fabric command crash).
   useEffect(() => {
-    mapRef.current?.animateToRegion(visibleDriverRegion(driverLocation), 350);
-  }, [driverLocation]);
+    if (!mapReady) return;
+    mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
+  }, [driverLocation, mapReady]);
 
-  // Ride request simulation
+  // Connect the driver session (WS) and post location periodically while online
+  // so the backend matching engine can find this driver and deliver requests.
+  const lastLocationSentRef = useRef<LocationSendState | null>(null);
   useEffect(() => {
-    const clearRequestTimers = () => {
-      timers.clearTimeout(requestTimeoutRef.current);
-      timers.clearInterval(countdownRef.current);
-      requestTimeoutRef.current = null;
-      countdownRef.current = null;
+    if (!isOnline) {
+      lastLocationSentRef.current = null;
+      return;
+    }
+    initDriverSession();
+    const coords = { latitude: driverLocation.latitude, longitude: driverLocation.longitude };
+    // Idle drivers are usually parked, so only post when they've moved ~100m or
+    // as a 60s heartbeat — instead of re-sending the same point every 12s.
+    const maybeSend = () => {
+      // Never post the KIGALI_CENTER placeholder — it's ~5km off and trips the
+      // server's GPS-plausibility guard. Wait for a real GPS fix.
+      if (!hasGpsFixRef.current) return;
+      const now = Date.now();
+      if (shouldSendLocation(lastLocationSentRef.current, coords, now, IDLE_THROTTLE)) {
+        lastLocationSentRef.current = { lat: coords.latitude, lng: coords.longitude, sentAt: now };
+        void updateDriverLocation(coords.latitude, coords.longitude).catch(() => {});
+      }
     };
-    clearRequestTimers();
-    requestSessionRef.current = timers.startSession();
-    if (!isOnline) { setShowRequest(false); setCountdown(15); return; }
-    const session = requestSessionRef.current;
-    requestTimeoutRef.current = timers.scheduleTimeout(() => {
-      requestTimeoutRef.current = null;
-      simulateIncomingRideRequest();
-      setShowRequest(true);
-      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
-      countdownValueRef.current = 15;
-      setCountdown(15);
-      countdownRef.current = timers.scheduleInterval(() => {
-        const nextCountdown = Math.max(0, countdownValueRef.current - 1);
-        countdownValueRef.current = nextCountdown;
-        setCountdown(nextCountdown);
-        if (nextCountdown <= 0) {
-          timers.clearInterval(countdownRef.current);
-          countdownRef.current = null;
-          handleDecline();
-        }
-      }, 1000, session);
-    }, 5000, session);
-    return clearRequestTimers;
-  }, [isOnline, simulateIncomingRideRequest, timers]);
+    maybeSend();
+    const interval = setInterval(maybeSend, 15000);
+    return () => clearInterval(interval);
+  }, [isOnline, initDriverSession, driverLocation.latitude, driverLocation.longitude]);
 
-  const handleDecline = () => {
-    timers.clearInterval(countdownRef.current);
-    countdownRef.current = null;
+  const handleDecline = useCallback(() => {
     Animated.timing(slideAnim, { toValue: 300, duration: 300, useNativeDriver: true }).start(() => {
       setShowRequest(false);
       setCountdown(15);
     });
     if (driverProfile) saveDriverProfile({ ...driverProfile, dailyDeclines: (driverProfile.dailyDeclines ?? 0) + 1 });
     declineRideRequest();
-  };
+  }, [slideAnim, driverProfile, saveDriverProfile, declineRideRequest]);
 
-  const handleAccept = () => {
-    timers.clearInterval(countdownRef.current);
-    countdownRef.current = null;
+  const handleAccept = useCallback(() => {
     acceptRideRequest();
     router.push('/driver-negotiation');
-  };
+  }, [acceptRideRequest]);
+
+  // Show the incoming-request card when a real request arrives over the WS,
+  // with a 15-second auto-decline countdown.
+  useEffect(() => {
+    if (!pendingRequest) {
+      setShowRequest(false);
+      setCountdown(15);
+      return;
+    }
+    setShowRequest(true);
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }).start();
+    countdownValueRef.current = 15;
+    setCountdown(15);
+    const interval = setInterval(() => {
+      const next = Math.max(0, countdownValueRef.current - 1);
+      countdownValueRef.current = next;
+      setCountdown(next);
+      if (next <= 0) {
+        clearInterval(interval);
+        handleDecline();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pendingRequest, slideAnim, handleDecline]);
 
   const toggleOnline = () => {
     const next = !isOnline;
@@ -286,11 +331,14 @@ export default function DriverDashboard() {
       Animated.timing(onlineScale, { toValue: 0.93, duration: 80, useNativeDriver: true }),
       Animated.spring(onlineScale, { toValue: 1, useNativeDriver: true, bounciness: 12 }),
     ]).start();
-    void setDriverOnline(next);
+    setDriverOnline(next).catch((err: Error) => {
+      Alert.alert('Connection Error', err.message);
+    });
   };
 
   const recenterMap = () => {
-    mapRef.current?.animateToRegion(visibleDriverRegion(driverLocation), 350);
+    if (!mapReady) return;
+    mapRef.current?.animateToRegion({ ...driverLocation, latitudeDelta: 0.015, longitudeDelta: 0.015 }, 350);
   };
 
   const cycleMapType = () => {
@@ -312,14 +360,13 @@ export default function DriverDashboard() {
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
   const driverInitial = user?.name?.trim().charAt(0).toUpperCase() || 'D';
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
-  const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
-  const remainingCreditsText = isEntitlementLoading ? '-' : String(activitySummary.remainingRideCredits);
+  const remainingCreditsText = isEntitlementLoading ? '-' : String(rideCredits);
   const statusLabel = isOnline ? 'Online' : 'Offline';
   const isVerified = driverProfile?.isVerified === true;
   const ratingLabel = ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
     ? ratingSummary.averageRating.toFixed(1)
     : '0.0';
-  const showNoCreditsWarning = !isEntitlementLoading && activitySummary.remainingRideCredits === 0;
+  const showNoCreditsWarning = !isEntitlementLoading && rideCredits === 0;
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
     ? 'Unknown - to be negotiated'
@@ -435,6 +482,7 @@ export default function DriverDashboard() {
         ref={mapRef}
         style={[StyleSheet.absoluteFill, { top: dashboardCardHeight }]}
         provider={PROVIDER_DEFAULT}
+        onMapReady={() => setMapReady(true)}
         mapType={mapType}
         initialRegion={visibleDriverRegion(driverLocation)}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
@@ -446,7 +494,7 @@ export default function DriverDashboard() {
             <VehicleMapMarker type={activeVehicleType} style={styles.driverVehicleMarker} />
           </View>
         </Marker>
-        {request && (
+        {request ? (
           <>
             <Marker coordinate={request.pickup}>
               <View style={[styles.pickupPin, { backgroundColor: colors.primary }]}>
@@ -460,7 +508,7 @@ export default function DriverDashboard() {
               lineDashPattern={[8, 4]}
             />
           </>
-        )}
+        ) : null}
       </MapView>
 
       {/* Top dashboard overlay */}
@@ -579,14 +627,14 @@ export default function DriverDashboard() {
           <View style={styles.activityGrid}>
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
-                {formatRwf(activitySummary.todayEarningsRwf)}
+                {daily ? formatRwf(daily.total_rwf) : '—'}
               </Text>
               <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings</Text>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
-                {activitySummary.completedRidesToday}
+                {serverStats ? serverStats.total_rides : '—'}
               </Text>
               <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Trips</Text>
             </View>

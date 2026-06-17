@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { AppButton } from '@/components/AppButton';
@@ -12,6 +12,7 @@ import { styles } from './negotiationStyles';
 export function NegotiationInputDock({
   acceptDriverOffer,
   actionPanelOffset,
+  canAccept,
   canCounter,
   counterLoading,
   customerLimitReached,
@@ -19,6 +20,7 @@ export function NegotiationInputDock({
   handleCall,
   handleDecline,
   handleSendCounter,
+  handleSendText,
   lastDriverOffer,
   offerPlaceholder,
   offerText,
@@ -30,6 +32,7 @@ export function NegotiationInputDock({
 }: {
   acceptDriverOffer: () => void;
   actionPanelOffset: number;
+  canAccept: boolean;
   canCounter: boolean;
   counterLoading: boolean;
   customerLimitReached: boolean;
@@ -37,6 +40,7 @@ export function NegotiationInputDock({
   handleCall: () => void;
   handleDecline: () => void;
   handleSendCounter: () => void;
+  handleSendText?: (text: string) => void;
   lastDriverOffer: NegotiationMessage | undefined;
   offerPlaceholder: string;
   offerText: string;
@@ -47,41 +51,77 @@ export function NegotiationInputDock({
   showAcceptModal: boolean;
 }) {
   const colors = useColors();
+  const [inputMode, setInputMode] = useState<'offer' | 'text'>('offer');
+  const [messageText, setMessageText] = useState('');
+  const showInput = canCounter || (handleSendText && inputMode === 'text');
+
   return (
     <>
       <View style={styles.bottomChrome}>
-        {canCounter && (
+        {showInput && (
           <KeyboardStickyView
             offset={{ closed: 0, opened: actionPanelOffset }}
             style={[styles.inputDock, { backgroundColor: colors.background }]}
           >
             <View style={styles.inputRow}>
-              <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
-              </View>
-              <TextInput
-                style={[
-                  styles.offerInput,
-                  !offerText && styles.offerInputPlaceholder,
-                  { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
-                ]}
-                value={offerText}
-                onChangeText={text => setOfferText(text.replace(/\D/g, ''))}
-                placeholder={offerPlaceholder}
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="number-pad"
-              />
+              {inputMode === 'offer' ? (
+                <>
+                  <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
+                    <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.offerInput,
+                      !offerText && styles.offerInputPlaceholder,
+                      { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
+                    ]}
+                    value={offerText}
+                    onChangeText={text => setOfferText(text.replace(/\D/g, ''))}
+                    placeholder={offerPlaceholder}
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="number-pad"
+                  />
+                </>
+              ) : (
+                <TextInput
+                  style={[
+                    styles.offerInput,
+                    { flex: 1, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
+                  ]}
+                  value={messageText}
+                  onChangeText={setMessageText}
+                  placeholder="Type a message…"
+                  placeholderTextColor={colors.mutedForeground}
+                  maxLength={500}
+                />
+              )}
+              {handleSendText && (
+                <TouchableOpacity
+                  style={[styles.sendBtn, { backgroundColor: colors.muted }]}
+                  onPress={() => setInputMode(prev => prev === 'offer' ? 'text' : 'offer')}
+                  accessibilityLabel={inputMode === 'offer' ? 'Switch to message' : 'Switch to offer'}
+                >
+                  <Feather name={inputMode === 'offer' ? 'message-circle' : 'dollar-sign'} size={18} color={colors.foreground} />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={[styles.sendBtn, { backgroundColor: offerText ? colors.primary : colors.muted }]}
-                onPress={handleSendCounter}
-                disabled={!offerText || counterLoading}
-                accessibilityLabel="Send offer"
+                style={[styles.sendBtn, { backgroundColor: (inputMode === 'offer' ? offerText : messageText) ? colors.primary : colors.muted }]}
+                onPress={() => {
+                  if (inputMode === 'text' && handleSendText && messageText.trim()) {
+                    handleSendText(messageText.trim());
+                    setMessageText('');
+                  } else {
+                    handleSendCounter();
+                  }
+                }}
+                disabled={inputMode === 'offer' ? (!offerText || counterLoading) : !messageText.trim()}
+                accessibilityLabel={inputMode === 'offer' ? 'Send offer' : 'Send message'}
                 accessibilityRole="button"
               >
-                {counterLoading ? (
+                {counterLoading && inputMode === 'offer' ? (
                   <ActivityIndicator size="small" color={colors.primaryForeground} />
                 ) : (
-                  <Feather name="send" size={18} color={offerText ? colors.primaryForeground : colors.mutedForeground} />
+                  <Feather name="send" size={18} color={(inputMode === 'offer' ? offerText : messageText.trim()) ? colors.primaryForeground : colors.mutedForeground} />
                 )}
               </TouchableOpacity>
             </View>
@@ -118,7 +158,7 @@ export function NegotiationInputDock({
               size="sm"
               compact
               onPress={() => setShowAcceptModal(true)}
-              disabled={!lastDriverOffer}
+              disabled={!canAccept}
               style={styles.actionFlexPrimary}
             />
           </View>

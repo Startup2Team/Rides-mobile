@@ -18,10 +18,19 @@ import {
   type PackageActivation,
 } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
+import { getDriverPackages, purchaseDriverPackage } from '@/services/driverRides';
+import { LEGACY_TO_API_VEHICLE, type LegacyVehicleType } from '@/services/vehicleTypes';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
+
+// Maps the local package id to the backend package name (seeded to match).
+const BACKEND_PACKAGE_NAME: Record<DriverRidePackageId, string> = {
+  launch_starter: 'Launch Starter Package',
+  growth: 'Growth Package',
+  pro: 'Pro Package',
+};
 
 export default function DriverPackagePaymentScreen() {
   const colors = useColors();
@@ -30,7 +39,20 @@ export default function DriverPackagePaymentScreen() {
   const isDark = useColorScheme() === 'dark';
   const { packageId } = useLocalSearchParams<{ packageId?: string }>();
   const { driverProfile } = useAuth();
-  const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus } = useDriverEntitlement();
+  const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus, refreshCredits } = useDriverEntitlement();
+
+  // Grant the package on the BACKEND (POST /driver/packages/purchase) — this is
+  // the authoritative credit grant (deducts the wallet price, free for the launch
+  // offer). The local activation below is only for the receipt/launch-offer UI.
+  const purchaseOnBackend = async () => {
+    if (!ridePackage || !driverProfile) return;
+    const vt = LEGACY_TO_API_VEHICLE[driverProfile.vehicleType as LegacyVehicleType] ?? 'MOTO_BIKE';
+    const pkgs = await getDriverPackages(vt);
+    const match = pkgs.find(p => p.name === BACKEND_PACKAGE_NAME[ridePackage.id]);
+    if (!match) throw new Error('This package is not available for your vehicle type.');
+    await purchaseDriverPackage(match.id);
+    await refreshCredits();
+  };
   const validPackageId: DriverRidePackageId | null =
     packageId === 'launch_starter' || packageId === 'growth' || packageId === 'pro' ? packageId : null;
   const ridePackage = validPackageId ? DRIVER_RIDE_PACKAGES[validPackageId] : null;
@@ -59,6 +81,7 @@ export default function DriverPackagePaymentScreen() {
     }, 700);
     const successTimer = setTimeout(async () => {
       try {
+        await purchaseOnBackend();
         const result = await updatePackagePurchaseStatus(purchase.transactionId, 'successful');
         setPaymentStatus('successful');
         if (result.activation) setReceipt(result.activation);
@@ -75,6 +98,7 @@ export default function DriverPackagePaymentScreen() {
     setLoading(true);
     setError(null);
     try {
+      await purchaseOnBackend();
       setReceipt(await activatePackage(ridePackage.id));
     } catch (activationError) {
       setError(activationError instanceof Error ? activationError.message : 'Unable to activate this package.');

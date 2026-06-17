@@ -89,6 +89,18 @@ export function acceptLatestCustomerOffer(ride: Ride | null): Ride | null {
   };
 }
 
+export function addTextMessage(ride: Ride | null, sender: 'customer' | 'driver' | 'system', text: string): Ride | null {
+  if (!ride) return null;
+  const msg: NegotiationMessage = {
+    id: generateRideId(),
+    sender,
+    type: 'text',
+    text,
+    timestamp: new Date().toISOString(),
+  };
+  return { ...ride, negotiation: [...ride.negotiation, msg] };
+}
+
 export function acceptRideWithFare(ride: Ride | null, amount: number): Ride | null {
   if (!ride) return null;
   return { ...ride, status: 'confirmed', agreedFare: amount };

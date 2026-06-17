@@ -17,6 +17,14 @@ import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
+import {
+  getDailyEarnings,
+  getWeeklyEarnings,
+  getDriverStats,
+  type DailyEarnings,
+  type WeeklyEarnings,
+  type DriverStats,
+} from '@/services/driverRides';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -28,10 +36,28 @@ export default function DriverStats() {
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { rideHistory, loadHistory } = useRide();
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  // Authoritative figures from the backend (earnings + lifetime stats). Local
+  // values are kept only as a fallback while these load or if the call fails.
+  const [daily, setDaily] = React.useState<DailyEarnings | null>(null);
+  const [weekly, setWeekly] = React.useState<WeeklyEarnings | null>(null);
+  const [serverStats, setServerStats] = React.useState<DriverStats | null>(null);
 
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [d, w, s] = await Promise.all([getDailyEarnings(), getWeeklyEarnings(), getDriverStats()]);
+        if (!cancelled) { setDaily(d); setWeekly(w); setServerStats(s); }
+      } catch {
+        // Offline / not yet a driver — fall back to local values below.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -61,7 +87,10 @@ export default function DriverStats() {
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
   const priorityReduced = declinesToday >= 10;
   const ratingValue = formatDriverRatingSummary(ratingSummary);
-  const hasTripsToday = activitySummary.completedRidesToday > 0;
+  // Today's completed trips comes from the backend (daily.rides_today), not the
+  // local ride history which is the wrong dataset for a driver.
+  const todayTrips = daily?.rides_today ?? 0;
+  const hasTripsToday = todayTrips > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -92,11 +121,11 @@ export default function DriverStats() {
             <Text style={styles.heroEyebrow}>TODAY'S ACTIVITY</Text>
           </View>
           <View>
-            <Text style={styles.heroValue}>{formatRwf(activitySummary.todayEarningsRwf)}</Text>
+            <Text style={styles.heroValue}>{daily ? formatRwf(daily.total_rwf) : '—'}</Text>
             <Text style={styles.heroCaption}>Activity Earnings</Text>
           </View>
           <View style={styles.heroMetrics}>
-            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
+            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(todayTrips)} />
             <View style={styles.heroDivider} />
             <HeroMetric label="Credits Left" value={isEntitlementLoading ? '...' : String(rideCredits)} />
             <View style={styles.heroDivider} />
@@ -113,15 +142,15 @@ export default function DriverStats() {
               icon="check-circle"
               label="Completed Today"
               note="Completed trips today"
-              value={String(activitySummary.completedRidesToday)}
+              value={String(todayTrips)}
               tone={colors.successHex}
             />
             <MetricTile
               colors={colors}
               icon="percent"
               label="Acceptance Rate"
-              note={acceptanceRateNote}
-              value={acceptanceRateValue}
+              note={serverStats ? 'Live' : acceptanceRateNote}
+              value={serverStats ? `${Math.round(serverStats.acceptance_rate)}%` : acceptanceRateValue}
               tone={colors.primaryHex}
             />
             <MetricTile
@@ -129,7 +158,7 @@ export default function DriverStats() {
               icon="award"
               label="Total Completed Trips"
               note="All-time completed trips"
-              value={String(dp.completedRides)}
+              value={String(serverStats?.total_rides ?? dp.completedRides)}
               tone={colors.primaryHex}
             />
             <MetricTile

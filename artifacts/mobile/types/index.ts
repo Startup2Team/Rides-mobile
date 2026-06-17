@@ -43,6 +43,7 @@ export interface User {
   name: string;
   phone: string;
   email?: string;
+  profileImageUrl?: string;
   mode: AppMode;
   isDriver: boolean;
   createdAt: string;
