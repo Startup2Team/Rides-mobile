@@ -17,7 +17,10 @@ import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { api } from '@/services/api';
+import { logout as authLogout } from '@/services/auth';
+import { setDriverAvailability } from '@/services/driverRides';
 import { API_TO_LEGACY_VEHICLE } from '@/services/vehicleTypes';
+import { formatDateDdMmYyyy } from '@/utils/dateUtils';
 
 interface AuthContextType {
   user: User | null;
@@ -57,6 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
       if (storedUser.data) setUser(storedUser.data);
       if (storedDriverProfile.data) setDriverProfile(storedDriverProfile.data);
+      // Refresh the driver profile from the backend so an approval (or rejection)
+      // that happened while the app was closed is reflected, and the status is
+      // authoritative rather than stale local. No-op for customer-only accounts.
+      if (storedUser.data) void loadDriverProfile();
     } catch {
       // ignore
     } finally {
@@ -70,6 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Revoke the backend session and mark the driver offline BEFORE clearing the
+    // token locally — otherwise "logout" only forgets the token on-device while
+    // the session stays valid server-side. Best-effort (short timeout inside).
+    const wasDriver = Boolean(userRef.current?.isDriver) || canAccessDriverMode(driverProfileRef.current);
+    try { await authLogout(wasDriver); } catch { /* token cleared below regardless */ }
     setUser(null);
     setDriverProfile(null);
     await clearSensitiveStorage();
@@ -80,6 +92,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...userRef.current, ...updates };
     setUser(updated);
     await saveStoredUser(updated);
+    // Persist to the backend so the change is authoritative and survives
+    // reinstall / re-login / a new device (PUT /customer/profile updates the
+    // shared users row, and the /customer group also allows driver roles).
+    try {
+      const body: Record<string, unknown> = {};
+      if (updates.name !== undefined) body.full_name = updates.name;
+      if (updates.email !== undefined) body.email = updates.email ?? null;
+      if (updates.profileImageUrl !== undefined) body.profile_image_url = updates.profileImageUrl;
+      if (Object.keys(body).length > 0) await api.put('/customer/profile', body);
+    } catch {
+      // Local copy is already saved; the next successful edit will sync.
+    }
   }, []);
 
   const saveDriverProfile = useCallback(async (profile: DriverProfile) => {
@@ -112,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         city: d?.city ?? '',
         momoCode: d?.momo_pay_code ?? '',
         momoProvider: d?.momo_provider === 'airtel' ? 'airtel' : 'mtn',
-        dob: d?.date_of_birth ?? '',
+        dob: d?.date_of_birth ? formatDateDdMmYyyy(new Date(d.date_of_birth)) : '',
         isOnline: d?.is_online ?? false,
         isVerified: approved,
         acceptanceRate: Number(d?.acceptance_rate ?? 0),
@@ -135,6 +159,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updated: DriverProfile = { ...prev, isOnline };
     setDriverProfile(updated);
     await saveStoredDriverProfile(updated);
+    try {
+      await setDriverAvailability(isOnline);
+    } catch {
+      setDriverProfile(prev);
+      await saveStoredDriverProfile(prev);
+      throw new Error(isOnline
+        ? 'Could not go online — check your connection and try again'
+        : 'Could not go offline — check your connection and try again');
+    }
   }, []);
 
   const switchMode = useCallback(async (mode: AppMode) => {

@@ -30,6 +30,7 @@ export interface RideContextType {
   acceptDriverOffer: () => void;
   acceptCustomerOffer: () => void;
   declineDriverOffer: () => void;
+  sendTextMessage: (text: string, role?: 'customer' | 'driver') => void;
   completeRide: (source?: 'customer' | 'driver', driverIdentity?: {
     driverId?: string;
     driverName?: string;

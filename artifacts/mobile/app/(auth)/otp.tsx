@@ -130,9 +130,11 @@ export default function OTPScreen() {
     try {
       const authData = await verifyOtp(normalizedPhone, entered);
       let profileName = (name ?? '').trim() || normalizedPhone || 'User';
+      let profileImageUrl: string | undefined;
       try {
         const { data } = await api.get('/customer/profile');
         profileName = data.full_name || data.name || profileName;
+        if (data.profile_image_url) profileImageUrl = data.profile_image_url;
       } catch {
         // no-op — use the name from registration
       }
@@ -141,6 +143,7 @@ export default function OTPScreen() {
         name: profileName,
         phone: normalizedPhone,
         email: email ?? undefined,
+        profileImageUrl,
         mode: authData.role_state === 'CUSTOMER_ONLY' ? 'customer' : 'driver',
         isDriver: authData.role_state !== 'CUSTOMER_ONLY',
         createdAt: new Date().toISOString(),

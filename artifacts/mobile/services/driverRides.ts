@@ -120,10 +120,21 @@ export async function lockManualFare(rideId: string, amount: number) {
   await api.post(`/driver/rides/${rideId}/negotiation/lock-fare`, { amount });
 }
 
+export async function sendDriverNegotiationMessage(rideId: string, text: string) {
+  await api.post(`/driver/rides/${rideId}/negotiation/message`, { text });
+}
+
+export async function getDriverNegotiationHistory(rideId: string) {
+  const { data } = await api.get(`/driver/rides/${rideId}/negotiation/history`);
+  return Array.isArray(data) ? data : [];
+}
+
 // ─── Earnings & Stats ────────────────────────────────────────────────────────
 
 export interface DailyEarnings {
   total_rwf: number;
+  /** Rides completed today (backend-computed). */
+  rides_today: number;
   period: string;
 }
 
@@ -138,6 +149,38 @@ export interface DriverStats {
   completion_rate: number;
   /** Numeric tier — lower is better: 1 = Gold, 2 = Silver, 3 = Bronze */
   priority_tier: number;
+}
+
+export interface RidePackage {
+  id: string;
+  name: string;
+  vehicle_type_code: string;
+  ride_count: number;
+  validity_days: number;
+  price_rwf: number;
+  is_promotional: boolean;
+}
+
+/** The buyable package catalog for a vehicle type (GET /driver/packages). */
+export async function getDriverPackages(vehicleType: string): Promise<RidePackage[]> {
+  const { data } = await api.get(`/driver/packages?vehicle_type=${encodeURIComponent(vehicleType)}`);
+  return Array.isArray(data) ? (data as RidePackage[]) : [];
+}
+
+/** Buy a package — deducts its price from the wallet and grants ride credits. */
+export async function purchaseDriverPackage(packageId: string): Promise<void> {
+  await api.post('/driver/packages/purchase', { package_id: packageId });
+}
+
+/** Active ride-credits remaining for this driver (GET /driver/credits). 0 = none. */
+export async function getDriverCredits(): Promise<number> {
+  try {
+    const { data } = await api.get('/driver/credits');
+    // total_remaining sums every active grant; fall back to the single credit.
+    return data?.total_remaining ?? data?.credit?.rides_remaining ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function getDailyEarnings(): Promise<DailyEarnings> {

@@ -20,6 +20,7 @@ import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
+import { register, verifyOtp } from '@/services/auth';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 
 const OTP_LENGTH = 6;
@@ -44,7 +45,10 @@ export default function ChangePhoneNumberScreen() {
     return () => clearTimeout(timeout);
   }, [expiryTimer]);
 
-  const sendCode = () => {
+  const [sending, setSending] = useState(false);
+  const [devOtp, setDevOtp] = useState('');
+
+  const sendCode = async () => {
     const normalized = normalizeRwandaPhoneNumber(phone);
     if (!normalized) {
       setPhoneError('Enter a valid Rwanda phone number');
@@ -56,9 +60,19 @@ export default function ChangePhoneNumberScreen() {
       return;
     }
     setPhoneError('');
-    setPendingPhone(normalized);
-    setCode(Array(OTP_LENGTH).fill(''));
-    setExpiryTimer(OTP_VALIDITY_SECONDS);
+    setSending(true);
+    try {
+      const result = await register(normalized);
+      if (result.devOtp) setDevOtp(result.devOtp);
+      setPendingPhone(normalized);
+      setCode(Array(OTP_LENGTH).fill(''));
+      setExpiryTimer(OTP_VALIDITY_SECONDS);
+    } catch {
+      setPhoneError('Could not send code — check your connection');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleDigit = (value: string, index: number) => {
@@ -70,15 +84,28 @@ export default function ChangePhoneNumberScreen() {
     if (!digit && index > 0) inputRefs.current[index - 1]?.focus();
   };
 
+  const [verifyError, setVerifyError] = useState('');
+
   const verifyAndSave = async () => {
-    if (code.join('').length !== OTP_LENGTH) return;
+    const otp = code.join('');
+    if (otp.length !== OTP_LENGTH) return;
     if (expiryTimer <= 0) return;
     setVerifying(true);
-    await new Promise(resolve => setTimeout(resolve, 700));
-    await updateUser({ phone: pendingPhone });
-    setVerifying(false);
-    showToast('Phone number verified and updated', 'info');
-    router.back();
+    setVerifyError('');
+    try {
+      await verifyOtp(pendingPhone, otp);
+      await updateUser({ phone: pendingPhone });
+      setVerifying(false);
+      showToast('Phone number verified and updated', 'info');
+      router.back();
+    } catch (err: any) {
+      setVerifying(false);
+      const msg = err?.response?.data?.error?.message || 'Invalid or expired code';
+      setVerifyError(msg);
+      setCode(Array(OTP_LENGTH).fill(''));
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
+    }
   };
 
   return (
@@ -123,7 +150,7 @@ export default function ChangePhoneNumberScreen() {
                 value={phone}
               />
             </View>
-            <AppButton fullWidth size="lg" title="Send Verification Code" onPress={sendCode} />
+            <AppButton fullWidth size="lg" title={sending ? 'Sending…' : 'Send Verification Code'} loading={sending} onPress={sendCode} />
           </View>
         ) : (
           <View style={styles.content}>
@@ -166,6 +193,17 @@ export default function ChangePhoneNumberScreen() {
               style={styles.otpAction}
               title="Verify and Save"
             />
+            {verifyError ? (
+              <Text style={[styles.expiryText, { color: colors.destructive ?? '#ef4444' }]}>{verifyError}</Text>
+            ) : null}
+            {devOtp ? (
+              <TouchableOpacity onPress={() => {
+                const digits = devOtp.split('');
+                setCode(digits.concat(Array(OTP_LENGTH - digits.length).fill('')));
+              }}>
+                <Text style={[styles.expiryText, { color: colors.primary }]}>Dev: tap to fill {devOtp}</Text>
+              </TouchableOpacity>
+            ) : null}
             {expiryTimer > 0 ? (
               <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
                 Code expires in {formatOtpTime(expiryTimer)}
@@ -174,9 +212,16 @@ export default function ChangePhoneNumberScreen() {
             <View style={styles.secondaryActions}>
               {expiryTimer <= 0 ? (
                 <TouchableOpacity
-                  onPress={() => {
-                    setCode(Array(OTP_LENGTH).fill(''));
-                    setExpiryTimer(OTP_VALIDITY_SECONDS);
+                  onPress={async () => {
+                    try {
+                      const result = await register(pendingPhone);
+                      if (result.devOtp) setDevOtp(result.devOtp);
+                      setCode(Array(OTP_LENGTH).fill(''));
+                      setExpiryTimer(OTP_VALIDITY_SECONDS);
+                      setVerifyError('');
+                    } catch {
+                      showToast('Could not resend code', 'error');
+                    }
                   }}
                 >
                   <Text style={[styles.secondaryAction, { color: colors.primary }]}>Resend code</Text>

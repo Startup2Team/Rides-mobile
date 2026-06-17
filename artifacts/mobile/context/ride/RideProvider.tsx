@@ -224,6 +224,22 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           negotiation: [...prev.negotiation, offerMessage('driver', amount)],
         } : null);
       })
+      .on('negotiation_text', payload => {
+        const sender = payload?.sender === 'CUSTOMER' ? 'customer' as const
+          : payload?.sender === 'SYSTEM' ? 'system' as const : 'driver' as const;
+        const body = String(payload?.body ?? '');
+        if (!body) return;
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          negotiation: [...prev.negotiation, {
+            id: payload?.id ?? `text_${Date.now()}`,
+            sender,
+            type: 'text',
+            text: body,
+            timestamp: payload?.sent_at ?? new Date().toISOString(),
+          }],
+        } : null);
+      })
       .on('ride_confirmed', payload => {
         setCurrentRide(prev => prev ? {
           ...prev,
@@ -293,6 +309,22 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         setCurrentRide(prev => prev ? {
           ...prev,
           negotiation: [...prev.negotiation, offerMessage('customer', amount)],
+        } : null);
+      })
+      .on('negotiation_text', payload => {
+        const sender = payload?.sender === 'DRIVER' ? 'driver' as const
+          : payload?.sender === 'SYSTEM' ? 'system' as const : 'customer' as const;
+        const body = String(payload?.body ?? '');
+        if (!body) return;
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          negotiation: [...prev.negotiation, {
+            id: payload?.id ?? `text_${Date.now()}`,
+            sender,
+            type: 'text',
+            text: body,
+            timestamp: payload?.sent_at ?? new Date().toISOString(),
+          }],
         } : null);
       })
       .on('ride_confirmed', payload => {
@@ -442,6 +474,27 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const declineDriverOffer = useCallback(() => {
     cancelRide();
   }, [cancelRide]);
+
+  const sendTextMessage = useCallback((text: string, role?: 'customer' | 'driver') => {
+    const ride = currentRideRef.current;
+    if (!ride?.id || !text.trim()) return;
+    const sender = role ?? 'customer';
+    setCurrentRide(prev => prev ? {
+      ...prev,
+      negotiation: [...prev.negotiation, {
+        id: `text_${Date.now()}`,
+        sender,
+        type: 'text',
+        text: text.trim(),
+        timestamp: new Date().toISOString(),
+      }],
+    } : null);
+    if (sender === 'driver') {
+      driverRideService.sendDriverNegotiationMessage(ride.id, text.trim()).catch(() => {});
+    } else {
+      rideService.sendNegotiationMessage(ride.id, text.trim()).catch(() => {});
+    }
+  }, []);
 
   // ── Driver ride actions ───────────────────────────────────────────────────────
 
@@ -628,6 +681,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     acceptDriverOffer,
     acceptCustomerOffer,
     declineDriverOffer,
+    sendTextMessage,
     completeRide,
     markArrived,
     startJourney,
@@ -669,6 +723,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     rideHistory,
     riderAcceptWithFare,
     sendDriverOffer,
+    sendTextMessage,
     sendWsLocationUpdate,
     startJourney,
   ]);

@@ -15,7 +15,7 @@ import { useMinFare } from '@/hooks/negotiation/useMinFare';
 export default function NegotiationScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, counterOffer, acceptDriverOffer, declineDriverOffer } = useRide();
+  const { currentRide, counterOffer, acceptDriverOffer, declineDriverOffer, sendTextMessage } = useRide();
   const state = useNegotiationState(currentRide);
   const minFare = useMinFare(currentRide?.vehicleType);
   const actions = useNegotiationActions({
@@ -71,6 +71,7 @@ export default function NegotiationScreen() {
         handleCall={actions.handleCall}
         handleDecline={actions.handleDecline}
         handleSendCounter={actions.handleSendCounter}
+        handleSendText={(text) => sendTextMessage(text, 'customer')}
         lastDriverOffer={state.lastDriverOffer}
         offerPlaceholder={state.offerPlaceholder}
         offerText={state.offerText}

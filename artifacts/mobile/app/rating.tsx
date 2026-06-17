@@ -25,6 +25,7 @@ import { useRide } from '@/context/RideContext';
 import { type DriverRatingStars } from '@/domain/driverWallet';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { buildLocalDriverRating, saveDriverRatingOnce } from '@/persistence/driverRatingPersistence';
+import { submitRideRating } from '@/services/rides';
 import {
   isUploadedProfileImageUri,
   resolveDriverProfileImage,
@@ -139,6 +140,17 @@ export default function RatingScreen() {
     if (!ratedRide?.id || !driverId) return;
 
     try {
+      await submitRideRating(ratedRide.id, {
+        score: stars,
+        comment: review.trim() || undefined,
+      });
+      ratingSavedRef.current = true;
+    } catch (error) {
+      reportOperationalFailure('driver.rating.backend', error, { rideId: ratedRide.id });
+    }
+
+    // Always persist locally too — serves as offline fallback and local history
+    try {
       await saveDriverRatingOnce(buildLocalDriverRating({
         comment: review,
         customerId: ratedRide.customerId ?? user?.id,
@@ -147,8 +159,8 @@ export default function RatingScreen() {
         stars: stars as DriverRatingStars,
       }));
       ratingSavedRef.current = true;
-    } catch (error) {
-      reportOperationalFailure('driver.rating.persist', error, { rideId: ratedRide.id, driverId });
+    } catch (localErr) {
+      reportOperationalFailure('driver.rating.local', localErr, { rideId: ratedRide.id, driverId });
     }
   };
 

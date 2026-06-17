@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import {
+  Alert,
   Animated,
   Image,
   Linking,
@@ -24,7 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
-import { setDriverAvailability, updateDriverLocation, getDailyEarnings, getDriverStats, type DailyEarnings, type DriverStats } from '@/services/driverRides';
+import { updateDriverLocation, getDailyEarnings, getDriverStats, type DailyEarnings, type DriverStats } from '@/services/driverRides';
 import { shouldSendLocation, IDLE_THROTTLE, type LocationSendState } from '@/utils/locationThrottle';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
@@ -99,7 +100,7 @@ export default function DriverDashboard() {
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, saveDriverProfile, setDriverOnline, switchMode } = useAuth();
-  const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const {
     pendingRequest,
     rideHistory,
@@ -330,9 +331,9 @@ export default function DriverDashboard() {
       Animated.timing(onlineScale, { toValue: 0.93, duration: 80, useNativeDriver: true }),
       Animated.spring(onlineScale, { toValue: 1, useNativeDriver: true, bounciness: 12 }),
     ]).start();
-    void setDriverOnline(next);
-    // Tell the backend so it adds/removes the driver from the matching pool.
-    void setDriverAvailability(next).catch(() => {});
+    setDriverOnline(next).catch((err: Error) => {
+      Alert.alert('Connection Error', err.message);
+    });
   };
 
   const recenterMap = () => {
@@ -359,14 +360,13 @@ export default function DriverDashboard() {
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
   const driverInitial = user?.name?.trim().charAt(0).toUpperCase() || 'D';
   const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
-  const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
-  const remainingCreditsText = isEntitlementLoading ? '-' : String(activitySummary.remainingRideCredits);
+  const remainingCreditsText = isEntitlementLoading ? '-' : String(rideCredits);
   const statusLabel = isOnline ? 'Online' : 'Offline';
   const isVerified = driverProfile?.isVerified === true;
   const ratingLabel = ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
     ? ratingSummary.averageRating.toFixed(1)
     : '0.0';
-  const showNoCreditsWarning = !isEntitlementLoading && activitySummary.remainingRideCredits === 0;
+  const showNoCreditsWarning = !isEntitlementLoading && rideCredits === 0;
   const request = pendingRequest;
   const requestDestinationLabel = request?.destination.locationType === 'generic'
     ? 'Unknown - to be negotiated'
@@ -627,14 +627,14 @@ export default function DriverDashboard() {
           <View style={styles.activityGrid}>
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
-                {formatRwf(daily?.total_rwf ?? activitySummary.todayEarningsRwf)}
+                {daily ? formatRwf(daily.total_rwf) : '—'}
               </Text>
               <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings</Text>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
               <Text style={[styles.activityValue, { color: colors.foreground }]}>
-                {serverStats?.total_rides ?? activitySummary.allTimeCompletedRides}
+                {serverStats ? serverStats.total_rides : '—'}
               </Text>
               <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Trips</Text>
             </View>

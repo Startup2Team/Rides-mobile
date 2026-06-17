@@ -87,7 +87,10 @@ export default function DriverStats() {
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
   const priorityReduced = declinesToday >= 10;
   const ratingValue = formatDriverRatingSummary(ratingSummary);
-  const hasTripsToday = activitySummary.completedRidesToday > 0;
+  // Today's completed trips comes from the backend (daily.rides_today), not the
+  // local ride history which is the wrong dataset for a driver.
+  const todayTrips = daily?.rides_today ?? 0;
+  const hasTripsToday = todayTrips > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -118,11 +121,11 @@ export default function DriverStats() {
             <Text style={styles.heroEyebrow}>TODAY'S ACTIVITY</Text>
           </View>
           <View>
-            <Text style={styles.heroValue}>{formatRwf(daily?.total_rwf ?? activitySummary.todayEarningsRwf)}</Text>
+            <Text style={styles.heroValue}>{daily ? formatRwf(daily.total_rwf) : '—'}</Text>
             <Text style={styles.heroCaption}>Activity Earnings</Text>
           </View>
           <View style={styles.heroMetrics}>
-            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
+            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(todayTrips)} />
             <View style={styles.heroDivider} />
             <HeroMetric label="Credits Left" value={isEntitlementLoading ? '...' : String(rideCredits)} />
             <View style={styles.heroDivider} />
@@ -139,7 +142,7 @@ export default function DriverStats() {
               icon="check-circle"
               label="Completed Today"
               note="Completed trips today"
-              value={String(activitySummary.completedRidesToday)}
+              value={String(todayTrips)}
               tone={colors.successHex}
             />
             <MetricTile

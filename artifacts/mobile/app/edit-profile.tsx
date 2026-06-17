@@ -21,8 +21,10 @@ import { AppInput } from '@/components/AppInput';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
+import { User } from '@/types';
 
 import { loadStoredProfileImage, saveStoredProfileImage } from '@/persistence/profilePersistence';
+import { uploadProfileImage } from '@/services/uploads';
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -36,12 +38,17 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    loadStoredProfileImage().then(stored => {
-      if (stored.data) setProfileImage(stored.data);
-    });
-  }, []);
+    if (user?.profileImageUrl) {
+      setProfileImage(user.profileImageUrl);
+    } else {
+      loadStoredProfileImage().then(stored => {
+        if (stored.data) setProfileImage(stored.data);
+      });
+    }
+  }, [user?.profileImageUrl]);
 
   const handleImagePick = async (source: 'camera' | 'gallery') => {
     let result: ImagePicker.ImagePickerResult;
@@ -77,6 +84,12 @@ export default function EditProfileScreen() {
       if (driverProfile) {
         await saveDriverProfile({ ...driverProfile, profileImage: asset.uri });
       }
+      try {
+        const remoteUrl = await uploadProfileImage(asset.uri);
+        setUploadedImageUrl(remoteUrl);
+      } catch {
+        // Upload failed — local image is saved; URL will sync on next save
+      }
       showToast('Photo updated', 'info');
     }
   };
@@ -106,8 +119,9 @@ export default function EditProfileScreen() {
       return;
     }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 500));
-    await updateUser({ name: name.trim(), email: email.trim() || undefined });
+    const updates: Partial<User> = { name: name.trim(), email: email.trim() || undefined };
+    if (uploadedImageUrl) updates.profileImageUrl = uploadedImageUrl;
+    await updateUser(updates);
     setSaving(false);
     showToast('Profile updated', 'info');
     router.back();

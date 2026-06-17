@@ -79,7 +79,15 @@ export default function DriverProfileScreen() {
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', onPress: logout },
+      {
+        text: 'Log Out',
+        onPress: async () => {
+          await logout();
+          // Navigate to auth explicitly — without this the (driver) layout gate
+          // redirects a logged-out user to the in-review screen, not login.
+          router.replace('/(auth)/welcome');
+        },
+      },
     ]);
   };
 

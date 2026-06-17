@@ -76,3 +76,34 @@ export async function proposeNegotiation(rideId: string, amount: number) {
 export async function acceptNegotiation(rideId: string) {
   await api.post(`/customer/rides/${rideId}/negotiation/accept`);
 }
+
+export async function sendNegotiationMessage(rideId: string, text: string) {
+  await api.post(`/customer/rides/${rideId}/negotiation/message`, { text });
+}
+
+export interface NegotiationHistoryEntry {
+  id: string;
+  type: 'offer' | 'text';
+  sender: 'customer' | 'driver' | 'system';
+  amount?: number;
+  response?: string;
+  text?: string;
+  is_final?: boolean;
+  timestamp: string;
+}
+
+export async function getNegotiationHistory(rideId: string): Promise<NegotiationHistoryEntry[]> {
+  const { data } = await api.get(`/customer/rides/${rideId}/negotiation/history`);
+  return Array.isArray(data) ? data : [];
+}
+
+export interface RatingPayload {
+  score: number;
+  comment?: string;
+  tags?: string[];
+}
+
+export async function submitRideRating(rideId: string, payload: RatingPayload): Promise<any> {
+  const { data } = await api.post(`/customer/rides/${rideId}/rate`, payload);
+  return data;
+}

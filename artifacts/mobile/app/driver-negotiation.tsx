@@ -86,9 +86,11 @@ function OfferTimelineItem({
 export default function DriverNegotiationScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, sendDriverOffer, acceptCustomerOffer, cancelRide, riderAcceptWithFare } = useRide();
+  const { currentRide, sendDriverOffer, acceptCustomerOffer, cancelRide, riderAcceptWithFare, sendTextMessage } = useRide();
 
   const [offerText, setOfferText] = useState('');
+  const [inputMode, setInputMode] = useState<'offer' | 'text'>('offer');
+  const [messageText, setMessageText] = useState('');
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualAmount, setManualAmount] = useState('');
@@ -248,21 +250,51 @@ export default function DriverNegotiationScreen() {
           </View>
         )}
 
-        {canSendOffer && (
+        {(canSendOffer || inputMode === 'text') && (
           <View style={styles.inputRow}>
-            <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
-            </View>
-            <TextInput
-              style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
-              value={offerText}
-              onChangeText={text => setOfferText(text.replace(/\D/g, ''))}
-              placeholder={lastDriverOffer ? 'Adjust your offer' : 'Your fare offer'}
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="number-pad"
-            />
-            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: offerText ? colors.primary : colors.muted }]} onPress={handleSendOffer} disabled={!offerText}>
-              <Feather name="send" size={18} color={offerText ? colors.primaryForeground : colors.mutedForeground} />
+            {inputMode === 'offer' ? (
+              <>
+                <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
+                  <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
+                </View>
+                <TextInput
+                  style={[styles.offerInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                  value={offerText}
+                  onChangeText={text => setOfferText(text.replace(/\D/g, ''))}
+                  placeholder={lastDriverOffer ? 'Adjust your offer' : 'Your fare offer'}
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                />
+              </>
+            ) : (
+              <TextInput
+                style={[styles.offerInput, { flex: 1, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                value={messageText}
+                onChangeText={setMessageText}
+                placeholder="Type a message…"
+                placeholderTextColor={colors.mutedForeground}
+                maxLength={500}
+              />
+            )}
+            <TouchableOpacity
+              style={[styles.sendBtn, { backgroundColor: colors.muted }]}
+              onPress={() => setInputMode(prev => prev === 'offer' ? 'text' : 'offer')}
+            >
+              <Feather name={inputMode === 'offer' ? 'message-circle' : 'dollar-sign'} size={18} color={colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sendBtn, { backgroundColor: (inputMode === 'offer' ? offerText : messageText.trim()) ? colors.primary : colors.muted }]}
+              onPress={() => {
+                if (inputMode === 'text' && messageText.trim()) {
+                  sendTextMessage(messageText.trim(), 'driver');
+                  setMessageText('');
+                } else {
+                  handleSendOffer();
+                }
+              }}
+              disabled={inputMode === 'offer' ? !offerText : !messageText.trim()}
+            >
+              <Feather name="send" size={18} color={(inputMode === 'offer' ? offerText : messageText.trim()) ? colors.primaryForeground : colors.mutedForeground} />
             </TouchableOpacity>
           </View>
         )}
