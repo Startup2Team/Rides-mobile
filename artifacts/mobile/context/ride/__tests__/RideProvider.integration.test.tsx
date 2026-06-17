@@ -140,6 +140,9 @@ describe('RideProvider lifecycle orchestration', () => {
     act(() => {
       jest.advanceTimersByTime(ARRIVING_TRACKING_INTERVAL_MS * ARRIVING_TRACKING_STEPS);
     });
+
+    act(() => result.current.markArrived());
+
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       status: 'arrived',
       arrivedAt: expect.any(String),
