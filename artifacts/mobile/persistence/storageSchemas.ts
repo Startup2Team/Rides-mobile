@@ -327,6 +327,24 @@ export const driverProfileSchema = z.preprocess(value => {
 
 export const verificationSubmissionStoreSchema = verificationSubmissionStoreZodSchema;
 
+const driverDocumentRecordSchema = z.object({
+  key: z.enum(['license', 'nationalId', 'insurance', 'authorization']),
+  faces: documentFacesSchema,
+  documentNumber: z.string().optional(),
+  expiryDate: z.string().optional(),
+  reviewStatus: z.enum(['verified', 'pending_review', 'rejected']),
+  submissionKind: z.enum(['initial', 'replacement']),
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const driverDocumentsSchema = z.object({
+  license: driverDocumentRecordSchema,
+  nationalId: driverDocumentRecordSchema,
+  insurance: driverDocumentRecordSchema,
+  authorization: driverDocumentRecordSchema,
+});
+
 export const driverOnboardingDraftSchema = z.object({
   form: z.object({
     vehicleType: vehicleTypeSchema,
