@@ -16,6 +16,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { useToast } from '@/context/ToastContext';
+import { loadNotificationReadState, saveNotificationReadState, type NotificationReadState } from '@/persistence/notificationPersistence';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
@@ -145,7 +146,7 @@ function buildDriverNotifications({
       icon: successful ? 'package' as const : 'alert-circle' as const,
       title: successful ? 'Ride package activated' : 'Ride package update',
       message: successful
-        ? `${ridePackage.name} is active with ${ridePackage.totalCredits} ride credits.`
+        ? `${ridePackage.name} is active with ${ridePackage.totalCredits} rides.`
         : `${ridePackage.name} payment status: ${purchase.status}.`,
       time: purchase.completedAt ?? purchase.createdAt,
       read: successful,
@@ -155,13 +156,13 @@ function buildDriverNotifications({
   const creditNotifications: AppNotification[] = [];
   if (rideCredits <= 5) {
     creditNotifications.push({
-      id: 'driver_low_credits',
+      id: `driver_low_credits_${rideCredits}`,
       type: rideCredits === 0 ? 'safety' : 'system',
       icon: 'alert-circle',
-      title: rideCredits === 0 ? 'No ride credits left' : 'Ride credits running low',
+      title: rideCredits === 0 ? 'No rides left' : 'Rides running low',
       message: rideCredits === 0
         ? 'View ride packages to continue receiving ride requests.'
-        : `${rideCredits} ride credits left. View packages before they run out.`,
+        : `${rideCredits} rides left. View packages before they run out.`,
       time: entitlement.updatedAt || new Date().toISOString(),
       read: false,
     });
@@ -238,12 +239,13 @@ export default function NotificationsScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
   const { currentRide, pendingRequest, rideHistory } = useRide();
-  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading, totalAvailableRides } = useDriverEntitlement();
   const { showToast } = useToast();
   const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const readStateRef = useRef<NotificationReadState>({ read: new Set(), unread: new Set() });
   const [swipeResetKey, setSwipeResetKey] = useState(0);
   const swipeRefs = useRef<Record<string, Swipeable | null>>({});
   const openRowId = useRef<string | null>(null);
@@ -252,21 +254,29 @@ export default function NotificationsScreen() {
   const halfCardSwipeThreshold = Math.max(44, (screenWidth - horizontalListPadding) / 2);
 
   useEffect(() => {
-    const modeNotifications = driverMode
-      ? buildDriverNotifications({
-          currentRide,
-          driverId: user?.id,
-          entitlement,
-          pendingRequest,
-          rideHistory,
-          rideCredits: isEntitlementLoading ? Number.POSITIVE_INFINITY : rideCredits,
+    loadNotificationReadState().then(state => {
+      readStateRef.current = state;
+      const modeNotifications = driverMode
+        ? buildDriverNotifications({
+            currentRide,
+            driverId: user?.id,
+            entitlement,
+            pendingRequest,
+            rideHistory,
+            rideCredits: isEntitlementLoading ? Number.POSITIVE_INFINITY : totalAvailableRides,
+          })
+        : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(rideHistory)];
+      const merged = modeNotifications
+        .map(n => {
+          if (state.unread.has(n.id)) return { ...n, read: false };
+          if (state.read.has(n.id)) return { ...n, read: true };
+          return n;
         })
-      : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(rideHistory)];
-    const merged = modeNotifications.sort(
-      (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
-    );
-    setNotifications(merged);
-  }, [currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideCredits, rideHistory, user?.id]);
+        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      setNotifications(merged);
+    });
+  }, [currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideHistory, totalAvailableRides, user?.id]);
+
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const todayNotifications = notifications.filter(n => getDayBucket(n.time) === 'today');
@@ -277,20 +287,36 @@ export default function NotificationsScreen() {
     const hadUnread = notifications.some(n => !n.read);
     if (!hadUnread) return;
     Haptics.selectionAsync();
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const updated = notifications.map(n => ({ ...n, read: true }));
+    const newState: NotificationReadState = {
+      read: new Set(updated.map(n => n.id)),
+      unread: new Set(),
+    };
+    readStateRef.current = newState;
+    void saveNotificationReadState(newState);
+    setNotifications(updated);
     showToast('All notifications marked as read');
   };
 
   const markRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    const newState = { read: new Set(readStateRef.current.read), unread: new Set(readStateRef.current.unread) };
+    newState.read.add(id);
+    newState.unread.delete(id);
+    readStateRef.current = newState;
+    void saveNotificationReadState(newState);
   };
-
   const toggleReadState = (id: string) => {
     const item = notifications.find(n => n.id === id);
     if (!item) return;
     const nextRead = !item.read;
     Haptics.selectionAsync();
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: nextRead } : n));
+    const newState = { read: new Set(readStateRef.current.read), unread: new Set(readStateRef.current.unread) };
+    if (nextRead) { newState.read.add(id); newState.unread.delete(id); }
+    else { newState.unread.add(id); newState.read.delete(id); }
+    readStateRef.current = newState;
+    void saveNotificationReadState(newState);
     showToast(nextRead ? 'Marked as read' : 'Marked as unread', nextRead ? 'success' : 'info');
   };
 
@@ -323,7 +349,7 @@ export default function NotificationsScreen() {
   };
 
   const renderItem = (item: AppNotification) => {
-    const accentColor = item.icon === 'check-circle' ? '#000' : TYPE_ICON_COLOR[item.type];
+    const accentColor = item.icon === 'check-circle' ? colors.foreground : TYPE_ICON_COLOR[item.type];
 
     return (
       <Swipeable

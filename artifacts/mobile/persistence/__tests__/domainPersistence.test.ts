@@ -18,9 +18,17 @@ import {
   saveStoredDriverOnboardingDraft,
 } from '../driverOnboardingPersistence';
 import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM } from '@/hooks/driver-onboarding/onboardingTypes';
-import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import {
+  activatePackage,
+  createPackagePurchase,
+  EMPTY_DRIVER_ENTITLEMENT,
+  getVehicleEntitlement,
+  updatePackagePurchaseStatus,
+} from '@/domain/driverRidePackages';
 import { buildDriverRatingIdempotencyKey, type DriverRating } from '@/domain/driverWallet';
+import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { loadStoredDriverEntitlement, saveStoredDriverEntitlement } from '../driverEntitlementPersistence';
+import { loadStoredDriverDocuments, saveStoredDriverDocuments } from '../driverDocumentsPersistence';
 import { buildLocalDriverRating, loadStoredDriverRatings, saveDriverRatingOnce } from '../driverRatingPersistence';
 import { loadVersionedStorage, saveVersionedStorage } from '../versionedStorage';
 import { rideHistorySchema } from '../storageSchemas';
@@ -89,12 +97,80 @@ describe('domain persistence validation', () => {
     await saveStoredDriverProfile(driverProfile);
 
     await expect(loadStoredUser()).resolves.toEqual({ data: user, source: 'current' });
-    await expect(loadStoredDriverProfile()).resolves.toEqual({
-      data: driverProfile,
+    await expect(loadStoredDriverProfile()).resolves.toMatchObject({
+      data: {
+        ...driverProfile,
+        activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+        vehicles: [
+          expect.objectContaining({
+            id: 'driver-vehicle:moto:rad-001-a',
+            status: 'approved',
+            vehicleType: 'moto',
+            plateNumber: 'RAD 001 A',
+            licenseNumber: 'license-1',
+          }),
+        ],
+      },
       source: 'current',
     });
     await expect(AsyncStorage.getItem(STORAGE_KEYS.user)).resolves.toBeNull();
     await expect(AsyncStorage.getItem(STORAGE_KEYS.driverProfile)).resolves.toBeNull();
+  });
+
+  test('migrates legacy flat driver profile and copies legacy documents into the primary vehicle', async () => {
+    const legacyProfile = {
+      ...driverProfile,
+      verificationStatus: 'pending_review' as const,
+      isVerified: false,
+      backendOnlyField: 'preserve-me',
+    };
+    const documents = buildInitialDriverDocuments(
+      {
+        ...INITIAL_DRIVER_ONBOARDING_FORM,
+        licenseNumber: legacyProfile.licenseNumber,
+        nationalId: '1199080012345678',
+        licenseExpiryDate: '01/01/2030',
+        insuranceExpiryDate: '01/01/2030',
+        authorizationExpiryDate: '01/01/2030',
+      },
+      {
+        ...INITIAL_DRIVER_DOCUMENTS,
+        license: ['file:///license-front.jpg', 'file:///license-back.jpg'],
+        nationalId: ['file:///id-front.jpg', 'file:///id-back.jpg'],
+        insurance: ['file:///insurance-front.jpg', null],
+        authorization: ['file:///authorization-front.jpg', null],
+      },
+      '2026-06-16T10:00:00.000Z',
+    );
+    await saveVersionedStorage(STORAGE_KEYS.driverProfile, legacyProfile);
+    await saveStoredDriverDocuments(documents);
+
+    const loaded = await loadStoredDriverProfile();
+
+    expect(loaded).toMatchObject({
+      data: {
+        backendOnlyField: 'preserve-me',
+        activeVehicle: { vehicleId: null },
+        vehicles: [
+          expect.objectContaining({
+            status: 'pending_review',
+            documents: expect.objectContaining({
+              license: expect.objectContaining({ faces: ['file:///license-front.jpg', 'file:///license-back.jpg'] }),
+              insurance: expect.objectContaining({ faces: ['file:///insurance-front.jpg', null] }),
+            }),
+          }),
+        ],
+      },
+      source: 'legacy',
+    });
+    await expect(loadStoredDriverDocuments()).resolves.toMatchObject({
+      data: {
+        license: expect.objectContaining({ faces: ['file:///license-front.jpg', 'file:///license-back.jpg'] }),
+        nationalId: expect.objectContaining({ faces: ['file:///id-front.jpg', 'file:///id-back.jpg'] }),
+        insurance: expect.objectContaining({ faces: ['file:///insurance-front.jpg', null] }),
+        authorization: expect.objectContaining({ faces: ['file:///authorization-front.jpg', null] }),
+      },
+    });
   });
 
   test('migrates legacy saved locations and ride history', async () => {
@@ -153,6 +229,50 @@ describe('domain persistence validation', () => {
     await saveStoredDriverEntitlement(entitlement);
     await expect(loadStoredDriverEntitlement()).resolves.toEqual({ data: entitlement, source: 'current' });
     await expect(AsyncStorage.getItem(STORAGE_KEYS.driverEntitlement)).resolves.toBeNull();
+  });
+
+  test('persists vehicle-specific package IDs and ledgers securely', async () => {
+    const cabVehicle = { id: 'driver-vehicle:cab:rad-002-a', vehicleType: 'cab' as const };
+    const fusoVehicle = { id: 'driver-vehicle:fuso:raf-300-a', vehicleType: 'fuso' as const };
+    const cabStarted = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
+      packageId: 'cab_growth',
+      provider: 'mtn',
+      phoneNumber: '+250788000001',
+    }, '2026-06-08T10:00:00.000Z', cabVehicle);
+    const cabCompleted = updatePackagePurchaseStatus(
+      cabStarted.entitlement,
+      cabStarted.purchase.transactionId,
+      'successful',
+      '2026-06-08T10:01:00.000Z',
+      cabVehicle,
+    );
+    const fusoEntitlement = activatePackage(
+      cabCompleted.entitlement,
+      'fuso_starter',
+      '2026-06-08T10:02:00.000Z',
+      fusoVehicle,
+    ).entitlement;
+
+    await saveStoredDriverEntitlement(fusoEntitlement);
+    const loaded = await loadStoredDriverEntitlement();
+
+    expect(loaded.source).toBe('current');
+    expect(getVehicleEntitlement(loaded.data, cabVehicle)).toMatchObject({
+      vehicleId: cabVehicle.id,
+      vehicleType: 'cab',
+      activePackageId: 'cab_growth',
+      remainingRideCredits: 5,
+      remainingBonusRides: 4,
+      purchaseHistory: [expect.objectContaining({ packageId: 'cab_growth', vehicleId: cabVehicle.id })],
+    });
+    expect(getVehicleEntitlement(loaded.data, fusoVehicle)).toMatchObject({
+      vehicleId: fusoVehicle.id,
+      vehicleType: 'fuso',
+      activePackageId: 'fuso_starter',
+      remainingRideCredits: 1,
+      remainingBonusRides: 2,
+      activations: [expect.objectContaining({ packageId: 'fuso_starter', vehicleId: fusoVehicle.id })],
+    });
   });
 
   test('saves a local driver rating securely', async () => {

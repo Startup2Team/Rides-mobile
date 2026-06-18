@@ -24,11 +24,14 @@ describe('mock ride matching', () => {
   });
 
   test('builds the existing mock incoming ride request values', () => {
-    const request = buildMockRideRequest();
+    const request = buildMockRideRequest('cab', { vehicleId: 'vehicle-1', vehicleType: 'cab' });
 
     expect(request).toEqual(expect.objectContaining({
       customerId: 'mock_customer',
-      vehicleType: 'moto',
+      vehicleType: 'cab',
+      requestedVehicleType: 'cab',
+      matchedVehicleId: 'vehicle-1',
+      matchedVehicleType: 'cab',
       status: 'searching',
     }));
     expect(request.suggestedFare).toBeGreaterThan(0);

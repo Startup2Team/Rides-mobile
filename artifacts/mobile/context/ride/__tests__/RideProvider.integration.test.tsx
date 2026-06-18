@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { act, renderHook } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { RideProvider, useRide } from '../RideProvider';
 import {
@@ -14,10 +14,22 @@ import {
   NEGOTIATION_RESPONSE_DELAY_MS,
 } from '../rideConstants';
 import { loadRideHistory } from '../ridePersistence';
+import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import type { RideLocation } from '@/types';
+
+let mockAuthDriverProfile: any = null;
+let mockDriverEntitlement: any = null;
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
+}));
+
+jest.mock('@/context/AuthContext', () => ({
+  useOptionalAuth: () => mockAuthDriverProfile ? { driverProfile: mockAuthDriverProfile } : null,
+}));
+
+jest.mock('@/context/DriverEntitlementContext', () => ({
+  useOptionalDriverEntitlement: () => mockDriverEntitlement,
 }));
 
 const pickup: RideLocation = {
@@ -66,6 +78,8 @@ describe('RideProvider lifecycle orchestration', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
     jest.spyOn(Math, 'random').mockReturnValue(0);
+    mockAuthDriverProfile = null;
+    mockDriverEntitlement = null;
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -95,6 +109,7 @@ describe('RideProvider lifecycle orchestration', () => {
       pickup,
       destination,
       vehicleType: 'moto',
+      requestedVehicleType: 'moto',
     }));
     expect(result.current.cancelledSearchDraft).toEqual(expect.objectContaining({
       pickup,
@@ -140,6 +155,9 @@ describe('RideProvider lifecycle orchestration', () => {
     act(() => {
       jest.advanceTimersByTime(ARRIVING_TRACKING_INTERVAL_MS * ARRIVING_TRACKING_STEPS);
     });
+
+    act(() => result.current.markArrived());
+
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       status: 'arrived',
       arrivedAt: expect.any(String),
@@ -263,23 +281,77 @@ describe('RideProvider lifecycle orchestration', () => {
   });
 
   test('stamps active driver identity when a driver completes a ride', async () => {
+    mockAuthDriverProfile = {
+      vehicleType: 'moto',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: 'LIC001',
+      province: 'Kigali',
+      district: 'Gasabo',
+      sector: 'Kimironko',
+      momoCode: '0781234567',
+      momoProvider: 'mtn',
+      dob: '1990-01-01',
+      isOnline: true,
+      isVerified: true,
+      acceptanceRate: 100,
+      completedRides: 0,
+      dailyRides: 0,
+      dailyDeclines: 0,
+      policyAccepted: true,
+      earningsTotal: 0,
+      onlineVehicleSession: {
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        startedAt: '2026-06-08T09:00:00.000Z',
+      },
+      activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+      vehicles: [{
+        id: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        status: 'approved',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: 'LIC001',
+        submittedAt: '2026-06-08T09:00:00.000Z',
+      }],
+    };
+    mockDriverEntitlement = {
+      ...EMPTY_DRIVER_ENTITLEMENT,
+      vehicleId: 'driver-vehicle:moto:rad-001-a',
+      vehicleType: 'moto',
+      remainingRideCredits: 3,
+      vehicleEntitlements: [{
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        activePackageId: null,
+        remainingRideCredits: 3,
+        remainingBonusRides: 0,
+        activations: [],
+        creditTransactions: [],
+        purchaseHistory: [],
+        updatedAt: '2026-06-08T09:00:00.000Z',
+        authority: 'local_prototype',
+      }],
+      deductCreditForCompletedRide: jest.fn(async () => true),
+    };
     const { result } = renderRideProvider();
 
-    act(() => result.current.simulateIncomingRideRequest());
-    act(() => result.current.acceptRideRequest());
-    act(() => result.current.riderAcceptWithFare(3500));
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
     act(() => result.current.completeRide('driver', {
       driverId: 'driver-1',
       driverName: 'Test Driver',
+      vehicleId: 'driver-vehicle:moto:rad-001-a',
       vehicleType: 'moto',
     }));
 
-    expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
+    await waitFor(() => expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
       driverId: 'driver-1',
       driverName: 'Test Driver',
       status: 'completed',
+      vehicleId: 'driver-vehicle:moto:rad-001-a',
       vehicleType: 'moto',
-    }));
+    })));
 
     await flushPromises();
     expect((await loadRideHistory())?.[0]).toEqual(expect.objectContaining({

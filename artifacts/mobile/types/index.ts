@@ -1,6 +1,27 @@
 export type VehicleType = 'moto' | 'rifani' | 'cab' | 'fuso' | 'hilux';
 export type AppMode = 'customer' | 'driver';
 export type DriverVerificationStatus = 'not_started' | 'draft' | 'pending_review' | 'approved' | 'rejected';
+export type DriverVehicleStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
+export type DriverVehicleDocumentReviewStatus = 'verified' | 'pending_review' | 'rejected';
+export type DriverVehicleReviewEventType = 'submitted' | 'under_review' | 'documents_updated' | 'approved' | 'rejected';
+export type VerificationSubmissionStatus =
+  | 'draft'
+  | 'submitted'
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+  | 'resubmitted'
+  | 'cancelled';
+export type VerificationReviewStatus = 'pending_review' | 'approved' | 'rejected';
+export type VerificationRejectionReason = string;
+export type VerificationSubmissionHistoryEventType =
+  | 'draft'
+  | 'submitted'
+  | 'pending_review'
+  | 'resubmitted'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled';
 export type LocationType = 'precise' | 'generic';
 
 export type RideStatus =
@@ -58,6 +79,199 @@ export interface PaymentMethod {
   isDefault: boolean;
 }
 
+export type DriverVehicleDocumentFaces = [string | null, string | null];
+
+export interface DriverVehicleDocumentRecord {
+  key: 'license' | 'nationalId' | 'insurance' | 'authorization';
+  faces: DriverVehicleDocumentFaces;
+  documentNumber?: string;
+  expiryDate?: string;
+  reviewStatus: DriverVehicleDocumentReviewStatus;
+  submissionKind: 'initial' | 'replacement';
+  submittedAt: string;
+  updatedAt: string;
+}
+
+export interface DriverVehicleDocumentSet {
+  license: DriverVehicleDocumentRecord;
+  nationalId: DriverVehicleDocumentRecord;
+  insurance: DriverVehicleDocumentRecord;
+  authorization: DriverVehicleDocumentRecord;
+}
+
+export interface DriverVehicleReviewEvent {
+  id: string;
+  type: DriverVehicleReviewEventType;
+  at: string;
+  reason?: string;
+}
+
+export interface VerificationSubmissionHistoryEvent {
+  id: string;
+  type: VerificationSubmissionHistoryEventType;
+  at: string;
+  reason?: VerificationRejectionReason;
+  rejectedFields?: string[];
+  rejectedDocuments?: string[];
+  reviewedBy?: string;
+}
+
+export interface VerificationReviewDecision {
+  status: 'approved' | 'rejected';
+  reviewedAt: string;
+  reviewedBy?: string;
+  reason?: VerificationRejectionReason;
+  rejectedFields?: string[];
+  rejectedDocuments?: string[];
+}
+
+export interface VerificationSubmissionBase {
+  id: string;
+  clientSubmissionId: string;
+  status: VerificationSubmissionStatus;
+  reviewStatus: VerificationReviewStatus;
+  submittedAt: string;
+  updatedAt: string;
+  reviewDecision?: VerificationReviewDecision;
+  history: VerificationSubmissionHistoryEvent[];
+}
+
+export interface DriverApplicationSubmission extends VerificationSubmissionBase {
+  kind: 'driver_application';
+  userId: string;
+  fullName: string;
+  phone: string;
+  dob: string;
+  nationalId: string;
+  operatingLocation: {
+    province: string;
+    district: string;
+    sector: string;
+    cell?: string;
+    village?: string;
+    city?: string;
+  };
+  momoDetails: {
+    provider: 'mtn' | 'airtel';
+    momoCode: string;
+    merchantCode?: string;
+  };
+  selfieImage: string | null;
+  firstVehicle: {
+    vehicleType: VehicleType;
+    plateNumber: string;
+    licenseNumber: string;
+    model?: string;
+    brand?: string;
+    manufactureYear?: number;
+    passengerSeats?: number;
+    loadCapacityKg?: number;
+    licenseExpiryDate?: string;
+    insuranceExpiryDate?: string;
+    authorizationExpiryDate?: string;
+  };
+  documents: DriverVehicleDocumentSet;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+}
+
+export interface VehicleApplicationSubmission extends VerificationSubmissionBase {
+  kind: 'vehicle_application';
+  userId: string;
+  driverId: string;
+  vehicleId: string;
+  vehicleType: VehicleType;
+  plateNumber: string;
+  licenseNumber: string;
+  brand?: string;
+  model?: string;
+  manufactureYear?: number;
+  passengerSeats?: number;
+  loadCapacityKg?: number;
+  licenseExpiryDate?: string;
+  insuranceExpiryDate?: string;
+  authorizationExpiryDate?: string;
+  documents: DriverVehicleDocumentSet;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+}
+
+export interface VehicleDocumentUpdateSubmission extends VerificationSubmissionBase {
+  kind: 'vehicle_document_update';
+  userId: string;
+  driverId: string;
+  vehicleId: string;
+  vehicleType: VehicleType;
+  plateNumber: string;
+  changedFields: Array<keyof DriverVehicleDocumentSet | 'outside' | 'inside'>;
+  previousDocumentMetadata?: {
+    documents?: DriverVehicleDocumentSet;
+    photos?: {
+      outside?: string | null;
+      inside?: string | null;
+    };
+  };
+  documents: DriverVehicleDocumentSet;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+}
+
+export interface DriverVehicleDocumentUpdate {
+  status: 'pending_review' | 'approved' | 'rejected';
+  submittedAt: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+  documents: DriverVehicleDocumentSet;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+}
+
+export interface DriverVehicleProfile {
+  id: string;
+  vehicleType: VehicleType;
+  status: DriverVehicleStatus;
+  plateNumber: string;
+  licenseNumber: string;
+  model?: string;
+  brand?: string;
+  manufactureYear?: number;
+  passengerSeats?: number;
+  loadCapacityKg?: number;
+  licenseExpiryDate?: string;
+  insuranceExpiryDate?: string;
+  authorizationExpiryDate?: string;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+  documents?: DriverVehicleDocumentSet;
+  pendingDocumentUpdate?: DriverVehicleDocumentUpdate | null;
+  submittedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  reviewHistory?: DriverVehicleReviewEvent[];
+}
+
+export interface DriverActiveVehicle {
+  vehicleId: string | null;
+  selectedAt?: string;
+}
+
+export interface DriverOnlineVehicleSession {
+  vehicleId: string;
+  vehicleType: VehicleType;
+  startedAt: string;
+}
+
 export interface DriverProfile {
   verificationStatus?: Exclude<DriverVerificationStatus, 'not_started'>;
   vehicleType: VehicleType;
@@ -90,6 +304,9 @@ export interface DriverProfile {
   passengerSeats?: number;
   loadCapacityKg?: number;
   rejectionReason?: string;
+  activeVehicle?: DriverActiveVehicle;
+  onlineVehicleSession?: DriverOnlineVehicleSession | null;
+  vehicles?: DriverVehicleProfile[];
 }
 
 export interface NegotiationMessage {
@@ -119,10 +336,16 @@ export interface Ride {
   customerId: string;
   customerName?: string;
   customerPhone?: string;
+  customerImage?: string;
+  customerRating?: number;
   driverId?: string;
   driverName?: string;
   driver?: MockDriver;
   vehicleType: VehicleType;
+  vehicleId?: string;
+  requestedVehicleType?: VehicleType;
+  matchedVehicleType?: VehicleType;
+  matchedVehicleId?: string;
   pickup: RideLocation;
   destination: RideLocation;
   status: RideStatus;

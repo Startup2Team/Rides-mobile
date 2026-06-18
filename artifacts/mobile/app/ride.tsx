@@ -17,7 +17,6 @@ import { useRideActions } from '@/hooks/ride/useRideActions';
 import { useRideStatus } from '@/hooks/ride/useRideStatus';
 import { DriverInfoCard } from '@/components/ride/DriverInfoCard';
 import { RideActionsSection } from '@/components/ride/RideActionsSection';
-import { RideCompleteModal } from '@/components/ride/RideCompleteModal';
 import { RideHeader } from '@/components/ride/RideHeader';
 import { RideStatusSection } from '@/components/ride/RideStatusSection';
 import {
@@ -86,7 +85,7 @@ function getBearingDegrees(from: { latitude: number; longitude: number }, to: { 
 export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, startJourney, cancelRide } = useRide();
+  const { currentRide, driverLocation, cancelRide } = useRide();
   const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
@@ -106,15 +105,11 @@ export default function RideScreen() {
   const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
     useRideStatus(currentRide);
   const {
-    completeModalVisible,
-    confirmCompleteRide,
     handleCallDriver,
     handleCancelArrived,
     handleCancelArriving,
-    handleComplete,
-    handleEmergencyEnd,
+    handleEmergency,
     handleSOS,
-    hideCompleteModal,
   } = useRideActions({ cancelRide, currentRide, showToast });
 
   const { route: driverToPickupRoute } = useRoute(
@@ -256,7 +251,6 @@ export default function RideScreen() {
     }
 
     if (status === 'in_progress') {
-      // Keep the arrived-screen framing when customer taps Start Journey (no second zoom).
       const alreadyFramedForTrip =
         fittedMapStateRef.current === 'arrived-route' ||
         fittedMapStateRef.current === 'arrived-pickup-dest' ||
@@ -480,14 +474,10 @@ export default function RideScreen() {
           onCall={handleCallDriver}
           onCancelArrived={handleCancelArrived}
           onCancelArriving={handleCancelArriving}
-          onComplete={handleComplete}
-          onEmergency={handleEmergencyEnd}
+          onEmergency={handleEmergency}
           onSOS={handleSOS}
-          onStartJourney={startJourney}
         />
       </View>
-
-      <RideCompleteModal colors={colors} visible={completeModalVisible} onClose={hideCompleteModal} onConfirm={confirmCompleteRide} />
     </View>
   );
 }

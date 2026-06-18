@@ -33,7 +33,7 @@ export function DriverPackageRequiredModal({
             You need an active ride package to receive ride requests.
           </Text>
           <Text style={[styles.text, { color: colors.mutedForeground }]}>
-            1 completed ride uses 1 ride credit. Cancellations and declined requests do not use credits.
+            1 completed trip uses 1 ride. Cancellations and declined requests do not change your rides.
           </Text>
           <TouchableOpacity style={styles.secondary} onPress={onClose} activeOpacity={0.7}>
             <Text style={[styles.secondaryText, { color: colors.primary }]}>Not Now</Text>

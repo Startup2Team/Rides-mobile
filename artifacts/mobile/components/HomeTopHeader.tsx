@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 import type { DriverVerificationStatus } from '@/types';
 
@@ -46,10 +47,10 @@ const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_P
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const FADE_HALF_MS = DRIVER_CTA_FADE_MS / 2;
 const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
-  require('../assets/images/dashboard/verified_badge.png'),
+  require('../assets/images/verified badge.png'),
   require('../assets/ads/dashboard/airtel.jpg'),
-  require('../assets/ads/dashboard/bk.jpg'),
   require('../assets/ads/dashboard/jibu.jpg'),
+  require('../assets/ads/bralirwa.png'),
 ];
 
 function prefetchImageSource(source: ImageSourcePropType) {
@@ -86,6 +87,7 @@ export function HomeTopHeader({
   const isDark = useColorScheme() === 'dark';
   const { driverProfile, switchMode } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [messageIndex, setMessageIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
@@ -155,6 +157,9 @@ export function HomeTopHeader({
       let active = true;
       void loadStoredProfileImage().then(stored => {
         if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
+      });
+      void loadNotificationReadState().then(state => {
+        if (active) setHasUnreadNotifications(state.unread.size > 0);
       });
       switchModeAvatarSlide.setValue(0);
       setIsSwitchingMode(false);
@@ -452,12 +457,14 @@ export function HomeTopHeader({
         accessibilityLabel="Notifications"
       >
         <Feather name="bell" size={20} color={colors.foreground} />
-        <View
-          style={[
-            styles.notifBadge,
-            { backgroundColor: colors.destructive, borderColor: colors.card },
-          ]}
-        />
+        {hasUnreadNotifications && (
+          <View
+            style={[
+              styles.notifBadge,
+              { backgroundColor: colors.destructive, borderColor: colors.card },
+            ]}
+          />
+        )}
       </TouchableOpacity>
     </View>
   );

@@ -36,6 +36,7 @@ export type RequestRideCommand = RideCommandEnvelope<'ride.request', {
   pickup: RideLocation;
   destination: RideLocation;
   vehicleType: VehicleType;
+  requestedVehicleType: VehicleType;
 }>;
 
 export type CancelRideCommand = RideCommandEnvelope<'ride.cancel', {
@@ -114,6 +115,7 @@ export type RideRequestedEvent = RideEventEnvelope<'ride.requested', {
   pickup: RideLocation;
   destination: RideLocation;
   vehicleType: VehicleType;
+  requestedVehicleType: VehicleType;
 }>;
 
 export type DriverAssignedEvent = RideEventEnvelope<'ride.driver.assigned', {

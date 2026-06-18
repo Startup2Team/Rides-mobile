@@ -16,6 +16,8 @@ const mockEntitlement: DriverEntitlement = {
       createdAt: '2026-06-08T10:00:00.000Z',
       completedAt: '2026-06-08T10:01:00.000Z',
       packageId: 'growth',
+      vehicleId: 'driver-vehicle:moto:rad-001-a',
+      vehicleType: 'moto',
       phoneNumber: '+250788000000',
       provider: 'mtn',
       status: 'successful',
@@ -25,6 +27,8 @@ const mockEntitlement: DriverEntitlement = {
       amount: 2_000,
       createdAt: '2026-06-07T10:00:00.000Z',
       packageId: 'growth',
+      vehicleId: 'driver-vehicle:moto:rad-001-a',
+      vehicleType: 'moto',
       phoneNumber: '+250788000000',
       provider: 'airtel',
       status: 'failed',
@@ -102,7 +106,9 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
     entitlement: mockEntitlement,
     isLoading: false,
+    bonusRides: mockEntitlement.remainingBonusRides,
     rideCredits: mockEntitlement.remainingRideCredits,
+    totalAvailableRides: mockEntitlement.remainingRideCredits + mockEntitlement.remainingBonusRides,
   }),
 }));
 
@@ -141,7 +147,7 @@ describe('DriverStats', () => {
     expect(screen.getByText('No trips completed today yet.')).toBeTruthy();
     expect(screen.getByText('Package History')).toBeTruthy();
     expect(screen.getByText('View Packages')).toBeTruthy();
-    expect(screen.getAllByText('Credits Left')).toHaveLength(1);
+    expect(screen.getAllByText('Rides')).toHaveLength(1);
     expect(screen.getAllByText('Growth Package')).toHaveLength(2);
     expect(screen.getByText('Successful')).toBeTruthy();
     expect(screen.getByText('Failed')).toBeTruthy();

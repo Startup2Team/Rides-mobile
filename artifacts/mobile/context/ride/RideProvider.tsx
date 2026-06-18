@@ -29,6 +29,7 @@ import {
   acceptLatestDriverOffer,
   acceptRideWithFare,
   addCustomerCounterOffer,
+  addCustomerAutoReply,
   addDriverOffer,
   respondToCustomerCounterOffer,
 } from './rideNegotiation';
@@ -50,11 +51,14 @@ import {
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { useOptionalAuth } from '@/context/AuthContext';
+import { getEligibleOnlineSessionVehicle } from './rideSession';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const driverEntitlement = useOptionalDriverEntitlement();
+  const auth = useOptionalAuth();
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [cancelledSearchDraft, setCancelledSearchDraft] = useState<BookingFormDraft | null>(null);
   const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
@@ -106,6 +110,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           status: 'negotiating',
           driver,
           driverId: driver.id,
+          matchedVehicleId: driver.id,
+          matchedVehicleType: driver.vehicleType,
           negotiation: initialMessages,
         };
       });
@@ -196,6 +202,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       customerName: 'Customer',
       customerPhone: '',
       vehicleType,
+      requestedVehicleType: vehicleType,
       pickup,
       destination,
       status: 'searching',
@@ -247,7 +254,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const sendDriverOffer = useCallback((amount: number) => {
     if (amount <= 0) return;
     setCurrentRide(prev => addDriverOffer(prev, amount));
-  }, []);
+    timers.scheduleTimeout(() => {
+      setCurrentRide(prev => addCustomerAutoReply(prev, amount));
+    }, NEGOTIATION_RESPONSE_DELAY_MS);
+  }, [timers]);
 
   const acceptCustomerOffer = useCallback(() => {
     setCurrentRide(acceptLatestCustomerOffer);
@@ -264,7 +274,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       step++;
       setDriverLocation(prev => addTrackingNoise(prev, ARRIVING_TRACKING_NOISE));
       if (step === ARRIVING_TRACKING_STEPS) {
-        setCurrentRide(markRideArrived);
         timers.clearInterval(driverIntervalRef.current);
         driverIntervalRef.current = null;
       }
@@ -287,7 +296,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const completeRide = useCallback((
     source: 'customer' | 'driver' = 'customer',
-    driverIdentity?: { driverId?: string; driverName?: string; vehicleType?: VehicleType },
+    driverIdentity?: { driverId?: string; driverName?: string; vehicleId?: string; vehicleType?: VehicleType },
   ) => {
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
@@ -298,7 +307,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         ? {
             driverId: driverIdentity.driverId,
             ...(driverIdentity.driverName ? { driverName: driverIdentity.driverName } : {}),
-            ...(driverIdentity.vehicleType ? { vehicleType: driverIdentity.vehicleType } : {}),
+            ...(driverIdentity.vehicleId ? { vehicleId: driverIdentity.vehicleId, matchedVehicleId: driverIdentity.vehicleId } : {}),
+            ...(driverIdentity.vehicleType ? { vehicleType: driverIdentity.vehicleType, matchedVehicleType: driverIdentity.vehicleType } : {}),
           }
         : {};
       const completed = {
@@ -324,17 +334,30 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.startSession();
     const request = pendingRequestRef.current;
     const initialMessages = buildInitialNegotiationMessages(request.pickup, request.destination);
-    setCurrentRide({ ...request, status: 'negotiating', negotiation: initialMessages });
+    const sessionVehicle = getEligibleOnlineSessionVehicle(auth?.driverProfile, driverEntitlement?.entitlement, request.requestedVehicleType ?? request.vehicleType);
+    setCurrentRide({
+      ...request,
+      status: 'negotiating',
+      negotiation: initialMessages,
+      matchedVehicleId: request.matchedVehicleId ?? sessionVehicle?.id,
+      matchedVehicleType: request.matchedVehicleType ?? sessionVehicle?.vehicleType,
+    });
     setPendingRequest(null);
-  }, [timers]);
+  }, [auth?.driverProfile, driverEntitlement?.entitlement, timers]);
 
   const declineRideRequest = useCallback(() => {
     setPendingRequest(null);
   }, []);
 
   const simulateIncomingRideRequest = useCallback(() => {
-    setPendingRequest(prev => prev ?? buildMockRideRequest());
-  }, []);
+    if (pendingRequestRef.current) return;
+    const sessionVehicle = getEligibleOnlineSessionVehicle(auth?.driverProfile, driverEntitlement?.entitlement);
+    if (!sessionVehicle) return;
+    setPendingRequest(prev => prev ?? buildMockRideRequest(
+      sessionVehicle.vehicleType,
+      { vehicleId: sessionVehicle.id, vehicleType: sessionVehicle.vehicleType },
+    ));
+  }, [auth?.driverProfile, driverEntitlement?.entitlement]);
 
   const riderAcceptWithFare = useCallback((amount: number) => {
     if (amount <= 0) return;

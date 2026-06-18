@@ -1,5 +1,5 @@
-import type { DriverProfile, Ride } from '@/types';
-import { getActiveRideCredits, type DriverEntitlement } from './driverRidePackages';
+import type { DriverProfile, Ride, VehicleType } from '@/types';
+import { getRideBalance, type DriverEntitlement } from './driverRidePackages';
 
 function isSameLocalDay(value: string | undefined, now: Date) {
   if (!value) return false;
@@ -20,6 +20,15 @@ function realFare(ride: Ride) {
     : 0;
 }
 
+function matchesVehicle(ride: Ride, vehicleId?: string | null, vehicleType?: VehicleType | null) {
+  if (!vehicleId && !vehicleType) return true;
+  const rideVehicleId = ride.vehicleId ?? ride.matchedVehicleId;
+  const rideVehicleType = ride.matchedVehicleType ?? ride.vehicleType;
+  if (vehicleId && rideVehicleId !== vehicleId) return false;
+  if (vehicleType && rideVehicleType !== vehicleType) return false;
+  return true;
+}
+
 export function formatRwf(amount: number) {
   return `${Math.max(0, Math.round(amount)).toLocaleString('en-RW')} RWF`;
 }
@@ -30,26 +39,32 @@ export function getDriverActivitySummary({
   entitlement,
   rideHistory,
   now = new Date(),
+  vehicleId,
+  vehicleType,
 }: {
   driverId?: string | null;
   driverProfile: DriverProfile | null | undefined;
   entitlement: DriverEntitlement | null | undefined;
   rideHistory: Ride[];
   now?: Date;
+  vehicleId?: string | null;
+  vehicleType?: VehicleType | null;
 }) {
   const completedToday = driverId
-    ? rideHistory.filter(ride =>
-        ride.driverId === driverId &&
-        isCompletedRide(ride) &&
-        isSameLocalDay(ride.completedAt, now),
-      )
+    ? rideHistory
+        .filter(ride =>
+          ride.driverId === driverId &&
+          isCompletedRide(ride) &&
+          isSameLocalDay(ride.completedAt, now),
+        )
+        .filter(ride => matchesVehicle(ride, vehicleId, vehicleType))
     : [];
   const completedRidesToday = completedToday.length;
 
   return {
     todayEarningsRwf: completedToday.reduce((total, ride) => total + realFare(ride), 0),
     completedRidesToday,
-    remainingRideCredits: getActiveRideCredits(entitlement),
+    remainingRideCredits: getRideBalance(entitlement),
     allTimeCompletedRides: Math.max(0, driverProfile?.completedRides ?? 0),
     allTimeEarningsRwf: Math.max(0, driverProfile?.earningsTotal ?? 0),
   };

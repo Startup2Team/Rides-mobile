@@ -132,7 +132,9 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
     entitlement: { activePackageId: null },
     isLoading: false,
+    bonusRides: 0,
     rideCredits: 0,
+    totalAvailableRides: 0,
   }),
 }));
 
@@ -160,9 +162,12 @@ describe('DriverProfileScreen rating summary', () => {
   test('profile displays no rating when none exists', async () => {
     render(<DriverProfileScreen />);
 
-    await waitFor(() => expect(screen.getByText('No ratings yet')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('No ratings yet')[0]).toBeTruthy());
     expect(screen.getByText('Notifications')).toBeTruthy();
-    expect(screen.getByText('Driver Documents')).toBeTruthy();
+    expect(screen.getByText('My Vehicles')).toBeTruthy();
+    expect(screen.queryByText('Driver Documents')).toBeNull();
+    expect(screen.queryByText('Plate Number')).toBeNull();
+    expect(screen.queryByText('License')).toBeNull();
   });
 
   test('profile displays rating summary when ratings exist', async () => {
@@ -174,6 +179,6 @@ describe('DriverProfileScreen rating summary', () => {
 
     render(<DriverProfileScreen />);
 
-    await waitFor(() => expect(screen.getByText('4.5 (2)')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('4.5 (2)')[0]).toBeTruthy());
   });
 });

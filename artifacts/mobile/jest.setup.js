@@ -1,5 +1,8 @@
 globalThis.__DEV__ = true;
 
+globalThis.requestAnimationFrame = globalThis.requestAnimationFrame ?? (callback => setTimeout(callback, 0));
+globalThis.cancelAnimationFrame = globalThis.cancelAnimationFrame ?? (handle => clearTimeout(handle));
+
 jest.mock('@sentry/react-native', () => {
   const scope = {
     setTag: jest.fn(),

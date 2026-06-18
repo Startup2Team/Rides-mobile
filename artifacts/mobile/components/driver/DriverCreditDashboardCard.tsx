@@ -22,7 +22,7 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
     return (
       <View style={[styles.loadingCard, { backgroundColor: cardFill }]}>
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Checking ride balance...</Text>
+        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Checking rides...</Text>
       </View>
     );
   }
@@ -34,7 +34,7 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
           <Feather name="layers" size={17} color={colors.success} />
         </View>
         <View style={styles.content}>
-          <Text style={[styles.title, { color: colors.foreground }]}>No ride credits</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>No rides</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{message}</Text>
         </View>
         <TouchableOpacity style={[styles.action, { backgroundColor: colors.primary }]} onPress={onViewPackages} activeOpacity={0.8}>
@@ -45,15 +45,15 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
   }
 
   const balanceLabel = progress.activationCount > 1
-    ? `${progress.remaining} ride credits remaining across ${progress.activationCount} packages`
-    : `${progress.remaining} of ${progress.totalGranted} ride credits remaining`;
+    ? `${progress.remaining} rides remaining across ${progress.activationCount} packages`
+    : `${progress.remaining} of ${progress.totalGranted} rides remaining`;
 
   return (
     <TouchableOpacity style={[styles.progressCard, { backgroundColor: cardFill }]} onPress={onViewPackages} activeOpacity={0.85}>
       <View style={styles.progressHeader}>
         <View style={styles.content}>
           <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>ACTIVE RIDE PACKAGE</Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>{activePackage?.name ?? 'Combined ride-credit balance'}</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>{activePackage?.name ?? 'Combined package rides'}</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{balanceLabel}</Text>
         </View>
         <Feather name="chevron-right" size={18} color={colors.mutedForeground} />

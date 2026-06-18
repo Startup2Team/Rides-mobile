@@ -16,6 +16,8 @@ const successfulPurchase: DriverPackagePurchase = {
   amount: 2_000,
   createdAt: '2026-06-08T10:00:00.000Z',
   packageId: 'growth',
+  vehicleId: 'driver-vehicle:moto:rad-001-a',
+  vehicleType: 'moto',
   phoneNumber: '+250788000000',
   provider: 'mtn',
   status: 'pending',
@@ -121,7 +123,9 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
     entitlement: mockEntitlement,
     isLoading: false,
     launchOfferUsed: mockEntitlement.activations.some(activation => activation.packageId === 'launch_starter'),
+    bonusRides: mockEntitlement.remainingBonusRides,
     rideCredits: mockEntitlement.remainingRideCredits,
+    totalAvailableRides: mockEntitlement.remainingRideCredits + mockEntitlement.remainingBonusRides,
     updatePackagePurchaseStatus: mockUpdatePackagePurchaseStatus,
   }),
 }));
@@ -138,6 +142,8 @@ describe('DriverPackagesScreen', () => {
     mockActivatePackage.mockResolvedValue({
       id: 'activation:launch_starter:2026-06-08T10:00:00.000Z',
       packageId: 'launch_starter',
+      vehicleId: 'driver-vehicle:moto:rad-001-a',
+      vehicleType: 'moto',
       activatedAt: '2026-06-08T10:00:00.000Z',
       pricePaidRwf: 0,
       creditsGranted: 35,
@@ -149,6 +155,8 @@ describe('DriverPackagesScreen', () => {
       activation: status === 'successful' ? {
         id: 'activation:momo-package:growth:2026-06-08T10:00:00.000Z',
         packageId: 'growth',
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
         activatedAt: '2026-06-08T10:01:00.000Z',
         pricePaidRwf: 2_000,
         creditsGranted: 75,
@@ -195,6 +203,8 @@ describe('DriverPackagesScreen', () => {
           createdAt: '2026-06-08T10:00:00.000Z',
           completedAt: '2026-06-08T10:01:00.000Z',
           packageId: 'growth',
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
           phoneNumber: '+250788000000',
           provider: 'mtn',
           status: 'successful',
@@ -204,6 +214,8 @@ describe('DriverPackagesScreen', () => {
           amount: 2_000,
           createdAt: '2026-06-07T10:00:00.000Z',
           packageId: 'growth',
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
           phoneNumber: '+250788000000',
           provider: 'airtel',
           status: 'failed',
@@ -224,14 +236,19 @@ describe('DriverPackagesScreen', () => {
     render(<DriverPackagesScreen />);
 
     expect(screen.getByText('FREE NOW')).toBeTruthy();
-    expect(screen.getByLabelText('30 Ride Credits + 5 Bonus Credits')).toBeTruthy();
+    expect(screen.getByLabelText('30 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('Launch Offer')).toBeTruthy();
-    expect(screen.getByLabelText('60 Ride Credits + 15 Bonus Credits')).toBeTruthy();
+    expect(screen.getByLabelText('60 Rides + 15 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('Most Popular Plan')).toBeTruthy();
     expect(screen.getByText('Pro Package')).toBeTruthy();
-    expect(screen.getByLabelText('120 Ride Credits + 30 Bonus Credits')).toBeTruthy();
+    expect(screen.getByLabelText('120 Rides + 30 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('Best Value Plan')).toBeTruthy();
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
+    const renderedText = screen.UNSAFE_getAllByType(Text)
+      .map(node => String(node.props.children))
+      .join(' ')
+      .toLowerCase();
+    expect(renderedText).not.toContain('credits');
   });
 
   test('user-facing package copy avoids misleading payment platform terms', () => {

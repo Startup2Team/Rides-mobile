@@ -26,6 +26,7 @@ import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, sav
 import { saveStoredProfileImage } from '@/persistence/profilePersistence';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
+import { submitDriverApplication } from '@/domain/verificationSubmissions';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -110,6 +111,16 @@ export default function DriverOnboarding() {
     const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
     await saveStoredDriverDocuments(buildInitialDriverDocuments(form, docs));
+    await submitDriverApplication({
+      userId: user?.id ?? 'unknown-user',
+      fullName: user?.name ?? 'Unknown driver',
+      phone: user?.phone ?? profile.momoCode,
+      driverProfile: profile,
+      form,
+      docs,
+      selfieUri,
+      submittedAt: new Date().toISOString(),
+    });
     if (selfieUri) await saveStoredProfileImage(selfieUri);
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');

@@ -89,6 +89,29 @@ export function acceptLatestCustomerOffer(ride: Ride | null): Ride | null {
   };
 }
 
+export function addCustomerAutoReply(ride: Ride | null, driverAmount: number): Ride | null {
+  if (!ride || ride.status !== 'negotiating') return ride;
+  const customerMessages = ride.negotiation.filter(
+    message => message.sender === 'customer' && message.type === 'offer',
+  );
+  if (customerMessages.length >= NEGOTIATION_OFFER_LIMIT) return ride;
+
+  // Accept straight away ~40% of the time, otherwise counter slightly lower
+  const shouldAccept = Math.random() < 0.4;
+  if (shouldAccept) {
+    return {
+      ...ride,
+      negotiation: [...ride.negotiation, createOfferMessage('customer', driverAmount)],
+    };
+  }
+
+  const counter = Math.round((driverAmount * 0.88) / 100) * 100;
+  return {
+    ...ride,
+    negotiation: [...ride.negotiation, createOfferMessage('customer', Math.max(counter, 100))],
+  };
+}
+
 export function acceptRideWithFare(ride: Ride | null, amount: number): Ride | null {
   if (!ride) return null;
   return { ...ride, status: 'confirmed', agreedFare: amount };
