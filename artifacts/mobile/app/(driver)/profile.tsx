@@ -14,9 +14,10 @@ import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSum
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
 import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
 import { APP_NAME } from '@/constants/branding';
+import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
-import { leaveRidesFeedback, rateRides, shareRides } from '@/utils/communityActions';
+import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -228,7 +229,7 @@ export default function DriverProfileScreen() {
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
             <MenuItem colors={colors} icon="star" label={`Rate ${APP_NAME}`} detail="Enjoying the app? Take a moment to rate it and share your feedback." onPress={() => { void rateRides(); }} />
             <MenuItem colors={colors} icon="message-square" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
-            <MenuItem colors={colors} icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => { void shareRides(); }} last />
+            <MenuItem colors={colors} icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => router.push(getShareRouteForMode(user?.mode))} last />
           </View>
         </View>
 

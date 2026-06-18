@@ -20,8 +20,9 @@ import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
-import { leaveRidesFeedback, rateRides, shareRides } from '@/utils/communityActions';
+import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 
 function MenuItem({
   icon,
@@ -258,7 +259,7 @@ export default function ProfileScreen() {
             icon="share-2"
             label="Share the App"
             detail={`Invite friends and family to experience ${APP_NAME}.`}
-            onPress={() => { void shareRides(); }}
+            onPress={() => router.push(getShareRouteForMode(user?.mode))}
             showSeparator={false}
             separatorColor={separatorColor}
           />

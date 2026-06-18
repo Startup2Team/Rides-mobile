@@ -22,6 +22,10 @@ function NativeDriverTabs() {
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Stats</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="share">
+        <Icon sf={{ default: 'square.and.arrow.up', selected: 'square.and.arrow.up.fill' }} />
+        <Label>Share</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: 'person', selected: 'person.fill' }} />
         <Label>Profile</Label>
@@ -73,6 +77,14 @@ function ClassicDriverTabs() {
           title: 'Stats',
           tabBarIcon: ({ color }) =>
             isIOS ? <SymbolView name="chart.bar" tintColor={color} size={24} /> : <Feather name="bar-chart-2" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="share"
+        options={{
+          title: 'Share',
+          tabBarIcon: ({ color }) =>
+            isIOS ? <SymbolView name="square.and.arrow.up" tintColor={color} size={24} /> : <Feather name="share-2" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

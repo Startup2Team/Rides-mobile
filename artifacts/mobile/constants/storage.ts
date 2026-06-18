@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   verificationSubmissions: '@rides_verification_submissions',
   driverEntitlement: '@rides_driver_entitlement',
   driverRatings: '@rides_driver_ratings',
+  referralEvents: '@rides_referral_events',
   rideHistory: '@rides_history',
   profileImage: '@rides_profile_image',
   paymentMethods: '@rides_payment_methods',
@@ -33,7 +34,7 @@ export const STORAGE_CLASSIFICATION = {
     STORAGE_KEYS.paymentMethods,
     STORAGE_KEYS.savedLocations,
   ],
-  internal: [],
+  internal: [STORAGE_KEYS.referralEvents],
   cacheable: [],
 } as const satisfies Record<StorageClassification, readonly string[]>;
 
