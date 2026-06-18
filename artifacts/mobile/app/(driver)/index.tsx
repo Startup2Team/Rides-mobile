@@ -45,14 +45,7 @@ import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { getApprovedDriverVehicles } from '@/domain/driverVehicles';
-import {
-  getAuthorizationComplianceMessage,
-  getAuthorizationComplianceStatus,
-  getInsuranceComplianceMessage,
-  getInsuranceComplianceStatus,
-  getLicenseComplianceMessage,
-  getLicenseComplianceStatus,
-} from '@/domain/vehicleCompliance';
+import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import {
   formatDistanceToPickup,
   formatRequestLocation,
@@ -199,13 +192,6 @@ export default function DriverDashboard() {
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const activeVehicleEntitlement = getVehicleEntitlement(entitlement, activeVehicle);
   const approvedVehicles = getApprovedDriverVehicles(driverProfile);
-  const licenseComplianceStatus = getLicenseComplianceStatus(activeVehicle?.licenseExpiryDate);
-  const insuranceComplianceStatus = getInsuranceComplianceStatus(activeVehicle?.insuranceExpiryDate);
-  const authorizationComplianceStatus = getAuthorizationComplianceStatus(activeVehicle?.authorizationExpiryDate);
-  const licenseComplianceMessage = getLicenseComplianceMessage(activeVehicle?.licenseExpiryDate);
-  const insuranceComplianceMessage = getInsuranceComplianceMessage(activeVehicle?.insuranceExpiryDate);
-  const authorizationComplianceMessage = getAuthorizationComplianceMessage(activeVehicle?.authorizationExpiryDate);
-  const showCompliancePanel = Boolean(licenseComplianceMessage || insuranceComplianceMessage || authorizationComplianceMessage);
 
   useEffect(() => {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
@@ -799,34 +785,6 @@ export default function DriverDashboard() {
             </TouchableOpacity>
           </View>
 
-          {showCompliancePanel ? (
-            <View
-              style={[
-                styles.compliancePanel,
-                {
-                  backgroundColor: licenseComplianceStatus === 'expired'
-                    ? colors.destructiveHex + '12'
-                    : colors.warningHex + '12',
-                  borderColor: licenseComplianceStatus === 'expired'
-                    ? colors.destructiveHex + '35'
-                    : colors.warningHex + '35',
-                },
-              ]}
-            >
-              <View style={styles.compliancePanelHeader}>
-                <Feather
-                  name={licenseComplianceStatus === 'expired' ? 'alert-triangle' : 'shield'}
-                  size={15}
-                  color={licenseComplianceStatus === 'expired' ? colors.destructiveHex : colors.warningHex}
-                />
-                <Text style={[styles.compliancePanelTitle, { color: colors.foreground }]}>Compliance</Text>
-              </View>
-              {licenseComplianceMessage ? <Text style={[styles.complianceLine, { color: licenseComplianceStatus === 'expired' ? colors.destructiveHex : colors.warningHex }]}>{licenseComplianceMessage}</Text> : null}
-              {insuranceComplianceMessage ? <Text style={[styles.complianceLine, { color: colors.warningHex }]}>{insuranceComplianceMessage}</Text> : null}
-              {authorizationComplianceMessage ? <Text style={[styles.complianceLine, { color: colors.warningHex }]}>{authorizationComplianceMessage}</Text> : null}
-            </View>
-          ) : null}
-
           {showNoCreditsWarning && (
             <View style={[styles.noCreditsPanel, { backgroundColor: colors.successHex + '12', borderColor: colors.successHex + '35' }]}>
               <View style={styles.noCreditsCopy}>
@@ -1224,17 +1182,6 @@ const styles = StyleSheet.create({
   activityValue: { fontSize: 18, lineHeight: 22, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   activityLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 2 },
   activityDivider: { width: 1, height: 24 },
-  compliancePanel: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-  },
-  compliancePanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  compliancePanelTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  complianceLine: { fontSize: 11, fontFamily: 'Inter_600SemiBold', lineHeight: 15 },
   noCreditsPanel: {
     marginTop: 8,
     borderRadius: 12,
