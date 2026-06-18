@@ -32,7 +32,7 @@ export default function DriverPackagePaymentScreen() {
   const { driverProfile } = useAuth();
   const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus } = useDriverEntitlement();
   const validPackageId: DriverRidePackageId | null =
-    packageId === 'launch_starter' || packageId === 'growth' || packageId === 'pro' ? packageId : null;
+    packageId && packageId in DRIVER_RIDE_PACKAGES ? packageId as DriverRidePackageId : null;
   const ridePackage = validPackageId ? DRIVER_RIDE_PACKAGES[validPackageId] : null;
   const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
     driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',

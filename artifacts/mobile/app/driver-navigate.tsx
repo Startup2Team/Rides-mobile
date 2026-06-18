@@ -27,6 +27,21 @@ import { getArrivalVerification } from './driverNavigateArrival';
 
 const WAIT_LIMIT_SECONDS = 180;
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
+const WAITING_CANCEL_REASONS = [
+  'Passenger did not show up',
+  'Wrong pickup location',
+  'Could not reach passenger',
+  'Safety concern',
+  'Other reason',
+];
+const IN_PROGRESS_CANCEL_REASONS = [
+  'Safety concern',
+  'Passenger misconduct',
+  'Harassment or abuse',
+  'Vehicle issue',
+  'Medical or emergency',
+  'Other reason',
+];
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   moto: 270,
@@ -77,16 +92,29 @@ function formatWaitTime(secs: number) {
   return m > 0 ? `${m}:${s < 10 ? '0' : ''}${s}` : `${s} sec`;
 }
 
+function formatArrivalTime(value?: string) {
+  if (!value) return 'Just now';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatLiveRemainingEta(seconds: number) {
+  const safeSeconds = Math.max(60, Math.round(seconds));
+  return formatDuration(safeSeconds);
+}
+
 export default function DriverNavigateScreen() {
   const colors = useColors();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, markArrived, startJourney, completeRide, cancelRide } = useRide();
-  const { driverProfile, recordCompletedRide, user } = useAuth();
+  const { currentRide, driverLocation, markArrived, startJourney, cancelRide } = useRide();
+  const { driverProfile, user } = useAuth();
 
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [bottomCardHeight, setBottomCardHeight] = useState(260);
   const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
+  const [completionInProgress, setCompletionInProgress] = useState(false);
 
   const mapRef = useRef<MapView>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
@@ -196,20 +224,28 @@ export default function DriverNavigateScreen() {
   }, [currentRide, remainingRoute]);
 
   const distanceToTargetKm = target ? getDistanceKm(driverPos, target) : 0;
-  const etaText = route && !routeLoading
-    ? formatDuration(route.durationSeconds)
-    : `${Math.round(distanceToTargetKm * 3 + 1)} min`;
+  const etaText = useMemo(() => {
+    if (phase === 'pickup' || phase === 'inprogress') {
+      if (distanceToTargetKm <= 0.01) return '1 min';
+      if (route && !routeLoading && route.distanceMeters > 0) {
+        const secondsPerKm = route.durationSeconds / (route.distanceMeters / 1000);
+        return formatLiveRemainingEta(distanceToTargetKm * secondsPerKm);
+      }
+    }
+    if (route && !routeLoading) return formatDuration(route.durationSeconds);
+    return `${Math.max(1, Math.round(distanceToTargetKm * 3 + 1))} min`;
+  }, [distanceToTargetKm, phase, route, routeLoading]);
   const arrivalVerification = currentRide
     ? getArrivalVerification(driverPos, currentRide.pickup)
     : null;
   const canMarkArrived = arrivalVerification?.canMarkArrived ?? false;
   const distanceText = phase === 'pickup' && arrivalVerification
     ? arrivalVerification.distanceText
-    : route
+    : phase === 'inprogress'
+      ? formatDistance(distanceToTargetKm * 1000)
+      : route
       ? formatDistance(route.distanceMeters)
       : formatDistance(distanceToTargetKm * 1000);
-  const isCustomerLate = pickupWait.isLate;
-
   const statusMessage =
     phase === 'pickup' ? 'Heading to pickup' :
     phase === 'waiting' ? 'Waiting for customer' :
@@ -245,6 +281,39 @@ export default function DriverNavigateScreen() {
     );
   }, [currentRide?.customerPhone]);
 
+  const handleSOS = useCallback(() => {
+    Alert.alert(
+      'Emergency SOS',
+      `Passenger: ${currentRide?.customerName ?? 'Unknown'}\nPickup: ${currentRide?.pickup.address ?? 'Pickup unavailable'}\nDestination: ${currentRide?.destination.address ?? 'Destination unavailable'}`,
+      [
+        { text: 'Dismiss', style: 'cancel' },
+        {
+          text: 'Cancel Trip',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+                'Why are you cancelling?',
+                'Choose a reason so the trip can be logged correctly.',
+                [
+                  { text: 'Keep Riding', style: 'cancel' },
+                ...IN_PROGRESS_CANCEL_REASONS.map(reason => ({
+                  text: reason,
+                  style: reason === 'Safety concern' ? 'destructive' as const : 'default' as const,
+                  onPress: () => {
+                    cancelRide();
+                    showToast(`Ride cancelled: ${reason}`, 'info');
+                    router.replace('/(driver)');
+                  },
+                })),
+              ],
+            );
+          },
+        },
+        { text: 'Call Police (112)', onPress: () => Linking.openURL('tel:112') },
+      ],
+    );
+  }, [cancelRide, currentRide?.customerName, currentRide?.destination.address, currentRide?.pickup.address, showToast]);
+
   const handleMarkArrived = useCallback(() => {
     if (!canMarkArrived) {
       showToast('Move closer to the pickup location to mark arrival.', 'info');
@@ -254,21 +323,24 @@ export default function DriverNavigateScreen() {
     markArrived();
   }, [canMarkArrived, markArrived, showToast]);
 
-  const handleCancelRide = () => {
+  const handleCancelAfterWait = useCallback(() => {
     Alert.alert(
-      'Cancel Ride',
-      isCustomerLate
-        ? `Customer is ${formatWaitTime(pickupWait.lateSeconds)} late. You may cancel this ride.`
-        : 'Cancel this ride and return to the queue?',
+      'Why are you cancelling?',
+      `Customer is ${formatWaitTime(pickupWait.lateSeconds)} late. Select a reason or keep waiting.`,
       [
-        {
-          text: 'Cancel Ride',
-          onPress: () => { cancelRide(); showToast('Ride cancelled', 'info'); router.replace('/(driver)'); },
-        },
-        { text: 'Back', style: 'cancel' },
+        { text: 'Keep Waiting', style: 'cancel' },
+        ...WAITING_CANCEL_REASONS.map(reason => ({
+          text: reason,
+          style: reason === 'Safety concern' ? 'destructive' as const : 'default' as const,
+          onPress: () => {
+            cancelRide();
+            showToast(`Ride cancelled: ${reason}`, 'info');
+            router.replace('/(driver)');
+          },
+        })),
       ],
     );
-  };
+  }, [cancelRide, pickupWait.lateSeconds, showToast]);
 
   const handleCompleteRide = () => {
     Alert.alert('Complete Ride', 'Mark this ride as completed?', [
@@ -276,18 +348,23 @@ export default function DriverNavigateScreen() {
       {
         text: 'Complete',
         onPress: () => {
-          completeRide('driver', { driverId: user?.id, driverName: user?.name, vehicleType: driverProfile?.vehicleType });
-          if (user?.id) void recordCompletedRide(currentRide?.agreedFare ?? 0);
-          router.replace('/(driver)');
+          const fare = currentRide?.agreedFare ?? 0;
+          const identity = { driverId: user?.id, driverName: user?.name, vehicleType: driverProfile?.vehicleType };
+          const fareForRecord = fare;
+          const userId = user?.id;
+          setCompletionInProgress(true);
+          router.push({
+            pathname: '/driver-ride-complete',
+            params: {
+              fare: String(fare),
+              driverId: identity.driverId ?? '',
+              driverName: identity.driverName ?? '',
+              vehicleType: identity.vehicleType ?? '',
+              recordFare: userId ? String(fareForRecord) : '',
+            },
+          });
         },
       },
-    ]);
-  };
-
-  const handleEmergencyEnd = () => {
-    Alert.alert('End Journey Early', 'Are you sure you want to end this journey?', [
-      { text: 'End Journey', onPress: handleCompleteRide },
-      { text: 'Back', style: 'cancel' },
     ]);
   };
 
@@ -366,13 +443,7 @@ export default function DriverNavigateScreen() {
               {statusMessage}
             </Text>
           </View>
-          <View style={styles.topRight}>
-            {phase !== 'waiting' && (
-              <Text style={[styles.topEta, { color: colors.primary }]} numberOfLines={1}>
-                {etaText}
-              </Text>
-            )}
-          </View>
+          <View style={styles.topRight} />
         </View>
       </View>
 
@@ -404,93 +475,184 @@ export default function DriverNavigateScreen() {
               </View>
             )}
           </View>
-          <TouchableOpacity
-            style={[styles.msgBtn, { backgroundColor: colors.muted }]}
-            onPress={() => Linking.openURL(`sms:${currentRide.customerPhone ?? ''}`).catch(() => {})}
-            accessibilityRole="button"
-            accessibilityLabel="Message customer"
-          >
-            <Feather name="message-circle" size={18} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.msgBtn, { backgroundColor: colors.call }]}
-            onPress={handleCall}
-            accessibilityRole="button"
-            accessibilityLabel="Call customer"
-          >
-            <Feather name="phone" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+          {phase === 'inprogress' ? (
+            <TouchableOpacity
+              style={[styles.sosAction, { backgroundColor: colors.destructive }]}
+              onPress={handleSOS}
+              accessibilityRole="button"
+              accessibilityLabel="Emergency SOS"
+            >
+              <Text style={styles.sosActionText}>SOS</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.callAction, { backgroundColor: colors.call }]}
+              onPress={handleCall}
+              accessibilityRole="button"
+              accessibilityLabel="Call customer"
+            >
+              <Feather name="phone" size={18} color="#FFFFFF" />
+              <Text style={styles.callActionText}>Call</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Fare / distance / ETA strip */}
-        <View style={[styles.fareRow, { backgroundColor: colors.muted }]}>
-          <View style={styles.fareItem}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>Agreed Fare</Text>
-            <Text style={[styles.fareValue, { color: colors.primary }]}>
-              {currentRide.agreedFare?.toLocaleString() ?? '-'} RWF
-            </Text>
-          </View>
-          <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.fareItem}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>
-              {phase === 'pickup' ? 'Distance to Pickup' : 'Distance'}
-            </Text>
-            <Text style={[styles.fareValue, { color: colors.foreground }]}>{distanceText}</Text>
-          </View>
-          <View style={[styles.fareDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.fareItem}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>ETA</Text>
-            <Text style={[styles.fareValue, { color: colors.foreground }]}>
-              {phase === 'waiting' ? '—' : etaText}
-            </Text>
-          </View>
-        </View>
-
-        {/* Waiting timer */}
-        {phase === 'waiting' && (
-          <View style={[styles.timerBox, {
-            backgroundColor: isCustomerLate ? colors.destructiveHex + '15' : colors.primaryHex + '12',
-            borderColor: isCustomerLate ? colors.destructive : colors.primaryHex + '30',
-          }]}>
-            <Feather
-              name={isCustomerLate ? 'alert-circle' : 'clock'}
-              size={18}
-              color={isCustomerLate ? colors.destructive : colors.primary}
-            />
-            <Text style={[styles.timerLabel, { color: isCustomerLate ? colors.destructive : colors.mutedForeground }]}>
-              {isCustomerLate ? `Customer ${formatWaitTime(pickupWait.lateSeconds)} late` : 'Time remaining'}
-            </Text>
-            <Text style={[styles.timerValue, { color: isCustomerLate ? colors.destructive : colors.primary }]}>
-              {isCustomerLate ? '' : formatWaitTime(pickupWait.remainingSeconds)}
-            </Text>
+        {phase === 'pickup' && (
+          <View style={styles.phaseContent}>
+            <View style={[styles.locationCard, { backgroundColor: colors.muted }]}>
+              <View style={styles.locRow}>
+                <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
+                <View style={styles.locTextBlock}>
+                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
+                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentRide.pickup.address || 'Pickup unavailable'}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.locRow}>
+                <View style={[styles.locDot, styles.locDotSquare, { backgroundColor: colors.destructive }]} />
+                <View style={styles.locTextBlock}>
+                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
+                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentRide.destination.address || 'Destination unavailable'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.metricGrid}>
+              <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
+                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>Distance to Pickup</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>{distanceText}</Text>
+              </View>
+              <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
+                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA to Pickup</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>{etaText}</Text>
+              </View>
+            </View>
           </View>
         )}
 
-        {/* Action buttons */}
+
+        {phase === 'waiting' && (
+          <View style={styles.phaseContent}>
+            <View style={[styles.waitingPanel, { backgroundColor: colors.primaryHex + '12', borderColor: colors.primaryHex + '30' }]}>
+              <Feather name="user-check" size={20} color={colors.primary} />
+              <View style={styles.waitingCopy}>
+                <Text style={[styles.waitingTitle, { color: colors.foreground }]}>Customer waiting for pickup</Text>
+                <Text style={[styles.waitingMeta, { color: colors.mutedForeground }]}>
+                  Arrived at {formatArrivalTime(currentRide.arrivedAt)}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.locationCard, { backgroundColor: colors.muted }]}>
+              <View style={styles.locRow}>
+                <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
+                <View style={styles.locTextBlock}>
+                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
+                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentRide.pickup.address || 'Pickup unavailable'}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.locRow}>
+                <View style={[styles.locDot, styles.locDotSquare, { backgroundColor: colors.destructive }]} />
+                <View style={styles.locTextBlock}>
+                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
+                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentRide.destination.address || 'Destination unavailable'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View style={[styles.timerBox, {
+              backgroundColor: pickupWait.isLate ? colors.destructiveHex + '15' : colors.muted,
+              borderColor: pickupWait.isLate ? colors.destructive : colors.border,
+            }]}>
+              <Feather
+                name={pickupWait.isLate ? 'alert-circle' : 'clock'}
+                size={18}
+                color={pickupWait.isLate ? colors.destructive : colors.primary}
+              />
+              <Text style={[styles.timerLabel, { color: pickupWait.isLate ? colors.destructive : colors.mutedForeground }]}>
+                {pickupWait.isLate ? `Customer ${formatWaitTime(pickupWait.lateSeconds)} late` : 'Pickup wait time remaining'}
+              </Text>
+              <Text style={[styles.timerValue, { color: pickupWait.isLate ? colors.destructive : colors.primary }]}>
+                {pickupWait.isLate ? '' : formatWaitTime(pickupWait.remainingSeconds)}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {phase === 'inprogress' && (
+          <View style={styles.phaseContent}>
+            <View style={[styles.locationCard, { backgroundColor: colors.muted }]}>
+              <View style={styles.locRow}>
+                <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
+                <View style={styles.locTextBlock}>
+                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
+                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentRide.pickup.address || 'Pickup unavailable'}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.locRow}>
+                <View style={[styles.locDot, styles.locDotSquare, { backgroundColor: colors.destructive }]} />
+                <View style={styles.locTextBlock}>
+                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
+                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentRide.destination.address || 'Destination unavailable'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.metricGrid}>
+              <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
+                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>Distance Remaining</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>{distanceText}</Text>
+              </View>
+              <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
+                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA Remaining</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>{etaText}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={styles.actions}>
           {phase === 'pickup' && (
-            <>
-              <AppButton title="Cancel" icon="x" variant="dangerPlain" size="sm" iconOnly onPress={handleCancelRide} accessibilityLabel="Cancel ride" />
-              <AppButton
-                title="I've Arrived"
-                onPress={handleMarkArrived}
-                disabled={!canMarkArrived}
-                style={styles.wide}
-                size="sm"
-              />
-            </>
+            <AppButton
+              title="I've Arrived"
+              onPress={handleMarkArrived}
+              disabled={!canMarkArrived}
+              fullWidth
+              size="lg"
+            />
           )}
           {phase === 'waiting' && (
             <>
-              <AppButton title="Cancel Ride" icon="x" variant="dangerPlain" size="sm" onPress={handleCancelRide} style={styles.wide} />
-              <AppButton title="Start Journey" size="sm" onPress={startJourney} style={styles.wide} />
+              {pickupWait.isLate && (
+                <AppButton
+                  title="Cancel Ride"
+                  variant="dangerPlain"
+                  size="lg"
+                  onPress={handleCancelAfterWait}
+                  style={styles.actionButton}
+                />
+              )}
+              <AppButton
+                title="Start Journey"
+                size="lg"
+                onPress={startJourney}
+                style={pickupWait.isLate ? styles.actionButton : styles.actionFullWidth}
+                fullWidth={!pickupWait.isLate}
+              />
             </>
           )}
           {phase === 'inprogress' && (
-            <>
-              <AppButton title="Emergency" icon="alert-octagon" variant="dangerPlain" size="sm" iconOnly onPress={handleEmergencyEnd} accessibilityLabel="End journey early" />
-              <AppButton title="Complete Ride" onPress={handleCompleteRide} style={styles.wide} size="sm" />
-            </>
+            <AppButton title="Complete Ride" onPress={handleCompleteRide} fullWidth size="lg" disabled={completionInProgress} />
           )}
         </View>
       </View>
@@ -507,7 +669,6 @@ const darkMapStyle = [
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
   mapBtn: {
     position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23,
     alignItems: 'center', justifyContent: 'center', zIndex: 5,
@@ -526,8 +687,6 @@ const styles = StyleSheet.create({
   topCenter: { flex: 2, alignItems: 'center', zIndex: 1 },
   topRight: { flex: 1, alignItems: 'flex-end', zIndex: 1 },
   topStatus: { fontSize: 13, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
-  topEta: { fontSize: 12, fontFamily: 'Inter_700Bold', textAlign: 'right' },
-  callBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
 
   bottomCard: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -543,13 +702,78 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  msgBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  callAction: {
+    height: 42,
+    borderRadius: 21,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  callActionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+  },
+  sosAction: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosActionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+  },
 
-  fareRow: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden' },
-  fareItem: { flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 },
-  fareDivider: { width: 1 },
-  fareLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
-  fareValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  phaseContent: { gap: 10 },
+  locationCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  locRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  locDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  locDotSquare: { borderRadius: 3 },
+  locTextBlock: { flex: 1, minWidth: 0 },
+  locInlineLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+    marginBottom: 2,
+  },
+  locValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 19 },
+  locDivider: { height: StyleSheet.hairlineWidth, marginLeft: 32 },
+  metricGrid: { flexDirection: 'row', gap: 8 },
+  metricBox: { flex: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 9, gap: 3 },
+  metricLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  metricValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  waitingPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+  },
+  waitingCopy: { flex: 1, minWidth: 0 },
+  waitingTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  waitingMeta: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
 
   timerBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -559,5 +783,6 @@ const styles = StyleSheet.create({
   timerValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
 
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  wide: { flex: 1 },
+  actionButton: { flex: 1 },
+  actionFullWidth: { flex: 1 },
 });

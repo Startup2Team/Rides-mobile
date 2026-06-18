@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import {
   Animated,
+  Modal,
   Image,
   Linking,
   PanResponder,
@@ -30,12 +31,12 @@ import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
-import { KIGALI_CENTER } from '@/types';
+import { KIGALI_CENTER, VEHICLE_LABELS, type VehicleType } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
 import { showDeclineRideAlert } from '@/utils/declineRideAlert';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
-import { canDriverGoOnlineWithCredits } from '@/domain/driverRidePackages';
+import { canDriverGoOnlineWithCredits, getActiveBonusRides, getActiveRideCredits, getEntitlementVehicleForProfile, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
@@ -43,6 +44,7 @@ import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
+import { getApprovedDriverVehicles } from '@/domain/driverVehicles';
 import {
   formatDistanceToPickup,
   formatRequestLocation,
@@ -113,8 +115,8 @@ export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { user, driverProfile, saveDriverProfile, setDriverOnline, switchMode } = useAuth();
-  const { bonusRides, entitlement, isLoading: isEntitlementLoading, totalAvailableRides } = useDriverEntitlement();
+  const { user, driverProfile, saveDriverProfile, setActiveVehicle, setDriverOnline, switchMode } = useAuth();
+  const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const {
     pendingRequest,
     rideHistory,
@@ -132,6 +134,7 @@ export default function DriverDashboard() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
+  const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
 
   const timers = useScreenTimerManager();
   const adCarouselRef = useRef<ScrollView>(null);
@@ -184,6 +187,9 @@ export default function DriverDashboard() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const isOnline = driverProfile?.isOnline === true;
+  const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
+  const activeVehicleEntitlement = getVehicleEntitlement(entitlement, activeVehicle);
+  const approvedVehicles = getApprovedDriverVehicles(driverProfile);
 
   useEffect(() => {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
@@ -206,7 +212,7 @@ export default function DriverDashboard() {
       });
       void loadNotificationReadState().then(state => {
         if (!active) return;
-        const credits = totalAvailableRides;
+        const credits = getActiveRideCredits(activeVehicleEntitlement);
         const hasUnread = Boolean(pendingRequest) || (!isEntitlementLoading && credits <= 5 && !state.read.has(`driver_low_credits_${credits}`)) || state.unread.size > 0;
         setHasUnreadNotifications(hasUnread);
       });
@@ -215,7 +221,7 @@ export default function DriverDashboard() {
       };
 
 
-    }, [driverProfile?.profileImage, isEntitlementLoading, pendingRequest, totalAvailableRides, user?.id]),
+    }, [activeVehicleEntitlement, driverProfile?.profileImage, isEntitlementLoading, pendingRequest, user?.id]),
   );
 
   // Location
@@ -336,15 +342,40 @@ export default function DriverDashboard() {
     router.push('/driver-negotiation');
   };
 
-  const toggleOnline = () => {
-    const next = !isOnline;
-    if (next && isEntitlementLoading) return;
-    if (next && canDriverGoOnline(driverProfile) && !canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
+  const handleVehicleSessionStart = useCallback(async (vehicle: { id: string; vehicleType: VehicleType; status: 'approved' }) => {
+    const vehicleEntitlementForSelection = getVehicleEntitlement(entitlement, vehicle);
+    await setActiveVehicle(vehicle.id);
+    setVehicleSelectorVisible(false);
+    if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
       router.push('/driver-packages');
       return;
     }
+    Animated.sequence([
+      Animated.timing(onlineScale, { toValue: 0.93, duration: 80, useNativeDriver: true }),
+      Animated.spring(onlineScale, { toValue: 1, useNativeDriver: true, bounciness: 12 }),
+    ]).start();
+    void setDriverOnline(true);
+  }, [entitlement, onlineScale, setActiveVehicle, setDriverOnline]);
+
+  const toggleOnline = () => {
+    const next = !isOnline;
+    if (next && isEntitlementLoading) return;
     if (next && !canDriverGoOnline(driverProfile)) {
       return;
+    }
+    if (next) {
+      if (approvedVehicles.length > 1) {
+        setVehicleSelectorVisible(true);
+        return;
+      }
+      if (approvedVehicles.length === 1) {
+        void handleVehicleSessionStart(approvedVehicles[0] as { id: string; vehicleType: VehicleType; status: 'approved' });
+        return;
+      }
+      if (!canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
+        router.push('/driver-packages');
+        return;
+      }
     }
     // Pulse animation on toggle
     Animated.sequence([
@@ -395,16 +426,16 @@ export default function DriverDashboard() {
 
   const driverName = user?.name?.split(' ')[0] ?? 'Driver';
   const driverInitial = user?.name?.trim().charAt(0).toUpperCase() || 'D';
-  const activeVehicleType = driverProfile?.vehicleType ?? 'moto';
+  const activeVehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? 'moto';
   const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
-  const remainingCreditsText = isEntitlementLoading ? '-' : String(activitySummary.remainingRideCredits);
-  const bonusRidesText = isEntitlementLoading ? '-' : String(bonusRides);
+  const remainingCreditsText = isEntitlementLoading ? '-' : String(getRideBalance(activeVehicleEntitlement));
+  const bonusRidesText = isEntitlementLoading ? '-' : String(getActiveBonusRides(activeVehicleEntitlement));
   const statusLabel = isOnline ? 'Online' : 'Offline';
   const isVerified = driverProfile?.isVerified === true;
   const ratingLabel = ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
     ? ratingSummary.averageRating.toFixed(1)
     : '0.0';
-  const showNoCreditsWarning = !isEntitlementLoading && totalAvailableRides === 0;
+  const showNoCreditsWarning = !isEntitlementLoading && getActiveRideCredits(activeVehicleEntitlement) === 0;
   const request = pendingRequest;
   const requestPickupLabel = formatRequestLocation(request?.pickup, 'Pickup unavailable');
   const requestDestinationLabel = formatRequestLocation(request?.destination, 'Destination unavailable');
@@ -846,21 +877,21 @@ export default function DriverDashboard() {
           </View>
           <View style={styles.metaRow}>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-              <MaterialCommunityIcons name="map-marker-radius" size={16} color={colors.primary} />
+              <MaterialCommunityIcons name="map-marker-radius" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
                 <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Pickup</Text>
                 <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestDistanceToPickup}</Text>
               </View>
             </View>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-              <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
+              <MaterialCommunityIcons name="map-marker-distance" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
                 <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Trip Distance</Text>
                 <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDistance}</Text>
               </View>
             </View>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
+              <MaterialCommunityIcons name="clock-outline" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
                 <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Time</Text>
                 <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDuration}</Text>
@@ -873,6 +904,56 @@ export default function DriverDashboard() {
           </View>
         </Animated.View>
       )}
+
+      <Modal
+        transparent
+        visible={vehicleSelectorVisible}
+        animationType="fade"
+        onRequestClose={() => setVehicleSelectorVisible(false)}
+      >
+        <View style={styles.selectorBackdrop}>
+          <View style={[styles.selectorSheet, { backgroundColor: cardFill }]}>
+            <View style={styles.selectorHeader}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.selectorTitle, { color: colors.foreground }]}>Select vehicle for this session</Text>
+                <Text style={[styles.selectorSubtitle, { color: colors.mutedForeground }]}>Choose the approved vehicle you are driving right now.</Text>
+              </View>
+              <TouchableOpacity onPress={() => setVehicleSelectorVisible(false)} accessibilityLabel="Close vehicle selector">
+                <Feather name="x" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.selectorList} contentContainerStyle={{ gap: 10 }}>
+              {approvedVehicles.map(vehicle => {
+                const vehicleEntitlementForSelection = getVehicleEntitlement(entitlement, vehicle);
+                return (
+                  <TouchableOpacity
+                    key={vehicle.id}
+                    style={[styles.selectorCard, { borderColor: colors.border }]}
+                    onPress={() => void handleVehicleSessionStart(vehicle as { id: string; vehicleType: VehicleType; status: 'approved' })}
+                    activeOpacity={0.78}
+                  >
+                    <View style={styles.selectorCardCopy}>
+                      <Text style={[styles.selectorVehicleName, { color: colors.foreground }]}>
+                        {vehicle.brand ? `${vehicle.brand} ` : ''}{vehicle.model ? `${vehicle.model}` : VEHICLE_LABELS[vehicle.vehicleType]}
+                      </Text>
+                      <Text style={[styles.selectorVehicleMeta, { color: colors.mutedForeground }]}>
+                        {VEHICLE_LABELS[vehicle.vehicleType]} - {vehicle.plateNumber}
+                      </Text>
+                      <Text style={[styles.selectorVehicleMeta, { color: colors.mutedForeground }]}>
+                        {getRideBalance(vehicleEntitlementForSelection)} rides left{getActiveBonusRides(vehicleEntitlementForSelection) > 0 ? ` - ${getActiveBonusRides(vehicleEntitlementForSelection)} bonus rides` : ''}
+                      </Text>
+                    </View>
+                    <View style={[styles.selectorPill, { backgroundColor: colors.successHex + '14' }]}>
+                      <Text style={[styles.selectorPillText, { color: colors.successHex }]}>Approved</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <AppButton title="Cancel" variant="secondary" onPress={() => setVehicleSelectorVisible(false)} fullWidth />
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -1112,9 +1193,21 @@ const styles = StyleSheet.create({
   routeValue: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   routeText: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
   metaRow: { flexDirection: 'row', gap: 5 },
-  metaInfoCard: { flex: 1, minHeight: 36, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 7, borderRadius: 12, gap: 4 },
-  metaInfoText: { flex: 1, gap: 1 },
-  metaInfoValue: { fontSize: 11, fontFamily: 'Inter_700Bold' },
-  metaInfoLabel: { fontSize: 8, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  metaInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 12, gap: 5 },
+  metaInfoText: { flex: 1, gap: 2 },
+  metaInfoValue: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  metaInfoLabel: { fontSize: 8.5, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
   requestActions: { flexDirection: 'row', gap: 10 },
+  selectorBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
+  selectorSheet: { borderRadius: 18, padding: 16, maxHeight: '72%', gap: 14 },
+  selectorHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  selectorTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  selectorSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  selectorList: { flexGrow: 0 },
+  selectorCard: { borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  selectorCardCopy: { flex: 1, minWidth: 0, gap: 2 },
+  selectorVehicleName: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  selectorVehicleMeta: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  selectorPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
+  selectorPillText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
 });

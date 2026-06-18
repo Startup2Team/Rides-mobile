@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { DriverCreditDashboardCard } from '../DriverCreditDashboardCard';
 import { DriverPackageRequiredModal } from '../DriverPackageRequiredModal';
-import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { activatePackage, EMPTY_DRIVER_ENTITLEMENT, normalizeEntitlement } from '@/domain/driverRidePackages';
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -57,11 +57,16 @@ describe('driver dashboard ride-credit UX', () => {
   });
 
   test('shows active package progress and low-rides guidance', () => {
-    const entitlement = {
-      ...activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'launch_starter').entitlement,
-      remainingRideCredits: 5,
-      remainingBonusRides: 0,
-    };
+    const active = activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'launch_starter').entitlement;
+    const [vehicleEntitlement] = active.vehicleEntitlements;
+    const entitlement = normalizeEntitlement({
+      ...active,
+      vehicleEntitlements: [{
+        ...vehicleEntitlement,
+        remainingRideCredits: 5,
+        remainingBonusRides: 0,
+      }],
+    });
     render(<DriverCreditDashboardCard entitlement={entitlement} isLoading={false} onViewPackages={jest.fn()} />);
 
     expect(screen.getByText('Launch Starter Package')).toBeTruthy();

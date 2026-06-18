@@ -7,12 +7,20 @@ import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import {
   DRIVER_RIDE_PACKAGES,
+  getPackagesForVehicleType,
+  hasUsedCabStarterOffer,
+  hasUsedFusoStarterOffer,
+  hasUsedHiluxStarterOffer,
+  hasUsedLaunchOffer,
+  hasUsedRifaniStarterOffer,
   type DriverRidePackage,
   type DriverRidePackageId,
 } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
+import { VEHICLE_LABELS } from '@/types';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -26,11 +34,17 @@ export default function DriverPackagesScreen() {
   const { driverProfile } = useAuth();
   const {
     isLoading: isEntitlementLoading,
-    launchOfferUsed,
+    entitlement,
     rideCredits,
   } = useDriverEntitlement();
   const [selectedPackageId, setSelectedPackageId] = useState<DriverRidePackageId | null>(null);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+
+  const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
+  const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
+  const packageIds = getPackagesForVehicleType(vehicleType);
+  const isCab = vehicleType === 'cab';
+  const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
 
   const handleSelectPackage = (packageId: DriverRidePackageId) => {
     setSelectedPackageId(current => current === packageId ? null : packageId);
@@ -47,7 +61,7 @@ export default function DriverPackagesScreen() {
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader
       title="Ride Packages"
-      subtitle="Choose a package to receive ride requests"
+      subtitle={`Choose a package for your ${vehicleLabel}`}
       onBackPress={() => router.back()}
     />
     <ScrollView
@@ -64,31 +78,32 @@ export default function DriverPackagesScreen() {
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
     </View>
 
-    <PackageCard
-      ridePackage={DRIVER_RIDE_PACKAGES.launch_starter}
-      cardFill={cardFill}
-      colors={colors}
-      disabled={launchOfferUsed}
-      unavailable={isEntitlementLoading}
-      selected={selectedPackageId === 'launch_starter'}
-      onPress={() => handleSelectPackage('launch_starter')}
-    />
-    <PackageCard
-      ridePackage={DRIVER_RIDE_PACKAGES.growth}
-      cardFill={cardFill}
-      colors={colors}
-      unavailable={isEntitlementLoading}
-      selected={selectedPackageId === 'growth'}
-      onPress={() => handleSelectPackage('growth')}
-    />
-    <PackageCard
-      ridePackage={DRIVER_RIDE_PACKAGES.pro}
-      cardFill={cardFill}
-      colors={colors}
-      unavailable={isEntitlementLoading}
-      selected={selectedPackageId === 'pro'}
-      onPress={() => handleSelectPackage('pro')}
-    />
+    {packageIds.map(id => {
+      const pkg = DRIVER_RIDE_PACKAGES[id];
+      const isOfferUsed = id === 'cab_starter'
+        ? hasUsedCabStarterOffer(entitlement)
+        : id === 'hilux_starter'
+          ? hasUsedHiluxStarterOffer(entitlement)
+          : id === 'rifani_starter'
+            ? hasUsedRifaniStarterOffer(entitlement)
+            : id === 'fuso_starter'
+              ? hasUsedFusoStarterOffer(entitlement)
+              : id === 'launch_starter'
+                ? hasUsedLaunchOffer(entitlement)
+                : false;
+      return (
+        <PackageCard
+          key={id}
+          ridePackage={pkg}
+          cardFill={cardFill}
+          colors={colors}
+          disabled={isOfferUsed}
+          unavailable={isEntitlementLoading}
+          selected={selectedPackageId === id}
+          onPress={() => handleSelectPackage(id)}
+        />
+      );
+    })}
     <View style={styles.buyButtonContainer}>
       <AppButton
         title="Buy Selected Package"
@@ -133,7 +148,7 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
         <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRides} Bonus Rides</Text>
       </View>
       <Text style={[styles.planLabel, { color: colors.mutedForeground }]}>
-        {ridePackage.launchOffer ? 'Launch Offer' : ridePackage.id === 'growth' ? 'Most Popular Plan' : 'Best Value Plan'}
+        {ridePackage.launchOffer ? 'Launch Offer' : ridePackage.id === 'growth' || ridePackage.id === 'cab_growth' ? 'Most Popular Plan' : 'Best Value Plan'}
       </Text>
       <View style={styles.priceRow}>
         <Text style={[styles.price, { color: ridePackage.launchOffer ? colors.primary : colors.foreground }]}>

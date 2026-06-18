@@ -1,6 +1,9 @@
 export type VehicleType = 'moto' | 'rifani' | 'cab' | 'fuso' | 'hilux';
 export type AppMode = 'customer' | 'driver';
 export type DriverVerificationStatus = 'not_started' | 'draft' | 'pending_review' | 'approved' | 'rejected';
+export type DriverVehicleStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
+export type DriverVehicleDocumentReviewStatus = 'verified' | 'pending_review' | 'rejected';
+export type DriverVehicleReviewEventType = 'submitted' | 'under_review' | 'approved' | 'rejected';
 export type LocationType = 'precise' | 'generic';
 
 export type RideStatus =
@@ -58,6 +61,64 @@ export interface PaymentMethod {
   isDefault: boolean;
 }
 
+export type DriverVehicleDocumentFaces = [string | null, string | null];
+
+export interface DriverVehicleDocumentRecord {
+  key: 'license' | 'nationalId' | 'insurance' | 'authorization';
+  faces: DriverVehicleDocumentFaces;
+  documentNumber?: string;
+  expiryDate?: string;
+  reviewStatus: DriverVehicleDocumentReviewStatus;
+  submissionKind: 'initial' | 'replacement';
+  submittedAt: string;
+  updatedAt: string;
+}
+
+export interface DriverVehicleDocumentSet {
+  license: DriverVehicleDocumentRecord;
+  nationalId: DriverVehicleDocumentRecord;
+  insurance: DriverVehicleDocumentRecord;
+  authorization: DriverVehicleDocumentRecord;
+}
+
+export interface DriverVehicleReviewEvent {
+  id: string;
+  type: DriverVehicleReviewEventType;
+  at: string;
+  reason?: string;
+}
+
+export interface DriverVehicleProfile {
+  id: string;
+  vehicleType: VehicleType;
+  status: DriverVehicleStatus;
+  plateNumber: string;
+  licenseNumber: string;
+  model?: string;
+  brand?: string;
+  manufactureYear?: number;
+  passengerSeats?: number;
+  loadCapacityKg?: number;
+  licenseExpiryDate?: string;
+  insuranceExpiryDate?: string;
+  authorizationExpiryDate?: string;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+  documents?: DriverVehicleDocumentSet;
+  submittedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  reviewHistory?: DriverVehicleReviewEvent[];
+}
+
+export interface DriverActiveVehicle {
+  vehicleId: string | null;
+  selectedAt?: string;
+}
+
 export interface DriverProfile {
   verificationStatus?: Exclude<DriverVerificationStatus, 'not_started'>;
   vehicleType: VehicleType;
@@ -90,6 +151,8 @@ export interface DriverProfile {
   passengerSeats?: number;
   loadCapacityKg?: number;
   rejectionReason?: string;
+  activeVehicle?: DriverActiveVehicle;
+  vehicles?: DriverVehicleProfile[];
 }
 
 export interface NegotiationMessage {

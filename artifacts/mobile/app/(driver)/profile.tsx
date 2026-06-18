@@ -13,6 +13,7 @@ import { VEHICLE_LABELS } from '@/types';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import { getActiveDriverVehicle, getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
 import { APP_NAME } from '@/constants/branding';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
@@ -28,6 +29,9 @@ export default function DriverProfileScreen() {
   const { user, driverProfile, logout, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+  const vehicles = getDriverVehicles(driverProfile);
+  const activeVehicle = getActiveDriverVehicle(driverProfile);
+  const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -131,6 +135,31 @@ export default function DriverProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <SectionTitle title="My Vehicles" />
+          <TouchableOpacity
+            style={[styles.vehicleSummaryCard, styles.cardShadow, { backgroundColor: cardFill }]}
+            onPress={() => router.push('/driver-vehicles')}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel="Open my vehicles"
+          >
+            <Feather name="truck" size={20} color={colors.foreground} />
+            <View style={styles.vehicleSummaryCopy}>
+              <Text style={[styles.vehicleSummaryTitle, { color: colors.foreground }]}>
+                {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} linked
+              </Text>
+              <Text style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
+                Approved {vehicleCounts.approved} • Pending {vehicleCounts.pendingReview} • Rejected {vehicleCounts.rejected}
+              </Text>
+              <Text style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
+                {activeVehicle ? `${VEHICLE_LABELS[activeVehicle.vehicleType]} selected` : 'No active vehicle'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
           <SectionTitle title={activePackage ? 'Active Ride Package' : 'Ride Package'} />
           <TouchableOpacity
             style={[styles.packageCard, styles.cardShadow, { backgroundColor: cardFill }]}
@@ -163,9 +192,9 @@ export default function DriverProfileScreen() {
           <View style={styles.section}>
             <SectionTitle title="Driver Details" />
             <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-              <InfoRow colors={colors} icon="truck" label="Vehicle" value={VEHICLE_LABELS[driverProfile.vehicleType]} />
-              <InfoRow colors={colors} icon="hash" label="Plate Number" value={driverProfile.plateNumber} />
-              <InfoRow colors={colors} icon="credit-card" label="License" value={driverProfile.licenseNumber} />
+              <InfoRow colors={colors} icon="truck" label="Vehicle" value={activeVehicle ? VEHICLE_LABELS[activeVehicle.vehicleType] : VEHICLE_LABELS[driverProfile.vehicleType]} />
+              <InfoRow colors={colors} icon="hash" label="Plate Number" value={activeVehicle?.plateNumber ?? driverProfile.plateNumber} />
+              <InfoRow colors={colors} icon="credit-card" label="License" value={activeVehicle?.licenseNumber ?? driverProfile.licenseNumber} />
               <InfoRow colors={colors} icon="map-pin" label="City" value={driverProfile.city ?? driverProfile.province} />
               <InfoRow colors={colors} icon="smartphone" label="Mobile Money Details" value={driverProfile.momoCode} last />
             </View>
@@ -317,6 +346,10 @@ const styles = StyleSheet.create({
   packageSubtext: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   packageStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
   packageStatusText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  vehicleSummaryCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
+  vehicleSummaryCopy: { flex: 1, gap: 3 },
+  vehicleSummaryTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  vehicleSummaryDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   groupedSection: { borderRadius: 20, overflow: 'hidden' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 50, paddingHorizontal: 16, paddingVertical: 12 },
   infoLabel: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },

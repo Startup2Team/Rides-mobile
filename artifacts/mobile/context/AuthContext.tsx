@@ -16,6 +16,7 @@ import {
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
+import { getApprovedDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
 
 interface AuthContextType {
   user: User | null;
@@ -25,6 +26,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
+  setActiveVehicle: (vehicleId: string | null) => Promise<void>;
   setDriverOnline: (isOnline: boolean) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
@@ -83,6 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveStoredDriverProfile(profile);
   }, []);
 
+  const setActiveVehicle = useCallback(async (vehicleId: string | null) => {
+    const prev = driverProfileRef.current;
+    if (!prev || prev.isOnline) return;
+    if (vehicleId !== null && !getApprovedDriverVehicles(prev).some(vehicle => vehicle.id === vehicleId)) return;
+    const updated = setDriverActiveVehicle(prev, vehicleId);
+    setDriverProfile(updated);
+    await saveStoredDriverProfile(updated);
+  }, []);
+
   const setDriverOnline = useCallback(async (isOnline: boolean) => {
     const prev = driverProfileRef.current;
     if (!prev || prev.isOnline === isOnline) return;
@@ -125,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     updateUser,
     saveDriverProfile,
+    setActiveVehicle,
     setDriverOnline,
     switchMode,
     recordCompletedRide,
@@ -135,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     recordCompletedRide,
     saveDriverProfile,
+    setActiveVehicle,
     setDriverOnline,
     switchMode,
     updateUser,
@@ -152,4 +165,8 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+export function useOptionalAuth() {
+  return useContext(AuthContext);
 }

@@ -1,9 +1,28 @@
 import { z } from 'zod';
+import { migrateDriverProfileToMultiVehicle } from '@/domain/driverVehicles';
+import { normalizeEntitlement } from '@/domain/driverRidePackages';
 
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
 const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
-const driverRidePackageIdSchema = z.enum(['launch_starter', 'growth', 'pro']);
+const driverVehicleStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
+const driverRidePackageIdSchema = z.enum([
+  'launch_starter',
+  'growth',
+  'pro',
+  'cab_starter',
+  'cab_growth',
+  'cab_pro',
+  'hilux_starter',
+  'hilux_growth',
+  'hilux_pro',
+  'rifani_starter',
+  'rifani_growth',
+  'rifani_pro',
+  'fuso_starter',
+  'fuso_growth',
+  'fuso_pro',
+]);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',
@@ -50,7 +69,60 @@ export const paymentMethodsSchema = z.array(z.object({
 
 export const profileImageSchema = z.string();
 
-export const driverProfileSchema = z.object({
+const documentFacesSchema = z.tuple([z.string().nullable(), z.string().nullable()]);
+
+const driverDocumentRecordSchema = z.object({
+  key: z.enum(['license', 'nationalId', 'insurance', 'authorization']),
+  faces: documentFacesSchema,
+  documentNumber: z.string().optional(),
+  expiryDate: z.string().optional(),
+  reviewStatus: z.enum(['verified', 'pending_review', 'rejected']),
+  submissionKind: z.enum(['initial', 'replacement']),
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+}).passthrough();
+
+export const driverDocumentsSchema = z.object({
+  license: driverDocumentRecordSchema,
+  nationalId: driverDocumentRecordSchema,
+  insurance: driverDocumentRecordSchema,
+  authorization: driverDocumentRecordSchema,
+});
+
+const driverVehicleDocumentSetSchema = driverDocumentsSchema;
+
+const driverVehicleProfileSchema = z.object({
+  id: z.string(),
+  vehicleType: vehicleTypeSchema,
+  status: driverVehicleStatusSchema,
+  plateNumber: z.string(),
+  licenseNumber: z.string(),
+  model: z.string().optional(),
+  brand: z.string().optional(),
+  manufactureYear: z.number().int().optional(),
+  passengerSeats: z.number().optional(),
+  loadCapacityKg: z.number().optional(),
+  licenseExpiryDate: z.string().optional(),
+  insuranceExpiryDate: z.string().optional(),
+  authorizationExpiryDate: z.string().optional(),
+  photos: z.object({
+    outside: z.string().nullable().optional(),
+    inside: z.string().nullable().optional(),
+  }).optional(),
+  documents: driverVehicleDocumentSetSchema.optional(),
+  submittedAt: z.string().optional(),
+  approvedAt: z.string().optional(),
+  rejectedAt: z.string().optional(),
+  rejectionReason: z.string().optional(),
+  reviewHistory: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['submitted', 'under_review', 'approved', 'rejected']),
+    at: z.string(),
+    reason: z.string().optional(),
+  }).passthrough()).optional(),
+}).passthrough();
+
+const driverProfileShapeSchema = z.object({
   verificationStatus: driverVerificationStatusSchema.optional(),
   vehicleType: vehicleTypeSchema,
   plateNumber: z.string(),
@@ -82,27 +154,17 @@ export const driverProfileSchema = z.object({
   passengerSeats: z.number().optional(),
   loadCapacityKg: z.number().optional(),
   rejectionReason: z.string().optional(),
+  activeVehicle: z.object({
+    vehicleId: z.string().nullable(),
+    selectedAt: z.string().optional(),
+  }).optional(),
+  vehicles: z.array(driverVehicleProfileSchema).optional(),
 }).passthrough();
 
-const documentFacesSchema = z.tuple([z.string().nullable(), z.string().nullable()]);
-
-const driverDocumentRecordSchema = z.object({
-  key: z.enum(['license', 'nationalId', 'insurance', 'authorization']),
-  faces: documentFacesSchema,
-  documentNumber: z.string().optional(),
-  expiryDate: z.string().optional(),
-  reviewStatus: z.enum(['verified', 'pending_review', 'rejected']),
-  submissionKind: z.enum(['initial', 'replacement']),
-  submittedAt: z.string(),
-  updatedAt: z.string(),
-});
-
-export const driverDocumentsSchema = z.object({
-  license: driverDocumentRecordSchema,
-  nationalId: driverDocumentRecordSchema,
-  insurance: driverDocumentRecordSchema,
-  authorization: driverDocumentRecordSchema,
-});
+export const driverProfileSchema = z.preprocess(value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  return migrateDriverProfileToMultiVehicle(value as z.infer<typeof driverProfileShapeSchema>);
+}, driverProfileShapeSchema);
 
 export const driverOnboardingDraftSchema = z.object({
   form: z.object({
@@ -140,6 +202,8 @@ export const driverOnboardingDraftSchema = z.object({
 const packageActivationSchema = z.object({
   id: z.string(),
   packageId: driverRidePackageIdSchema,
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
   activatedAt: z.string(),
   pricePaidRwf: z.number().nonnegative(),
   creditsGranted: z.number().int().positive(),
@@ -158,6 +222,8 @@ const driverPackagePurchaseStatusSchema = z.enum([
 
 const driverPackagePurchaseSchema = z.object({
   packageId: driverRidePackageIdSchema,
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
   amount: z.number().nonnegative(),
   provider: z.enum(['mtn', 'airtel']),
   phoneNumber: z.string(),
@@ -170,6 +236,8 @@ const driverPackagePurchaseSchema = z.object({
 const driverCreditTransactionSchema = z.object({
   id: z.string(),
   type: z.enum(['credit', 'debit']),
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
   amount: z.number().int(),
   createdAt: z.string(),
   packageActivationId: z.string().optional(),
@@ -194,7 +262,9 @@ const driverRatingSchema = z.object({
 
 export const driverRatingsSchema = z.array(driverRatingSchema);
 
-const driverEntitlementShapeSchema = z.object({
+const vehicleEntitlementSchema = z.object({
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
   activePackageId: driverRidePackageIdSchema.nullable(),
   remainingRideCredits: z.number().int().nonnegative(),
   remainingBonusRides: z.number().int().nonnegative(),
@@ -205,12 +275,19 @@ const driverEntitlementShapeSchema = z.object({
   authority: z.enum(['local_prototype', 'backend']),
 });
 
+const driverEntitlementShapeSchema = vehicleEntitlementSchema.extend({
+  vehicleId: z.string().nullable(),
+  vehicleType: vehicleTypeSchema.nullable(),
+  vehicleEntitlements: z.array(vehicleEntitlementSchema),
+});
+
 export const driverEntitlementSchema = z.preprocess(value => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  return {
+  return normalizeEntitlement({
     remainingBonusRides: 0,
+    vehicleEntitlements: [],
     ...value,
-  };
+  } as unknown as Parameters<typeof normalizeEntitlement>[0]);
 }, driverEntitlementShapeSchema);
 
 const negotiationMessageSchema = z.object({
