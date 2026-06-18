@@ -127,24 +127,27 @@ export default function DriverOnboarding() {
       );
       return;
     }
-    // Upload the KYC photos to the backend now that the driver_profiles row
-    // exists and the token carries DRIVER_PENDING. Best-effort: a failed photo
-    // doesn't block submission (it can be re-taken from the documents screen),
-    // but warn so the driver knows to re-upload before review.
-    try {
-      const failed = await uploadOnboardingDocuments(docs, selfieUri);
-      if (failed.length) {
+    // Kick off the KYC photo uploads in the BACKGROUND now that the
+    // driver_profiles row exists and the token carries DRIVER_PENDING. We do NOT
+    // await — the driver goes straight to the waiting screen while photos upload,
+    // which then reflects upload progress and polls for approval. A failed photo
+    // can be re-taken from the Documents screen; we surface that via an alert.
+    void uploadOnboardingDocuments(docs, selfieUri)
+      .then(failed => {
+        if (failed.length) {
+          Alert.alert(
+            'Some photos didn’t upload',
+            'Your application was submitted, but a few documents failed to upload. Open Documents to re-add them so your review isn’t delayed.',
+          );
+        }
+      })
+      .catch(() => {
         Alert.alert(
-          'Some photos didn’t upload',
-          'Your application was submitted, but a few documents failed to upload. Open Documents to re-add them so your review isn’t delayed.',
+          'Documents not uploaded',
+          'Your application was submitted, but document photos failed to upload. You can add them from the Documents screen.',
         );
-      }
-    } catch {
-      Alert.alert(
-        'Documents not uploaded',
-        'Your application was submitted, but document photos failed to upload. You can add them from the Documents screen.',
-      );
-    }
+      });
+
     const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
     await saveDriverProfile(profile);
     await saveStoredDriverDocuments(buildInitialDriverDocuments(form, docs));

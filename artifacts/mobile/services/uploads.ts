@@ -21,6 +21,29 @@ interface PresignResult {
   file_url: string;
 }
 
+// ─── Background document-upload status ────────────────────────────────────────
+// The onboarding flow kicks off document uploads in the background and navigates
+// straight to the waiting screen. This tiny pub/sub lets that screen reflect
+// progress ("uploading" → "done" / "partial") without blocking submission.
+export type DocUploadStatus = 'idle' | 'uploading' | 'done' | 'partial';
+
+let docUploadStatus: DocUploadStatus = 'idle';
+const docUploadListeners = new Set<(s: DocUploadStatus) => void>();
+
+export function getDocUploadStatus(): DocUploadStatus {
+  return docUploadStatus;
+}
+
+export function subscribeDocUploadStatus(fn: (s: DocUploadStatus) => void): () => void {
+  docUploadListeners.add(fn);
+  return () => docUploadListeners.delete(fn);
+}
+
+function setDocUploadStatus(s: DocUploadStatus): void {
+  docUploadStatus = s;
+  docUploadListeners.forEach(l => l(s));
+}
+
 /** Already-stored remote URLs are http(s); local picker results are file://. */
 function isLocalUri(uri: string | null | undefined): uri is string {
   return !!uri && !/^https?:\/\//i.test(uri);
@@ -172,6 +195,7 @@ export async function uploadOnboardingDocuments(
   docs: Record<DocumentKey, DocFaces>,
   selfieUri: string | null,
 ): Promise<DriverDocumentType[]> {
+  setDocUploadStatus('uploading');
   const failures: DriverDocumentType[] = [];
 
   for (const { key, face, type } of FACE_TYPES) {
@@ -192,5 +216,6 @@ export async function uploadOnboardingDocuments(
     }
   }
 
+  setDocUploadStatus(failures.length ? 'partial' : 'done');
   return failures;
 }

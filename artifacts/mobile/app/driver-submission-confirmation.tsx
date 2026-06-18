@@ -17,6 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { isDriverApprovalDevtoolEnabled } from '@/utils/driverDevTools';
 import { refreshSession } from '@/services/api';
+import { getDocUploadStatus, subscribeDocUploadStatus, type DocUploadStatus } from '@/services/uploads';
 
 const STEPS = [
   {
@@ -68,6 +69,19 @@ export default function DriverSubmissionConfirmation() {
       ]),
     ]).start();
   }, []);
+
+  // Live background document-upload status (set by the onboarding submit).
+  const [uploadStatus, setUploadStatus] = React.useState<DocUploadStatus>(getDocUploadStatus());
+  useEffect(() => {
+    setUploadStatus(getDocUploadStatus());
+    return subscribeDocUploadStatus(setUploadStatus);
+  }, []);
+  const uploadDesc =
+    uploadStatus === 'uploading'
+      ? 'Uploading your documents… keep the app open for a moment.'
+      : uploadStatus === 'partial'
+        ? 'Some documents didn’t upload — open Documents to re-add them.'
+        : 'Your documents and details are safely submitted.';
 
   const isRejected = driverProfile?.verificationStatus === 'rejected';
   const isApproved = driverProfile?.verificationStatus === 'approved';
@@ -175,9 +189,15 @@ export default function DriverSubmissionConfirmation() {
                   <Text style={[styles.timelineLabel, { color: step.done || step.active ? colors.foreground : colors.mutedForeground }]}>
                     {step.label}
                   </Text>
-                  <Text style={[styles.timelineDesc, { color: colors.mutedForeground }]}>{step.desc}</Text>
+                  <Text style={[styles.timelineDesc, { color: colors.mutedForeground }]}>
+                    {i === 0 ? uploadDesc : step.desc}
+                  </Text>
                 </View>
-                <Feather name={step.icon} size={17} color={step.done || step.active ? colors.primary : colors.mutedForeground} />
+                <Feather
+                  name={i === 0 && uploadStatus === 'uploading' ? 'loader' : step.icon}
+                  size={17}
+                  color={i === 0 && uploadStatus === 'partial' ? colors.destructive : step.done || step.active ? colors.primary : colors.mutedForeground}
+                />
               </View>
               {i < STEPS.length - 1 && <View style={[styles.divider, { backgroundColor: separatorColor, marginLeft: 52 }]} />}
             </View>

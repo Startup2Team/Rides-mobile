@@ -27,7 +27,9 @@ export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetState
       Alert.alert('Permission required', 'Please allow photo access to upload documents.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
+    // quality 0.5 keeps documents legible while keeping the upload small enough
+    // to send over ngrok quickly (full-res phone JPEGs can exceed the 25 MB cap).
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5, allowsEditing: false });
     if (!result.canceled && result.assets[0]) {
       if (!isValidImageAsset(result.assets[0])) {
         Alert.alert('Invalid document', 'Please select a valid image file.');
@@ -43,7 +45,7 @@ export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetState
       Alert.alert('Permission required', 'Please allow camera access to take document photos.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.5, allowsEditing: false });
     if (!result.canceled && result.assets[0]) {
       if (!isValidImageAsset(result.assets[0])) {
         Alert.alert('Invalid document', 'Please take a valid image.');
@@ -59,7 +61,7 @@ export function useDriverDocumentUpload(setErrors: React.Dispatch<React.SetState
       Alert.alert('Permission required', 'Please allow camera access for identity verification.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9, allowsEditing: true, aspect: [1, 1] });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6, allowsEditing: true, aspect: [1, 1] });
     if (!result.canceled && result.assets[0]) {
       setSelfieUri(result.assets[0].uri);
       setErrors(current => ({ ...current, selfie: '' }));
