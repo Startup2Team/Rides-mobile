@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { DriverProfile, DriverVehicleProfile } from '@/types';
 import DriverVehicleDetailsScreen from '../driver-vehicle-details';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
+const mockSaveDriverProfile = jest.fn(() => Promise.resolve());
 let mockDriverProfile: DriverProfile | null = null;
 let mockParams: Record<string, string> = {};
 
@@ -12,6 +13,7 @@ jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
   return {
+    Alert: { alert: jest.fn() },
     Image: host('Image'),
     Modal: ({ visible, children }: { visible?: boolean; children?: React.ReactNode }) => (visible ? <>{children}</> : null),
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
@@ -38,6 +40,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     driverProfile: mockDriverProfile,
+    saveDriverProfile: mockSaveDriverProfile,
   }),
 }));
 
@@ -55,6 +58,13 @@ jest.mock('@/components/AppButton', () => ({
 
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
+}));
+
+jest.mock('expo-image-picker', () => ({
+  requestCameraPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  requestMediaLibraryPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  launchCameraAsync: jest.fn(),
+  launchImageLibraryAsync: jest.fn(() => Promise.resolve({ canceled: false, assets: [{ uri: 'file:///updated-document.jpg' }] })),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -112,6 +122,7 @@ describe('DriverVehicleDetailsScreen', () => {
   beforeEach(() => {
     mockBack.mockClear();
     mockPush.mockClear();
+    mockSaveDriverProfile.mockClear();
     mockParams = { vehicleId: 'driver-vehicle:moto:rad-001-a' };
     mockDriverProfile = {
       vehicleType: 'moto',
@@ -193,5 +204,39 @@ describe('DriverVehicleDetailsScreen', () => {
     expect(screen.getAllByText('Reason: Insurance photo missing')[0]).toBeTruthy();
     expect(screen.getByText('Rejected date: 2026-06-09T12:00:00.000Z')).toBeTruthy();
     expect(screen.getByText('Update Application')).toBeTruthy();
+  });
+
+  test('shows expiry warnings for insurance and authorization documents', () => {
+    mockDriverProfile = {
+      ...mockDriverProfile!,
+      vehicles: [makeVehicle({
+        documents: {
+          license: { key: 'license', faces: ['license-front://photo', 'license-back://photo'], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
+          nationalId: { key: 'nationalId', faces: ['national-front://photo', 'national-back://photo'], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
+          insurance: { key: 'insurance', faces: ['insurance-front://photo', null], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z', expiryDate: '01/01/2020' },
+          authorization: { key: 'authorization', faces: ['authorization-front://photo', null], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z', expiryDate: '01/01/2020' },
+        },
+      })],
+    };
+
+    render(<DriverVehicleDetailsScreen />);
+
+    expect(screen.getByText('Insurance expired')).toBeTruthy();
+    expect(screen.getByText('Authorization Certificate expired')).toBeTruthy();
+  });
+
+  test('submits a document update without changing the vehicle identity', async () => {
+    render(<DriverVehicleDetailsScreen />);
+
+    fireEvent.press(screen.getAllByText('Replace Front')[0]);
+    await waitFor(() => expect(screen.getByText('Upload from Gallery')).toBeTruthy());
+    fireEvent.press(screen.getByText('Upload from Gallery'));
+    fireEvent.press(screen.getByText('Submit Updated Documents'));
+
+    await waitFor(() => expect(mockSaveDriverProfile).toHaveBeenCalled());
+    const savedProfile = ((mockSaveDriverProfile as unknown as jest.Mock).mock.calls[0]?.[0]) as DriverProfile;
+    expect(savedProfile.vehicles?.[0].id).toBe('driver-vehicle:moto:rad-001-a');
+    expect(savedProfile.vehicles?.[0].pendingDocumentUpdate?.status).toBe('pending_review');
+    expect(savedProfile.vehicles?.[0].reviewHistory?.some(entry => entry.type === 'documents_updated')).toBe(true);
   });
 });

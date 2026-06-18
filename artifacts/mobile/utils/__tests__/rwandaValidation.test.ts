@@ -27,6 +27,8 @@ describe('Rwanda identity and plate validation', () => {
 
   test('formats and validates Rwanda plates', () => {
     expect(formatRwandaPlateInput(' rad 123 a ')).toBe('RAD 123 A');
+    expect(formatRwandaPlateInput('RAD852B')).toBe('RAD 852 B');
+    expect(formatRwandaPlateInput('AB-123-XY')).toBe('AB-123-XY');
     expect(isValidRwandaPlateNumber('RAD 123 A')).toBe(true);
     expect(isValidRwandaPlateNumber('ABC 123 A')).toBe(false);
   });

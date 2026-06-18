@@ -26,7 +26,7 @@ import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocu
 import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM, type DocFaces, type DocumentKey, type DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
 import { useDriverOnboardingForm } from '@/hooks/driver-onboarding/useDriverOnboardingForm';
 import { isFutureExpiryDate, isValidDriverLicenceNumber } from '@/hooks/driver-onboarding/useDriverOnboardingValidation';
-import { normalizeRwandaPlateNumber, isValidRwandaPlateNumber, isValidRwandaNationalId } from '@/utils/rwandaValidation';
+import { formatRwandaPlateInput, normalizeRwandaPlateNumber, isValidRwandaPlateNumber, isValidRwandaNationalId } from '@/utils/rwandaValidation';
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
 
@@ -262,7 +262,7 @@ export default function DriverAddVehicleScreen() {
           <AppInput label="Brand" value={brand} onChangeText={setBrand} placeholder="Toyota" />
           <AppInput label="Model" value={model} onChangeText={setModel} placeholder="Corolla" />
           <AppInput label="Manufacture Year" value={manufactureYear} onChangeText={text => setManufactureYear(text.replace(/\D/g, '').slice(0, 4))} keyboardType="numeric" placeholder="2020" />
-          <AppInput label="Plate Number" value={form.plateNumber} onChangeText={value => update('plateNumber', normalizeRwandaPlateNumber(value))} placeholder="RAD 000 A" />
+          <AppInput label="Plate Number" value={form.plateNumber} onChangeText={value => update('plateNumber', formatRwandaPlateInput(value))} placeholder="RAD 000 A" />
           <AppInput label="Licence Number" value={form.licenseNumber} onChangeText={value => update('licenseNumber', value.replace(/\D/g, '').slice(0, 16))} keyboardType="numeric" placeholder="16 digits" maxLength={16} />
           {canShowPassengerSeats ? (
             <AppInput label="Passenger Seats" value={form.passengerSeats} onChangeText={value => update('passengerSeats', value.replace(/\D/g, '').slice(0, 2))} keyboardType="numeric" placeholder="4" />

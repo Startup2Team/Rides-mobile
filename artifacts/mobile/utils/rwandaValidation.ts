@@ -41,12 +41,16 @@ export function formatSubscriberDigits(digits: string): string {
 }
 
 export function formatRwandaPlateInput(value: string): string {
-  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
-  return [compact.slice(0, 3), compact.slice(3, 6), compact.slice(6, 7)].filter(Boolean).join(' ');
+  const upper = value.toUpperCase().trim();
+  const compact = upper.replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  if (/^R[A-Z]{2}\d{3}[A-Z]$/.test(compact)) {
+    return `${compact.slice(0, 3)} ${compact.slice(3, 6)} ${compact.slice(6, 7)}`;
+  }
+  return upper.replace(/\s+/g, ' ').trim();
 }
 
 export const normalizeRwandaPlateNumber = (value: string) =>
-  value.toUpperCase().trim().replace(/\s+/g, ' ');
+  formatRwandaPlateInput(value);
 
 export const isValidRwandaPlateNumber = (value: string) =>
   RWANDA_PLATE_PATTERN.test(normalizeRwandaPlateNumber(value));

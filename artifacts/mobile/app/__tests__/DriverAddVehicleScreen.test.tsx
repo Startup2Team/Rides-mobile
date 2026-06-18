@@ -3,6 +3,7 @@ import React from 'react';
 import { Alert, Text } from 'react-native';
 import type { DriverProfile, DriverVehicleProfile } from '@/types';
 import type { DocFaces, DocumentKey } from '@/hooks/driver-onboarding/onboardingTypes';
+import { formatRwandaPlateInput } from '@/utils/rwandaValidation';
 import DriverAddVehicleScreen from '../driver-add-vehicle';
 
 const mockSaveDriverProfile = jest.fn(() => Promise.resolve());
@@ -213,6 +214,7 @@ describe('DriverAddVehicleScreen', () => {
     expect(savedProfile.vehicles?.[0].status).toBe('approved');
     expect(savedProfile.vehicles?.[1]).toMatchObject({
       status: 'pending_review',
+      plateNumber: 'RAC 002 A',
       photos: {
         outside: 'vehicle-outside://photo',
         inside: 'vehicle-inside://photo',
@@ -239,6 +241,10 @@ describe('DriverAddVehicleScreen', () => {
 
     expect(mockSaveDriverProfile).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  test('formats Rwanda plates as RAD 852 B during input', () => {
+    expect(formatRwandaPlateInput('RAD852B')).toBe('RAD 852 B');
   });
 
   test('resubmits a rejected vehicle without changing the vehicle identity', async () => {

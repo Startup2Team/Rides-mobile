@@ -142,6 +142,26 @@ function buildDriverVehicleReviewHistory(
   return history;
 }
 
+function buildDriverVehicleDocumentUpdateHistory(
+  vehicleId: string,
+  submittedAt: string,
+  previousHistory: DriverVehicleReviewEvent[],
+): DriverVehicleReviewEvent[] {
+  return [
+    ...previousHistory,
+    {
+      id: createReviewEventId(vehicleId, 'documents_updated', submittedAt),
+      type: 'documents_updated',
+      at: submittedAt,
+    },
+    {
+      id: createReviewEventId(vehicleId, 'under_review', submittedAt),
+      type: 'under_review',
+      at: submittedAt,
+    },
+  ];
+}
+
 export function getDriverVehicleReviewHistory(vehicle: DriverVehicleProfile | null | undefined): DriverVehicleReviewEvent[] {
   if (!vehicle) return [];
   if (vehicle.reviewHistory?.length) return vehicle.reviewHistory;
@@ -246,6 +266,24 @@ export function resubmitDriverVehicleApplication(
     ...next,
     id: sourceVehicle.id,
     reviewHistory: [...previousHistory, ...updateHistory],
+  };
+}
+
+export function submitDriverVehicleDocumentUpdate(
+  vehicle: DriverVehicleProfile,
+  input: Pick<DriverVehicleApplicationInput, 'documents' | 'photos' | 'submittedAt'>,
+): DriverVehicleProfile {
+  const submittedAt = input.submittedAt ?? new Date().toISOString();
+  const previousHistory = getDriverVehicleReviewHistory(vehicle);
+  return {
+    ...vehicle,
+    pendingDocumentUpdate: {
+      status: 'pending_review',
+      submittedAt,
+      documents: input.documents,
+      photos: input.photos,
+    },
+    reviewHistory: buildDriverVehicleDocumentUpdateHistory(vehicle.id, submittedAt, previousHistory),
   };
 }
 

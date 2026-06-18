@@ -3,7 +3,7 @@ export type AppMode = 'customer' | 'driver';
 export type DriverVerificationStatus = 'not_started' | 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type DriverVehicleStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type DriverVehicleDocumentReviewStatus = 'verified' | 'pending_review' | 'rejected';
-export type DriverVehicleReviewEventType = 'submitted' | 'under_review' | 'approved' | 'rejected';
+export type DriverVehicleReviewEventType = 'submitted' | 'under_review' | 'documents_updated' | 'approved' | 'rejected';
 export type LocationType = 'precise' | 'generic';
 
 export type RideStatus =
@@ -88,6 +88,18 @@ export interface DriverVehicleReviewEvent {
   reason?: string;
 }
 
+export interface DriverVehicleDocumentUpdate {
+  status: 'pending_review' | 'approved' | 'rejected';
+  submittedAt: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+  documents: DriverVehicleDocumentSet;
+  photos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
+}
+
 export interface DriverVehicleProfile {
   id: string;
   vehicleType: VehicleType;
@@ -107,6 +119,7 @@ export interface DriverVehicleProfile {
     inside?: string | null;
   };
   documents?: DriverVehicleDocumentSet;
+  pendingDocumentUpdate?: DriverVehicleDocumentUpdate | null;
   submittedAt?: string;
   approvedAt?: string;
   rejectedAt?: string;

@@ -10,6 +10,7 @@ import {
   getDriverVehicles,
   migrateDriverProfileToMultiVehicle,
   resubmitDriverVehicleApplication,
+  submitDriverVehicleDocumentUpdate,
 } from '../driverVehicles';
 import type { DriverProfile } from '@/types';
 
@@ -180,6 +181,41 @@ describe('driver vehicle migration', () => {
     expect(resubmitted.status).toBe('pending_review');
     expect(resubmitted.reviewHistory?.slice(-2)).toEqual([
       expect.objectContaining({ type: 'submitted' }),
+      expect.objectContaining({ type: 'under_review' }),
+    ]);
+  });
+
+  test('submitting a document update preserves the vehicle id and keeps the vehicle approved', () => {
+    const vehicle = {
+      id: 'driver-vehicle:moto:rad-001-a',
+      vehicleType: 'moto',
+      status: 'approved',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: '1234567890123456',
+      submittedAt: '2026-06-15T10:00:00.000Z',
+      reviewHistory: [
+        { id: 'event-1', type: 'submitted', at: '2026-06-15T10:00:00.000Z' },
+        { id: 'event-2', type: 'under_review', at: '2026-06-15T10:00:00.000Z' },
+        { id: 'event-3', type: 'approved', at: '2026-06-15T11:00:00.000Z' },
+      ],
+    } satisfies NonNullable<DriverProfile['vehicles']>[number];
+
+    const updated = submitDriverVehicleDocumentUpdate(vehicle, {
+      documents: {
+        license: { key: 'license', faces: ['front', 'back'], reviewStatus: 'verified', submissionKind: 'replacement', submittedAt: '2026-06-17T10:00:00.000Z', updatedAt: '2026-06-17T10:00:00.000Z' },
+        nationalId: { key: 'nationalId', faces: ['front', 'back'], reviewStatus: 'verified', submissionKind: 'replacement', submittedAt: '2026-06-17T10:00:00.000Z', updatedAt: '2026-06-17T10:00:00.000Z' },
+        insurance: { key: 'insurance', faces: ['front', null], reviewStatus: 'verified', submissionKind: 'replacement', submittedAt: '2026-06-17T10:00:00.000Z', updatedAt: '2026-06-17T10:00:00.000Z' },
+        authorization: { key: 'authorization', faces: ['front', null], reviewStatus: 'verified', submissionKind: 'replacement', submittedAt: '2026-06-17T10:00:00.000Z', updatedAt: '2026-06-17T10:00:00.000Z' },
+      },
+      photos: { outside: 'vehicle-outside://photo', inside: 'vehicle-inside://photo' },
+      submittedAt: '2026-06-17T10:00:00.000Z',
+    });
+
+    expect(updated.id).toBe(vehicle.id);
+    expect(updated.status).toBe('approved');
+    expect(updated.pendingDocumentUpdate?.status).toBe('pending_review');
+    expect(updated.reviewHistory?.slice(-2)).toEqual([
+      expect.objectContaining({ type: 'documents_updated' }),
       expect.objectContaining({ type: 'under_review' }),
     ]);
   });

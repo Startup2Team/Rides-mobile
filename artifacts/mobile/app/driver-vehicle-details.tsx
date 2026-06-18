@@ -1,27 +1,49 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
-import { getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById } from '@/domain/driverVehicles';
+import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
 import { useColors } from '@/hooks/useColors';
-import { VEHICLE_LABELS, type DriverVehicleDocumentRecord } from '@/types';
+import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDocumentSet } from '@/types';
+import { parseDateDdMmYyyy } from '@/utils/dateUtils';
+import { isValidImageAsset } from '@/utils/documentValidation';
 
 type PreviewTarget = { label: string; uri: string } | null;
+type UpdateTarget =
+  | { kind: 'document'; key: keyof DriverVehicleDocumentSet; face: 0 | 1; label: string }
+  | { kind: 'photo'; key: 'outside' | 'inside'; label: string };
 
 export default function DriverVehicleDetailsScreen() {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { driverProfile } = useAuth();
+  const { driverProfile, saveDriverProfile } = useAuth();
   const params = useLocalSearchParams<{ vehicleId?: string }>();
   const vehicleId = typeof params.vehicleId === 'string' ? params.vehicleId : null;
   const vehicle = getVehicleById(driverProfile, vehicleId);
   const [previewTarget, setPreviewTarget] = React.useState<PreviewTarget>(null);
+  const [updateTarget, setUpdateTarget] = React.useState<UpdateTarget | null>(null);
+  const [draftDocuments, setDraftDocuments] = React.useState<DriverVehicleDocumentSet | null>(null);
+  const [draftPhotos, setDraftPhotos] = React.useState<{ outside: string | null; inside: string | null } | null>(null);
+  const [savingUpdate, setSavingUpdate] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!vehicle) return;
+    setDraftDocuments(vehicle.pendingDocumentUpdate?.documents ?? vehicle.documents ?? null);
+    setDraftPhotos(
+      {
+        outside: vehicle.pendingDocumentUpdate?.photos?.outside ?? vehicle.photos?.outside ?? null,
+        inside: vehicle.pendingDocumentUpdate?.photos?.inside ?? vehicle.photos?.inside ?? null,
+      },
+    );
+    setUpdateTarget(null);
+  }, [vehicle]);
 
   if (!vehicle) {
     return (
@@ -35,8 +57,72 @@ export default function DriverVehicleDetailsScreen() {
     );
   }
 
+  const updateDraftDocumentFace = (key: keyof DriverVehicleDocumentSet, face: 0 | 1, uri: string) => {
+    setDraftDocuments(current => {
+      if (!current) return current;
+      const next: DriverVehicleDocumentSet = {
+        ...current,
+        [key]: {
+          ...current[key],
+          faces: [current[key].faces[0], current[key].faces[1]],
+        },
+      };
+      next[key].faces[face] = uri;
+      return next;
+    });
+  };
+
+  const updateDraftPhoto = (key: 'outside' | 'inside', uri: string) => {
+    setDraftPhotos(current => current ? { ...current, [key]: uri } : current);
+  };
+
+  const pickImageForUpdate = async (target: UpdateTarget, fromCamera: boolean) => {
+    const requestPermission = fromCamera
+      ? ImagePicker.requestCameraPermissionsAsync
+      : ImagePicker.requestMediaLibraryPermissionsAsync;
+    const launchPicker = fromCamera
+      ? ImagePicker.launchCameraAsync
+      : ImagePicker.launchImageLibraryAsync;
+
+    const { status } = await requestPermission();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', fromCamera ? 'Please allow camera access.' : 'Please allow photo access.');
+      return;
+    }
+
+    const result = await launchPicker({ mediaTypes: ['images'], quality: 0.88, allowsEditing: false });
+    if (result.canceled || !result.assets[0]) return;
+    if (!isValidImageAsset(result.assets[0])) {
+      Alert.alert('Invalid image', 'Please choose a valid image.');
+      return;
+    }
+
+    if (target.kind === 'document') {
+      updateDraftDocumentFace(target.key, target.face, result.assets[0].uri);
+    } else {
+      updateDraftPhoto(target.key, result.assets[0].uri);
+    }
+    setUpdateTarget(null);
+  };
+
+  const submitVehicleDocumentUpdate = async () => {
+    if (!vehicle || !driverProfile || !draftDocuments || !draftPhotos) return;
+    setSavingUpdate(true);
+    const updatedVehicle = submitDriverVehicleDocumentUpdate(vehicle, {
+      documents: draftDocuments,
+      photos: draftPhotos,
+      submittedAt: new Date().toISOString(),
+    });
+    const nextProfile = appendDriverVehicle(driverProfile, updatedVehicle);
+    await saveDriverProfile(nextProfile);
+    setSavingUpdate(false);
+    setUpdateTarget(null);
+    Alert.alert('Submitted for review', 'Updated documents submitted for review. Your approved documents remain active until review completes.');
+  };
+
   const reviewHistory = getDriverVehicleReviewHistory(vehicle);
   const timeline = getDriverVehicleTimeline(vehicle);
+  const pendingDocumentUpdate = vehicle.pendingDocumentUpdate;
   const documentCards = [
     { key: 'license', label: 'Driver License', record: vehicle.documents?.license, faces: 2 },
     { key: 'nationalId', label: 'National ID', record: vehicle.documents?.nationalId, faces: 2 },
@@ -78,6 +164,19 @@ export default function DriverVehicleDetailsScreen() {
           <StatusPanel colors={colors} vehicle={vehicle} />
         </View>
 
+        {pendingDocumentUpdate ? (
+          <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Document Update</Text>
+            <Text style={[styles.updateBanner, { color: colors.warningHex }]}>Updated documents submitted for review</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              The current approved documents remain active until this update is reviewed.
+            </Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              Submitted {pendingDocumentUpdate.submittedAt}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Documents</Text>
           <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>Tap any thumbnail to preview the full image.</Text>
@@ -88,7 +187,9 @@ export default function DriverVehicleDetailsScreen() {
               label={card.label}
               record={card.record}
               faces={card.faces}
+              warningText={getDocumentExpiryWarning(card.label, card.record?.expiryDate)}
               onPreview={target => setPreviewTarget(target)}
+              onReplaceFace={(face) => setUpdateTarget({ kind: 'document', key: card.key, face, label: card.label })}
             />
           ))}
         </View>
@@ -102,6 +203,7 @@ export default function DriverVehicleDetailsScreen() {
               label={photo.label}
               uri={photo.uri}
               onPreview={target => setPreviewTarget(target)}
+              onReplace={() => setUpdateTarget({ kind: 'photo', key: photo.key, label: photo.label })}
             />
           ))}
         </View>
@@ -152,6 +254,21 @@ export default function DriverVehicleDetailsScreen() {
             </View>
           </View>
         ) : null}
+
+        {vehicle.status === 'approved' ? (
+          <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Document Actions</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>Replace any document or vehicle photo. Current approved documents stay active until review completes.</Text>
+            <AppButton
+              title="Submit Updated Documents"
+              onPress={() => void submitVehicleDocumentUpdate()}
+              size="md"
+              fullWidth
+              loading={savingUpdate}
+              disabled={!draftDocuments || !draftPhotos}
+            />
+          </View>
+        ) : null}
       </ScrollView>
 
       <Modal visible={Boolean(previewTarget)} transparent animationType="fade" onRequestClose={() => setPreviewTarget(null)}>
@@ -177,6 +294,44 @@ export default function DriverVehicleDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={Boolean(updateTarget)} transparent animationType="fade" onRequestClose={() => setUpdateTarget(null)}>
+        <View style={styles.previewOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setUpdateTarget(null)} activeOpacity={1} />
+          <View style={[styles.previewSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.previewHeader}>
+              <Text style={[styles.previewTitle, { color: colors.foreground }]} numberOfLines={1}>
+                {updateTarget?.label ?? 'Update'}
+              </Text>
+              <TouchableOpacity onPress={() => setUpdateTarget(null)} accessibilityLabel="Close update editor">
+                <Feather name="x" size={22} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              {updateTarget?.kind === 'photo'
+                ? 'Replace the vehicle photo.'
+                : updateTarget?.face === 0
+                  ? 'Replace the front image.'
+                  : 'Replace the back image.'}
+            </Text>
+            <View style={styles.updateActions}>
+              <AppButton
+                title="Upload from Gallery"
+                onPress={() => updateTarget ? void pickImageForUpdate(updateTarget, false) : undefined}
+                variant="secondary"
+                fullWidth
+                size="md"
+              />
+              <AppButton
+                title="Take Photo"
+                onPress={() => updateTarget ? void pickImageForUpdate(updateTarget, true) : undefined}
+                fullWidth
+                size="md"
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -186,12 +341,16 @@ function DocumentBlock({
   faces,
   label,
   onPreview,
+  onReplaceFace,
+  warningText,
   record,
 }: {
   colors: ReturnType<typeof useColors>;
   faces: 1 | 2;
   label: string;
   onPreview: (target: PreviewTarget) => void;
+  onReplaceFace: (face: 0 | 1) => void;
+  warningText?: string | null;
   record?: DriverVehicleDocumentRecord;
 }) {
   const statusLabel = record ? formatDocumentStatus(record.reviewStatus) : 'Missing';
@@ -219,7 +378,26 @@ function DocumentBlock({
             {uri ? <Image source={{ uri }} style={styles.thumbnailImage} /> : <Feather name="image" size={18} color={colors.mutedForeground} />}
           </TouchableOpacity>
         ))}
+        <View style={styles.documentActionStack}>
+          <AppButton
+            title={faces === 2 ? 'Replace Front' : 'Replace'}
+            onPress={() => onReplaceFace(0)}
+            variant="secondary"
+            size="sm"
+            compact
+          />
+          {faces === 2 ? (
+            <AppButton
+              title="Replace Back"
+              onPress={() => onReplaceFace(1)}
+              variant="secondary"
+              size="sm"
+              compact
+            />
+          ) : null}
+        </View>
       </View>
+      {warningText ? <Text style={[styles.warningText, { color: colors.warningHex }]}>{warningText}</Text> : null}
     </View>
   );
 }
@@ -228,11 +406,13 @@ function PhotoBlock({
   colors,
   label,
   onPreview,
+  onReplace,
   uri,
 }: {
   colors: ReturnType<typeof useColors>;
   label: string;
   onPreview: (target: PreviewTarget) => void;
+  onReplace: () => void;
   uri: string | null;
 }) {
   return (
@@ -252,6 +432,7 @@ function PhotoBlock({
         >
           {uri ? <Image source={{ uri }} style={styles.thumbnailImage} /> : <Feather name="image" size={18} color={colors.mutedForeground} />}
         </TouchableOpacity>
+        <AppButton title="Replace" onPress={onReplace} variant="secondary" size="sm" compact />
       </View>
     </View>
   );
@@ -325,19 +506,35 @@ function formatDocumentStatus(status: 'verified' | 'pending_review' | 'rejected'
       : 'Rejected';
 }
 
-function formatTimelineLabel(type: 'submitted' | 'under_review' | 'approved' | 'rejected') {
+function formatTimelineLabel(type: 'submitted' | 'under_review' | 'documents_updated' | 'approved' | 'rejected') {
   return type === 'submitted'
     ? 'Submitted'
     : type === 'under_review'
       ? 'Under Review'
+      : type === 'documents_updated'
+        ? 'Documents Updated'
       : type === 'approved'
         ? 'Approved'
         : 'Rejected';
 }
 
-function formatTimelineDetail(entry: { type: 'submitted' | 'under_review' | 'approved' | 'rejected'; at: string; reason?: string }) {
+function formatTimelineDetail(entry: { type: 'submitted' | 'under_review' | 'documents_updated' | 'approved' | 'rejected'; at: string; reason?: string }) {
+  if (entry.type === 'documents_updated') return `${entry.at} - Updated documents submitted for review`;
   if (entry.type === 'rejected' && entry.reason) return `${entry.at} - ${entry.reason}`;
   return entry.at;
+}
+
+function getDocumentExpiryWarning(label: string, expiryDate?: string) {
+  if (!expiryDate) return null;
+  const expiry = parseDateDdMmYyyy(expiryDate);
+  if (!expiry) return null;
+  const now = new Date();
+  const normalizedLabel = label.replace(/\s+/g, ' ').trim();
+  if (expiry < now) return `${normalizedLabel} expired`;
+  const soon = new Date(now);
+  soon.setDate(soon.getDate() + 30);
+  if (expiry <= soon) return `${normalizedLabel} expires soon`;
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -360,6 +557,8 @@ const styles = StyleSheet.create({
   thumbnail: { width: 66, height: 66, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailLarge: { width: 106, height: 84, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailImage: { width: '100%', height: '100%' },
+  documentActionStack: { gap: 6, justifyContent: 'center' },
+  warningText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
   timeline: { gap: 14 },
   timelineRow: { flexDirection: 'row', gap: 12 },
   timelineMarkerColumn: { width: 16, alignItems: 'center' },
@@ -369,6 +568,8 @@ const styles = StyleSheet.create({
   timelineTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   timelineMeta: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
   rejectionReason: { fontSize: 13, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
+  updateBanner: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  updateActions: { gap: 10 },
   buttonRow: { gap: 10 },
   previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: 18 },
   previewSheet: { borderRadius: 20, padding: 14, gap: 14, maxHeight: '88%' },

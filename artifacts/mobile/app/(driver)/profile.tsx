@@ -9,11 +9,10 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { VEHICLE_LABELS } from '@/types';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
-import { getActiveDriverVehicle, getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
+import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
 import { APP_NAME } from '@/constants/branding';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
@@ -30,7 +29,6 @@ export default function DriverProfileScreen() {
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
   const vehicles = getDriverVehicles(driverProfile);
-  const activeVehicle = getActiveDriverVehicle(driverProfile);
   const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
@@ -151,9 +149,6 @@ export default function DriverProfileScreen() {
               <Text style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
                 Approved {vehicleCounts.approved} • Pending {vehicleCounts.pendingReview} • Rejected {vehicleCounts.rejected}
               </Text>
-              <Text style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
-                {activeVehicle ? `${VEHICLE_LABELS[activeVehicle.vehicleType]} selected` : 'No active vehicle'}
-              </Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -192,10 +187,9 @@ export default function DriverProfileScreen() {
           <View style={styles.section}>
             <SectionTitle title="Driver Details" />
             <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-              <InfoRow colors={colors} icon="truck" label="Vehicle" value={activeVehicle ? VEHICLE_LABELS[activeVehicle.vehicleType] : VEHICLE_LABELS[driverProfile.vehicleType]} />
-              <InfoRow colors={colors} icon="hash" label="Plate Number" value={activeVehicle?.plateNumber ?? driverProfile.plateNumber} />
-              <InfoRow colors={colors} icon="credit-card" label="License" value={activeVehicle?.licenseNumber ?? driverProfile.licenseNumber} />
-              <InfoRow colors={colors} icon="map-pin" label="City" value={driverProfile.city ?? driverProfile.province} />
+              <InfoRow colors={colors} icon="star" label="Rating Summary" value={formatDriverRatingSummary(ratingSummary)} />
+              <InfoRow colors={colors} icon="shield" label="Verification Status" value={driverProfile.verificationStatus === 'approved' && driverProfile.isVerified ? 'Verified' : driverProfile.verificationStatus === 'pending_review' ? 'Pending Review' : driverProfile.verificationStatus === 'rejected' ? 'Rejected' : 'Draft'} />
+              <InfoRow colors={colors} icon="map-pin" label="Location" value={driverProfile.city ?? driverProfile.province} />
               <InfoRow colors={colors} icon="smartphone" label="Mobile Money Details" value={driverProfile.momoCode} last />
             </View>
           </View>
@@ -205,7 +199,6 @@ export default function DriverProfileScreen() {
           <SectionTitle title="Account" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
             <MenuItem colors={colors} icon="edit-2" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
-            <MenuItem colors={colors} icon="file-text" label="Driver Documents" onPress={() => router.push('/driver-documents')} />
             <MenuItem colors={colors} icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
             <MenuItem colors={colors} icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
             <MenuItem colors={colors} icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
