@@ -111,4 +111,3 @@ export function getComplianceStatusLabel(status: VehicleComplianceStatus) {
         ? 'Urgent'
         : 'Expired';
 }
-

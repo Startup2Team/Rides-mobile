@@ -86,4 +86,3 @@ The mobile app is already structured to send local image URIs and document metad
 3. Admin approves or rejects with a reason.
 4. Mobile applies the review decision to the stored submission.
 5. Existing approved vehicles remain usable until a new submission is explicitly approved or rejected.
-

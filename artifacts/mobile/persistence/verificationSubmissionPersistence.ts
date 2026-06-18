@@ -24,4 +24,3 @@ export const loadStoredVerificationSubmissions = () =>
 
 export const saveStoredVerificationSubmissions = (store: VerificationSubmissionStore) =>
   saveSecureStorage(STORAGE_KEYS.verificationSubmissions, store);
-
