@@ -286,7 +286,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
 
     const view = render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     expect(screen.getByText('Go Offline')).toBeTruthy();
 
     act(() => {
@@ -313,11 +313,11 @@ describe('DriverDashboard online state', () => {
     view.unmount();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     expect(screen.getByText('Go Offline')).toBeTruthy();
   });
 
-  test('shows verified identity, zero-rating fallback, and offline status pill with the active vehicle label', async () => {
+  test('shows verified identity, zero-rating fallback, and offline status', async () => {
     await seedDriverState();
 
     render(<DashboardProviders />);
@@ -326,7 +326,7 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByTestId('driver-verified-badge')).toBeTruthy();
     expect(screen.queryByText('Compact vehicle marker')).toBeNull();
     expect(screen.getByText('0.0')).toBeTruthy();
-    expect(screen.getByText('Current Vehicle: Moto')).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
     expect(screen.getByTestId('driver-identity-block').props.style).toEqual(
       expect.objectContaining({ height: 44 }),
     );
@@ -348,7 +348,7 @@ describe('DriverDashboard online state', () => {
     render(<DashboardProviders />);
 
     await waitFor(() => expect(screen.getByText('0.0')).toBeTruthy());
-    expect(screen.getByText('Online with: Moto')).toBeTruthy();
+    expect(screen.getByText('Online')).toBeTruthy();
     expect(screen.queryByText('Accepting rides')).toBeNull();
     expect(screen.queryByText('New Driver')).toBeNull();
   });
@@ -359,13 +359,13 @@ describe('DriverDashboard online state', () => {
     await waitFor(() => expect(screen.getByText('Rides')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: true }),
     });
 
     fireEvent.press(screen.getByText('Go Offline'));
-    await waitFor(() => expect(screen.getByText('Current Vehicle: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Offline')).toBeTruthy());
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -380,7 +380,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
       jest.advanceTimersByTime(5_000);
     });
@@ -396,7 +396,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
       jest.advanceTimersByTime(5_000);
     });
@@ -411,7 +411,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
       jest.advanceTimersByTime(5_000);
     });
@@ -432,7 +432,7 @@ describe('DriverDashboard online state', () => {
     await waitFor(() => expect(screen.getByText('Rides')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
-    expect(screen.getByText('Current Vehicle: Moto')).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -446,7 +446,7 @@ describe('DriverDashboard online state', () => {
     await waitFor(() => expect(screen.getByText('No Rides')).toBeTruthy());
 
     fireEvent.press(screen.getByText('Go Online'));
-    expect(screen.getByText('Current Vehicle: Moto')).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -473,7 +473,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
 
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     expect(screen.queryByText('Select vehicle for this session')).toBeNull();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({
@@ -500,7 +500,7 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('Your driver license has expired. Update your driver license documents to continue receiving ride requests.')).toBeTruthy();
     expect(screen.getByText('Update License')).toBeTruthy();
     expect(screen.getByText('Not Now')).toBeTruthy();
-    expect(screen.getByText('Current Vehicle: Moto')).toBeTruthy();
+    expect(screen.getByText('Offline')).toBeTruthy();
 
     fireEvent.press(screen.getByText('Update License'));
 
@@ -532,10 +532,10 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
 
-    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
-    expect(screen.getByText('Compliance')).toBeTruthy();
-    expect(screen.getByText('⚠ Insurance expired. Update recommended.')).toBeTruthy();
-    expect(screen.getByText('⚠ Authorization expired. Update recommended.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
+    expect(screen.queryByText('Compliance')).toBeNull();
+    expect(screen.queryByText('⚠ Insurance expired. Update recommended.')).toBeNull();
+    expect(screen.queryByText('⚠ Authorization expired. Update recommended.')).toBeNull();
   });
 
   test('shows a vehicle selection sheet when multiple approved vehicles exist', async () => {
@@ -570,7 +570,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Toyota Corolla'));
 
-    await waitFor(() => expect(screen.getByText('Online with: Cab')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({
         isOnline: true,
