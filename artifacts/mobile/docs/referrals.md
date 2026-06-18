@@ -44,4 +44,3 @@ The backend should eventually receive and correlate:
 - Accept idempotent referral events using a generated event id or request id.
 - Attribute install and signup only after a trusted backend signal arrives.
 - Keep the mobile app behavior unchanged until attribution endpoints exist.
-

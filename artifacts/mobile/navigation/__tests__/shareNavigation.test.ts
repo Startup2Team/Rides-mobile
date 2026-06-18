@@ -7,4 +7,3 @@ describe('share navigation', () => {
     expect(getShareRouteForMode(null)).toBe('/(tabs)/share');
   });
 });
-
