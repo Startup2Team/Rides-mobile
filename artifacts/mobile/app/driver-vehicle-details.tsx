@@ -8,6 +8,16 @@ import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
 import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
+import {
+  getAuthorizationComplianceMessage,
+  getAuthorizationComplianceStatus,
+  getComplianceStatusLabel,
+  getInsuranceComplianceMessage,
+  getInsuranceComplianceStatus,
+  getLicenseComplianceMessage,
+  getLicenseComplianceStatus,
+} from '@/domain/vehicleCompliance';
+import { submitVehicleDocumentUpdate as submitVerificationVehicleDocumentUpdate } from '@/domain/verificationSubmissions';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDocumentSet } from '@/types';
 import { parseDateDdMmYyyy } from '@/utils/dateUtils';
@@ -23,15 +33,17 @@ export default function DriverVehicleDetailsScreen() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { driverProfile, saveDriverProfile } = useAuth();
-  const params = useLocalSearchParams<{ vehicleId?: string }>();
+  const { driverProfile, user, saveDriverProfile } = useAuth();
+  const params = useLocalSearchParams<{ vehicleId?: string; updateDocument?: string }>();
   const vehicleId = typeof params.vehicleId === 'string' ? params.vehicleId : null;
+  const requestedUpdateDocument = typeof params.updateDocument === 'string' ? params.updateDocument : null;
   const vehicle = getVehicleById(driverProfile, vehicleId);
   const [previewTarget, setPreviewTarget] = React.useState<PreviewTarget>(null);
   const [updateTarget, setUpdateTarget] = React.useState<UpdateTarget | null>(null);
   const [draftDocuments, setDraftDocuments] = React.useState<DriverVehicleDocumentSet | null>(null);
   const [draftPhotos, setDraftPhotos] = React.useState<{ outside: string | null; inside: string | null } | null>(null);
   const [savingUpdate, setSavingUpdate] = React.useState(false);
+  const updateDocumentAutoOpenedRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!vehicle) return;
@@ -43,7 +55,15 @@ export default function DriverVehicleDetailsScreen() {
       },
     );
     setUpdateTarget(null);
+    updateDocumentAutoOpenedRef.current = false;
   }, [vehicle]);
+
+  React.useEffect(() => {
+    if (!vehicle || !requestedUpdateDocument || updateDocumentAutoOpenedRef.current) return;
+    if (requestedUpdateDocument !== 'license') return;
+    updateDocumentAutoOpenedRef.current = true;
+    setUpdateTarget({ kind: 'document', key: 'license', face: 0, label: 'Driver License' });
+  }, [requestedUpdateDocument, vehicle]);
 
   if (!vehicle) {
     return (
@@ -115,6 +135,15 @@ export default function DriverVehicleDetailsScreen() {
     });
     const nextProfile = appendDriverVehicle(driverProfile, updatedVehicle);
     await saveDriverProfile(nextProfile);
+    await submitVerificationVehicleDocumentUpdate({
+      userId: user?.id ?? 'unknown-user',
+      driverProfile,
+      vehicle,
+      sourceVehicleStatus: vehicle.status,
+      documents: updatedVehicle.pendingDocumentUpdate!.documents,
+      photos: updatedVehicle.pendingDocumentUpdate!.photos,
+      submittedAt: updatedVehicle.pendingDocumentUpdate!.submittedAt,
+    });
     setSavingUpdate(false);
     setUpdateTarget(null);
     Alert.alert('Submitted for review', 'Updated documents submitted for review. Your approved documents remain active until review completes.');
@@ -123,6 +152,12 @@ export default function DriverVehicleDetailsScreen() {
   const reviewHistory = getDriverVehicleReviewHistory(vehicle);
   const timeline = getDriverVehicleTimeline(vehicle);
   const pendingDocumentUpdate = vehicle.pendingDocumentUpdate;
+  const licenseComplianceStatus = getLicenseComplianceStatus(vehicle.licenseExpiryDate);
+  const insuranceComplianceStatus = getInsuranceComplianceStatus(vehicle.insuranceExpiryDate);
+  const authorizationComplianceStatus = getAuthorizationComplianceStatus(vehicle.authorizationExpiryDate);
+  const licenseComplianceMessage = getLicenseComplianceMessage(vehicle.licenseExpiryDate);
+  const insuranceComplianceMessage = getInsuranceComplianceMessage(vehicle.insuranceExpiryDate);
+  const authorizationComplianceMessage = getAuthorizationComplianceMessage(vehicle.authorizationExpiryDate);
   const documentCards = [
     { key: 'license', label: 'Driver License', record: vehicle.documents?.license, faces: 2 },
     { key: 'nationalId', label: 'National ID', record: vehicle.documents?.nationalId, faces: 2 },
@@ -162,6 +197,31 @@ export default function DriverVehicleDetailsScreen() {
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Status</Text>
           <StatusPanel colors={colors} vehicle={vehicle} />
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Compliance</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+            Review the current validity of each compliance document.
+          </Text>
+          <ComplianceRow
+            colors={colors}
+            label="Driver License"
+            status={licenseComplianceStatus}
+            message={licenseComplianceMessage}
+          />
+          <ComplianceRow
+            colors={colors}
+            label="Insurance"
+            status={insuranceComplianceStatus}
+            message={insuranceComplianceMessage}
+          />
+          <ComplianceRow
+            colors={colors}
+            label="Authorization"
+            status={authorizationComplianceStatus}
+            message={authorizationComplianceMessage}
+          />
         </View>
 
         {pendingDocumentUpdate ? (
@@ -477,6 +537,39 @@ function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>
   );
 }
 
+function ComplianceRow({
+  colors,
+  label,
+  message,
+  status,
+}: {
+  colors: ReturnType<typeof useColors>;
+  label: string;
+  message: string | null;
+  status: 'valid' | 'expiring_soon' | 'urgent' | 'expired';
+}) {
+  const statusColor =
+    status === 'valid'
+      ? colors.successHex
+      : status === 'expiring_soon'
+        ? colors.warningHex
+        : status === 'urgent'
+          ? colors.warningHex
+          : colors.destructiveHex;
+
+  return (
+    <View style={styles.complianceRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.complianceLabel, { color: colors.foreground }]}>{label}</Text>
+        {message ? <Text style={[styles.complianceMessage, { color: status === 'expired' ? colors.destructiveHex : colors.warningHex }]}>{message}</Text> : null}
+      </View>
+      <View style={[styles.compliancePill, { borderColor: statusColor, backgroundColor: `${statusColor}14` }]}>
+        <Text style={[styles.compliancePillText, { color: statusColor }]}>{getComplianceStatusLabel(status)}</Text>
+      </View>
+    </View>
+  );
+}
+
 function InfoRow({ label, last = false, value }: { label: string; last?: boolean; value: string }) {
   const colors = useColors();
   return (
@@ -542,6 +635,11 @@ const styles = StyleSheet.create({
   sectionCard: { borderRadius: 18, padding: 14, gap: 12 },
   sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   sectionSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
+  complianceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  complianceLabel: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  complianceMessage: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 15, marginTop: 2 },
+  compliancePill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
+  compliancePillText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   infoLabel: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
   infoValue: { fontSize: 12, fontFamily: 'Inter_600SemiBold', flexShrink: 1, textAlign: 'right' },

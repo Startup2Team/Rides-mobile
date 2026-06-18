@@ -51,9 +51,14 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
+    user: { id: 'user-1', name: 'Driver User', phone: '250788000000' },
     driverProfile: mockDriverProfile,
     saveDriverProfile: mockSaveDriverProfile,
   }),
+}));
+
+jest.mock('@/domain/verificationSubmissions', () => ({
+  submitVehicleApplication: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('@/hooks/driver-onboarding/useDriverOnboardingForm', () => ({

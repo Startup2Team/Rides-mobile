@@ -483,6 +483,61 @@ describe('DriverDashboard online state', () => {
     });
   });
 
+  test('blocks going online when the selected vehicle license is expired and opens the update flow', async () => {
+    await seedDriverState({
+      profile: {
+        ...baseProfile,
+        licenseExpiryDate: '07/06/2026',
+      },
+    });
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Go Online')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Go Online'));
+
+    await waitFor(() => expect(screen.getByText('Driver License Expired')).toBeTruthy());
+    expect(screen.getByText('Your driver license has expired. Update your driver license documents to continue receiving ride requests.')).toBeTruthy();
+    expect(screen.getByText('Update License')).toBeTruthy();
+    expect(screen.getByText('Not Now')).toBeTruthy();
+    expect(screen.getByText('Current Vehicle: Moto')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Update License'));
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/driver-vehicle-details',
+      params: {
+        vehicleId: expect.any(String),
+        updateDocument: 'license',
+      },
+    });
+
+    await expect(loadStoredDriverProfile()).resolves.toMatchObject({
+      data: expect.objectContaining({ isOnline: false }),
+    });
+  });
+
+  test('allows online when insurance or authorization are expired but license is valid', async () => {
+    await seedDriverState({
+      profile: {
+        ...baseProfile,
+        licenseExpiryDate: '01/01/2030',
+        insuranceExpiryDate: '07/06/2026',
+        authorizationExpiryDate: '07/06/2026',
+      },
+    });
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByText('Go Online')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Go Online'));
+
+    await waitFor(() => expect(screen.getByText('Online with: Moto')).toBeTruthy());
+    expect(screen.getByText('Compliance')).toBeTruthy();
+    expect(screen.getByText('⚠ Insurance expired. Update recommended.')).toBeTruthy();
+    expect(screen.getByText('⚠ Authorization expired. Update recommended.')).toBeTruthy();
+  });
+
   test('shows a vehicle selection sheet when multiple approved vehicles exist', async () => {
     const primary = makeVehicle('driver-vehicle:moto:rad-001-a', 'moto', 'RAD 001 A');
     const secondary = makeVehicle('driver-vehicle:cab:rac-002-a', 'cab', 'RAC 002 A');

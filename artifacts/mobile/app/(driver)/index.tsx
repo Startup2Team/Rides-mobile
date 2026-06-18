@@ -31,7 +31,7 @@ import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
-import { KIGALI_CENTER, VEHICLE_LABELS, type VehicleType } from '@/types';
+import { KIGALI_CENTER, VEHICLE_LABELS, type DriverVehicleProfile, type VehicleType } from '@/types';
 import { canDriverGoOnline } from '@/utils/driverVerification';
 import { showDeclineRideAlert } from '@/utils/declineRideAlert';
 import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
@@ -45,6 +45,14 @@ import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { getApprovedDriverVehicles } from '@/domain/driverVehicles';
+import {
+  getAuthorizationComplianceMessage,
+  getAuthorizationComplianceStatus,
+  getInsuranceComplianceMessage,
+  getInsuranceComplianceStatus,
+  getLicenseComplianceMessage,
+  getLicenseComplianceStatus,
+} from '@/domain/vehicleCompliance';
 import {
   formatDistanceToPickup,
   formatRequestLocation,
@@ -135,6 +143,7 @@ export default function DriverDashboard() {
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
+  const [licenseBlockVehicle, setLicenseBlockVehicle] = useState<Pick<DriverVehicleProfile, 'id' | 'vehicleType' | 'plateNumber'> | null>(null);
 
   const timers = useScreenTimerManager();
   const adCarouselRef = useRef<ScrollView>(null);
@@ -190,6 +199,13 @@ export default function DriverDashboard() {
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const activeVehicleEntitlement = getVehicleEntitlement(entitlement, activeVehicle);
   const approvedVehicles = getApprovedDriverVehicles(driverProfile);
+  const licenseComplianceStatus = getLicenseComplianceStatus(activeVehicle?.licenseExpiryDate);
+  const insuranceComplianceStatus = getInsuranceComplianceStatus(activeVehicle?.insuranceExpiryDate);
+  const authorizationComplianceStatus = getAuthorizationComplianceStatus(activeVehicle?.authorizationExpiryDate);
+  const licenseComplianceMessage = getLicenseComplianceMessage(activeVehicle?.licenseExpiryDate);
+  const insuranceComplianceMessage = getInsuranceComplianceMessage(activeVehicle?.insuranceExpiryDate);
+  const authorizationComplianceMessage = getAuthorizationComplianceMessage(activeVehicle?.authorizationExpiryDate);
+  const showCompliancePanel = Boolean(licenseComplianceMessage || insuranceComplianceMessage || authorizationComplianceMessage);
 
   useEffect(() => {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
@@ -342,7 +358,7 @@ export default function DriverDashboard() {
     router.push('/driver-negotiation');
   };
 
-  const handleVehicleSessionStart = useCallback(async (vehicle: { id: string; vehicleType: VehicleType; status: 'approved' }) => {
+  const handleVehicleSessionStart = useCallback(async (vehicle: DriverVehicleProfile) => {
     const vehicleEntitlementForSelection = getVehicleEntitlement(entitlement, vehicle);
     const startedAt = new Date().toISOString();
     const nextProfile = driverProfile
@@ -354,10 +370,21 @@ export default function DriverDashboard() {
 
     setVehicleSelectorVisible(false);
 
+    if (nextProfile) {
+      await saveDriverProfile(nextProfile);
+    }
+
+    const vehicleLicenseStatus = getLicenseComplianceStatus(vehicle.licenseExpiryDate);
+    if (vehicleLicenseStatus === 'expired') {
+      setLicenseBlockVehicle({
+        id: vehicle.id,
+        vehicleType: vehicle.vehicleType,
+        plateNumber: vehicle.plateNumber,
+      });
+      return;
+    }
+
     if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
-      if (nextProfile) {
-        await saveDriverProfile(nextProfile);
-      }
       router.push('/driver-packages');
       return;
     }
@@ -390,7 +417,7 @@ export default function DriverDashboard() {
         return;
       }
       if (approvedVehicles.length === 1) {
-        void handleVehicleSessionStart(approvedVehicles[0] as { id: string; vehicleType: VehicleType; status: 'approved' });
+        void handleVehicleSessionStart(approvedVehicles[0]);
         return;
       }
       if (!canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
@@ -463,6 +490,21 @@ export default function DriverDashboard() {
   const requestDistanceToPickup = request ? formatDistanceToPickup(driverLocation, request.pickup) : 'Distance unavailable';
   const requestTripDistance = formatTripDistance(request?.distance);
   const requestTripDuration = formatTripDuration(request?.duration);
+  const closeLicenseBlockModal = useCallback(() => {
+    setLicenseBlockVehicle(null);
+  }, []);
+
+  const openLicenseUpdateFlow = useCallback(() => {
+    if (!licenseBlockVehicle) return;
+    setLicenseBlockVehicle(null);
+    router.push({
+      pathname: '/driver-vehicle-details',
+      params: {
+        vehicleId: licenseBlockVehicle.id,
+        updateDocument: 'license',
+      },
+    });
+  }, [licenseBlockVehicle]);
 
   const getSwitchModeSlideEnd = useCallback(() => (
     Math.max(
@@ -757,6 +799,34 @@ export default function DriverDashboard() {
             </TouchableOpacity>
           </View>
 
+          {showCompliancePanel ? (
+            <View
+              style={[
+                styles.compliancePanel,
+                {
+                  backgroundColor: licenseComplianceStatus === 'expired'
+                    ? colors.destructiveHex + '12'
+                    : colors.warningHex + '12',
+                  borderColor: licenseComplianceStatus === 'expired'
+                    ? colors.destructiveHex + '35'
+                    : colors.warningHex + '35',
+                },
+              ]}
+            >
+              <View style={styles.compliancePanelHeader}>
+                <Feather
+                  name={licenseComplianceStatus === 'expired' ? 'alert-triangle' : 'shield'}
+                  size={15}
+                  color={licenseComplianceStatus === 'expired' ? colors.destructiveHex : colors.warningHex}
+                />
+                <Text style={[styles.compliancePanelTitle, { color: colors.foreground }]}>Compliance</Text>
+              </View>
+              {licenseComplianceMessage ? <Text style={[styles.complianceLine, { color: licenseComplianceStatus === 'expired' ? colors.destructiveHex : colors.warningHex }]}>{licenseComplianceMessage}</Text> : null}
+              {insuranceComplianceMessage ? <Text style={[styles.complianceLine, { color: colors.warningHex }]}>{insuranceComplianceMessage}</Text> : null}
+              {authorizationComplianceMessage ? <Text style={[styles.complianceLine, { color: colors.warningHex }]}>{authorizationComplianceMessage}</Text> : null}
+            </View>
+          ) : null}
+
           {showNoCreditsWarning && (
             <View style={[styles.noCreditsPanel, { backgroundColor: colors.successHex + '12', borderColor: colors.successHex + '35' }]}>
               <View style={styles.noCreditsCopy}>
@@ -950,7 +1020,7 @@ export default function DriverDashboard() {
                   <TouchableOpacity
                     key={vehicle.id}
                     style={[styles.selectorCard, { borderColor: colors.border }]}
-                    onPress={() => void handleVehicleSessionStart(vehicle as { id: string; vehicleType: VehicleType; status: 'approved' })}
+                    onPress={() => void handleVehicleSessionStart(vehicle)}
                     activeOpacity={0.78}
                   >
                     <View style={styles.selectorCardCopy}>
@@ -972,6 +1042,48 @@ export default function DriverDashboard() {
               })}
             </ScrollView>
             <AppButton title="Cancel" variant="secondary" onPress={() => setVehicleSelectorVisible(false)} fullWidth />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={Boolean(licenseBlockVehicle)}
+        animationType="fade"
+        onRequestClose={closeLicenseBlockModal}
+      >
+        <View style={styles.selectorBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeLicenseBlockModal} />
+          <View style={[styles.licenseModalSheet, { backgroundColor: cardFill }]}>
+            <View style={styles.selectorHeader}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.selectorTitle, { color: colors.foreground }]}>Driver License Expired</Text>
+                <Text style={[styles.selectorSubtitle, { color: colors.mutedForeground }]}>
+                  {licenseBlockVehicle?.plateNumber ? `${licenseBlockVehicle.plateNumber} is not currently eligible to go online.` : 'Your selected vehicle is not currently eligible to go online.'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeLicenseBlockModal} accessibilityLabel="Close license warning">
+                <Feather name="x" size={20} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.licenseModalBody, { color: colors.foreground }]}>
+              Your driver license has expired. Update your driver license documents to continue receiving ride requests.
+            </Text>
+            <View style={styles.licenseModalActions}>
+              <AppButton
+                title="Update License"
+                onPress={openLicenseUpdateFlow}
+                fullWidth
+                size="md"
+              />
+              <AppButton
+                title="Not Now"
+                onPress={closeLicenseBlockModal}
+                fullWidth
+                size="md"
+                variant="secondary"
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -1112,6 +1224,17 @@ const styles = StyleSheet.create({
   activityValue: { fontSize: 18, lineHeight: 22, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   activityLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 2 },
   activityDivider: { width: 1, height: 24 },
+  compliancePanel: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  compliancePanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  compliancePanelTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  complianceLine: { fontSize: 11, fontFamily: 'Inter_600SemiBold', lineHeight: 15 },
   noCreditsPanel: {
     marginTop: 8,
     borderRadius: 12,
@@ -1231,4 +1354,7 @@ const styles = StyleSheet.create({
   selectorVehicleMeta: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   selectorPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
   selectorPillText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  licenseModalSheet: { borderRadius: 18, padding: 16, gap: 14, maxWidth: 420, width: '100%', alignSelf: 'center' },
+  licenseModalBody: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  licenseModalActions: { gap: 10 },
 });

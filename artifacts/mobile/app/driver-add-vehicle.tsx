@@ -29,6 +29,7 @@ import { isFutureExpiryDate, isValidDriverLicenceNumber } from '@/hooks/driver-o
 import { formatRwandaPlateInput, normalizeRwandaPlateNumber, isValidRwandaPlateNumber, isValidRwandaNationalId } from '@/utils/rwandaValidation';
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
+import { submitVehicleApplication } from '@/domain/verificationSubmissions';
 
 type VehiclePhotoKey = 'outside' | 'inside';
 
@@ -94,7 +95,7 @@ export default function DriverAddVehicleScreen() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { driverProfile, saveDriverProfile } = useAuth();
+  const { driverProfile, user, saveDriverProfile } = useAuth();
   const params = useLocalSearchParams<{ sourceVehicleId?: string }>();
   const sourceVehicleId = typeof params.sourceVehicleId === 'string' ? params.sourceVehicleId : null;
   const sourceVehicle = getVehicleById(driverProfile, sourceVehicleId);
@@ -212,8 +213,17 @@ export default function DriverAddVehicleScreen() {
     const nextProfile = appendDriverVehicle(driverProfile!, sourceVehicleId ? { ...vehicle, id: sourceVehicleId } : vehicle);
     setSaving(true);
     await saveDriverProfile(nextProfile);
+    await submitVehicleApplication({
+      userId: user?.id ?? 'unknown-user',
+      driverProfile: driverProfile!,
+      vehicle: sourceVehicleId ? { ...vehicle, id: sourceVehicleId } : vehicle,
+      sourceVehicleStatus: sourceVehicle?.status,
+      docs: documents,
+      photos: { outside: vehiclePhotos.outside, inside: vehiclePhotos.inside },
+      submittedAt: applicationInput.submittedAt,
+    });
     setSaving(false);
-    Alert.alert('Submitted', 'Your vehicle has been submitted for review.');
+    Alert.alert('Submitted for review', 'Your vehicle has been submitted for review.');
     router.replace('/driver-vehicles');
   };
 

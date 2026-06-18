@@ -133,6 +133,149 @@ const driverVehicleProfileSchema = z.object({
   }).passthrough()).optional(),
 }).passthrough();
 
+const verificationSubmissionStatusSchema = z.enum([
+  'draft',
+  'submitted',
+  'pending_review',
+  'approved',
+  'rejected',
+  'resubmitted',
+  'cancelled',
+]);
+const verificationReviewStatusSchema = z.enum(['pending_review', 'approved', 'rejected']);
+const verificationSubmissionHistoryEventTypeSchema = z.enum([
+  'draft',
+  'submitted',
+  'pending_review',
+  'resubmitted',
+  'approved',
+  'rejected',
+  'cancelled',
+]);
+const verificationReviewDecisionSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  reviewedAt: z.string(),
+  reviewedBy: z.string().optional(),
+  reason: z.string().optional(),
+  rejectedFields: z.array(z.string()).optional(),
+  rejectedDocuments: z.array(z.string()).optional(),
+});
+const verificationSubmissionChangedFieldSchema = z.enum(['license', 'nationalId', 'insurance', 'authorization', 'outside', 'inside']);
+const verificationSubmissionHistoryEventSchema = z.object({
+  id: z.string(),
+  type: verificationSubmissionHistoryEventTypeSchema,
+  at: z.string(),
+  reason: z.string().optional(),
+  rejectedFields: z.array(z.string()).optional(),
+  rejectedDocuments: z.array(z.string()).optional(),
+  reviewedBy: z.string().optional(),
+});
+const submissionDocumentSetSchema = driverVehicleDocumentSetSchema;
+const submissionPhotoSchema = z.object({
+  outside: z.string().nullable().optional(),
+  inside: z.string().nullable().optional(),
+}).passthrough();
+const driverApplicationSubmissionSchema = z.object({
+  id: z.string(),
+  clientSubmissionId: z.string(),
+  kind: z.literal('driver_application'),
+  status: verificationSubmissionStatusSchema,
+  reviewStatus: verificationReviewStatusSchema,
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+  reviewDecision: verificationReviewDecisionSchema.optional(),
+  history: z.array(verificationSubmissionHistoryEventSchema),
+  userId: z.string(),
+  fullName: z.string(),
+  phone: z.string(),
+  dob: z.string(),
+  nationalId: z.string(),
+  operatingLocation: z.object({
+    province: z.string(),
+    district: z.string(),
+    sector: z.string(),
+    cell: z.string().optional(),
+    village: z.string().optional(),
+    city: z.string().optional(),
+  }).passthrough(),
+  momoDetails: z.object({
+    provider: z.enum(['mtn', 'airtel']),
+    momoCode: z.string(),
+    merchantCode: z.string().optional(),
+  }).passthrough(),
+  selfieImage: z.string().nullable(),
+  firstVehicle: z.object({
+    vehicleType: vehicleTypeSchema,
+    plateNumber: z.string(),
+    licenseNumber: z.string(),
+    model: z.string().optional(),
+    brand: z.string().optional(),
+    manufactureYear: z.number().int().optional(),
+    passengerSeats: z.number().optional(),
+    loadCapacityKg: z.number().optional(),
+    licenseExpiryDate: z.string().optional(),
+    insuranceExpiryDate: z.string().optional(),
+    authorizationExpiryDate: z.string().optional(),
+  }).passthrough(),
+  documents: submissionDocumentSetSchema,
+  photos: submissionPhotoSchema.optional(),
+}).passthrough();
+const vehicleApplicationSubmissionSchema = z.object({
+  id: z.string(),
+  clientSubmissionId: z.string(),
+  kind: z.literal('vehicle_application'),
+  status: verificationSubmissionStatusSchema,
+  reviewStatus: verificationReviewStatusSchema,
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+  reviewDecision: verificationReviewDecisionSchema.optional(),
+  history: z.array(verificationSubmissionHistoryEventSchema),
+  userId: z.string(),
+  driverId: z.string(),
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
+  plateNumber: z.string(),
+  licenseNumber: z.string(),
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  manufactureYear: z.number().int().optional(),
+  passengerSeats: z.number().optional(),
+  loadCapacityKg: z.number().optional(),
+  licenseExpiryDate: z.string().optional(),
+  insuranceExpiryDate: z.string().optional(),
+  authorizationExpiryDate: z.string().optional(),
+  documents: submissionDocumentSetSchema,
+  photos: submissionPhotoSchema.optional(),
+}).passthrough();
+const vehicleDocumentUpdateSubmissionSchema = z.object({
+  id: z.string(),
+  clientSubmissionId: z.string(),
+  kind: z.literal('vehicle_document_update'),
+  status: verificationSubmissionStatusSchema,
+  reviewStatus: verificationReviewStatusSchema,
+  submittedAt: z.string(),
+  updatedAt: z.string(),
+  reviewDecision: verificationReviewDecisionSchema.optional(),
+  history: z.array(verificationSubmissionHistoryEventSchema),
+  userId: z.string(),
+  driverId: z.string(),
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
+  plateNumber: z.string(),
+  changedFields: z.array(verificationSubmissionChangedFieldSchema),
+  previousDocumentMetadata: z.object({
+    documents: submissionDocumentSetSchema.optional(),
+    photos: submissionPhotoSchema.optional(),
+  }).optional(),
+  documents: submissionDocumentSetSchema,
+  photos: submissionPhotoSchema.optional(),
+}).passthrough();
+const verificationSubmissionStoreZodSchema = z.object({
+  driverApplications: z.array(driverApplicationSubmissionSchema),
+  vehicleApplications: z.array(vehicleApplicationSubmissionSchema),
+  vehicleDocumentUpdates: z.array(vehicleDocumentUpdateSubmissionSchema),
+});
+
 const driverProfileShapeSchema = z.object({
   verificationStatus: driverVerificationStatusSchema.optional(),
   vehicleType: vehicleTypeSchema,
@@ -181,6 +324,8 @@ export const driverProfileSchema = z.preprocess(value => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   return migrateDriverProfileToMultiVehicle(value as z.infer<typeof driverProfileShapeSchema>);
 }, driverProfileShapeSchema);
+
+export const verificationSubmissionStoreSchema = verificationSubmissionStoreZodSchema;
 
 export const driverOnboardingDraftSchema = z.object({
   form: z.object({

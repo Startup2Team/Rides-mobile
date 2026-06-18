@@ -39,9 +39,14 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
+    user: { id: 'user-1', name: 'Driver User', phone: '250788000000' },
     driverProfile: mockDriverProfile,
     saveDriverProfile: mockSaveDriverProfile,
   }),
+}));
+
+jest.mock('@/domain/verificationSubmissions', () => ({
+  submitVehicleDocumentUpdate: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('@/components/GlassHeader', () => ({
@@ -223,6 +228,24 @@ describe('DriverVehicleDetailsScreen', () => {
 
     expect(screen.getByText('Insurance expired')).toBeTruthy();
     expect(screen.getByText('Authorization Certificate expired')).toBeTruthy();
+  });
+
+  test('shows the compliance section with semantic statuses', () => {
+    mockDriverProfile = {
+      ...mockDriverProfile!,
+      vehicles: [makeVehicle({
+        licenseExpiryDate: '01/01/2030',
+        insuranceExpiryDate: '01/01/2020',
+        authorizationExpiryDate: '01/01/2030',
+      })],
+    };
+
+    render(<DriverVehicleDetailsScreen />);
+
+    expect(screen.getByText('Compliance')).toBeTruthy();
+    expect(screen.getAllByText('Valid').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Expired')).toBeTruthy();
+    expect(screen.getByText('⚠ Insurance expired. Update recommended.')).toBeTruthy();
   });
 
   test('submits a document update without changing the vehicle identity', async () => {
