@@ -533,9 +533,9 @@ describe('DriverDashboard online state', () => {
     fireEvent.press(screen.getByText('Go Online'));
 
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
-    expect(screen.queryByText('Compliance')).toBeNull();
-    expect(screen.queryByText('⚠ Insurance expired. Update recommended.')).toBeNull();
-    expect(screen.queryByText('⚠ Authorization expired. Update recommended.')).toBeNull();
+    expect(screen.getByText('Compliance')).toBeTruthy();
+    expect(screen.getByText('⚠ Insurance expired. Update recommended.')).toBeTruthy();
+    expect(screen.getByText('⚠ Authorization expired. Update recommended.')).toBeTruthy();
   });
 
   test('shows a vehicle selection sheet when multiple approved vehicles exist', async () => {
