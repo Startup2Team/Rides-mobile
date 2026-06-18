@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo } from 'react';
-import { Alert, Linking, Pressable, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { APP_NAME, APP_SCHEME } from '@/constants/branding';
+import { Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import { SymbolView } from 'expo-symbols';
+import { APP_NAME } from '@/constants/branding';
+import { buttonCornerRadius } from '@/constants/buttons';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { ReferralQrCode } from './ReferralQrCode';
 import { appendStoredReferralEvent } from '@/persistence/referralEventsPersistence';
@@ -13,26 +18,47 @@ function eventId() {
 }
 
 function PrimaryButton({
-  icon,
   label,
   onPress,
+  variant = 'solid',
 }: {
-  icon: keyof typeof Feather.glyphMap;
   label: string;
   onPress: () => void;
+  variant?: 'solid' | 'outline';
 }) {
   const colors = useColors();
+  const isSolid = variant === 'solid';
   return (
-    <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.primary }]} activeOpacity={0.84} onPress={onPress}>
-      <Feather name={icon} size={18} color="#fff" />
-      <Text style={styles.actionButtonText}>{label}</Text>
+    <TouchableOpacity
+      style={[
+        styles.actionButton,
+        {
+          backgroundColor: isSolid ? colors.primary : colors.card,
+          borderColor: isSolid ? colors.primary : colors.border,
+        },
+      ]}
+      activeOpacity={0.84}
+      onPress={onPress}
+    >
+      {Platform.OS === 'ios' ? (
+        <SymbolView
+          name="square.and.arrow.up"
+          size={20}
+          tintColor={isSolid ? '#fff' : colors.foreground}
+        />
+      ) : (
+        <Ionicons name="share-outline" size={21} color={isSolid ? '#fff' : colors.foreground} />
+      )}
+      <Text style={[styles.actionButtonText, { color: isSolid ? '#fff' : colors.foreground }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 export default function ReferralShareScreen() {
   const colors = useColors();
+  const headerMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const referralLink = useMemo(() => buildReferralLink(user?.id ?? ''), [user?.id]);
   const referralId = useMemo(() => buildReferralId(user?.id ?? ''), [user?.id]);
 
@@ -62,40 +88,27 @@ export default function ReferralShareScreen() {
 
   const handleCopyLink = async () => {
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      if (Clipboard?.setStringAsync) {
+        await Clipboard.setStringAsync(referralLink);
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(referralLink);
-        void appendStoredReferralEvent({
-          id: eventId(),
-          name: REFERRAL_EVENT_NAMES.linkShared,
-          method: 'copy',
-          userId: user?.id ?? '',
-          referralId,
-          referralLink,
-          platform: getReferralPlatform(),
-          createdAt: new Date().toISOString(),
-        });
-        Alert.alert('Link copied', 'Your invite link was copied to the clipboard.');
-        return;
+      } else {
+        throw new Error('Clipboard unavailable');
       }
+      void appendStoredReferralEvent({
+        id: eventId(),
+        name: REFERRAL_EVENT_NAMES.linkShared,
+        method: 'copy',
+        userId: user?.id ?? '',
+        referralId,
+        referralLink,
+        platform: getReferralPlatform(),
+        createdAt: new Date().toISOString(),
+      });
+      showToast('Link copied', 'success');
     } catch {
-      // fall through to share sheet
+      showToast('Unable to copy link', 'error');
     }
-
-    await Share.share({
-      title: `${APP_NAME} invite link`,
-      message: referralLink,
-      url: referralLink,
-    });
-    void appendStoredReferralEvent({
-      id: eventId(),
-      name: REFERRAL_EVENT_NAMES.linkShared,
-      method: 'copy',
-      userId: user?.id ?? '',
-      referralId,
-      referralLink,
-      platform: getReferralPlatform(),
-      createdAt: new Date().toISOString(),
-    });
   };
 
   const handleShare = async () => {
@@ -116,129 +129,122 @@ export default function ReferralShareScreen() {
     });
   };
 
-  const handleOpenLink = async () => {
-    void appendStoredReferralEvent({
-      id: eventId(),
-      name: REFERRAL_EVENT_NAMES.linkOpened,
-      method: 'open',
-      userId: user?.id ?? '',
-      referralId,
-      referralLink,
-      platform: getReferralPlatform(),
-      createdAt: new Date().toISOString(),
-    });
-    await Linking.openURL(referralLink);
-  };
-
   if (!user?.id) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Share App</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>No referral account is available.</Text>
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <GlassHeader title={`Invite people to ${APP_NAME}`} subtitle="Share your link or QR" />
+        <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
+          <Text style={[styles.emptyState, { color: colors.mutedForeground }]}>No referral account is available.</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.foreground }]}>Share App</Text>
-      <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-        Share your invite code or QR so friends can join {APP_NAME}.
-      </Text>
-
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <ReferralQrCode data={referralLink} />
-        <Text style={[styles.linkLabel, { color: colors.mutedForeground }]}>Invite link</Text>
-        <Pressable onPress={handleOpenLink} accessibilityRole="link" accessibilityLabel="Open invite link">
-          <Text style={[styles.link, { color: colors.primary }]} numberOfLines={2}>
-            {referralLink}
-          </Text>
-        </Pressable>
-        <Text style={[styles.code, { color: colors.mutedForeground }]}>Referral ID: {referralId}</Text>
-      </View>
-
-      <View style={styles.actions}>
-        <PrimaryButton icon="copy" label="Copy link" onPress={() => { void handleCopyLink(); }} />
-        <PrimaryButton icon="share-2" label="Share" onPress={() => { void handleShare(); }} />
-      </View>
-
-      <View style={[styles.noteCard, { borderColor: colors.border }]}>
-        <Text style={[styles.noteTitle, { color: colors.foreground }]}>Backend-ready attribution</Text>
-        <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
-          QR scans, app installs, and signup attribution are recorded later by backend install attribution and deferred deep linking.
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <GlassHeader title={`Invite people to ${APP_NAME}`} subtitle="Share your link or QR" />
+      <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
+        <Text style={[styles.helpText, { color: colors.mutedForeground }]}>
+          Ask a friend to scan the QR code, copy the link and send it in chat or contacts, or tap Share to choose social apps and messaging.
         </Text>
-        <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
-          Local tracking currently captures link creation, QR display, link sharing, and link opens only.
-        </Text>
-        <Text style={[styles.noteText, { color: colors.mutedForeground }]}>Custom scheme: {APP_SCHEME}://invite?ref={referralId}</Text>
+
+        <View style={styles.qrSection}>
+          <View style={[styles.qrFrame, { backgroundColor: '#FFFFFF', borderColor: colors.border }]}>
+            <View style={styles.qrCenter}>
+              <ReferralQrCode data={referralLink} size={256} />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.linkCard, { backgroundColor: colors.input }]}
+            activeOpacity={0.76}
+            onPress={() => {
+              void handleCopyLink();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Copy invite link"
+          >
+            <Text style={[styles.linkText, { color: colors.foreground }]} numberOfLines={1}>
+              {referralLink}
+            </Text>
+            <Feather name="copy" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.actions}>
+          <PrimaryButton label="Share" onPress={() => { void handleShare(); }} />
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    padding: 20,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    gap: 14,
+    justifyContent: 'flex-start',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
+  emptyState: {
+    fontSize: 14,
+    lineHeight: 20,
   },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 21,
+  helpText: {
+    fontSize: 14,
+    lineHeight: 19,
   },
-  card: {
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
+  qrSection: {
+    gap: 4,
+    marginTop: 56,
+  },
+  qrFrame: {
+    alignSelf: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 0,
+    padding: 1,
+  },
+  qrCenter: {
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: 0,
   },
-  linkLabel: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+  linkCard: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 6,
+    marginTop: 42,
+    paddingHorizontal: 15,
   },
-  link: {
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  code: {
-    fontSize: 13,
+  linkText: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '400',
+    lineHeight: 22,
   },
   actions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   actionButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    minHeight: 48,
+    flex: 1,
+    borderRadius: buttonCornerRadius(48),
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
   },
   actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-  },
-  noteCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 16,
-    padding: 14,
-    gap: 8,
-  },
-  noteTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  noteText: {
-    fontSize: 13,
-    lineHeight: 18,
   },
 });

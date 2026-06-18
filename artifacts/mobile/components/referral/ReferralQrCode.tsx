@@ -3,7 +3,6 @@ import { View } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 
 const MATRIX_SIZE = 29;
-const QUIET_ZONE = 4;
 
 function hashString(input: string) {
   let hash = 0x811c9dc5;
@@ -61,15 +60,14 @@ function buildMatrix(data: string) {
 
 export function ReferralQrCode({ data, size = 240 }: { data: string; size?: number }) {
   const matrix = useMemo(() => buildMatrix(data), [data]);
-  const moduleSize = size / (MATRIX_SIZE + QUIET_ZONE * 2);
+  const moduleSize = size / MATRIX_SIZE;
   const viewBoxSize = size;
-  const offset = QUIET_ZONE * moduleSize;
+  const offset = 0;
 
   return (
     <View accessibilityLabel="Referral QR code" testID="referral-qr">
       <Svg width={viewBoxSize} height={viewBoxSize} viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}>
-        <Rect x={0} y={0} width={viewBoxSize} height={viewBoxSize} rx={16} fill="#FFFFFF" />
-        <Rect x={offset} y={offset} width={MATRIX_SIZE * moduleSize} height={MATRIX_SIZE * moduleSize} fill="#F8FAFC" rx={10} />
+        <Rect x={0} y={0} width={viewBoxSize} height={viewBoxSize} fill="#FFFFFF" />
         {matrix.map((row, y) =>
           row.map((filled, x) =>
             filled ? (
@@ -79,7 +77,7 @@ export function ReferralQrCode({ data, size = 240 }: { data: string; size?: numb
                 y={offset + y * moduleSize}
                 width={moduleSize}
                 height={moduleSize}
-                fill="#111827"
+                fill="#000000"
               />
             ) : null,
           ),
@@ -88,4 +86,3 @@ export function ReferralQrCode({ data, size = 240 }: { data: string; size?: numb
     </View>
   );
 }
-
