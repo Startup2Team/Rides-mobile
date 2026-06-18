@@ -115,7 +115,7 @@ export default function DriverDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { user, driverProfile, saveDriverProfile, setActiveVehicle, setDriverOnline, switchMode } = useAuth();
+  const { user, driverProfile, saveDriverProfile, setDriverOnline, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const {
     pendingRequest,
@@ -344,18 +344,39 @@ export default function DriverDashboard() {
 
   const handleVehicleSessionStart = useCallback(async (vehicle: { id: string; vehicleType: VehicleType; status: 'approved' }) => {
     const vehicleEntitlementForSelection = getVehicleEntitlement(entitlement, vehicle);
-    await setActiveVehicle(vehicle.id);
+    const startedAt = new Date().toISOString();
+    const nextProfile = driverProfile
+      ? {
+          ...driverProfile,
+          activeVehicle: { vehicleId: vehicle.id, selectedAt: startedAt },
+        }
+      : null;
+
     setVehicleSelectorVisible(false);
+
     if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
+      if (nextProfile) {
+        await saveDriverProfile(nextProfile);
+      }
       router.push('/driver-packages');
       return;
     }
+
+    if (!nextProfile) return;
     Animated.sequence([
       Animated.timing(onlineScale, { toValue: 0.93, duration: 80, useNativeDriver: true }),
       Animated.spring(onlineScale, { toValue: 1, useNativeDriver: true, bounciness: 12 }),
     ]).start();
-    void setDriverOnline(true);
-  }, [entitlement, onlineScale, setActiveVehicle, setDriverOnline]);
+    await saveDriverProfile({
+      ...nextProfile,
+      isOnline: true,
+      onlineVehicleSession: {
+        vehicleId: vehicle.id,
+        vehicleType: vehicle.vehicleType,
+        startedAt,
+      },
+    });
+  }, [driverProfile, entitlement, onlineScale, saveDriverProfile]);
 
   const toggleOnline = () => {
     const next = !isOnline;
@@ -430,7 +451,7 @@ export default function DriverDashboard() {
   const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
   const remainingCreditsText = isEntitlementLoading ? '-' : String(getRideBalance(activeVehicleEntitlement));
   const bonusRidesText = isEntitlementLoading ? '-' : String(getActiveBonusRides(activeVehicleEntitlement));
-  const statusLabel = isOnline ? 'Online' : 'Offline';
+  const statusLabel = `${isOnline ? 'Online with' : 'Current Vehicle'}: ${VEHICLE_LABELS[activeVehicleType]}`;
   const isVerified = driverProfile?.isVerified === true;
   const ratingLabel = ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
     ? ratingSummary.averageRating.toFixed(1)

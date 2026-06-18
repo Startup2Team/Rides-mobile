@@ -158,6 +158,11 @@ const driverProfileShapeSchema = z.object({
     vehicleId: z.string().nullable(),
     selectedAt: z.string().optional(),
   }).optional(),
+  onlineVehicleSession: z.object({
+    vehicleId: z.string(),
+    vehicleType: vehicleTypeSchema,
+    startedAt: z.string(),
+  }).nullable().optional(),
   vehicles: z.array(driverVehicleProfileSchema).optional(),
 }).passthrough();
 
@@ -324,6 +329,10 @@ export const rideSchema = z.object({
   driverName: z.string().optional(),
   driver: mockDriverSchema.optional(),
   vehicleType: vehicleTypeSchema,
+  vehicleId: z.string().optional(),
+  requestedVehicleType: vehicleTypeSchema.optional(),
+  matchedVehicleType: vehicleTypeSchema.optional(),
+  matchedVehicleId: z.string().optional(),
   pickup: rideLocationSchema,
   destination: rideLocationSchema,
   status: rideStatusSchema,

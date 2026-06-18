@@ -5,6 +5,12 @@ import React from 'react';
 import { DriverEntitlementProvider, useDriverEntitlement } from '../DriverEntitlementContext';
 import { RideProvider, useRide } from '../RideContext';
 
+let mockRideDriverProfile: any = null;
+
+jest.mock('@/context/AuthContext', () => ({
+  useOptionalAuth: () => mockRideDriverProfile ? { driverProfile: mockRideDriverProfile } : null,
+}));
+
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <DriverEntitlementProvider>{children}</DriverEntitlementProvider>
 );
@@ -16,10 +22,14 @@ describe('DriverEntitlementProvider', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
+    mockRideDriverProfile = null;
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    mockRideDriverProfile = null;
+    jest.restoreAllMocks();
+  });
 
   test('activates a package and persists idempotent completed-ride deduction', async () => {
     const { result } = renderHook(() => useDriverEntitlement(), { wrapper });
@@ -42,6 +52,39 @@ describe('DriverEntitlementProvider', () => {
   });
 
   test('driver completion deducts one credit while cancellation deducts none', async () => {
+    mockRideDriverProfile = {
+      vehicleType: 'moto',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: 'LIC001',
+      province: 'Kigali',
+      district: 'Gasabo',
+      sector: 'Kimironko',
+      momoCode: '0781234567',
+      momoProvider: 'mtn',
+      dob: '1990-01-01',
+      isOnline: true,
+      isVerified: true,
+      acceptanceRate: 100,
+      completedRides: 0,
+      dailyRides: 0,
+      dailyDeclines: 0,
+      policyAccepted: true,
+      earningsTotal: 0,
+      onlineVehicleSession: {
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        startedAt: '2026-06-08T09:00:00.000Z',
+      },
+      activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+      vehicles: [{
+        id: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        status: 'approved',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: 'LIC001',
+        submittedAt: '2026-06-08T09:00:00.000Z',
+      }],
+    };
     const { result } = renderHook(() => ({
       entitlement: useDriverEntitlement(),
       ride: useRide(),
@@ -50,7 +93,6 @@ describe('DriverEntitlementProvider', () => {
     await act(async () => {
       await result.current.entitlement.activatePackage('launch_starter');
     });
-
     act(() => {
       result.current.ride.simulateIncomingRideRequest();
       result.current.ride.acceptRideRequest();

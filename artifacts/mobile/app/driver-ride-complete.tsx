@@ -95,10 +95,11 @@ export default function DriverRideCompleteScreen() {
   const insets = useSafeAreaInsets();
   const { completeRide } = useRide();
   const { recordCompletedRide, user } = useAuth();
-  const { fare, driverId, driverName, vehicleType, recordFare } = useLocalSearchParams<{
+  const { fare, driverId, driverName, vehicleId, vehicleType, recordFare } = useLocalSearchParams<{
     fare?: string;
     driverId?: string;
     driverName?: string;
+    vehicleId?: string;
     vehicleType?: string;
     recordFare?: string;
   }>();
@@ -113,6 +114,7 @@ export default function DriverRideCompleteScreen() {
     completeRide('driver', {
       driverId: driverId || user?.id,
       driverName: driverName || user?.name,
+      vehicleId: vehicleId || undefined,
       vehicleType: (vehicleType as VehicleType) || undefined,
     });
     const fareNum = recordFare ? parseInt(recordFare, 10) : 0;

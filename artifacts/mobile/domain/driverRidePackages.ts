@@ -1,4 +1,4 @@
-import { getActiveDriverVehicle, getPrimaryDriverVehicle } from './driverVehicles';
+import { getActiveDriverVehicle, getDriverVehicleForSession, getPrimaryDriverVehicle } from './driverVehicles';
 import type { DriverProfile, DriverVehicleProfile, VehicleType } from '@/types';
 
 export type DriverRidePackageId = 'launch_starter' | 'growth' | 'pro' | 'cab_starter' | 'cab_growth' | 'cab_pro' | 'hilux_starter' | 'hilux_growth' | 'hilux_pro' | 'rifani_starter' | 'rifani_growth' | 'rifani_pro' | 'fuso_starter' | 'fuso_growth' | 'fuso_pro';
@@ -461,7 +461,7 @@ export function getVehicleEntitlement(
 }
 
 export function getEntitlementVehicleForProfile(profile: DriverProfile | null | undefined) {
-  return getActiveDriverVehicle(profile) ?? getPrimaryDriverVehicle(profile);
+  return getDriverVehicleForSession(profile) ?? getActiveDriverVehicle(profile) ?? getPrimaryDriverVehicle(profile);
 }
 
 export const getActiveRideCredits = (entitlement: DriverEntitlement | VehicleEntitlement | null | undefined) =>
@@ -477,9 +477,10 @@ export const canDriverGoOnlineWithCredits = (
   profile: DriverProfile | null | undefined,
   entitlement: DriverEntitlement | VehicleEntitlement | null | undefined,
 ) => {
-  const vehicle = getEntitlementVehicleForProfile(profile);
+  const vehicle = getActiveDriverVehicle(profile) ?? getPrimaryDriverVehicle(profile);
   const vehicleApproved = vehicle ? vehicle.status === 'approved' : true;
-  return (profile?.verificationStatus ? profile.verificationStatus === 'approved' : profile?.isVerified === true)
+  return !profile?.isOnline
+    && (profile?.verificationStatus ? profile.verificationStatus === 'approved' : profile?.isVerified === true)
     && profile?.isVerified === true
     && vehicleApproved
     && getActiveRideCredits(normalizeEntitlement(entitlement, vehicle)) > 0;

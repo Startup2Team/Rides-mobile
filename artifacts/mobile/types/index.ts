@@ -119,6 +119,12 @@ export interface DriverActiveVehicle {
   selectedAt?: string;
 }
 
+export interface DriverOnlineVehicleSession {
+  vehicleId: string;
+  vehicleType: VehicleType;
+  startedAt: string;
+}
+
 export interface DriverProfile {
   verificationStatus?: Exclude<DriverVerificationStatus, 'not_started'>;
   vehicleType: VehicleType;
@@ -152,6 +158,7 @@ export interface DriverProfile {
   loadCapacityKg?: number;
   rejectionReason?: string;
   activeVehicle?: DriverActiveVehicle;
+  onlineVehicleSession?: DriverOnlineVehicleSession | null;
   vehicles?: DriverVehicleProfile[];
 }
 
@@ -188,6 +195,10 @@ export interface Ride {
   driverName?: string;
   driver?: MockDriver;
   vehicleType: VehicleType;
+  vehicleId?: string;
+  requestedVehicleType?: VehicleType;
+  matchedVehicleType?: VehicleType;
+  matchedVehicleId?: string;
   pickup: RideLocation;
   destination: RideLocation;
   status: RideStatus;

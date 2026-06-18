@@ -1,6 +1,7 @@
 import type {
   DriverActiveVehicle,
   DriverProfile,
+  DriverOnlineVehicleSession,
   DriverVehicleDocumentRecord,
   DriverVehicleDocumentSet,
   DriverVehicleProfile,
@@ -285,12 +286,26 @@ export function getActiveDriverVehicle(profile: DriverProfile | null | undefined
   return vehicles.find(vehicle => vehicle.id === activeVehicleId) ?? getApprovedDriverVehicles(profile)[0] ?? getPrimaryDriverVehicle(profile);
 }
 
+export function getOnlineDriverVehicleSession(profile: DriverProfile | null | undefined): DriverOnlineVehicleSession | null {
+  return profile?.onlineVehicleSession ?? null;
+}
+
+export function getOnlineDriverVehicle(profile: DriverProfile | null | undefined) {
+  const session = getOnlineDriverVehicleSession(profile);
+  if (!session) return null;
+  return getVehicleById(profile, session.vehicleId);
+}
+
+export function getDriverVehicleForSession(profile: DriverProfile | null | undefined) {
+  return getOnlineDriverVehicle(profile) ?? getActiveDriverVehicle(profile) ?? getPrimaryDriverVehicle(profile);
+}
+
 export function getDriverVehicleType(profile: DriverProfile | null | undefined): VehicleType | undefined {
-  return getActiveDriverVehicle(profile)?.vehicleType ?? profile?.vehicleType;
+  return getDriverVehicleForSession(profile)?.vehicleType ?? profile?.vehicleType;
 }
 
 export function getDriverVehiclePlate(profile: DriverProfile | null | undefined): string | undefined {
-  return getActiveDriverVehicle(profile)?.plateNumber ?? profile?.plateNumber;
+  return getDriverVehicleForSession(profile)?.plateNumber ?? profile?.plateNumber;
 }
 
 export function migrateDriverProfileToMultiVehicle(profile: DriverProfile): DriverProfile {

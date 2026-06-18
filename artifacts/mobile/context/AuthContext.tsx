@@ -16,7 +16,7 @@ import {
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
-import { getApprovedDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
+import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
 
 interface AuthContextType {
   user: User | null;
@@ -97,7 +97,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setDriverOnline = useCallback(async (isOnline: boolean) => {
     const prev = driverProfileRef.current;
     if (!prev || prev.isOnline === isOnline) return;
-    const updated: DriverProfile = { ...prev, isOnline };
+    if (isOnline) {
+      const vehicle = getDriverVehicleForSession(prev);
+      if (!vehicle || vehicle.status !== 'approved') return;
+      const updated: DriverProfile = {
+        ...prev,
+        isOnline: true,
+        onlineVehicleSession: {
+          vehicleId: vehicle.id,
+          vehicleType: vehicle.vehicleType,
+          startedAt: new Date().toISOString(),
+        },
+      };
+      setDriverProfile(updated);
+      await saveStoredDriverProfile(updated);
+      return;
+    }
+    const updated: DriverProfile = { ...prev, isOnline: false, onlineVehicleSession: null };
     setDriverProfile(updated);
     await saveStoredDriverProfile(updated);
   }, []);

@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
+import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
@@ -349,7 +350,13 @@ export default function DriverNavigateScreen() {
         text: 'Complete',
         onPress: () => {
           const fare = currentRide?.agreedFare ?? 0;
-          const identity = { driverId: user?.id, driverName: user?.name, vehicleType: driverProfile?.vehicleType };
+          const selectedVehicle = getEntitlementVehicleForProfile(driverProfile);
+          const identity = {
+            driverId: user?.id,
+            driverName: user?.name,
+            vehicleId: selectedVehicle?.id,
+            vehicleType: selectedVehicle?.vehicleType ?? driverProfile?.vehicleType,
+          };
           const fareForRecord = fare;
           const userId = user?.id;
           setCompletionInProgress(true);
@@ -359,6 +366,7 @@ export default function DriverNavigateScreen() {
               fare: String(fare),
               driverId: identity.driverId ?? '',
               driverName: identity.driverName ?? '',
+              vehicleId: identity.vehicleId ?? '',
               vehicleType: identity.vehicleType ?? '',
               recordFare: userId ? String(fareForRecord) : '',
             },

@@ -15,6 +15,25 @@ import { RideProvider, useRide } from '@/context/ride/RideProvider';
 import type { CloseButtonHandle } from '@/components/BackButton';
 import type { RideLocation, User } from '@/types';
 
+let mockRideDriverProfile: any = null;
+let mockRideEntitlement: any = null;
+
+jest.mock('@/context/AuthContext', () => {
+  const actual = jest.requireActual('@/context/AuthContext');
+  return {
+    ...actual,
+    useOptionalAuth: () => mockRideDriverProfile ? { driverProfile: mockRideDriverProfile } : null,
+  };
+});
+
+jest.mock('@/context/DriverEntitlementContext', () => {
+  const actual = jest.requireActual('@/context/DriverEntitlementContext');
+  return {
+    ...actual,
+    useOptionalDriverEntitlement: () => mockRideEntitlement,
+  };
+});
+
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
@@ -208,6 +227,8 @@ describe('critical rendered ride and auth workflows', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
+    mockRideDriverProfile = null;
+    mockRideEntitlement = null;
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -234,6 +255,66 @@ describe('critical rendered ride and auth workflows', () => {
   });
 
   test('driver receives, accepts, starts, and completes a ride request', async () => {
+    mockRideDriverProfile = {
+      vehicleType: 'moto',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: 'LIC001',
+      province: 'Kigali',
+      district: 'Gasabo',
+      sector: 'Kimironko',
+      momoCode: '0781234567',
+      momoProvider: 'mtn',
+      dob: '1990-01-01',
+      isOnline: true,
+      isVerified: true,
+      acceptanceRate: 100,
+      completedRides: 0,
+      dailyRides: 0,
+      dailyDeclines: 0,
+      policyAccepted: true,
+      earningsTotal: 0,
+      onlineVehicleSession: {
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        startedAt: '2026-06-08T09:00:00.000Z',
+      },
+      activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+      vehicles: [{
+        id: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        status: 'approved',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: 'LIC001',
+        submittedAt: '2026-06-08T09:00:00.000Z',
+      }],
+    };
+    mockRideEntitlement = {
+      entitlement: {
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        activePackageId: null,
+        remainingRideCredits: 30,
+        remainingBonusRides: 5,
+        activations: [],
+        creditTransactions: [],
+        purchaseHistory: [],
+        vehicleEntitlements: [{
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
+          activePackageId: null,
+          remainingRideCredits: 30,
+          remainingBonusRides: 5,
+          activations: [],
+          creditTransactions: [],
+          purchaseHistory: [],
+          updatedAt: '2026-06-08T09:00:00.000Z',
+          authority: 'local_prototype',
+        }],
+        updatedAt: '2026-06-08T09:00:00.000Z',
+        authority: 'local_prototype',
+      },
+      deductCreditForCompletedRide: jest.fn(async () => true),
+    };
     render(
       <RideProvider>
         <DriverRideWorkflow />

@@ -92,9 +92,18 @@ describe('setDriverOnline', () => {
     });
 
     expect(result.current.driverProfile?.isOnline).toBe(true);
+    expect(result.current.driverProfile?.onlineVehicleSession).toEqual(expect.objectContaining({
+      vehicleType: 'moto',
+      startedAt: expect.any(String),
+    }));
 
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
-      data: expect.objectContaining({ isOnline: true }),
+      data: expect.objectContaining({
+        isOnline: true,
+        onlineVehicleSession: expect.objectContaining({
+          vehicleType: 'moto',
+        }),
+      }),
     });
   });
 
@@ -107,6 +116,24 @@ describe('setDriverOnline', () => {
     });
 
     expect(result.current.driverProfile).toBeNull();
+  });
+
+  test('clears the online session when going offline', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.saveDriverProfile(baseProfile);
+    });
+    await act(async () => {
+      await result.current.setDriverOnline(true);
+    });
+    await act(async () => {
+      await result.current.setDriverOnline(false);
+    });
+
+    expect(result.current.driverProfile?.isOnline).toBe(false);
+    expect(result.current.driverProfile?.onlineVehicleSession).toBeNull();
   });
 });
 
