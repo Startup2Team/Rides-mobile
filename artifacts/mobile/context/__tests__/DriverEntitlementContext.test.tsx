@@ -4,6 +4,9 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { DriverEntitlementProvider, useDriverEntitlement } from '../DriverEntitlementContext';
 import { RideProvider, useRide } from '../RideContext';
+import { createPackageOfferSnapshot } from '@/domain/driverRidePackages';
+import { getPackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
+import { resolvePackageOffer } from '@/domain/driverRideCampaigns';
 
 let mockRideDriverProfile: any = null;
 
@@ -17,6 +20,14 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 const rideWrapper = ({ children }: { children: React.ReactNode }) => (
   <DriverEntitlementProvider><RideProvider>{children}</RideProvider></DriverEntitlementProvider>
 );
+
+function launchOffer(vehicle = { vehicleId: 'driver-vehicle:legacy', vehicleType: 'moto' as const }) {
+  return createPackageOfferSnapshot(resolvePackageOffer({
+    package: getPackageCatalogEntry('launch_starter', 'moto')!,
+    vehicleType: 'moto',
+    activeCampaigns: [],
+  }), vehicle);
+}
 
 describe('DriverEntitlementProvider', () => {
   beforeEach(async () => {
@@ -36,7 +47,7 @@ describe('DriverEntitlementProvider', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
-      await result.current.activatePackage('launch_starter');
+      await result.current.activatePackage(launchOffer());
     });
     expect(result.current.rideCredits).toBe(30);
     expect(result.current.bonusRides).toBe(5);
@@ -91,7 +102,10 @@ describe('DriverEntitlementProvider', () => {
     }), { wrapper: rideWrapper });
     await waitFor(() => expect(result.current.entitlement.isLoading).toBe(false));
     await act(async () => {
-      await result.current.entitlement.activatePackage('launch_starter');
+      await result.current.entitlement.activatePackage(launchOffer({
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+      }));
     });
     act(() => {
       result.current.ride.simulateIncomingRideRequest();

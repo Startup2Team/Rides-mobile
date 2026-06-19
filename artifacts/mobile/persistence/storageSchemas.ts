@@ -392,6 +392,7 @@ const driverPackagePurchaseStatusSchema = z.enum([
 ]);
 
 const driverPackagePurchaseSchema = z.object({
+  offerId: z.string().optional(),
   packageId: driverRidePackageIdSchema,
   packageVersion: z.string().optional(),
   packageName: z.string().optional(),

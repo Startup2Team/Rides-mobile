@@ -182,7 +182,20 @@ describe('DriverPackagesScreen', () => {
 
     expect(require('expo-router').router.push).toHaveBeenCalledWith({
       pathname: '/driver-package-payment',
-      params: { packageId: 'growth' },
+      params: {
+        offer: expect.any(String),
+      },
+    });
+    const navigation = require('expo-router').router.push.mock.calls[0][0];
+    expect(JSON.parse(navigation.params.offer)).toMatchObject({
+      offerId: expect.stringContaining('package-offer:'),
+      packageId: 'growth',
+      packageVersion: 'v1',
+      packageName: 'Growth Package',
+      priceRwf: 2_000,
+      ridesGranted: 60,
+      bonusRidesGranted: 15,
+      source: 'local_catalog',
     });
   });
 

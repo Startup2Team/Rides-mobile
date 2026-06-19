@@ -10,15 +10,13 @@ import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardin
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
-  DRIVER_RIDE_PACKAGES,
+  isPackageOfferExpired,
+  parsePackageOfferSnapshot,
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
-  type DriverRidePackageId,
   type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
-import { getPackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
-import { getActiveDriverRideCampaigns, resolvePackageOffer } from '@/domain/driverRideCampaigns';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
 
@@ -31,22 +29,12 @@ export default function DriverPackagePaymentScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { packageId } = useLocalSearchParams<{ packageId?: string }>();
+  const { offer: serializedOffer } = useLocalSearchParams<{ offer?: string }>();
   const { driverProfile } = useAuth();
-  const { activatePackage, createPackagePurchase, entitlement, updatePackagePurchaseStatus } = useDriverEntitlement();
-  const validPackageId: DriverRidePackageId | null =
-    packageId && packageId in DRIVER_RIDE_PACKAGES ? packageId as DriverRidePackageId : null;
+  const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus } = useDriverEntitlement();
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
-  const catalogEntry = validPackageId ? getPackageCatalogEntry(validPackageId, activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null) : null;
-  const ridePackage = catalogEntry
-    ? resolvePackageOffer({
-        package: catalogEntry,
-        vehicleType: activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? catalogEntry.vehicleType,
-        driver: driverProfile,
-        entitlement,
-        activeCampaigns: getActiveDriverRideCampaigns(),
-      })
-    : null;
+  const ridePackage = parsePackageOfferSnapshot(serializedOffer, activeVehicle);
+  const offerExpired = Boolean(ridePackage && isPackageOfferExpired(ridePackage));
   const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
     driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
   );
@@ -85,10 +73,14 @@ export default function DriverPackagePaymentScreen() {
 
   const handleActivateFreePackage = async () => {
     if (!ridePackage) return;
+    if (isPackageOfferExpired(ridePackage)) {
+      setError('This package offer expired. Please refresh packages.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      setReceipt(await activatePackage(ridePackage.packageId));
+      setReceipt(await activatePackage(ridePackage));
     } catch (activationError) {
       setError(activationError instanceof Error ? activationError.message : 'Unable to activate this package.');
     } finally {
@@ -98,6 +90,10 @@ export default function DriverPackagePaymentScreen() {
 
   const handleSendPaymentPrompt = async () => {
     if (!ridePackage) return;
+    if (isPackageOfferExpired(ridePackage)) {
+      setError('This package offer expired. Please refresh packages.');
+      return;
+    }
     if (ridePackage.priceRwf <= 0) {
       await handleActivateFreePackage();
       return;
@@ -107,7 +103,7 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
     try {
       const purchase = await createPackagePurchase({
-        packageId: ridePackage.packageId,
+        offer: ridePackage,
         provider: selectedProvider,
         phoneNumber,
       });
@@ -134,13 +130,21 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
   };
 
-  if (!ridePackage) {
+  if (!ridePackage || offerExpired) {
+    const expired = Boolean(ridePackage && offerExpired);
     return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <View style={[styles.invalidIconHalo, { backgroundColor: colors.destructiveHex + '14' }]}>
         <Feather name="package" size={28} color={colors.destructive} />
       </View>
-      <Text style={[styles.invalidTitle, { color: colors.foreground }]}>Package not found</Text>
-      <AppButton title="Choose a Package" onPress={() => router.replace('/driver-packages')} />
+      <Text style={[styles.invalidTitle, { color: colors.foreground }]}>
+        {expired ? 'Package offer expired' : 'Package offer unavailable'}
+      </Text>
+      <Text style={[styles.invalidText, { color: colors.mutedForeground }]}>
+        {expired
+          ? 'This package offer expired. Please refresh packages.'
+          : 'This package offer is missing or invalid. Please choose the package again.'}
+      </Text>
+      <AppButton title="Return to Packages" onPress={() => router.replace('/driver-packages')} />
     </View>;
   }
 
@@ -337,6 +341,7 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
   invalidIconHalo: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   invalidTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  invalidText: { maxWidth: 300, textAlign: 'center', fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
   paymentScrollContent: { flexGrow: 1, justifyContent: 'center' },
   paymentContent: { marginHorizontal: 20, gap: 20 },
   summaryPanel: { gap: 10 },

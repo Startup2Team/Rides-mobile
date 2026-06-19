@@ -2,7 +2,9 @@ import type { DriverProfile } from '@/types';
 import {
   activatePackage,
   canDriverGoOnlineWithCredits,
+  createPackageOfferSnapshot,
   createPackagePurchase,
+  createPackagePurchaseFromOffer,
   deductCreditForCompletedRide,
   EMPTY_DRIVER_ENTITLEMENT,
   getPackagePurchaseSnapshot,
@@ -17,6 +19,7 @@ import {
   normalizeEntitlement,
   updatePackagePurchaseStatus,
 } from '../driverRidePackages';
+import { resolvePackageOffer } from '../driverRideCampaigns';
 import {
   getActivePackages,
   getPackageByVersion,
@@ -163,6 +166,77 @@ describe('driver ride packages', () => {
       pricePaid: 2_000,
       purchasedAt: '2026-06-08T10:00:00.000Z',
     });
+  });
+
+  test('locked offer values are used for purchase and activation snapshots', () => {
+    const catalogOffer = resolvePackageOffer({
+      package: getPackageCatalogEntry('growth', 'moto')!,
+      vehicleType: 'moto',
+      activeCampaigns: [],
+      now: new Date('2026-06-08T10:00:00.000Z'),
+    });
+    const lockedOffer = createPackageOfferSnapshot(
+      { ...catalogOffer, priceRwf: 1_250, ridesGranted: 44, bonusRidesGranted: 6 },
+      motoVehicle,
+      new Date('2026-06-08T10:00:00.000Z'),
+    );
+    const started = createPackagePurchaseFromOffer(EMPTY_DRIVER_ENTITLEMENT, {
+      offer: lockedOffer,
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:01:00.000Z', motoVehicle);
+    const completed = updatePackagePurchaseStatus(
+      started.entitlement,
+      started.purchase.transactionId,
+      'successful',
+      '2026-06-08T10:02:00.000Z',
+      motoVehicle,
+    );
+
+    expect(started.purchase).toMatchObject({
+      offerId: lockedOffer.offerId,
+      pricePaid: 1_250,
+      ridesGranted: 44,
+      bonusRidesGranted: 6,
+    });
+    expect(completed.activation).toMatchObject({
+      pricePaid: 1_250,
+      ridesGranted: 44,
+      bonusRidesGranted: 6,
+      creditsGranted: 50,
+    });
+    expect(getPackagePurchaseSnapshot(completed.purchase)).toMatchObject({
+      pricePaid: 1_250,
+      ridesGranted: 44,
+      bonusRidesGranted: 6,
+    });
+  });
+
+  test('expired or invalid locked offers cannot create purchases', () => {
+    const catalogOffer = resolvePackageOffer({
+      package: getPackageCatalogEntry('growth', 'moto')!,
+      vehicleType: 'moto',
+      activeCampaigns: [],
+      now: new Date('2026-06-08T10:00:00.000Z'),
+    });
+    const expiredOffer = createPackageOfferSnapshot(
+      catalogOffer,
+      motoVehicle,
+      new Date('2026-06-08T10:00:00.000Z'),
+      1_000,
+    );
+
+    expect(() => createPackagePurchaseFromOffer(EMPTY_DRIVER_ENTITLEMENT, {
+      offer: expiredOffer,
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:02.000Z', motoVehicle)).toThrow('offer expired');
+
+    expect(() => createPackagePurchaseFromOffer(EMPTY_DRIVER_ENTITLEMENT, {
+      offer: { ...expiredOffer, ridesGranted: -1 },
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:00.500Z', motoVehicle)).toThrow('offer is invalid');
   });
 
   test('package catalog versions can coexist while active lookup stays singular', () => {

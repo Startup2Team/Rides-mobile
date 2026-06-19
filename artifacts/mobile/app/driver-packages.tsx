@@ -9,13 +9,15 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import {
+  createPackageOfferSnapshot,
   getPackagesForVehicleType,
   hasUsedCabStarterOffer,
   hasUsedFusoStarterOffer,
   hasUsedHiluxStarterOffer,
   hasUsedLaunchOffer,
   hasUsedRifaniStarterOffer,
-  type DriverRidePackageId,
+  serializePackageOfferSnapshot,
+  type DriverPackageOfferSnapshot,
 } from '@/domain/driverRidePackages';
 import { getPackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
 import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePackageOffer } from '@/domain/driverRideCampaigns';
@@ -37,7 +39,7 @@ export default function DriverPackagesScreen() {
     entitlement,
     rideCredits,
   } = useDriverEntitlement();
-  const [selectedPackageId, setSelectedPackageId] = useState<DriverRidePackageId | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<DriverPackageOfferSnapshot | null>(null);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
@@ -47,15 +49,23 @@ export default function DriverPackagesScreen() {
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
   const activeCampaigns = getActiveDriverRideCampaigns();
 
-  const handleSelectPackage = (packageId: DriverRidePackageId) => {
-    setSelectedPackageId(current => current === packageId ? null : packageId);
+  const handleSelectPackage = (offer: DriverRidePackageOffer) => {
+    if (selectedOffer?.packageId === offer.packageId) {
+      setSelectedOffer(null);
+      return;
+    }
+    const vehicle = activeVehicle
+      ?? (entitlement.vehicleId && entitlement.vehicleType
+        ? { vehicleId: entitlement.vehicleId, vehicleType: entitlement.vehicleType }
+        : { vehicleId: 'driver-vehicle:legacy', vehicleType: offer.vehicleType });
+    setSelectedOffer(createPackageOfferSnapshot(offer, vehicle));
   };
 
   const handleBuySelectedPackage = () => {
-    if (!selectedPackageId) return;
+    if (!selectedOffer) return;
     router.push({
       pathname: '/driver-package-payment',
-      params: { packageId: selectedPackageId },
+      params: { offer: serializePackageOfferSnapshot(selectedOffer) },
     });
   };
 
@@ -108,8 +118,8 @@ export default function DriverPackagesScreen() {
           colors={colors}
           disabled={isOfferUsed}
           unavailable={isEntitlementLoading}
-          selected={selectedPackageId === id}
-          onPress={() => handleSelectPackage(id)}
+          selected={selectedOffer?.packageId === id}
+          onPress={() => handleSelectPackage(pkg)}
         />
       );
     })}
@@ -117,7 +127,7 @@ export default function DriverPackagesScreen() {
       <AppButton
         title="Buy Selected Package"
         onPress={handleBuySelectedPackage}
-        disabled={!selectedPackageId}
+        disabled={!selectedOffer}
         fullWidth
         size="lg"
       />
