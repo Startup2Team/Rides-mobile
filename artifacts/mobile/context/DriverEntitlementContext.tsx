@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  activatePackage as activatePackageDomain,
-  createPackagePurchase as createPackagePurchaseDomain,
+  activatePackageOffer as activatePackageOfferDomain,
+  createPackagePurchaseFromOffer as createPackagePurchaseDomain,
   deductCreditForCompletedRide as deductCreditDomain,
   EMPTY_DRIVER_ENTITLEMENT,
   getEntitlementVehicleForProfile,
@@ -14,7 +14,7 @@ import {
   type DriverEntitlement,
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
-  type DriverRidePackageId,
+  type DriverPackageOfferSnapshot,
   type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
@@ -28,9 +28,9 @@ interface DriverEntitlementContextType {
   bonusRides: number;
   totalAvailableRides: number;
   launchOfferUsed: boolean;
-  activatePackage: (packageId: DriverRidePackageId) => Promise<PackageActivation>;
+  activatePackage: (offer: DriverPackageOfferSnapshot) => Promise<PackageActivation>;
   createPackagePurchase: (input: {
-    packageId: DriverRidePackageId;
+    offer: DriverPackageOfferSnapshot;
     provider: MobileMoneyPackageProvider;
     phoneNumber: string;
   }) => Promise<DriverPackagePurchase>;
@@ -88,14 +88,14 @@ export function DriverEntitlementProvider({ children }: { children: React.ReactN
     await saveStoredDriverEntitlement(normalized);
   }, []);
 
-  const activatePackage = useCallback(async (packageId: DriverRidePackageId) => {
-    const result = activatePackageDomain(entitlementRef.current, packageId, undefined, activeVehicleRef.current);
+  const activatePackage = useCallback(async (offer: DriverPackageOfferSnapshot) => {
+    const result = activatePackageOfferDomain(entitlementRef.current, offer, undefined, activeVehicleRef.current);
     await persist(result.entitlement);
     return result.activation;
   }, [persist]);
 
   const createPackagePurchase = useCallback(async (input: {
-    packageId: DriverRidePackageId;
+    offer: DriverPackageOfferSnapshot;
     provider: MobileMoneyPackageProvider;
     phoneNumber: string;
   }) => {

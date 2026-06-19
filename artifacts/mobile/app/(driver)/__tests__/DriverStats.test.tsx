@@ -6,33 +6,45 @@ import DriverStats from '../stats';
 
 const mockLoadHistory = jest.fn();
 
-const mockEntitlement: DriverEntitlement = {
+let mockEntitlement: DriverEntitlement = {
   ...EMPTY_DRIVER_ENTITLEMENT,
   activePackageId: 'growth',
   remainingRideCredits: 110,
   purchaseHistory: [
     {
       amount: 2_000,
+      bonusRidesGranted: 15,
       createdAt: '2026-06-08T10:00:00.000Z',
       completedAt: '2026-06-08T10:01:00.000Z',
+      packageName: 'Growth Package',
       packageId: 'growth',
+      packageVersion: 'v1',
       vehicleId: 'driver-vehicle:moto:rad-001-a',
       vehicleType: 'moto',
       phoneNumber: '+250788000000',
       provider: 'mtn',
       status: 'successful',
       transactionId: 'momo-package:growth:2026-06-08T10:00:00.000Z',
+      purchasedAt: '2026-06-08T10:00:00.000Z',
+      pricePaid: 2_000,
+      ridesGranted: 60,
     },
     {
       amount: 2_000,
+      bonusRidesGranted: 15,
       createdAt: '2026-06-07T10:00:00.000Z',
+      packageName: 'Growth Package',
       packageId: 'growth',
+      packageVersion: 'v1',
       vehicleId: 'driver-vehicle:moto:rad-001-a',
       vehicleType: 'moto',
       phoneNumber: '+250788000000',
       provider: 'airtel',
       status: 'failed',
       transactionId: 'momo-package:growth:2026-06-07T10:00:00.000Z',
+      purchasedAt: '2026-06-07T10:00:00.000Z',
+      pricePaid: 2_000,
+      ridesGranted: 60,
     },
   ],
   updatedAt: '2026-06-08T10:00:00.000Z',
@@ -155,5 +167,41 @@ describe('DriverStats', () => {
     expect(screen.getByText(/Airtel Money/)).toBeTruthy();
     expect(screen.getAllByText('2,000 RWF')).toHaveLength(2);
     expect(screen.queryByText('How Stats Work')).toBeNull();
+  });
+
+  test('renders package history from purchase snapshots', async () => {
+    mockEntitlement = {
+      ...EMPTY_DRIVER_ENTITLEMENT,
+      activePackageId: 'archived_growth_2026',
+      remainingRideCredits: 70,
+      purchaseHistory: [
+        {
+          amount: 2_500,
+          bonusRidesGranted: 20,
+          createdAt: '2026-06-09T10:00:00.000Z',
+          packageName: 'Growth Package v2',
+          packageId: 'archived_growth_2026',
+          packageVersion: 'v2',
+          phoneNumber: '+250788000000',
+          provider: 'mtn',
+          purchasedAt: '2026-06-09T10:00:00.000Z',
+          pricePaid: 2_500,
+          ridesGranted: 70,
+          status: 'successful',
+          transactionId: 'momo-package:growth:2026-06-09T10:00:00.000Z',
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
+        },
+      ],
+      updatedAt: '2026-06-09T10:00:00.000Z',
+    };
+
+    render(<DriverStats />);
+
+    await waitFor(() => expect(mockLoadHistory).toHaveBeenCalled());
+
+    expect(screen.getByText('Growth Package v2')).toBeTruthy();
+    expect(screen.getByText('70 Rides + 20 Bonus Rides')).toBeTruthy();
+    expect(screen.getByText('2,500 RWF')).toBeTruthy();
   });
 });

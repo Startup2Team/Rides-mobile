@@ -21,7 +21,7 @@ import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
-import { DRIVER_RIDE_PACKAGES, type DriverEntitlement } from '@/domain/driverRidePackages';
+import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
 import type { Ride } from '@/types';
 
 type NotifType = 'ride' | 'promo' | 'system' | 'safety';
@@ -138,7 +138,7 @@ function buildDriverNotifications({
   }
 
   const packageNotifications = entitlement.purchaseHistory.slice(0, 3).map(purchase => {
-    const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+    const purchaseSnapshot = getPackagePurchaseSnapshot(purchase);
     const successful = purchase.status === 'successful';
     return {
       id: `driver_package_${purchase.transactionId}`,
@@ -146,9 +146,9 @@ function buildDriverNotifications({
       icon: successful ? 'package' as const : 'alert-circle' as const,
       title: successful ? 'Ride package activated' : 'Ride package update',
       message: successful
-        ? `${ridePackage.name} is active with ${ridePackage.totalCredits} rides.`
-        : `${ridePackage.name} payment status: ${purchase.status}.`,
-      time: purchase.completedAt ?? purchase.createdAt,
+        ? `${purchaseSnapshot?.packageName ?? purchase.packageId} is active with ${purchaseSnapshot?.ridesGranted ?? purchase.ridesGranted ?? 0} rides.`
+        : `${purchaseSnapshot?.packageName ?? purchase.packageId} payment status: ${purchase.status}.`,
+      time: purchase.completedAt ?? purchase.purchasedAt ?? purchase.createdAt,
       read: successful,
     };
   });

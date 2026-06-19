@@ -1,9 +1,26 @@
 import { getActiveDriverVehicle, getDriverVehicleForSession, getPrimaryDriverVehicle } from './driverVehicles';
+import {
+  DRIVER_RIDE_PACKAGE_CATALOG,
+  getActivePackages,
+  getPackageCatalogEntry,
+  type DriverRidePackageCatalogEntry,
+  type DriverRidePackageCatalogStatus,
+} from './driverRidePackageCatalog';
+import {
+  getActiveDriverRideCampaigns,
+  resolvePackageOffer,
+  type DriverRideCampaignStatus,
+  type DriverRideCampaignType,
+  type DriverRidePackageCampaign,
+  type DriverRidePackageOffer,
+} from './driverRideCampaigns';
 import type { DriverProfile, DriverVehicleProfile, VehicleType } from '@/types';
 
-export type DriverRidePackageId = 'launch_starter' | 'growth' | 'pro' | 'cab_starter' | 'cab_growth' | 'cab_pro' | 'hilux_starter' | 'hilux_growth' | 'hilux_pro' | 'rifani_starter' | 'rifani_growth' | 'rifani_pro' | 'fuso_starter' | 'fuso_growth' | 'fuso_pro';
+export type DriverRidePackageId = string;
 export type DriverEntitlementAuthority = 'local_prototype' | 'backend';
 export type MobileMoneyPackageProvider = 'mtn' | 'airtel';
+export type DriverPackageOfferSource = 'local_catalog';
+export type DriverPackageQuoteAuthority = 'local' | 'backend';
 export type DriverPackagePurchaseStatus =
   | 'idle'
   | 'pending'
@@ -24,22 +41,83 @@ export interface DriverRidePackage {
   launchOffer: boolean;
 }
 
+export interface DriverRidePackageCatalogSnapshot {
+  packageId: DriverRidePackageId;
+  packageVersion: string;
+  packageName: string;
+  vehicleType: VehicleType;
+  pricePaid: number;
+  ridesGranted: number;
+  bonusRidesGranted: number;
+  purchasedAt: string;
+}
+
+export interface DriverRidePackagePurchaseSnapshot extends DriverRidePackageCatalogSnapshot {
+  campaignId?: string | null;
+  campaignName?: string | null;
+  campaignType?: DriverRideCampaignType | null;
+  campaignStatus?: DriverRideCampaignStatus | null;
+}
+
+export interface DriverPackageOfferSnapshot {
+  offerId: string;
+  packageId: DriverRidePackageId;
+  packageVersion: string;
+  packageName: string;
+  vehicleId: string;
+  vehicleType: VehicleType;
+  priceRwf: number;
+  ridesGranted: number;
+  bonusRidesGranted: number;
+  campaignId?: string | null;
+  campaignName?: string | null;
+  campaignType?: DriverRideCampaignType | null;
+  ownerUserId?: string | null;
+  quoteId?: string | null;
+  quoteSignature?: string | null;
+  quoteAuthority: DriverPackageQuoteAuthority;
+  createdAt: string;
+  expiresAt: string;
+  source: DriverPackageOfferSource;
+}
+
 export interface PackageActivation {
   id: string;
   packageId: DriverRidePackageId;
+  packageVersion?: string;
+  packageName?: string;
+  campaignId?: string | null;
+  campaignName?: string | null;
+  campaignType?: DriverRideCampaignType | null;
+  campaignStatus?: DriverRideCampaignStatus | null;
   vehicleId: string;
   vehicleType: VehicleType;
   activatedAt: string;
   pricePaidRwf: number;
+  pricePaid?: number;
+  ridesGranted?: number;
+  bonusRidesGranted?: number;
+  purchasedAt?: string;
   creditsGranted: number;
   authority: DriverEntitlementAuthority;
 }
 
 export interface DriverPackagePurchase {
+  offerId?: string;
   packageId: DriverRidePackageId;
+  packageVersion?: string;
+  packageName?: string;
+  campaignId?: string | null;
+  campaignName?: string | null;
+  campaignType?: DriverRideCampaignType | null;
+  campaignStatus?: DriverRideCampaignStatus | null;
   vehicleId: string;
   vehicleType: VehicleType;
   amount: number;
+  pricePaid?: number;
+  ridesGranted?: number;
+  bonusRidesGranted?: number;
+  purchasedAt?: string;
   provider: MobileMoneyPackageProvider;
   phoneNumber: string;
   transactionId: string;
@@ -88,165 +166,206 @@ export interface VehicleEntitlement {
   authority: DriverEntitlementAuthority;
 }
 
-export const DRIVER_RIDE_PACKAGES: Record<DriverRidePackageId, DriverRidePackage> = {
-  launch_starter: {
-    id: 'launch_starter',
-    name: 'Launch Starter Package',
-    normalPriceRwf: 1_000,
-    currentPriceRwf: 0,
-    includedRides: 30,
-    bonusRides: 5,
-    totalCredits: 35,
-    launchOffer: true,
-  },
-  growth: {
-    id: 'growth',
-    name: 'Growth Package',
-    normalPriceRwf: 2_000,
-    currentPriceRwf: 2_000,
-    includedRides: 60,
-    bonusRides: 15,
-    totalCredits: 75,
-    launchOffer: false,
-  },
-  pro: {
-    id: 'pro',
-    name: 'Pro Package',
-    normalPriceRwf: 3_500,
-    currentPriceRwf: 3_500,
-    includedRides: 120,
-    bonusRides: 30,
-    totalCredits: 150,
-    launchOffer: false,
-  },
-  cab_starter: {
-    id: 'cab_starter',
-    name: 'Starter',
-    normalPriceRwf: 1_000,
-    currentPriceRwf: 0,
-    includedRides: 2,
-    bonusRides: 2,
-    totalCredits: 4,
-    launchOffer: true,
-  },
-  cab_growth: {
-    id: 'cab_growth',
-    name: 'Growth',
-    normalPriceRwf: 2_000,
-    currentPriceRwf: 2_000,
-    includedRides: 5,
-    bonusRides: 4,
-    totalCredits: 9,
-    launchOffer: false,
-  },
-  cab_pro: {
-    id: 'cab_pro',
-    name: 'Pro',
-    normalPriceRwf: 5_000,
-    currentPriceRwf: 5_000,
-    includedRides: 10,
-    bonusRides: 9,
-    totalCredits: 19,
-    launchOffer: false,
-  },
-  hilux_starter: {
-    id: 'hilux_starter',
-    name: 'Starter',
-    normalPriceRwf: 1_000,
-    currentPriceRwf: 0,
-    includedRides: 1,
-    bonusRides: 1,
-    totalCredits: 2,
-    launchOffer: true,
-  },
-  hilux_growth: {
-    id: 'hilux_growth',
-    name: 'Growth',
-    normalPriceRwf: 2_000,
-    currentPriceRwf: 2_000,
-    includedRides: 2,
-    bonusRides: 3,
-    totalCredits: 5,
-    launchOffer: false,
-  },
-  hilux_pro: {
-    id: 'hilux_pro',
-    name: 'Pro',
-    normalPriceRwf: 5_000,
-    currentPriceRwf: 5_000,
-    includedRides: 4,
-    bonusRides: 7,
-    totalCredits: 11,
-    launchOffer: false,
-  },
-  rifani_starter: {
-    id: 'rifani_starter',
-    name: 'Starter',
-    normalPriceRwf: 1_000,
-    currentPriceRwf: 0,
-    includedRides: 4,
-    bonusRides: 2,
-    totalCredits: 6,
-    launchOffer: true,
-  },
-  rifani_growth: {
-    id: 'rifani_growth',
-    name: 'Growth',
-    normalPriceRwf: 2_000,
-    currentPriceRwf: 2_000,
-    includedRides: 8,
-    bonusRides: 5,
-    totalCredits: 13,
-    launchOffer: false,
-  },
-  rifani_pro: {
-    id: 'rifani_pro',
-    name: 'Pro',
-    normalPriceRwf: 5_000,
-    currentPriceRwf: 5_000,
-    includedRides: 16,
-    bonusRides: 11,
-    totalCredits: 27,
-    launchOffer: false,
-  },
-  fuso_starter: {
-    id: 'fuso_starter',
-    name: 'Starter',
-    normalPriceRwf: 2_500,
-    currentPriceRwf: 0,
-    includedRides: 1,
-    bonusRides: 2,
-    totalCredits: 3,
-    launchOffer: true,
-  },
-  fuso_growth: {
-    id: 'fuso_growth',
-    name: 'Growth',
-    normalPriceRwf: 5_000,
-    currentPriceRwf: 5_000,
-    includedRides: 2,
-    bonusRides: 3,
-    totalCredits: 5,
-    launchOffer: false,
-  },
-  fuso_pro: {
-    id: 'fuso_pro',
-    name: 'Pro',
-    normalPriceRwf: 10_000,
-    currentPriceRwf: 10_000,
-    includedRides: 4,
-    bonusRides: 7,
-    totalCredits: 11,
-    launchOffer: false,
-  },
-};
+export const PACKAGE_OFFER_TTL_MS = 15 * 60 * 1000;
+
+export function createPackageOfferSnapshot(
+  offer: DriverRidePackageOffer,
+  vehicle: DriverEntitlementVehicleRef,
+  now = new Date(),
+  ttlMs = PACKAGE_OFFER_TTL_MS,
+  options: {
+    ownerUserId?: string | null;
+    quoteId?: string | null;
+    quoteSignature?: string | null;
+    quoteAuthority?: DriverPackageQuoteAuthority;
+  } = {},
+): DriverPackageOfferSnapshot {
+  const vehicleId = vehicleIdFromRef(vehicle);
+  const vehicleType = vehicleTypeFromRef(vehicle);
+  if (!vehicleId || !vehicleType || offer.vehicleType !== vehicleType) {
+    throw new Error('Package offer does not match the selected vehicle.');
+  }
+  const createdAt = now.toISOString();
+  return {
+    offerId: `package-offer:${vehicleId}:${offer.packageId}:${offer.packageVersion}:${now.getTime()}`,
+    packageId: offer.packageId,
+    packageVersion: offer.packageVersion,
+    packageName: offer.packageName,
+    vehicleId,
+    vehicleType,
+    priceRwf: offer.priceRwf,
+    ridesGranted: offer.ridesGranted,
+    bonusRidesGranted: offer.bonusRidesGranted,
+    campaignId: offer.campaignId,
+    campaignName: offer.campaignName,
+    campaignType: offer.campaignType,
+    ownerUserId: options.ownerUserId,
+    quoteId: options.quoteId,
+    quoteSignature: options.quoteSignature,
+    quoteAuthority: options.quoteAuthority ?? 'local',
+    createdAt,
+    expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
+    source: 'local_catalog',
+  };
+}
+
+export function isPackageOfferExpired(
+  offer: DriverPackageOfferSnapshot,
+  now = new Date(),
+) {
+  const expiresAt = new Date(offer.expiresAt).getTime();
+  return Number.isNaN(expiresAt) || now.getTime() >= expiresAt;
+}
+
+export function validatePackageOfferSnapshot(
+  value: unknown,
+  vehicle?: DriverEntitlementVehicleRef | null,
+): DriverPackageOfferSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const offer = value as Partial<DriverPackageOfferSnapshot>;
+  const validPackageId = typeof offer.packageId === 'string' && offer.packageId.trim().length > 0;
+  const knownVehicleTypes: VehicleType[] = ['moto', 'rifani', 'cab', 'fuso', 'hilux'];
+  const validVehicle = typeof offer.vehicleId === 'string'
+    && offer.vehicleId.length > 0
+    && typeof offer.vehicleType === 'string'
+    && knownVehicleTypes.includes(offer.vehicleType as VehicleType);
+  const validNumbers = [offer.priceRwf, offer.ridesGranted, offer.bonusRidesGranted]
+    .every(item => typeof item === 'number' && Number.isFinite(item) && item >= 0);
+  const createdAt = typeof offer.createdAt === 'string' ? new Date(offer.createdAt).getTime() : Number.NaN;
+  const expiresAt = typeof offer.expiresAt === 'string' ? new Date(offer.expiresAt).getTime() : Number.NaN;
+  const validDates = !Number.isNaN(createdAt) && !Number.isNaN(expiresAt) && expiresAt > createdAt;
+  if (
+    typeof offer.offerId !== 'string'
+    || offer.offerId.length === 0
+    || !validPackageId
+    || typeof offer.packageVersion !== 'string'
+    || offer.packageVersion.length === 0
+    || typeof offer.packageName !== 'string'
+    || offer.packageName.length === 0
+    || !validVehicle
+    || !validNumbers
+    || !validDates
+    || offer.source !== 'local_catalog'
+    || (offer.quoteAuthority !== 'local' && offer.quoteAuthority !== 'backend')
+  ) return null;
+  if (
+    vehicle
+    && (offer.vehicleId !== vehicleIdFromRef(vehicle) || offer.vehicleType !== vehicleTypeFromRef(vehicle))
+  ) return null;
+  return offer as DriverPackageOfferSnapshot;
+}
+
+export function serializePackageOfferSnapshot(offer: DriverPackageOfferSnapshot) {
+  return JSON.stringify(offer);
+}
+
+export function parsePackageOfferSnapshot(
+  serialized: string | string[] | undefined,
+  vehicle?: DriverEntitlementVehicleRef | null,
+) {
+  if (!serialized || Array.isArray(serialized)) return null;
+  try {
+    return validatePackageOfferSnapshot(JSON.parse(serialized), vehicle);
+  } catch {
+    return null;
+  }
+}
+
+function toLegacyRidePackage(entry: DriverRidePackageCatalogEntry): DriverRidePackage {
+  const totalCredits = entry.ridesGranted + entry.bonusRidesGranted;
+  return {
+    id: entry.packageId,
+    name: entry.packageName,
+    normalPriceRwf: entry.compareAtPriceRwf ?? entry.priceRwf,
+    currentPriceRwf: entry.priceRwf,
+    includedRides: entry.ridesGranted,
+    bonusRides: entry.bonusRidesGranted,
+    totalCredits,
+    launchOffer: entry.priceRwf === 0,
+  };
+}
+
+export function getDriverRidePackageCatalogEntries(
+  status?: DriverRidePackageCatalogStatus,
+  vehicleType?: VehicleType | null,
+  catalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG,
+) {
+  return catalog.filter(entry =>
+    (!status || entry.status === status) &&
+    (!vehicleType || entry.vehicleType === vehicleType),
+  );
+}
+
+export function getActivePackagesByVehicleType(
+  vehicleType?: VehicleType | null,
+  catalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG,
+) {
+  return getActivePackages(vehicleType, catalog).map(toLegacyRidePackage);
+}
+
+export function getPackageCatalogSnapshot(
+  packageId: DriverRidePackageId,
+  vehicleType?: VehicleType | null,
+  packageVersion?: string | null,
+  catalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG,
+): DriverRidePackageCatalogSnapshot | null {
+  const entry = getPackageCatalogEntry(packageId, vehicleType, packageVersion, catalog);
+  if (!entry) return null;
+  return {
+    packageId: entry.packageId,
+    packageVersion: entry.packageVersion,
+    packageName: entry.packageName,
+    vehicleType: entry.vehicleType,
+    pricePaid: entry.priceRwf,
+    ridesGranted: entry.ridesGranted,
+    bonusRidesGranted: entry.bonusRidesGranted,
+    purchasedAt: entry.effectiveFrom,
+  };
+}
+
+export function getPackagePurchaseSnapshot(
+  purchase: DriverPackagePurchase | null | undefined,
+  vehicle?: DriverEntitlementVehicleRef | null,
+): DriverRidePackagePurchaseSnapshot | null {
+  if (!purchase) return null;
+  const vehicleType = purchase.vehicleType ?? vehicle?.vehicleType ?? null;
+  const snapshot = purchase.packageVersion
+    ? getPackageCatalogSnapshot(purchase.packageId, vehicleType, purchase.packageVersion)
+    : getPackageCatalogSnapshot(purchase.packageId, vehicleType);
+  if (snapshot) {
+    return {
+      ...snapshot,
+      packageVersion: purchase.packageVersion ?? snapshot.packageVersion,
+      packageName: purchase.packageName ?? snapshot.packageName,
+      pricePaid: purchase.pricePaid ?? purchase.amount ?? snapshot.pricePaid,
+      ridesGranted: purchase.ridesGranted ?? snapshot.ridesGranted,
+      bonusRidesGranted: purchase.bonusRidesGranted ?? snapshot.bonusRidesGranted,
+      purchasedAt: purchase.purchasedAt ?? purchase.createdAt ?? snapshot.purchasedAt,
+      campaignId: purchase.campaignId ?? null,
+      campaignName: purchase.campaignName ?? null,
+      campaignType: purchase.campaignType ?? null,
+      campaignStatus: purchase.campaignStatus ?? null,
+    };
+  }
+
+  return {
+    packageId: purchase.packageId,
+    packageVersion: purchase.packageVersion ?? 'v1',
+    packageName: purchase.packageName ?? purchase.packageId,
+    vehicleType: vehicleType ?? 'moto',
+    pricePaid: purchase.pricePaid ?? purchase.amount,
+    ridesGranted: purchase.ridesGranted ?? 0,
+    bonusRidesGranted: purchase.bonusRidesGranted ?? 0,
+    purchasedAt: purchase.purchasedAt ?? purchase.createdAt,
+    campaignId: purchase.campaignId ?? null,
+    campaignName: purchase.campaignName ?? null,
+    campaignType: purchase.campaignType ?? null,
+    campaignStatus: purchase.campaignStatus ?? null,
+  };
+}
 
 export function getPackagesForVehicleType(vehicleType: VehicleType | null | undefined): DriverRidePackageId[] {
-  if (vehicleType === 'cab') return ['cab_starter', 'cab_growth', 'cab_pro'];
-  if (vehicleType === 'hilux') return ['hilux_starter', 'hilux_growth', 'hilux_pro'];
-  if (vehicleType === 'rifani') return ['rifani_starter', 'rifani_growth', 'rifani_pro'];
-  if (vehicleType === 'fuso') return ['fuso_starter', 'fuso_growth', 'fuso_pro'];
-  return ['launch_starter', 'growth', 'pro'];
+  return getActivePackagesByVehicleType(vehicleType).map(pkg => pkg.id);
 }
 
 function assertPackageMatchesVehicle(packageId: DriverRidePackageId, vehicleType: VehicleType) {
@@ -255,20 +374,11 @@ function assertPackageMatchesVehicle(packageId: DriverRidePackageId, vehicleType
   }
 }
 
-export function hasUsedCabStarterOffer(entitlement: DriverEntitlement | null | undefined) {
-  return normalizeEntitlement(entitlement).activations.some(a => a.packageId === 'cab_starter');
-}
-
-export function hasUsedHiluxStarterOffer(entitlement: DriverEntitlement | null | undefined) {
-  return normalizeEntitlement(entitlement).activations.some(a => a.packageId === 'hilux_starter');
-}
-
-export function hasUsedRifaniStarterOffer(entitlement: DriverEntitlement | null | undefined) {
-  return normalizeEntitlement(entitlement).activations.some(a => a.packageId === 'rifani_starter');
-}
-
-export function hasUsedFusoStarterOffer(entitlement: DriverEntitlement | null | undefined) {
-  return normalizeEntitlement(entitlement).activations.some(a => a.packageId === 'fuso_starter');
+export function hasUsedPackageOffer(
+  entitlement: DriverEntitlement | null | undefined,
+  packageId: string,
+) {
+  return normalizeEntitlement(entitlement).activations.some(a => a.packageId === packageId);
 }
 
 export const EMPTY_DRIVER_ENTITLEMENT: DriverEntitlement = {
@@ -333,7 +443,18 @@ function stampActivation(
   vehicleId: string,
   vehicleType: VehicleType,
 ): PackageActivation {
-  return { ...activation, vehicleId: activation.vehicleId ?? vehicleId, vehicleType: activation.vehicleType ?? vehicleType };
+  const snapshot = getPackageCatalogSnapshot(activation.packageId, activation.vehicleType ?? vehicleType, activation.packageVersion ?? null);
+  return {
+    ...activation,
+    vehicleId: activation.vehicleId ?? vehicleId,
+    vehicleType: activation.vehicleType ?? vehicleType,
+    packageVersion: activation.packageVersion ?? snapshot?.packageVersion,
+    packageName: activation.packageName ?? snapshot?.packageName,
+    pricePaid: activation.pricePaid ?? snapshot?.pricePaid,
+    ridesGranted: activation.ridesGranted ?? snapshot?.ridesGranted,
+    bonusRidesGranted: activation.bonusRidesGranted ?? snapshot?.bonusRidesGranted,
+    purchasedAt: activation.purchasedAt ?? snapshot?.purchasedAt,
+  };
 }
 
 function stampPurchase(
@@ -341,7 +462,26 @@ function stampPurchase(
   vehicleId: string,
   vehicleType: VehicleType,
 ): DriverPackagePurchase {
-  return { ...purchase, vehicleId: purchase.vehicleId ?? vehicleId, vehicleType: purchase.vehicleType ?? vehicleType };
+  const snapshot = getPackageCatalogSnapshot(purchase.packageId, purchase.vehicleType ?? vehicleType, purchase.packageVersion ?? null);
+  const packageVersion = purchase.packageVersion ?? snapshot?.packageVersion;
+  const packageName = purchase.packageName ?? snapshot?.packageName;
+  const ridesGranted = purchase.ridesGranted ?? snapshot?.ridesGranted;
+  const bonusRidesGranted = purchase.bonusRidesGranted ?? snapshot?.bonusRidesGranted;
+  const pricePaid = purchase.pricePaid ?? purchase.amount ?? snapshot?.pricePaid;
+  const purchasedAt = purchase.purchasedAt ?? purchase.createdAt ?? snapshot?.purchasedAt;
+  return {
+    ...purchase,
+    vehicleId: purchase.vehicleId ?? vehicleId,
+    vehicleType: purchase.vehicleType ?? vehicleType,
+    packageVersion,
+    packageName,
+    ridesGranted,
+    bonusRidesGranted,
+    pricePaid,
+    purchasedAt,
+    amount: pricePaid ?? purchase.amount,
+    createdAt: purchase.createdAt ?? purchasedAt ?? '',
+  };
 }
 
 function stampTransaction(
@@ -460,6 +600,16 @@ export function getVehicleEntitlement(
     ?? emptyVehicleEntitlement(vehicleId, vehicleType, normalized.updatedAt);
 }
 
+export function getActivePackageActivation(
+  entitlement: DriverEntitlement | VehicleEntitlement | null | undefined,
+) {
+  const current = normalizeEntitlement(entitlement);
+  if (!current.activePackageId) return null;
+  return [...current.activations]
+    .reverse()
+    .find(activation => activation.packageId === current.activePackageId) ?? null;
+}
+
 export function getEntitlementVehicleForProfile(profile: DriverProfile | null | undefined) {
   return getDriverVehicleForSession(profile) ?? getActiveDriverVehicle(profile) ?? getPrimaryDriverVehicle(profile);
 }
@@ -487,7 +637,7 @@ export const canDriverGoOnlineWithCredits = (
 };
 
 export const hasUsedLaunchOffer = (entitlement: DriverEntitlement | null | undefined) =>
-  normalizeEntitlement(entitlement).activations.some(activation => activation.packageId === 'launch_starter');
+  normalizeEntitlement(entitlement).activations.some(activation => activation.pricePaidRwf === 0);
 
 export const isLowRideCreditBalance = (entitlement: DriverEntitlement | null | undefined) => {
   const credits = getActiveRideCredits(entitlement);
@@ -520,23 +670,43 @@ export function activatePackage(
   packageId: DriverRidePackageId,
   now = new Date().toISOString(),
   vehicle?: DriverEntitlementVehicleRef | null,
+  activeCampaigns?: DriverRidePackageCampaign[],
 ): { entitlement: DriverEntitlement; activation: PackageActivation } {
   const current = normalizeEntitlement(entitlement, vehicle);
   const currentVehicle = getVehicleEntitlement(current, vehicle);
-  const ridePackage = DRIVER_RIDE_PACKAGES[packageId];
+  const packageEntry = getPackageCatalogEntry(packageId, currentVehicle.vehicleType);
+  if (!packageEntry) throw new Error('Package does not apply to this vehicle type.');
   assertPackageMatchesVehicle(packageId, currentVehicle.vehicleType);
-  if (ridePackage.launchOffer && currentVehicle.activations.some(activation => DRIVER_RIDE_PACKAGES[activation.packageId]?.launchOffer)) {
+  const offer = resolvePackageOffer({
+    package: packageEntry,
+    vehicleType: currentVehicle.vehicleType,
+    driver: current,
+    activeCampaigns: activeCampaigns ?? getActiveDriverRideCampaigns(),
+    now: new Date(now),
+  });
+
+  if (offer.priceRwf === 0 && currentVehicle.activations.some(activation => activation.packageId === packageId)) {
     throw new Error('Launch offer has already been used');
   }
 
   const activation: PackageActivation = {
     id: `activation:${currentVehicle.vehicleId}:${packageId}:${now}`,
     packageId,
+    packageVersion: offer.packageVersion,
+    packageName: offer.packageName,
+    campaignId: offer.campaignId,
+    campaignName: offer.campaignName,
+    campaignType: offer.campaignType,
+    campaignStatus: offer.campaignStatus,
     vehicleId: currentVehicle.vehicleId,
     vehicleType: currentVehicle.vehicleType,
     activatedAt: now,
-    pricePaidRwf: ridePackage.currentPriceRwf,
-    creditsGranted: ridePackage.totalCredits,
+    pricePaidRwf: offer.priceRwf,
+    pricePaid: offer.priceRwf,
+    ridesGranted: offer.ridesGranted,
+    bonusRidesGranted: offer.bonusRidesGranted,
+    purchasedAt: now,
+    creditsGranted: offer.ridesGranted + offer.bonusRidesGranted,
     authority: 'local_prototype',
   };
   const transaction: DriverCreditTransaction = {
@@ -544,7 +714,7 @@ export function activatePackage(
     type: 'credit',
     vehicleId: currentVehicle.vehicleId,
     vehicleType: currentVehicle.vehicleType,
-    amount: ridePackage.totalCredits,
+    amount: offer.ridesGranted + offer.bonusRidesGranted,
     createdAt: now,
     packageActivationId: activation.id,
     idempotencyKey: `package-activation:${activation.id}`,
@@ -555,8 +725,75 @@ export function activatePackage(
     entitlement: replaceVehicleEntitlement(current, {
       ...currentVehicle,
       activePackageId: packageId,
-      remainingRideCredits: currentVehicle.remainingRideCredits + ridePackage.includedRides,
-      remainingBonusRides: currentVehicle.remainingBonusRides + ridePackage.bonusRides,
+      remainingRideCredits: currentVehicle.remainingRideCredits + offer.ridesGranted,
+      remainingBonusRides: currentVehicle.remainingBonusRides + offer.bonusRidesGranted,
+      activations: [...currentVehicle.activations, activation],
+      creditTransactions: [...currentVehicle.creditTransactions, transaction],
+      updatedAt: now,
+      authority: 'local_prototype',
+    }),
+  };
+}
+
+export function activatePackageOffer(
+  entitlement: DriverEntitlement | null | undefined,
+  offerInput: DriverPackageOfferSnapshot,
+  now = new Date().toISOString(),
+  vehicle?: DriverEntitlementVehicleRef | null,
+): { entitlement: DriverEntitlement; activation: PackageActivation } {
+  const current = normalizeEntitlement(entitlement, vehicle);
+  const currentVehicle = getVehicleEntitlement(current, vehicle);
+  const offer = validatePackageOfferSnapshot(offerInput, currentVehicle);
+  if (!offer) throw new Error('Package offer is invalid.');
+  if (isPackageOfferExpired(offer, new Date(now))) {
+    throw new Error('This package offer expired. Please refresh packages.');
+  }
+  if (offer.priceRwf > 0) throw new Error('This package requires Mobile Money confirmation.');
+  if (
+    offer.priceRwf === 0
+    && currentVehicle.activations.some(activation => activation.packageId === offer.packageId)
+  ) {
+    throw new Error('Launch offer has already been used');
+  }
+
+  const activation: PackageActivation = {
+    id: `activation:${currentVehicle.vehicleId}:${offer.offerId}`,
+    packageId: offer.packageId,
+    packageVersion: offer.packageVersion,
+    packageName: offer.packageName,
+    campaignId: offer.campaignId,
+    campaignName: offer.campaignName,
+    campaignType: offer.campaignType,
+    campaignStatus: offer.campaignId ? 'active' : null,
+    vehicleId: currentVehicle.vehicleId,
+    vehicleType: currentVehicle.vehicleType,
+    activatedAt: now,
+    pricePaidRwf: offer.priceRwf,
+    pricePaid: offer.priceRwf,
+    ridesGranted: offer.ridesGranted,
+    bonusRidesGranted: offer.bonusRidesGranted,
+    purchasedAt: now,
+    creditsGranted: offer.ridesGranted + offer.bonusRidesGranted,
+    authority: 'local_prototype',
+  };
+  const transaction: DriverCreditTransaction = {
+    id: `credit:${activation.id}`,
+    type: 'credit',
+    vehicleId: currentVehicle.vehicleId,
+    vehicleType: currentVehicle.vehicleType,
+    amount: activation.creditsGranted,
+    createdAt: now,
+    packageActivationId: activation.id,
+    idempotencyKey: `package-offer-activation:${offer.offerId}`,
+    authority: 'local_prototype',
+  };
+  return {
+    activation,
+    entitlement: replaceVehicleEntitlement(current, {
+      ...currentVehicle,
+      activePackageId: offer.packageId,
+      remainingRideCredits: currentVehicle.remainingRideCredits + offer.ridesGranted,
+      remainingBonusRides: currentVehicle.remainingBonusRides + offer.bonusRidesGranted,
       activations: [...currentVehicle.activations, activation],
       creditTransactions: [...currentVehicle.creditTransactions, transaction],
       updatedAt: now,
@@ -574,23 +811,96 @@ export function createPackagePurchase(
   },
   now = new Date().toISOString(),
   vehicle?: DriverEntitlementVehicleRef | null,
+  activeCampaigns?: DriverRidePackageCampaign[],
 ): { entitlement: DriverEntitlement; purchase: DriverPackagePurchase } {
   const current = normalizeEntitlement(entitlement, vehicle);
   const currentVehicle = getVehicleEntitlement(current, vehicle);
-  const ridePackage = DRIVER_RIDE_PACKAGES[input.packageId];
+  const packageEntry = getPackageCatalogEntry(input.packageId, currentVehicle.vehicleType);
+  if (!packageEntry) throw new Error('Package does not apply to this vehicle type.');
   assertPackageMatchesVehicle(input.packageId, currentVehicle.vehicleType);
-  if (ridePackage.currentPriceRwf <= 0) {
+  const offer = resolvePackageOffer({
+    package: packageEntry,
+    vehicleType: currentVehicle.vehicleType,
+    driver: current,
+    activeCampaigns: activeCampaigns ?? getActiveDriverRideCampaigns(),
+    now: new Date(now),
+  });
+  if (offer.priceRwf <= 0) {
     throw new Error('This package does not require Mobile Money confirmation.');
   }
 
   const purchase: DriverPackagePurchase = {
     packageId: input.packageId,
+    packageVersion: offer.packageVersion,
+    packageName: offer.packageName,
+    campaignId: offer.campaignId,
+    campaignName: offer.campaignName,
+    campaignType: offer.campaignType,
+    campaignStatus: offer.campaignStatus,
     vehicleId: currentVehicle.vehicleId,
     vehicleType: currentVehicle.vehicleType,
-    amount: ridePackage.currentPriceRwf,
+    amount: offer.priceRwf,
+    pricePaid: offer.priceRwf,
+    ridesGranted: offer.ridesGranted,
+    bonusRidesGranted: offer.bonusRidesGranted,
+    purchasedAt: now,
     provider: input.provider,
     phoneNumber: input.phoneNumber,
     transactionId: `momo-package:${input.packageId}:${now}`,
+    status: 'pending',
+    createdAt: now,
+  };
+
+  return {
+    purchase,
+    entitlement: replaceVehicleEntitlement(current, {
+      ...currentVehicle,
+      purchaseHistory: [...currentVehicle.purchaseHistory, purchase],
+      updatedAt: now,
+    }),
+  };
+}
+
+export function createPackagePurchaseFromOffer(
+  entitlement: DriverEntitlement | null | undefined,
+  input: {
+    offer: DriverPackageOfferSnapshot;
+    provider: MobileMoneyPackageProvider;
+    phoneNumber: string;
+  },
+  now = new Date().toISOString(),
+  vehicle?: DriverEntitlementVehicleRef | null,
+): { entitlement: DriverEntitlement; purchase: DriverPackagePurchase } {
+  const current = normalizeEntitlement(entitlement, vehicle);
+  const currentVehicle = getVehicleEntitlement(current, vehicle);
+  const offer = validatePackageOfferSnapshot(input.offer, currentVehicle);
+  if (!offer) throw new Error('Package offer is invalid.');
+  if (isPackageOfferExpired(offer, new Date(now))) {
+    throw new Error('This package offer expired. Please refresh packages.');
+  }
+  if (offer.priceRwf <= 0) {
+    throw new Error('This package does not require Mobile Money confirmation.');
+  }
+
+  const purchase: DriverPackagePurchase = {
+    offerId: offer.offerId,
+    packageId: offer.packageId,
+    packageVersion: offer.packageVersion,
+    packageName: offer.packageName,
+    campaignId: offer.campaignId,
+    campaignName: offer.campaignName,
+    campaignType: offer.campaignType,
+    campaignStatus: offer.campaignId ? 'active' : null,
+    vehicleId: offer.vehicleId,
+    vehicleType: offer.vehicleType,
+    amount: offer.priceRwf,
+    pricePaid: offer.priceRwf,
+    ridesGranted: offer.ridesGranted,
+    bonusRidesGranted: offer.bonusRidesGranted,
+    purchasedAt: now,
+    provider: input.provider,
+    phoneNumber: input.phoneNumber,
+    transactionId: `momo-package:${offer.offerId}:${now}`,
     status: 'pending',
     createdAt: now,
   };
@@ -643,15 +953,39 @@ export function updatePackagePurchaseStatus(
     return { entitlement: next, purchase: updatedPurchase, activation: existingActivation };
   }
 
-  const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+  const snapshot = getPackagePurchaseSnapshot(purchase, currentVehicle)
+    ?? {
+      packageId: purchase.packageId,
+      packageVersion: purchase.packageVersion ?? 'v1',
+      packageName: purchase.packageName ?? purchase.packageId,
+      vehicleType: currentVehicle.vehicleType,
+      pricePaid: purchase.pricePaid ?? purchase.amount,
+      ridesGranted: purchase.ridesGranted ?? 0,
+      bonusRidesGranted: purchase.bonusRidesGranted ?? 0,
+      purchasedAt: purchase.purchasedAt ?? purchase.createdAt,
+      campaignId: purchase.campaignId ?? null,
+      campaignName: purchase.campaignName ?? null,
+      campaignType: purchase.campaignType ?? null,
+      campaignStatus: purchase.campaignStatus ?? null,
+    };
   const activation: PackageActivation = {
     id: `activation:${transactionId}`,
     packageId: purchase.packageId,
+    packageVersion: snapshot.packageVersion,
+    packageName: snapshot.packageName,
+    campaignId: snapshot.campaignId ?? null,
+    campaignName: snapshot.campaignName ?? null,
+    campaignType: snapshot.campaignType ?? null,
+    campaignStatus: snapshot.campaignStatus ?? null,
     vehicleId: currentVehicle.vehicleId,
     vehicleType: currentVehicle.vehicleType,
     activatedAt: now,
-    pricePaidRwf: purchase.amount,
-    creditsGranted: ridePackage.totalCredits,
+    pricePaidRwf: snapshot.pricePaid,
+    pricePaid: snapshot.pricePaid,
+    ridesGranted: snapshot.ridesGranted,
+    bonusRidesGranted: snapshot.bonusRidesGranted,
+    purchasedAt: snapshot.purchasedAt,
+    creditsGranted: snapshot.ridesGranted + snapshot.bonusRidesGranted,
     authority: 'local_prototype',
   };
   const transaction: DriverCreditTransaction = {
@@ -659,7 +993,7 @@ export function updatePackagePurchaseStatus(
     type: 'credit',
     vehicleId: currentVehicle.vehicleId,
     vehicleType: currentVehicle.vehicleType,
-    amount: ridePackage.totalCredits,
+    amount: snapshot.ridesGranted + snapshot.bonusRidesGranted,
     createdAt: now,
     packageActivationId: activation.id,
     idempotencyKey,
@@ -669,8 +1003,8 @@ export function updatePackagePurchaseStatus(
   nextVehicle = {
     ...nextVehicle,
     activePackageId: purchase.packageId,
-    remainingRideCredits: nextVehicle.remainingRideCredits + ridePackage.includedRides,
-    remainingBonusRides: nextVehicle.remainingBonusRides + ridePackage.bonusRides,
+    remainingRideCredits: nextVehicle.remainingRideCredits + snapshot.ridesGranted,
+    remainingBonusRides: nextVehicle.remainingBonusRides + snapshot.bonusRidesGranted,
     activations: [...nextVehicle.activations, activation],
     creditTransactions: [...nextVehicle.creditTransactions, transaction],
     updatedAt: now,

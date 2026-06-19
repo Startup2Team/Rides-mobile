@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
+import { PackageSyncProvider } from '@/context/PackageSyncContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -116,19 +117,21 @@ export default function RootLayout() {
       >
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <DriverEntitlementProvider>
-              <RideProvider>
-                <ToastProvider>
-                  <SavedLocationsProvider>
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <KeyboardProvider>
-                        <RootLayoutNav />
-                      </KeyboardProvider>
-                    </GestureHandlerRootView>
-                  </SavedLocationsProvider>
-                </ToastProvider>
-              </RideProvider>
-            </DriverEntitlementProvider>
+            <PackageSyncProvider>
+              <DriverEntitlementProvider>
+                <RideProvider>
+                  <ToastProvider>
+                    <SavedLocationsProvider>
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <KeyboardProvider>
+                          <RootLayoutNav />
+                        </KeyboardProvider>
+                      </GestureHandlerRootView>
+                    </SavedLocationsProvider>
+                  </ToastProvider>
+                </RideProvider>
+              </DriverEntitlementProvider>
+            </PackageSyncProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>

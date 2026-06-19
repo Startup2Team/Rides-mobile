@@ -6,23 +6,7 @@ const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
 const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
 const driverVehicleStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
-const driverRidePackageIdSchema = z.enum([
-  'launch_starter',
-  'growth',
-  'pro',
-  'cab_starter',
-  'cab_growth',
-  'cab_pro',
-  'hilux_starter',
-  'hilux_growth',
-  'hilux_pro',
-  'rifani_starter',
-  'rifani_growth',
-  'rifani_pro',
-  'fuso_starter',
-  'fuso_growth',
-  'fuso_pro',
-]);
+const driverRidePackageIdSchema = z.string().trim().min(1);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',
@@ -363,10 +347,20 @@ export const driverOnboardingDraftSchema = z.object({
 const packageActivationSchema = z.object({
   id: z.string(),
   packageId: driverRidePackageIdSchema,
+  packageVersion: z.string().optional(),
+  packageName: z.string().optional(),
+  campaignId: z.string().nullable().optional(),
+  campaignName: z.string().nullable().optional(),
+  campaignType: z.enum(['global', 'vehicle_type', 'first_purchase', 'referral']).nullable().optional(),
+  campaignStatus: z.enum(['draft', 'scheduled', 'active', 'expired', 'archived']).nullable().optional(),
   vehicleId: z.string(),
   vehicleType: vehicleTypeSchema,
   activatedAt: z.string(),
   pricePaidRwf: z.number().nonnegative(),
+  pricePaid: z.number().nonnegative().optional(),
+  ridesGranted: z.number().int().nonnegative().optional(),
+  bonusRidesGranted: z.number().int().nonnegative().optional(),
+  purchasedAt: z.string().optional(),
   creditsGranted: z.number().int().positive(),
   authority: z.enum(['local_prototype', 'backend']),
 });
@@ -382,10 +376,21 @@ const driverPackagePurchaseStatusSchema = z.enum([
 ]);
 
 const driverPackagePurchaseSchema = z.object({
+  offerId: z.string().optional(),
   packageId: driverRidePackageIdSchema,
+  packageVersion: z.string().optional(),
+  packageName: z.string().optional(),
+  campaignId: z.string().nullable().optional(),
+  campaignName: z.string().nullable().optional(),
+  campaignType: z.enum(['global', 'vehicle_type', 'first_purchase', 'referral']).nullable().optional(),
+  campaignStatus: z.enum(['draft', 'scheduled', 'active', 'expired', 'archived']).nullable().optional(),
   vehicleId: z.string(),
   vehicleType: vehicleTypeSchema,
   amount: z.number().nonnegative(),
+  pricePaid: z.number().nonnegative().optional(),
+  ridesGranted: z.number().int().nonnegative().optional(),
+  bonusRidesGranted: z.number().int().nonnegative().optional(),
+  purchasedAt: z.string().optional(),
   provider: z.enum(['mtn', 'airtel']),
   phoneNumber: z.string(),
   transactionId: z.string(),

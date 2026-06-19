@@ -1,8 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import * as campaignModule from '@/domain/driverRideCampaigns';
+import {
+  DRIVER_RIDE_PACKAGE_CATALOG,
+  type DriverRidePackageCatalogEntry,
+} from '@/domain/driverRidePackageCatalog';
 import DriverPackagesScreen from '../driver-packages';
 
 const mockRouterReplace = jest.fn();
@@ -11,6 +16,15 @@ const mockActivatePackage = jest.fn();
 const mockCreatePackagePurchase = jest.fn();
 const mockUpdatePackagePurchaseStatus = jest.fn();
 let mockEntitlement: DriverEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+let mockCatalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG;
+let mockCampaigns: campaignModule.DriverRidePackageCampaign[] = [];
+let mockHasCatalogSnapshot = true;
+let mockIsCatalogLoading = false;
+let mockSyncWarning: string | null = null;
+const mockRefreshPackages = jest.fn();
+const mockSaveLockedPackageOffer = jest.fn();
+let mockSyncGeneration = 'generation-1';
+let mockGetActiveDriverRideCampaigns: jest.SpiedFunction<typeof campaignModule.getActiveDriverRideCampaigns>;
 
 const successfulPurchase: DriverPackagePurchase = {
   amount: 2_000,
@@ -107,6 +121,7 @@ jest.mock('@expo/vector-icons', () => {
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
+    user: { id: 'driver-user-1' },
     driverProfile: {
       isVerified: true,
       momoCode: '+250788000000',
@@ -130,15 +145,45 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+jest.mock('@/context/PackageSyncContext', () => ({
+  usePackageSync: () => ({
+    campaigns: mockCampaigns,
+    catalog: mockCatalog,
+    hasCatalogSnapshot: mockHasCatalogSnapshot,
+    catalogLoaded: mockHasCatalogSnapshot,
+    campaignsLoaded: mockHasCatalogSnapshot,
+    offerSourceReady: mockHasCatalogSnapshot,
+    syncGeneration: mockSyncGeneration,
+    isLoading: mockIsCatalogLoading,
+    isRefreshing: false,
+    lastSyncedAt: '2026-06-19T10:00:00.000Z',
+    refresh: mockRefreshPackages,
+    syncWarning: mockSyncWarning,
+  }),
+}));
+
+jest.mock('@/persistence/lockedPackageOfferPersistence', () => ({
+  saveLockedPackageOffer: (...args: unknown[]) => mockSaveLockedPackageOffer(...args),
+}));
+
 describe('DriverPackagesScreen', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockGetActiveDriverRideCampaigns = jest.spyOn(campaignModule, 'getActiveDriverRideCampaigns').mockReturnValue([]);
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
       console.warn(...args);
     });
     mockEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+    mockCatalog = DRIVER_RIDE_PACKAGE_CATALOG;
+    mockCampaigns = [];
+    mockHasCatalogSnapshot = true;
+    mockIsCatalogLoading = false;
+    mockSyncWarning = null;
+    mockSyncGeneration = 'generation-1';
+    mockSaveLockedPackageOffer.mockImplementation(async offer => offer);
+    mockGetActiveDriverRideCampaigns.mockReturnValue([]);
     mockActivatePackage.mockResolvedValue({
       id: 'activation:launch_starter:2026-06-08T10:00:00.000Z',
       packageId: 'launch_starter',
@@ -170,25 +215,54 @@ describe('DriverPackagesScreen', () => {
     jest.restoreAllMocks();
   });
 
-  test('opens the payment page only after buying the selected package', () => {
+  test('opens the payment page only after buying the selected package', async () => {
     render(<DriverPackagesScreen />);
 
     fireEvent.press(screen.getByText('Growth Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
     fireEvent.press(screen.getByText('Buy Selected Package'));
 
     expect(require('expo-router').router.push).toHaveBeenCalledWith({
       pathname: '/driver-package-payment',
-      params: { packageId: 'growth' },
+      params: {
+        offerId: expect.stringContaining('package-offer:'),
+      },
+    });
+    expect(mockSaveLockedPackageOffer.mock.calls[0][0]).toMatchObject({
+      offerId: expect.stringContaining('package-offer:'),
+      packageId: 'growth',
+      packageVersion: 'v1',
+      packageName: 'Growth Package',
+      priceRwf: 2_000,
+      ridesGranted: 60,
+      bonusRidesGranted: 15,
+      source: 'local_catalog',
+      ownerUserId: 'driver-user-1',
+      quoteAuthority: 'local',
     });
   });
 
-  test('deselects a package when it is pressed again', () => {
+  test('deselects a package when it is pressed again', async () => {
     render(<DriverPackagesScreen />);
 
     fireEvent.press(screen.getByText('Growth Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
     fireEvent.press(screen.getByText('Growth Package'));
     fireEvent.press(screen.getByText('Buy Selected Package'));
 
+    expect(require('expo-router').router.push).not.toHaveBeenCalled();
+  });
+
+  test('clears the selected offer when the catalog/campaign generation changes', async () => {
+    const view = render(<DriverPackagesScreen />);
+    fireEvent.press(screen.getByText('Growth Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
+
+    mockSyncGeneration = 'generation-2';
+    view.rerender(<DriverPackagesScreen />);
+
+    expect(await screen.findByText('Package offers were refreshed. Please select again.')).toBeTruthy();
+    fireEvent.press(screen.getByText('Buy Selected Package'));
     expect(require('expo-router').router.push).not.toHaveBeenCalled();
   });
 
@@ -235,14 +309,13 @@ describe('DriverPackagesScreen', () => {
   test('shows the simplified package copy', () => {
     render(<DriverPackagesScreen />);
 
-    expect(screen.getByText('FREE NOW')).toBeTruthy();
+    expect(screen.getAllByText('FREE NOW').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('30 Rides + 5 Bonus Rides')).toBeTruthy();
-    expect(screen.getByText('Launch Offer')).toBeTruthy();
+    expect(screen.getAllByText('Launch Offer').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('60 Rides + 15 Bonus Rides')).toBeTruthy();
-    expect(screen.getByText('Most Popular Plan')).toBeTruthy();
+    expect(screen.getAllByText('Ride Package').length).toBeGreaterThan(0);
     expect(screen.getByText('Pro Package')).toBeTruthy();
     expect(screen.getByLabelText('120 Rides + 30 Bonus Rides')).toBeTruthy();
-    expect(screen.getByText('Best Value Plan')).toBeTruthy();
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
     const renderedText = screen.UNSAFE_getAllByType(Text)
       .map(node => String(node.props.children))
@@ -267,5 +340,99 @@ describe('DriverPackagesScreen', () => {
     expect(renderedText).not.toContain('prototype');
     expect(renderedText).not.toContain('backend');
     expect(renderedText).not.toContain('simulated');
+  });
+
+  test('shows campaign values when a promotion is active', () => {
+    mockGetActiveDriverRideCampaigns.mockReturnValue([{
+      campaignId: 'world-cup',
+      campaignName: 'World Cup',
+      campaignType: 'global',
+      status: 'active',
+      startDate: '2026-06-01T00:00:00.000Z',
+      endDate: '2026-07-01T00:00:00.000Z',
+      createdAt: '2026-06-01T00:00:00.000Z',
+      description: 'Temporary promotion',
+      packageIds: ['growth'],
+      priceRwf: 1_500,
+      ridesGranted: 40,
+      bonusRidesGranted: 5,
+    }]);
+
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('World Cup')).toBeTruthy();
+    expect(screen.getByLabelText('40 Rides + 5 Bonus Rides')).toBeTruthy();
+    expect(screen.getByText('1,500 RWF')).toBeTruthy();
+    expect(screen.getByText('Promotional Offer')).toBeTruthy();
+  });
+
+  test('renders variable package counts and unknown package IDs from the supplied catalog', () => {
+    const catalog: DriverRidePackageCatalogEntry[] = [
+      {
+        packageId: 'moto_weekend_special',
+        packageVersion: '2026-weekend-1',
+        packageName: 'Moto Weekend Special',
+        vehicleType: 'moto',
+        priceRwf: 900,
+        ridesGranted: 25,
+        bonusRidesGranted: 5,
+        status: 'active',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        effectiveFrom: '2026-06-19T00:00:00.000Z',
+        effectiveUntil: null,
+      },
+      {
+        packageId: 'moto_premium',
+        packageVersion: 'v4',
+        packageName: 'Moto Premium',
+        vehicleType: 'moto',
+        priceRwf: 7_500,
+        ridesGranted: 250,
+        bonusRidesGranted: 75,
+        status: 'active',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        effectiveFrom: '2026-06-19T00:00:00.000Z',
+        effectiveUntil: null,
+      },
+    ];
+
+    mockCatalog = catalog;
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('Moto Weekend Special')).toBeTruthy();
+    expect(screen.getByText('Moto Premium')).toBeTruthy();
+    expect(screen.getByLabelText('25 Rides + 5 Bonus Rides')).toBeTruthy();
+    expect(screen.getByLabelText('250 Rides + 75 Bonus Rides')).toBeTruthy();
+    expect(screen.queryByText('Growth Package')).toBeNull();
+  });
+
+  test('shows loading, unavailable, and empty catalog states', () => {
+    mockCatalog = [];
+    mockHasCatalogSnapshot = false;
+    mockIsCatalogLoading = true;
+    const loadingView = render(<DriverPackagesScreen />);
+    expect(screen.getByText('Loading packages...')).toBeTruthy();
+    loadingView.unmount();
+
+    mockIsCatalogLoading = false;
+    mockSyncWarning = 'Using cached package data';
+    const unavailableView = render(<DriverPackagesScreen />);
+    expect(screen.getByText('Packages unavailable.')).toBeTruthy();
+    expect(screen.getByText('Please connect to the internet and try again.')).toBeTruthy();
+    unavailableView.unmount();
+
+    mockHasCatalogSnapshot = true;
+    mockSyncWarning = null;
+    render(<DriverPackagesScreen />);
+    expect(screen.getByText('No packages available')).toBeTruthy();
+  });
+
+  test('manually refreshes package data and shows cached warning', () => {
+    mockSyncWarning = 'Using cached package data';
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('Using cached package data')).toBeTruthy();
+    fireEvent.press(screen.getByText('Refresh'));
+    expect(mockRefreshPackages).toHaveBeenCalled();
   });
 });

@@ -10,14 +10,17 @@ import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardin
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
-  DRIVER_RIDE_PACKAGES,
+  isPackageOfferExpired,
+  type DriverEntitlementVehicleRef,
+  type DriverPackageOfferSnapshot,
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
-  type DriverRidePackageId,
   type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
+import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
+import { loadLockedPackageOffer, type LockedOfferLoadFailure } from '@/persistence/lockedPackageOfferPersistence';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -28,12 +31,18 @@ export default function DriverPackagePaymentScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { packageId } = useLocalSearchParams<{ packageId?: string }>();
-  const { driverProfile } = useAuth();
-  const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus } = useDriverEntitlement();
-  const validPackageId: DriverRidePackageId | null =
-    packageId && packageId in DRIVER_RIDE_PACKAGES ? packageId as DriverRidePackageId : null;
-  const ridePackage = validPackageId ? DRIVER_RIDE_PACKAGES[validPackageId] : null;
+  const { offerId } = useLocalSearchParams<{ offerId?: string }>();
+  const { driverProfile, user } = useAuth();
+  const { activatePackage, createPackagePurchase, entitlement, updatePackagePurchaseStatus } = useDriverEntitlement();
+  const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
+  const checkoutVehicle: DriverEntitlementVehicleRef | null = activeVehicle
+    ?? (entitlement.vehicleId && entitlement.vehicleType
+      ? { vehicleId: entitlement.vehicleId, vehicleType: entitlement.vehicleType }
+      : null);
+  const checkoutVehicleId = activeVehicle?.id ?? entitlement.vehicleId ?? null;
+  const [ridePackage, setRidePackage] = useState<DriverPackageOfferSnapshot | null>(null);
+  const [offerFailure, setOfferFailure] = useState<LockedOfferLoadFailure | null>(null);
+  const [offerLoading, setOfferLoading] = useState(true);
   const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
     driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
   );
@@ -51,6 +60,23 @@ export default function DriverPackagePaymentScreen() {
   };
 
   useEffect(() => () => clearPaymentTimers(), []);
+
+  useEffect(() => {
+    let active = true;
+    setOfferLoading(true);
+    void loadLockedPackageOffer(offerId, {
+      ownerUserId: user?.id,
+      vehicle: checkoutVehicle,
+    }).then(result => {
+      if (!active) return;
+      setRidePackage(result.offer);
+      setOfferFailure(result.failure);
+      setOfferLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [checkoutVehicleId, checkoutVehicle?.vehicleType, offerId, user?.id]);
 
   const schedulePaymentSuccess = (purchase: DriverPackagePurchase) => {
     const processingTimer = setTimeout(() => {
@@ -72,10 +98,14 @@ export default function DriverPackagePaymentScreen() {
 
   const handleActivateFreePackage = async () => {
     if (!ridePackage) return;
+    if (isPackageOfferExpired(ridePackage)) {
+      setError('This package offer expired. Please refresh packages.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      setReceipt(await activatePackage(ridePackage.id));
+      setReceipt(await activatePackage(ridePackage));
     } catch (activationError) {
       setError(activationError instanceof Error ? activationError.message : 'Unable to activate this package.');
     } finally {
@@ -85,7 +115,11 @@ export default function DriverPackagePaymentScreen() {
 
   const handleSendPaymentPrompt = async () => {
     if (!ridePackage) return;
-    if (ridePackage.currentPriceRwf <= 0) {
+    if (isPackageOfferExpired(ridePackage)) {
+      setError('This package offer expired. Please refresh packages.');
+      return;
+    }
+    if (ridePackage.priceRwf <= 0) {
       await handleActivateFreePackage();
       return;
     }
@@ -94,7 +128,7 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
     try {
       const purchase = await createPackagePurchase({
-        packageId: ridePackage.id,
+        offer: ridePackage,
         provider: selectedProvider,
         phoneNumber,
       });
@@ -121,17 +155,31 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
   };
 
+  if (offerLoading) {
+    return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+      <Text style={[styles.invalidText, { color: colors.mutedForeground }]}>Loading package offer...</Text>
+    </View>;
+  }
+
   if (!ridePackage) {
+    const expired = offerFailure === 'expired';
     return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <View style={[styles.invalidIconHalo, { backgroundColor: colors.destructiveHex + '14' }]}>
         <Feather name="package" size={28} color={colors.destructive} />
       </View>
-      <Text style={[styles.invalidTitle, { color: colors.foreground }]}>Package not found</Text>
-      <AppButton title="Choose a Package" onPress={() => router.replace('/driver-packages')} />
+      <Text style={[styles.invalidTitle, { color: colors.foreground }]}>
+        {expired ? 'Package offer expired' : 'Package offer unavailable'}
+      </Text>
+      <Text style={[styles.invalidText, { color: colors.mutedForeground }]}>
+        {expired
+          ? 'This package offer expired. Please refresh packages.'
+          : 'This package offer is missing or invalid. Please choose the package again.'}
+      </Text>
+      <AppButton title="Return to Packages" onPress={() => router.replace('/driver-packages')} />
     </View>;
   }
 
-  const isFree = ridePackage.currentPriceRwf === 0;
+  const isFree = ridePackage.priceRwf === 0;
   const isWaiting = paymentStatus === 'pending' || paymentStatus === 'processing';
   const isIncomplete = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'expired';
 
@@ -156,22 +204,28 @@ export default function DriverPackagePaymentScreen() {
               </View>
               <View style={styles.summaryTitleBlock}>
                 <Text style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</Text>
-                <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
+                <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</Text>
+                {ridePackage.campaignName ? (
+                  <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
+                    <Feather name="tag" size={11} color={colors.primary} />
+                    <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Rides</Text>
-              <Text style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.includedRides}</Text>
+              <Text style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.ridesGranted}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus Rides</Text>
-              <Text style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRides}</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRidesGranted}</Text>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryRow}>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total due</Text>
-              <Text style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.currentPriceRwf)}</Text>
+              <Text style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.priceRwf)}</Text>
             </View>
           </View>
 
@@ -291,8 +345,6 @@ function Notice({ colors, icon, text, tone }: {
 function ReceiptCard({ activation, colors }: {
   activation: PackageActivation; colors: ReturnType<typeof useColors>;
 }) {
-  const ridePackage = DRIVER_RIDE_PACKAGES[activation.packageId];
-
   return <View style={[styles.paymentContent, styles.receiptCard]}>
     <View style={[styles.receiptIconHalo, { backgroundColor: colors.successHex + '18' }]}>
       <View style={[styles.receiptIcon, { backgroundColor: colors.success }]}>
@@ -300,9 +352,15 @@ function ReceiptCard({ activation, colors }: {
       </View>
     </View>
     <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package Activated</Text>
+    {activation.campaignName ? (
+      <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
+        <Feather name="tag" size={11} color={colors.primary} />
+        <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{activation.campaignName}</Text>
+      </View>
+    ) : null}
     <Text style={[styles.receiptText, { color: colors.mutedForeground }]}>You can now go online and start receiving ride requests.</Text>
-    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Rides Added: {ridePackage.includedRides}</Text>
-    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Rides Added: {ridePackage.bonusRides}</Text>
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Rides Added: {activation.ridesGranted ?? 0}</Text>
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Rides Added: {activation.bonusRidesGranted ?? 0}</Text>
     <View style={styles.receiptAction}>
       <AppButton title="Go to Dashboard" onPress={() => router.replace('/(driver)')} fullWidth size="lg" />
     </View>
@@ -314,6 +372,7 @@ const styles = StyleSheet.create({
   centered: { alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
   invalidIconHalo: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   invalidTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  invalidText: { maxWidth: 300, textAlign: 'center', fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19 },
   paymentScrollContent: { flexGrow: 1, justifyContent: 'center' },
   paymentContent: { marginHorizontal: 20, gap: 20 },
   summaryPanel: { gap: 10 },
@@ -322,6 +381,8 @@ const styles = StyleSheet.create({
   summaryTitleBlock: { flex: 1, gap: 2 },
   summaryEyebrow: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
   packageName: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
+  campaignBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   summaryDivider: { height: StyleSheet.hairlineWidth },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
   summaryLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },

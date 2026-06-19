@@ -7,7 +7,7 @@ import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
-import { DRIVER_RIDE_PACKAGES, getActiveBonusRides, getActiveRideCredits, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
+import { getActiveBonusRides, getActivePackageActivation, getActiveRideCredits, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
 import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS } from '@/types';
@@ -77,7 +77,7 @@ export default function DriverVehiclesScreen() {
             const ridesLeft = getRideBalance(vehicleEntitlement);
             const totalRides = getActiveRideCredits(vehicleEntitlement);
             const bonusRidesLeft = getActiveBonusRides(vehicleEntitlement);
-            const activePackage = vehicleEntitlement.activePackageId ? DRIVER_RIDE_PACKAGES[vehicleEntitlement.activePackageId] : null;
+            const activePackage = getActivePackageActivation(vehicleEntitlement);
             const isApproved = vehicle.status === 'approved';
             const isCurrent = driverProfile?.activeVehicle?.vehicleId === vehicle.id;
 
@@ -107,7 +107,7 @@ export default function DriverVehiclesScreen() {
                       {bonusRidesLeft > 0 ? ` - ${bonusRidesLeft} bonus rides` : ''}
                     </Text>
                     <Text style={[styles.vehicleMeta, { color: colors.mutedForeground }]}>
-                      {activePackage ? `${activePackage.name} - ${totalRides} total rides available` : 'No active package'}
+                      {activePackage ? `${activePackage.packageName ?? activePackage.packageId} - ${totalRides} total rides available` : 'No active package'}
                     </Text>
                     {vehicle.status === 'rejected' && vehicle.rejectionReason ? (
                       <Text style={[styles.rejectionReason, { color: colors.destructive }]}>Rejected: {vehicle.rejectionReason}</Text>

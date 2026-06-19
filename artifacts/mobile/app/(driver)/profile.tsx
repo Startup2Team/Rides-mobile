@@ -11,7 +11,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
-import { DRIVER_RIDE_PACKAGES } from '@/domain/driverRidePackages';
+import { getActivePackageActivation } from '@/domain/driverRidePackages';
 import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
@@ -28,7 +28,7 @@ export default function DriverProfileScreen() {
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, logout, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
-  const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+  const activePackage = getActivePackageActivation(entitlement);
   const vehicles = getDriverVehicles(driverProfile);
   const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
@@ -168,7 +168,7 @@ export default function DriverProfileScreen() {
             <View style={styles.packageCopy}>
               <View style={styles.packageTitleRow}>
                 <Text style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
-                  {isEntitlementLoading ? 'Checking ride package...' : activePackage?.name ?? 'No active package'}
+                  {isEntitlementLoading ? 'Checking ride package...' : activePackage?.packageName ?? 'No active package'}
                 </Text>
                 {!isEntitlementLoading && activePackage ? (
                   <View style={[styles.packageStatus, { backgroundColor: colors.successHex + '16' }]}>
