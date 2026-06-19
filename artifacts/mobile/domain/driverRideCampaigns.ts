@@ -174,3 +174,30 @@ export function getPackageCampaignById(
 ) {
   return campaigns.find(campaign => campaign.campaignId === campaignId) ?? null;
 }
+
+export function validatePackageCampaigns(value: unknown): DriverRidePackageCampaign[] {
+  if (!Array.isArray(value)) throw new Error('Package campaigns are invalid.');
+  const statuses: DriverRideCampaignStatus[] = ['draft', 'scheduled', 'active', 'expired', 'archived'];
+  const types: DriverRideCampaignType[] = ['global', 'vehicle_type', 'first_purchase', 'referral'];
+  const vehicleTypes: VehicleType[] = ['moto', 'rifani', 'cab', 'fuso', 'hilux'];
+  const valid = value.every(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const campaign = item as Partial<DriverRidePackageCampaign>;
+    return typeof campaign.campaignId === 'string'
+      && campaign.campaignId.trim().length > 0
+      && typeof campaign.campaignName === 'string'
+      && campaign.campaignName.trim().length > 0
+      && typeof campaign.campaignType === 'string'
+      && types.includes(campaign.campaignType as DriverRideCampaignType)
+      && typeof campaign.status === 'string'
+      && statuses.includes(campaign.status as DriverRideCampaignStatus)
+      && typeof campaign.startDate === 'string'
+      && typeof campaign.endDate === 'string'
+      && (!campaign.packageIds || campaign.packageIds.every(id => typeof id === 'string' && id.trim().length > 0))
+      && (!campaign.vehicleTypes || campaign.vehicleTypes.every(type => vehicleTypes.includes(type)))
+      && [campaign.priceRwf, campaign.ridesGranted, campaign.bonusRidesGranted]
+        .every(number => number === undefined || (typeof number === 'number' && Number.isFinite(number) && number >= 0));
+  });
+  if (!valid) throw new Error('Package campaigns are invalid.');
+  return value as DriverRidePackageCampaign[];
+}

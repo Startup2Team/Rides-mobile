@@ -4,7 +4,10 @@ import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import * as campaignModule from '@/domain/driverRideCampaigns';
-import type { DriverRidePackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
+import {
+  DRIVER_RIDE_PACKAGE_CATALOG,
+  type DriverRidePackageCatalogEntry,
+} from '@/domain/driverRidePackageCatalog';
 import DriverPackagesScreen from '../driver-packages';
 
 const mockRouterReplace = jest.fn();
@@ -13,6 +16,12 @@ const mockActivatePackage = jest.fn();
 const mockCreatePackagePurchase = jest.fn();
 const mockUpdatePackagePurchaseStatus = jest.fn();
 let mockEntitlement: DriverEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+let mockCatalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG;
+let mockCampaigns: campaignModule.DriverRidePackageCampaign[] = [];
+let mockHasCatalogSnapshot = true;
+let mockIsCatalogLoading = false;
+let mockSyncWarning: string | null = null;
+const mockRefreshPackages = jest.fn();
 let mockGetActiveDriverRideCampaigns: jest.SpiedFunction<typeof campaignModule.getActiveDriverRideCampaigns>;
 
 const successfulPurchase: DriverPackagePurchase = {
@@ -133,6 +142,19 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+jest.mock('@/context/PackageSyncContext', () => ({
+  usePackageSync: () => ({
+    campaigns: mockCampaigns,
+    catalog: mockCatalog,
+    hasCatalogSnapshot: mockHasCatalogSnapshot,
+    isLoading: mockIsCatalogLoading,
+    isRefreshing: false,
+    lastSyncedAt: '2026-06-19T10:00:00.000Z',
+    refresh: mockRefreshPackages,
+    syncWarning: mockSyncWarning,
+  }),
+}));
+
 describe('DriverPackagesScreen', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -143,6 +165,11 @@ describe('DriverPackagesScreen', () => {
       console.warn(...args);
     });
     mockEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+    mockCatalog = DRIVER_RIDE_PACKAGE_CATALOG;
+    mockCampaigns = [];
+    mockHasCatalogSnapshot = true;
+    mockIsCatalogLoading = false;
+    mockSyncWarning = null;
     mockGetActiveDriverRideCampaigns.mockReturnValue([]);
     mockActivatePackage.mockResolvedValue({
       id: 'activation:launch_starter:2026-06-08T10:00:00.000Z',
@@ -340,12 +367,43 @@ describe('DriverPackagesScreen', () => {
       },
     ];
 
-    render(<DriverPackagesScreen catalog={catalog} />);
+    mockCatalog = catalog;
+    render(<DriverPackagesScreen />);
 
     expect(screen.getByText('Moto Weekend Special')).toBeTruthy();
     expect(screen.getByText('Moto Premium')).toBeTruthy();
     expect(screen.getByLabelText('25 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getByLabelText('250 Rides + 75 Bonus Rides')).toBeTruthy();
     expect(screen.queryByText('Growth Package')).toBeNull();
+  });
+
+  test('shows loading, unavailable, and empty catalog states', () => {
+    mockCatalog = [];
+    mockHasCatalogSnapshot = false;
+    mockIsCatalogLoading = true;
+    const loadingView = render(<DriverPackagesScreen />);
+    expect(screen.getByText('Loading packages...')).toBeTruthy();
+    loadingView.unmount();
+
+    mockIsCatalogLoading = false;
+    mockSyncWarning = 'Using cached package data';
+    const unavailableView = render(<DriverPackagesScreen />);
+    expect(screen.getByText('Packages unavailable.')).toBeTruthy();
+    expect(screen.getByText('Please connect to the internet and try again.')).toBeTruthy();
+    unavailableView.unmount();
+
+    mockHasCatalogSnapshot = true;
+    mockSyncWarning = null;
+    render(<DriverPackagesScreen />);
+    expect(screen.getByText('No packages available')).toBeTruthy();
+  });
+
+  test('manually refreshes package data and shows cached warning', () => {
+    mockSyncWarning = 'Using cached package data';
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('Using cached package data')).toBeTruthy();
+    fireEvent.press(screen.getByText('Refresh'));
+    expect(mockRefreshPackages).toHaveBeenCalled();
   });
 });

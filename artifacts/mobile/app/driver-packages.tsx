@@ -7,6 +7,7 @@ import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { usePackageSync } from '@/context/PackageSyncContext';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import {
   createPackageOfferSnapshot,
@@ -14,11 +15,7 @@ import {
   serializePackageOfferSnapshot,
   type DriverPackageOfferSnapshot,
 } from '@/domain/driverRidePackages';
-import {
-  DRIVER_RIDE_PACKAGE_CATALOG,
-  getActivePackages,
-  type DriverRidePackageCatalogEntry,
-} from '@/domain/driverRidePackageCatalog';
+import { getActivePackages } from '@/domain/driverRidePackageCatalog';
 import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePackageOffer } from '@/domain/driverRideCampaigns';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS } from '@/types';
@@ -27,11 +24,15 @@ function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
 
-export default function DriverPackagesScreen({
-  catalog = DRIVER_RIDE_PACKAGE_CATALOG,
-}: {
-  catalog?: DriverRidePackageCatalogEntry[];
-} = {}) {
+function formatLastUpdated(value: string | null) {
+  if (!value) return 'Never';
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes === 1) return '1 minute ago';
+  return `${minutes} minutes ago`;
+}
+
+export default function DriverPackagesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
@@ -42,6 +43,16 @@ export default function DriverPackagesScreen({
     entitlement,
     rideCredits,
   } = useDriverEntitlement();
+  const {
+    campaigns,
+    catalog,
+    hasCatalogSnapshot,
+    isLoading: isCatalogLoading,
+    isRefreshing,
+    lastSyncedAt,
+    refresh,
+    syncWarning,
+  } = usePackageSync();
   const [selectedOffer, setSelectedOffer] = useState<DriverPackageOfferSnapshot | null>(null);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
@@ -49,7 +60,7 @@ export default function DriverPackagesScreen({
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
   const packages = getActivePackages(vehicleType, catalog);
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
-  const activeCampaigns = getActiveDriverRideCampaigns();
+  const activeCampaigns = getActiveDriverRideCampaigns(campaigns);
 
   const handleSelectPackage = (offer: DriverRidePackageOffer) => {
     if (selectedOffer?.packageId === offer.packageId) {
@@ -91,7 +102,51 @@ export default function DriverPackagesScreen({
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
     </View>
 
-    {packages.map(catalogEntry => {
+    <View style={styles.syncRow}>
+      <View style={styles.syncCopy}>
+        <Text style={[styles.syncText, { color: colors.mutedForeground }]}>
+          Last updated: {formatLastUpdated(lastSyncedAt)}
+        </Text>
+        {syncWarning && hasCatalogSnapshot ? (
+          <Text style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</Text>
+        ) : null}
+      </View>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Refresh packages"
+        disabled={isRefreshing}
+        onPress={() => void refresh()}
+        style={[styles.refreshButton, { borderColor: colors.border, opacity: isRefreshing ? 0.55 : 1 }]}
+      >
+        <Feather name="refresh-cw" size={14} color={colors.primary} />
+        <Text style={[styles.refreshText, { color: colors.primary }]}>
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+
+    {isCatalogLoading && !hasCatalogSnapshot ? (
+      <PackageState
+        colors={colors}
+        icon="loader"
+        title="Loading packages..."
+        detail="Checking for the latest package offers."
+      />
+    ) : !hasCatalogSnapshot && syncWarning ? (
+      <PackageState
+        colors={colors}
+        icon="wifi-off"
+        title="Packages unavailable."
+        detail="Please connect to the internet and try again."
+      />
+    ) : packages.length === 0 ? (
+      <PackageState
+        colors={colors}
+        icon="package"
+        title="No packages available"
+        detail={`There are no active packages for your ${vehicleLabel} right now.`}
+      />
+    ) : packages.map(catalogEntry => {
       const pkg = resolvePackageOffer({
         package: catalogEntry,
         vehicleType,
@@ -113,7 +168,7 @@ export default function DriverPackagesScreen({
         />
       );
     })}
-    <View style={styles.buyButtonContainer}>
+    {packages.length > 0 ? <View style={styles.buyButtonContainer}>
       <AppButton
         title="Buy Selected Package"
         onPress={handleBuySelectedPackage}
@@ -121,7 +176,7 @@ export default function DriverPackagesScreen({
         fullWidth
         size="lg"
       />
-    </View>
+    </View> : null}
    </ScrollView>
   </View>;
 }
@@ -188,6 +243,19 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
   </TouchableOpacity>;
 }
 
+function PackageState({ colors, detail, icon, title }: {
+  colors: ReturnType<typeof useColors>;
+  detail: string;
+  icon: React.ComponentProps<typeof Feather>['name'];
+  title: string;
+}) {
+  return <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Feather name={icon} size={22} color={colors.mutedForeground} />
+    <Text style={[styles.stateTitle, { color: colors.foreground }]}>{title}</Text>
+    <Text style={[styles.stateDetail, { color: colors.mutedForeground }]}>{detail}</Text>
+  </View>;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   balanceCard: { marginHorizontal: 16, marginBottom: 14, borderRadius: 18, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -195,6 +263,15 @@ const styles = StyleSheet.create({
   balanceValue: { color: '#fff', fontSize: 40, fontFamily: 'Inter_700Bold', marginTop: 3 },
   approvedBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
   approvedText: { color: '#fff', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  syncRow: { marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  syncCopy: { flex: 1, gap: 3 },
+  syncText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  syncWarning: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  refreshButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 17, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  refreshText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  stateCard: { marginHorizontal: 16, borderRadius: 18, borderWidth: 1, padding: 22, alignItems: 'center', gap: 8 },
+  stateTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  stateDetail: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18, textAlign: 'center' },
   packageCard: { minHeight: 132, marginHorizontal: 16, marginBottom: 14, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 20, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   packageContent: { flex: 1, gap: 9 },
   packageName: { fontSize: 23, fontFamily: 'Inter_700Bold', lineHeight: 29 },

@@ -13,6 +13,8 @@ export const STORAGE_KEYS = {
   profileImage: '@rides_profile_image',
   paymentMethods: '@rides_payment_methods',
   savedLocations: '@rides_saved_locations',
+  packageCatalogCache: '@rides_package_catalog_cache',
+  packageCampaignCache: '@rides_package_campaign_cache',
 } as const;
 
 /**
@@ -35,7 +37,10 @@ export const STORAGE_CLASSIFICATION = {
     STORAGE_KEYS.savedLocations,
   ],
   internal: [STORAGE_KEYS.referralEvents],
-  cacheable: [],
+  cacheable: [
+    STORAGE_KEYS.packageCatalogCache,
+    STORAGE_KEYS.packageCampaignCache,
+  ],
 } as const satisfies Record<StorageClassification, readonly string[]>;
 
 export const SENSITIVE_STORAGE_KEYS = STORAGE_CLASSIFICATION.sensitive;
