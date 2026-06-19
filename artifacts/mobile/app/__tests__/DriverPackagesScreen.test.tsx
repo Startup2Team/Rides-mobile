@@ -235,14 +235,14 @@ describe('DriverPackagesScreen', () => {
   test('shows the simplified package copy', () => {
     render(<DriverPackagesScreen />);
 
-    expect(screen.getByText('FREE NOW')).toBeTruthy();
+    expect(screen.getAllByText('FREE NOW').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('30 Rides + 5 Bonus Rides')).toBeTruthy();
-    expect(screen.getByText('Launch Offer')).toBeTruthy();
+    expect(screen.getAllByText('Launch Offer').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('60 Rides + 15 Bonus Rides')).toBeTruthy();
-    expect(screen.getByText('Most Popular Plan')).toBeTruthy();
+    expect(screen.getAllByText('Most Popular Plan').length).toBeGreaterThan(0);
     expect(screen.getByText('Pro Package')).toBeTruthy();
     expect(screen.getByLabelText('120 Rides + 30 Bonus Rides')).toBeTruthy();
-    expect(screen.getByText('Best Value Plan')).toBeTruthy();
+    expect(screen.getAllByText('Best Value Plan').length).toBeGreaterThan(0);
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
     const renderedText = screen.UNSAFE_getAllByType(Text)
       .map(node => String(node.props.children))

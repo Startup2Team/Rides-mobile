@@ -9,7 +9,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
-  DRIVER_RIDE_PACKAGES,
+  getPackagePurchaseSnapshot,
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
 } from '@/domain/driverRidePackages';
@@ -274,7 +274,7 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
           <Text style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</Text>
         </View>
       ) : recentPurchases.map((purchase, index) => {
-        const ridePackage = DRIVER_RIDE_PACKAGES[purchase.packageId];
+        const purchaseSnapshot = getPackagePurchaseSnapshot(purchase);
         const statusColor = getPurchaseStatusColor(purchase.status, colors);
         return <View
           key={purchase.transactionId}
@@ -282,13 +282,16 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
         >
           <Feather name="package" size={18} color={colors.primary} />
           <View style={styles.historyLabelGroup}>
-            <Text style={[styles.historyName, { color: colors.foreground }]}>{ridePackage.name}</Text>
+            <Text style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</Text>
             <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
-              {formatHistoryDate(purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+              {purchaseSnapshot ? `${purchaseSnapshot.ridesGranted} Rides + ${purchaseSnapshot.bonusRidesGranted} Bonus Rides` : 'Package snapshot unavailable'}
+            </Text>
+            <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+              {formatHistoryDate(purchaseSnapshot?.purchasedAt ?? purchase.purchasedAt ?? purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
             </Text>
           </View>
           <View style={styles.historyTotals}>
-            <Text style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchase.amount)}</Text>
+            <Text style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchaseSnapshot?.pricePaid ?? purchase.pricePaid ?? purchase.amount)}</Text>
             <View style={[styles.statusPill, { backgroundColor: statusColor + '12' }]}>
               <Text style={[styles.historyStatus, { color: statusColor }]}>{formatPurchaseStatus(purchase.status)}</Text>
             </View>

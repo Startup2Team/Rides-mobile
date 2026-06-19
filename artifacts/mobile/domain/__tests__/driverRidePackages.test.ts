@@ -5,6 +5,7 @@ import {
   createPackagePurchase,
   deductCreditForCompletedRide,
   EMPTY_DRIVER_ENTITLEMENT,
+  getPackagePurchaseSnapshot,
   getActiveBonusRides,
   getActiveRideCredits,
   getPackagesForVehicleType,
@@ -16,6 +17,11 @@ import {
   normalizeEntitlement,
   updatePackagePurchaseStatus,
 } from '../driverRidePackages';
+import {
+  getActivePackages,
+  getPackageByVersion,
+  getPackageCatalogEntry,
+} from '../driverRidePackageCatalog';
 
 const approvedDriver = { verificationStatus: 'approved', isVerified: true } as DriverProfile;
 const motoVehicle = { id: 'vehicle-moto-1', vehicleType: 'moto' as const, status: 'approved' as const };
@@ -119,8 +125,93 @@ describe('driver ride packages', () => {
       remainingBonusRides: 2,
       activations: [expect.objectContaining({ vehicleId: motoVehicle.id, vehicleType: 'moto' })],
       creditTransactions: [expect.objectContaining({ vehicleId: motoVehicle.id, vehicleType: 'moto' })],
-      purchaseHistory: [expect.objectContaining({ vehicleId: motoVehicle.id, vehicleType: 'moto' })],
+      purchaseHistory: [expect.objectContaining({
+        bonusRidesGranted: 15,
+        packageName: 'Growth Package',
+        packageVersion: 'v1',
+        purchasedAt: '2026-06-08T09:59:00.000Z',
+        ridesGranted: 60,
+        vehicleId: motoVehicle.id,
+        vehicleType: 'moto',
+      })],
     });
+  });
+
+  test('purchase snapshots are created from the active catalog and remain immutable', () => {
+    const started = createPackagePurchase(EMPTY_DRIVER_ENTITLEMENT, {
+      packageId: 'growth',
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-08T10:00:00.000Z');
+    const completed = updatePackagePurchaseStatus(started.entitlement, started.purchase.transactionId, 'successful', '2026-06-08T10:01:00.000Z');
+    const snapshot = getPackagePurchaseSnapshot(completed.purchase);
+
+    expect(started.purchase).toMatchObject({
+      packageVersion: 'v1',
+      packageName: 'Growth Package',
+      ridesGranted: 60,
+      bonusRidesGranted: 15,
+      pricePaid: 2_000,
+      purchasedAt: '2026-06-08T10:00:00.000Z',
+    });
+    expect(snapshot).toMatchObject({
+      packageId: 'growth',
+      packageVersion: 'v1',
+      packageName: 'Growth Package',
+      ridesGranted: 60,
+      bonusRidesGranted: 15,
+      pricePaid: 2_000,
+      purchasedAt: '2026-06-08T10:00:00.000Z',
+    });
+  });
+
+  test('package catalog versions can coexist while active lookup stays singular', () => {
+    const catalog = [
+      {
+        packageId: 'growth' as const,
+        packageVersion: 'v1',
+        packageName: 'Growth Package',
+        vehicleType: 'moto' as const,
+        priceRwf: 2_000,
+        ridesGranted: 60,
+        bonusRidesGranted: 15,
+        status: 'archived' as const,
+        createdAt: '2026-06-01T00:00:00.000Z',
+        effectiveFrom: '2026-06-01T00:00:00.000Z',
+        effectiveUntil: '2026-06-15T00:00:00.000Z',
+      },
+      {
+        packageId: 'growth' as const,
+        packageVersion: 'v2',
+        packageName: 'Growth Package',
+        vehicleType: 'moto' as const,
+        priceRwf: 2_500,
+        ridesGranted: 70,
+        bonusRidesGranted: 20,
+        status: 'active' as const,
+        createdAt: '2026-06-16T00:00:00.000Z',
+        effectiveFrom: '2026-06-16T00:00:00.000Z',
+        effectiveUntil: null,
+      },
+      {
+        packageId: 'growth' as const,
+        packageVersion: 'v3',
+        packageName: 'Growth Package',
+        vehicleType: 'moto' as const,
+        priceRwf: 3_000,
+        ridesGranted: 80,
+        bonusRidesGranted: 25,
+        status: 'scheduled' as const,
+        createdAt: '2026-06-20T00:00:00.000Z',
+        effectiveFrom: '2026-06-21T00:00:00.000Z',
+        effectiveUntil: null,
+      },
+    ];
+
+    expect(getActivePackages('moto', catalog)).toHaveLength(1);
+    expect(getActivePackages('moto', catalog)[0]).toMatchObject({ packageVersion: 'v2', status: 'active' });
+    expect(getPackageByVersion('growth', 'v1', 'moto', catalog)).toMatchObject({ status: 'archived', ridesGranted: 60 });
+    expect(getPackageCatalogEntry('growth', 'moto', undefined, catalog)).toMatchObject({ packageVersion: 'v2', priceRwf: 2_500 });
   });
 
   test('package ID must match the selected vehicle type', () => {
@@ -230,9 +321,14 @@ describe('driver ride packages', () => {
     expect(failed.entitlement.purchaseHistory).toEqual([
       expect.objectContaining({
         amount: 2_000,
+        bonusRidesGranted: 15,
+        packageName: 'Growth Package',
         packageId: 'growth',
+        packageVersion: 'v1',
         phoneNumber: '+250788000000',
         provider: 'mtn',
+        purchasedAt: '2026-06-08T10:00:00.000Z',
+        ridesGranted: 60,
         status: 'failed',
         completedAt: '2026-06-08T10:01:00.000Z',
       }),

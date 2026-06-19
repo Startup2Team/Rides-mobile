@@ -363,6 +363,8 @@ export const driverOnboardingDraftSchema = z.object({
 const packageActivationSchema = z.object({
   id: z.string(),
   packageId: driverRidePackageIdSchema,
+  packageVersion: z.string().optional(),
+  packageName: z.string().optional(),
   vehicleId: z.string(),
   vehicleType: vehicleTypeSchema,
   activatedAt: z.string(),
@@ -383,9 +385,15 @@ const driverPackagePurchaseStatusSchema = z.enum([
 
 const driverPackagePurchaseSchema = z.object({
   packageId: driverRidePackageIdSchema,
+  packageVersion: z.string().optional(),
+  packageName: z.string().optional(),
   vehicleId: z.string(),
   vehicleType: vehicleTypeSchema,
   amount: z.number().nonnegative(),
+  pricePaid: z.number().nonnegative().optional(),
+  ridesGranted: z.number().int().nonnegative().optional(),
+  bonusRidesGranted: z.number().int().nonnegative().optional(),
+  purchasedAt: z.string().optional(),
   provider: z.enum(['mtn', 'airtel']),
   phoneNumber: z.string(),
   transactionId: z.string(),
