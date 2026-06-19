@@ -53,7 +53,7 @@ export function ReviewSubmissionSection({ colors, docs, form }: {
       </ReviewCard>
 
       {/* Documents */}
-      <ReviewCard icon="file-text" title="Uploaded Documents" cardFill={cardFill} colors={colors}>
+      <ReviewCard icon="file-text" title="Captured Documents" cardFill={cardFill} colors={colors}>
         {DOCUMENTS.map((doc, index) => {
           const front = docs[doc.key][0];
           const back = docs[doc.key][1];

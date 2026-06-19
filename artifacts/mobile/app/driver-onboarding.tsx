@@ -49,7 +49,6 @@ export default function DriverOnboarding() {
   } = useDriverOnboardingForm();
   const {
     docs,
-    pickDocument,
     selfieUri,
     setDocs,
     setSelfieUri,
@@ -178,7 +177,6 @@ export default function DriverOnboarding() {
             docs={docs}
             errors={errors}
             form={form}
-            pickDocument={pickDocument}
             takeDocumentPhoto={takeDocumentPhoto}
             update={update}
           />

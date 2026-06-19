@@ -228,7 +228,7 @@ describe('DriverAddVehicleScreen', () => {
     useStateSpy.mockRestore();
   });
 
-  test('blocks submission when required documents are missing and shows the missing list', async () => {
+  test('blocks submission when required documents are missing without showing a summary card', async () => {
     mockDocs = {
       license: ['license-front://photo', null],
       nationalId: ['national-front://photo', null],
@@ -238,9 +238,7 @@ describe('DriverAddVehicleScreen', () => {
 
     render(<DriverAddVehicleScreen />);
 
-    expect(screen.getByText(/Missing/)).toBeTruthy();
-    expect(screen.getByText(/Driver License Back/)).toBeTruthy();
-    expect(screen.getByText(/Vehicle Outside Photo/)).toBeTruthy();
+    expect(screen.queryByText(/Missing/)).toBeNull();
     expect(screen.getByLabelText('Submit Vehicle').props.accessibilityState.disabled).toBe(true);
     fireEvent.press(screen.getByLabelText('Submit Vehicle'));
 
