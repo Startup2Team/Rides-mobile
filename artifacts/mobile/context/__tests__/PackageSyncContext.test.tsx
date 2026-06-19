@@ -3,8 +3,7 @@ import React from 'react';
 import { AppState } from 'react-native';
 import { PackageSyncProvider, usePackageSync } from '../PackageSyncContext';
 import type {
-  PackageCampaignRepository,
-  PackageCatalogRepository,
+  PackageOfferSourceRepository,
 } from '@/services/packageSyncRepositories';
 
 jest.mock('react-native', () => ({
@@ -28,29 +27,32 @@ const cachedCatalog = [{
   effectiveUntil: null,
 }];
 
-function repositories(options: { failRefresh?: boolean; emptyCache?: boolean } = {}) {
-  const catalogRepository: PackageCatalogRepository = {
-    getCatalog: jest.fn().mockResolvedValue(options.emptyCache ? null : cachedCatalog),
-    refreshCatalog: options.failRefresh
-      ? jest.fn().mockRejectedValue(new Error('offline'))
-      : jest.fn().mockResolvedValue(cachedCatalog),
-    getLastSyncTime: jest.fn().mockResolvedValue('2026-06-19T10:00:00.000Z'),
+function repository(options: { failRefresh?: boolean; emptyCache?: boolean } = {}) {
+  const generation = {
+    catalog: cachedCatalog,
+    campaigns: [],
+    catalogLoaded: true as const,
+    campaignsLoaded: true as const,
+    generation: 'offer-source:generation-1',
+    lastSuccessfulGenerationAt: '2026-06-19T10:00:00.000Z',
+    sourceVersion: 'catalog-v1:campaign-v1',
+    cacheCreatedAt: '2026-06-19T09:00:00.000Z',
   };
-  const campaignRepository: PackageCampaignRepository = {
-    getCampaigns: jest.fn().mockResolvedValue(options.emptyCache ? null : []),
-    refreshCampaigns: options.failRefresh
+  const offerSourceRepository: PackageOfferSourceRepository = {
+    getOfferSource: jest.fn().mockResolvedValue(options.emptyCache ? null : generation),
+    refreshOfferSource: options.failRefresh
       ? jest.fn().mockRejectedValue(new Error('offline'))
-      : jest.fn().mockResolvedValue([]),
-    getLastSyncTime: jest.fn().mockResolvedValue('2026-06-19T10:00:00.000Z'),
+      : jest.fn().mockResolvedValue(generation),
+    getLastSyncTime: jest.fn().mockResolvedValue(generation.lastSuccessfulGenerationAt),
   };
-  return { catalogRepository, campaignRepository };
+  return offerSourceRepository;
 }
 
 describe('PackageSyncProvider', () => {
   test('loads cache immediately and exposes an offline warning when refresh fails', async () => {
-    const repos = repositories({ failRefresh: true });
+    const offerSourceRepository = repository({ failRefresh: true });
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider {...repos}>{children}</PackageSyncProvider>
+      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
     );
     const { result } = renderHook(() => usePackageSync(), { wrapper });
 
@@ -65,26 +67,26 @@ describe('PackageSyncProvider', () => {
       appStateListener = listener as typeof appStateListener;
       return { remove: jest.fn() };
     });
-    const repos = repositories();
+    const offerSourceRepository = repository();
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider {...repos}>{children}</PackageSyncProvider>
+      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
     );
     renderHook(() => usePackageSync(), { wrapper });
-    await waitFor(() => expect(repos.catalogRepository.refreshCatalog).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(offerSourceRepository.refreshOfferSource).toHaveBeenCalledTimes(1));
 
     act(() => {
       appStateListener?.('background');
       appStateListener?.('active');
     });
 
-    await waitFor(() => expect(repos.catalogRepository.refreshCatalog).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(offerSourceRepository.refreshOfferSource).toHaveBeenCalledTimes(2));
     jest.restoreAllMocks();
   });
 
   test('manual refresh updates repositories without clearing existing catalog', async () => {
-    const repos = repositories();
+    const offerSourceRepository = repository();
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider {...repos}>{children}</PackageSyncProvider>
+      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
     );
     const { result } = renderHook(() => usePackageSync(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -94,6 +96,20 @@ describe('PackageSyncProvider', () => {
     });
 
     expect(result.current.catalog).toEqual(cachedCatalog);
-    expect(repos.catalogRepository.refreshCatalog).toHaveBeenCalled();
+    expect(offerSourceRepository.refreshOfferSource).toHaveBeenCalled();
+  });
+
+  test('does not expose a partial generation when refresh fails without cache', async () => {
+    const offerSourceRepository = repository({ failRefresh: true, emptyCache: true });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
+    );
+    const { result } = renderHook(() => usePackageSync(), { wrapper });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.catalogLoaded).toBe(false);
+    expect(result.current.campaignsLoaded).toBe(false);
+    expect(result.current.offerSourceReady).toBe(false);
+    expect(result.current.syncWarning).toBe('Packages unavailable. Please try again.');
   });
 });

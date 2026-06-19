@@ -3,16 +3,19 @@ import { AppState, type AppStateStatus } from 'react-native';
 import type { DriverRidePackageCampaign } from '@/domain/driverRideCampaigns';
 import type { DriverRidePackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
 import {
-  packageCampaignRepository,
-  packageCatalogRepository,
-  type PackageCampaignRepository,
-  type PackageCatalogRepository,
+  packageOfferSourceRepository,
+  type PackageOfferSourceRepository,
 } from '@/services/packageSyncRepositories';
 
 interface PackageSyncContextValue {
   catalog: DriverRidePackageCatalogEntry[];
   campaigns: DriverRidePackageCampaign[];
   hasCatalogSnapshot: boolean;
+  catalogLoaded: boolean;
+  campaignsLoaded: boolean;
+  offerSourceReady: boolean;
+  syncGeneration: string | null;
+  lastSuccessfulGenerationAt: string | null;
   isLoading: boolean;
   isRefreshing: boolean;
   syncWarning: string | null;
@@ -22,29 +25,25 @@ interface PackageSyncContextValue {
 
 const PackageSyncContext = createContext<PackageSyncContextValue | null>(null);
 
-function latestSyncTime(left: string | null, right: string | null) {
-  if (!left) return right;
-  if (!right) return left;
-  return new Date(left).getTime() <= new Date(right).getTime() ? left : right;
-}
-
 export function PackageSyncProvider({
   children,
-  catalogRepository = packageCatalogRepository,
-  campaignRepository = packageCampaignRepository,
+  offerSourceRepository = packageOfferSourceRepository,
 }: {
   children: React.ReactNode;
-  catalogRepository?: PackageCatalogRepository;
-  campaignRepository?: PackageCampaignRepository;
+  offerSourceRepository?: PackageOfferSourceRepository;
 }) {
   const [catalog, setCatalog] = useState<DriverRidePackageCatalogEntry[]>([]);
   const [campaigns, setCampaigns] = useState<DriverRidePackageCampaign[]>([]);
   const [hasCatalogSnapshot, setHasCatalogSnapshot] = useState(false);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [campaignsLoaded, setCampaignsLoaded] = useState(false);
+  const [syncGeneration, setSyncGeneration] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const offerSourceReadyRef = useRef(false);
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -52,58 +51,57 @@ export function PackageSyncProvider({
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
     const operation = (async () => {
       if (mountedRef.current) setIsRefreshing(true);
-      const [catalogResult, campaignResult] = await Promise.allSettled([
-        catalogRepository.refreshCatalog(),
-        campaignRepository.refreshCampaigns(),
-      ]);
+      const result = await offerSourceRepository.refreshOfferSource()
+        .then(value => ({ status: 'fulfilled' as const, value }))
+        .catch(reason => ({ status: 'rejected' as const, reason }));
       if (!mountedRef.current) return;
 
-      if (catalogResult.status === 'fulfilled') {
-        setCatalog(catalogResult.value);
+      if (result.status === 'fulfilled') {
+        setCatalog(result.value.catalog);
+        setCampaigns(result.value.campaigns);
         setHasCatalogSnapshot(true);
+        setCatalogLoaded(true);
+        setCampaignsLoaded(true);
+        offerSourceReadyRef.current = true;
+        setSyncGeneration(result.value.generation);
+        setLastSyncedAt(result.value.lastSuccessfulGenerationAt);
+        setSyncWarning(null);
+      } else {
+        setSyncWarning(offerSourceReadyRef.current
+          ? 'Using cached package data'
+          : 'Packages unavailable. Please try again.');
       }
-      if (campaignResult.status === 'fulfilled') setCampaigns(campaignResult.value);
-
-      const failed = catalogResult.status === 'rejected' || campaignResult.status === 'rejected';
-      setSyncWarning(failed ? 'Using cached package data' : null);
-      const [catalogSyncTime, campaignSyncTime] = await Promise.all([
-        catalogRepository.getLastSyncTime(),
-        campaignRepository.getLastSyncTime(),
-      ]);
-      if (mountedRef.current) setLastSyncedAt(latestSyncTime(catalogSyncTime, campaignSyncTime));
     })().finally(() => {
       refreshPromiseRef.current = null;
       if (mountedRef.current) setIsRefreshing(false);
     });
     refreshPromiseRef.current = operation;
     return operation;
-  }, [campaignRepository, catalogRepository]);
+  }, [offerSourceRepository]);
 
   useEffect(() => {
     mountedRef.current = true;
     void (async () => {
-      const [cachedCatalog, cachedCampaigns, catalogSyncTime, campaignSyncTime] = await Promise.all([
-        catalogRepository.getCatalog(),
-        campaignRepository.getCampaigns(),
-        catalogRepository.getLastSyncTime(),
-        campaignRepository.getLastSyncTime(),
-      ]);
+      const cached = await offerSourceRepository.getOfferSource();
       if (!mountedRef.current) return;
-      if (cachedCatalog) {
-        setCatalog(cachedCatalog);
+      if (cached?.catalogLoaded && cached.campaignsLoaded) {
+        setCatalog(cached.catalog);
+        setCampaigns(cached.campaigns);
         setHasCatalogSnapshot(true);
+        setCatalogLoaded(true);
+        setCampaignsLoaded(true);
+        offerSourceReadyRef.current = true;
+        setSyncGeneration(cached.generation);
+        setLastSyncedAt(cached.lastSuccessfulGenerationAt);
       }
-      if (cachedCampaigns) setCampaigns(cachedCampaigns);
-      setLastSyncedAt(latestSyncTime(catalogSyncTime, campaignSyncTime));
-      const hasCachedCatalog = cachedCatalog !== null;
-      if (hasCachedCatalog) setIsLoading(false);
+      if (cached) setIsLoading(false);
       await refresh();
       if (mountedRef.current) setIsLoading(false);
     })();
     return () => {
       mountedRef.current = false;
     };
-  }, [campaignRepository, catalogRepository, refresh]);
+  }, [offerSourceRepository, refresh]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
@@ -118,12 +116,17 @@ export function PackageSyncProvider({
     catalog,
     campaigns,
     hasCatalogSnapshot,
+    catalogLoaded,
+    campaignsLoaded,
+    offerSourceReady: catalogLoaded && campaignsLoaded,
+    syncGeneration,
+    lastSuccessfulGenerationAt: lastSyncedAt,
     isLoading,
     isRefreshing,
     syncWarning,
     lastSyncedAt,
     refresh,
-  }), [campaigns, catalog, hasCatalogSnapshot, isLoading, isRefreshing, lastSyncedAt, refresh, syncWarning]);
+  }), [campaigns, campaignsLoaded, catalog, catalogLoaded, hasCatalogSnapshot, isLoading, isRefreshing, lastSyncedAt, refresh, syncGeneration, syncWarning]);
 
   return <PackageSyncContext.Provider value={value}>{children}</PackageSyncContext.Provider>;
 }

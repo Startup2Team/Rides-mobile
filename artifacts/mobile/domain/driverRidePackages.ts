@@ -20,6 +20,7 @@ export type DriverRidePackageId = string;
 export type DriverEntitlementAuthority = 'local_prototype' | 'backend';
 export type MobileMoneyPackageProvider = 'mtn' | 'airtel';
 export type DriverPackageOfferSource = 'local_catalog';
+export type DriverPackageQuoteAuthority = 'local' | 'backend';
 export type DriverPackagePurchaseStatus =
   | 'idle'
   | 'pending'
@@ -71,6 +72,10 @@ export interface DriverPackageOfferSnapshot {
   campaignId?: string | null;
   campaignName?: string | null;
   campaignType?: DriverRideCampaignType | null;
+  ownerUserId?: string | null;
+  quoteId?: string | null;
+  quoteSignature?: string | null;
+  quoteAuthority: DriverPackageQuoteAuthority;
   createdAt: string;
   expiresAt: string;
   source: DriverPackageOfferSource;
@@ -168,6 +173,12 @@ export function createPackageOfferSnapshot(
   vehicle: DriverEntitlementVehicleRef,
   now = new Date(),
   ttlMs = PACKAGE_OFFER_TTL_MS,
+  options: {
+    ownerUserId?: string | null;
+    quoteId?: string | null;
+    quoteSignature?: string | null;
+    quoteAuthority?: DriverPackageQuoteAuthority;
+  } = {},
 ): DriverPackageOfferSnapshot {
   const vehicleId = vehicleIdFromRef(vehicle);
   const vehicleType = vehicleTypeFromRef(vehicle);
@@ -188,6 +199,10 @@ export function createPackageOfferSnapshot(
     campaignId: offer.campaignId,
     campaignName: offer.campaignName,
     campaignType: offer.campaignType,
+    ownerUserId: options.ownerUserId,
+    quoteId: options.quoteId,
+    quoteSignature: options.quoteSignature,
+    quoteAuthority: options.quoteAuthority ?? 'local',
     createdAt,
     expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
     source: 'local_catalog',
@@ -231,6 +246,7 @@ export function validatePackageOfferSnapshot(
     || !validNumbers
     || !validDates
     || offer.source !== 'local_catalog'
+    || (offer.quoteAuthority !== 'local' && offer.quoteAuthority !== 'backend')
   ) return null;
   if (
     vehicle

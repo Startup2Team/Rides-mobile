@@ -20,7 +20,11 @@ import {
   updatePackagePurchaseStatus,
   validatePackageOfferSnapshot,
 } from '../driverRidePackages';
-import { resolvePackageOffer } from '../driverRideCampaigns';
+import {
+  getActiveDriverRideCampaigns,
+  resolvePackageOffer,
+  validatePackageCampaigns,
+} from '../driverRideCampaigns';
 import {
   getActivePackages,
   getPackageByVersion,
@@ -258,6 +262,7 @@ describe('driver ride packages', () => {
       createdAt: '2026-06-19T10:00:00.000Z',
       expiresAt: '2026-06-19T10:15:00.000Z',
       source: 'local_catalog' as const,
+      quoteAuthority: 'local' as const,
     };
 
     expect(validatePackageOfferSnapshot(lockedOffer, motoVehicle)).toEqual(lockedOffer);
@@ -386,6 +391,76 @@ describe('driver ride packages', () => {
     expect(() => validatePackageCatalog([{ ...dynamicEntry, packageVersion: '' }])).toThrow('catalog is invalid');
     expect(() => validatePackageCatalog([{ ...dynamicEntry, ridesGranted: -1 }])).toThrow('catalog is invalid');
     expect(() => validatePackageCatalog([{ ...dynamicEntry, vehicleType: 'plane' }])).toThrow('catalog is invalid');
+    expect(() => validatePackageCatalog([{ ...dynamicEntry, effectiveFrom: 'not-a-date' }])).toThrow('catalog is invalid');
+    expect(() => validatePackageCatalog([{
+      ...dynamicEntry,
+      effectiveUntil: '2026-06-18T00:00:00.000Z',
+    }])).toThrow('catalog is invalid');
+  });
+
+  test('active package versions enforce effective dates', () => {
+    const base = {
+      packageId: 'moto_timed',
+      packageVersion: 'v1',
+      packageName: 'Timed',
+      vehicleType: 'moto' as const,
+      priceRwf: 1_000,
+      ridesGranted: 10,
+      bonusRidesGranted: 1,
+      status: 'active' as const,
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+    const catalog = [
+      { ...base, effectiveFrom: '2026-06-20T00:00:00.000Z', effectiveUntil: null },
+      { ...base, packageVersion: 'v0', effectiveFrom: '2026-06-01T00:00:00.000Z', effectiveUntil: '2026-06-18T00:00:00.000Z' },
+    ];
+
+    expect(getActivePackages('moto', catalog, new Date('2026-06-19T00:00:00.000Z'))).toEqual([]);
+    expect(getActivePackages('moto', catalog, new Date('2026-06-20T00:00:00.000Z'))).toEqual([catalog[0]]);
+  });
+
+  test('campaign precedence favors first purchase, then vehicle, then global', () => {
+    const common = {
+      status: 'active' as const,
+      startDate: '2026-06-01T00:00:00.000Z',
+      endDate: '2026-07-01T00:00:00.000Z',
+      createdAt: '2026-06-01T00:00:00.000Z',
+      description: 'test',
+      packageIds: ['growth'],
+    };
+    const campaigns = [
+      { ...common, campaignId: 'global', campaignName: 'Global', campaignType: 'global' as const, priceRwf: 1_900 },
+      { ...common, campaignId: 'vehicle', campaignName: 'Vehicle', campaignType: 'vehicle_type' as const, vehicleTypes: ['moto' as const], priceRwf: 1_500 },
+      { ...common, campaignId: 'first', campaignName: 'First', campaignType: 'first_purchase' as const, priceRwf: 1_000 },
+    ];
+    const offer = resolvePackageOffer({
+      package: getPackageCatalogEntry('growth', 'moto')!,
+      vehicleType: 'moto',
+      activeCampaigns: getActiveDriverRideCampaigns(campaigns, new Date('2026-06-19T00:00:00.000Z')),
+      now: new Date('2026-06-19T00:00:00.000Z'),
+    });
+
+    expect(offer.campaignId).toBe('first');
+    expect(offer.priceRwf).toBe(1_000);
+  });
+
+  test('campaign validation rejects invalid and reversed dates', () => {
+    const campaign = {
+      campaignId: 'dated',
+      campaignName: 'Dated',
+      campaignType: 'global' as const,
+      status: 'active' as const,
+      startDate: '2026-06-01T00:00:00.000Z',
+      endDate: '2026-07-01T00:00:00.000Z',
+      createdAt: '2026-06-01T00:00:00.000Z',
+      description: 'test',
+    };
+
+    expect(() => validatePackageCampaigns([{ ...campaign, startDate: 'invalid' }])).toThrow('campaigns are invalid');
+    expect(() => validatePackageCampaigns([{
+      ...campaign,
+      endDate: '2026-05-01T00:00:00.000Z',
+    }])).toThrow('campaigns are invalid');
   });
 
   test('package ID must match the selected vehicle type', () => {

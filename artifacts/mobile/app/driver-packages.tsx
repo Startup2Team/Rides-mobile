@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,12 +12,12 @@ import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import {
   createPackageOfferSnapshot,
   hasUsedPackageOffer,
-  serializePackageOfferSnapshot,
   type DriverPackageOfferSnapshot,
 } from '@/domain/driverRidePackages';
 import { getActivePackages } from '@/domain/driverRidePackageCatalog';
 import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePackageOffer } from '@/domain/driverRideCampaigns';
 import { useColors } from '@/hooks/useColors';
+import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
 
 function formatRwf(amount: number) {
@@ -37,7 +37,7 @@ export default function DriverPackagesScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { driverProfile } = useAuth();
+  const { driverProfile, user } = useAuth();
   const {
     isLoading: isEntitlementLoading,
     entitlement,
@@ -47,22 +47,40 @@ export default function DriverPackagesScreen() {
     campaigns,
     catalog,
     hasCatalogSnapshot,
+    offerSourceReady,
     isLoading: isCatalogLoading,
     isRefreshing,
     lastSyncedAt,
     refresh,
     syncWarning,
+    syncGeneration,
   } = usePackageSync();
   const [selectedOffer, setSelectedOffer] = useState<DriverPackageOfferSnapshot | null>(null);
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
+  const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
-  const packages = getActivePackages(vehicleType, catalog);
+  const packages = offerSourceReady ? getActivePackages(vehicleType, catalog) : [];
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
   const activeCampaigns = getActiveDriverRideCampaigns(campaigns);
 
-  const handleSelectPackage = (offer: DriverRidePackageOffer) => {
+  useEffect(() => {
+    if (generationRef.current === null) {
+      generationRef.current = syncGeneration;
+      return;
+    }
+    if (syncGeneration && generationRef.current !== syncGeneration) {
+      generationRef.current = syncGeneration;
+      if (selectedOffer) {
+        setSelectedOffer(null);
+        setSelectionNotice('Package offers were refreshed. Please select again.');
+      }
+    }
+  }, [selectedOffer, syncGeneration]);
+
+  const handleSelectPackage = async (offer: DriverRidePackageOffer) => {
     if (selectedOffer?.packageId === offer.packageId) {
       setSelectedOffer(null);
       return;
@@ -71,14 +89,30 @@ export default function DriverPackagesScreen() {
       ?? (entitlement.vehicleId && entitlement.vehicleType
         ? { vehicleId: entitlement.vehicleId, vehicleType: entitlement.vehicleType }
         : { vehicleId: 'driver-vehicle:legacy', vehicleType: offer.vehicleType });
-    setSelectedOffer(createPackageOfferSnapshot(offer, vehicle));
+    const selectionGeneration = syncGeneration;
+    const lockedOffer = createPackageOfferSnapshot(offer, vehicle, new Date(), undefined, {
+      ownerUserId: user?.id,
+      quoteAuthority: 'local',
+    });
+    try {
+      await saveLockedPackageOffer(lockedOffer, catalog, offer);
+      if (generationRef.current !== selectionGeneration) {
+        setSelectionNotice('Package offers were refreshed. Please select again.');
+        return;
+      }
+      setSelectionNotice(null);
+      setSelectedOffer(lockedOffer);
+    } catch (lockError) {
+      setSelectedOffer(null);
+      setSelectionNotice(lockError instanceof Error ? lockError.message : 'Unable to lock this package offer.');
+    }
   };
 
   const handleBuySelectedPackage = () => {
     if (!selectedOffer) return;
     router.push({
       pathname: '/driver-package-payment',
-      params: { offer: serializePackageOfferSnapshot(selectedOffer) },
+      params: { offerId: selectedOffer.offerId },
     });
   };
 
@@ -107,8 +141,11 @@ export default function DriverPackagesScreen() {
         <Text style={[styles.syncText, { color: colors.mutedForeground }]}>
           Last updated: {formatLastUpdated(lastSyncedAt)}
         </Text>
-        {syncWarning && hasCatalogSnapshot ? (
+        {syncWarning && offerSourceReady ? (
           <Text style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</Text>
+        ) : null}
+        {selectionNotice ? (
+          <Text style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</Text>
         ) : null}
       </View>
       <TouchableOpacity
@@ -132,7 +169,7 @@ export default function DriverPackagesScreen() {
         title="Loading packages..."
         detail="Checking for the latest package offers."
       />
-    ) : !hasCatalogSnapshot && syncWarning ? (
+    ) : !offerSourceReady && syncWarning ? (
       <PackageState
         colors={colors}
         icon="wifi-off"
@@ -164,7 +201,7 @@ export default function DriverPackagesScreen() {
           disabled={isOfferUsed}
           unavailable={isEntitlementLoading}
           selected={selectedOffer?.packageId === pkg.packageId}
-          onPress={() => handleSelectPackage(pkg)}
+          onPress={() => void handleSelectPackage(pkg)}
         />
       );
     })}

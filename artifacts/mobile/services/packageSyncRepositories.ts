@@ -10,8 +10,11 @@ import {
 import {
   loadPackageCampaignCache,
   loadPackageCatalogCache,
+  loadPackageOfferSourceCache,
   savePackageCampaignCache,
   savePackageCatalogCache,
+  savePackageOfferSourceCache,
+  type PackageOfferSourceCache,
   type PackageSyncCache,
 } from '@/persistence/packageSyncPersistence';
 
@@ -38,6 +41,12 @@ export interface PackageCatalogRepository {
 export interface PackageCampaignRepository {
   getCampaigns(): Promise<DriverRidePackageCampaign[] | null>;
   refreshCampaigns(): Promise<DriverRidePackageCampaign[]>;
+  getLastSyncTime(): Promise<string | null>;
+}
+
+export interface PackageOfferSourceRepository {
+  getOfferSource(): Promise<PackageOfferSourceCache | null>;
+  refreshOfferSource(): Promise<PackageOfferSourceCache>;
   getLastSyncTime(): Promise<string | null>;
 }
 
@@ -121,5 +130,47 @@ export class CachedPackageCampaignRepository implements PackageCampaignRepositor
   }
 }
 
+export class CachedPackageOfferSourceRepository implements PackageOfferSourceRepository {
+  constructor(
+    private readonly catalogAdapter: PackageCatalogBackendAdapter = new MockPackageCatalogBackendAdapter(),
+    private readonly campaignAdapter: PackageCampaignBackendAdapter = new MockPackageCampaignBackendAdapter(),
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  async getOfferSource() {
+    return (await loadPackageOfferSourceCache()).data;
+  }
+
+  async refreshOfferSource() {
+    // Both responses are validated before the single cache commit. A partial
+    // backend failure therefore cannot replace either half of the generation.
+    const [catalogResponse, campaignResponse] = await Promise.all([
+      this.catalogAdapter.fetchPackages(),
+      this.campaignAdapter.fetchCampaigns(),
+    ]);
+    const catalog = validatePackageCatalog(catalogResponse.data);
+    const campaigns = validatePackageCampaigns(campaignResponse.data);
+    const refreshedAt = this.now().toISOString();
+    const previous = (await loadPackageOfferSourceCache()).data;
+    const cache: PackageOfferSourceCache = {
+      catalog,
+      campaigns,
+      catalogLoaded: true,
+      campaignsLoaded: true,
+      generation: `offer-source:${refreshedAt}:${catalogResponse.sourceVersion}:${campaignResponse.sourceVersion}`,
+      lastSuccessfulGenerationAt: refreshedAt,
+      sourceVersion: `${catalogResponse.sourceVersion}:${campaignResponse.sourceVersion}`,
+      cacheCreatedAt: previous?.cacheCreatedAt ?? refreshedAt,
+    };
+    await savePackageOfferSourceCache(cache);
+    return cache;
+  }
+
+  async getLastSyncTime() {
+    return (await loadPackageOfferSourceCache()).data?.lastSuccessfulGenerationAt ?? null;
+  }
+}
+
 export const packageCatalogRepository = new CachedPackageCatalogRepository();
 export const packageCampaignRepository = new CachedPackageCampaignRepository();
+export const packageOfferSourceRepository = new CachedPackageOfferSourceRepository();

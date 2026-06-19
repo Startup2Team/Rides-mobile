@@ -53,12 +53,34 @@ export interface PackageSyncCache<T> {
   cacheCreatedAt: string;
 }
 
+export interface PackageOfferSourceCache {
+  catalog: DriverRidePackageCatalogEntry[];
+  campaigns: DriverRidePackageCampaign[];
+  catalogLoaded: true;
+  campaignsLoaded: true;
+  generation: string;
+  lastSuccessfulGenerationAt: string;
+  sourceVersion: string;
+  cacheCreatedAt: string;
+}
+
 export const packageCatalogCacheSchema = syncMetadataSchema.extend({
   data: z.array(catalogEntrySchema),
 });
 
 export const packageCampaignCacheSchema = syncMetadataSchema.extend({
   data: z.array(campaignSchema),
+});
+
+export const packageOfferSourceCacheSchema = z.object({
+  catalog: z.array(catalogEntrySchema),
+  campaigns: z.array(campaignSchema),
+  catalogLoaded: z.literal(true),
+  campaignsLoaded: z.literal(true),
+  generation: z.string().trim().min(1),
+  lastSuccessfulGenerationAt: z.string(),
+  sourceVersion: z.string().trim().min(1),
+  cacheCreatedAt: z.string(),
 });
 
 export const loadPackageCatalogCache = () =>
@@ -80,3 +102,12 @@ export const loadPackageCampaignCache = () =>
 export const savePackageCampaignCache = (
   cache: PackageSyncCache<DriverRidePackageCampaign[]>,
 ) => saveVersionedStorage(STORAGE_KEYS.packageCampaignCache, cache);
+
+export const loadPackageOfferSourceCache = () =>
+  loadVersionedStorage<PackageOfferSourceCache>(
+    STORAGE_KEYS.packageOfferSourceCache,
+    packageOfferSourceCacheSchema,
+  );
+
+export const savePackageOfferSourceCache = (cache: PackageOfferSourceCache) =>
+  saveVersionedStorage(STORAGE_KEYS.packageOfferSourceCache, cache);

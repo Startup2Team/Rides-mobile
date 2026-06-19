@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
@@ -22,6 +22,8 @@ let mockHasCatalogSnapshot = true;
 let mockIsCatalogLoading = false;
 let mockSyncWarning: string | null = null;
 const mockRefreshPackages = jest.fn();
+const mockSaveLockedPackageOffer = jest.fn();
+let mockSyncGeneration = 'generation-1';
 let mockGetActiveDriverRideCampaigns: jest.SpiedFunction<typeof campaignModule.getActiveDriverRideCampaigns>;
 
 const successfulPurchase: DriverPackagePurchase = {
@@ -119,6 +121,7 @@ jest.mock('@expo/vector-icons', () => {
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
+    user: { id: 'driver-user-1' },
     driverProfile: {
       isVerified: true,
       momoCode: '+250788000000',
@@ -147,12 +150,20 @@ jest.mock('@/context/PackageSyncContext', () => ({
     campaigns: mockCampaigns,
     catalog: mockCatalog,
     hasCatalogSnapshot: mockHasCatalogSnapshot,
+    catalogLoaded: mockHasCatalogSnapshot,
+    campaignsLoaded: mockHasCatalogSnapshot,
+    offerSourceReady: mockHasCatalogSnapshot,
+    syncGeneration: mockSyncGeneration,
     isLoading: mockIsCatalogLoading,
     isRefreshing: false,
     lastSyncedAt: '2026-06-19T10:00:00.000Z',
     refresh: mockRefreshPackages,
     syncWarning: mockSyncWarning,
   }),
+}));
+
+jest.mock('@/persistence/lockedPackageOfferPersistence', () => ({
+  saveLockedPackageOffer: (...args: unknown[]) => mockSaveLockedPackageOffer(...args),
 }));
 
 describe('DriverPackagesScreen', () => {
@@ -170,6 +181,8 @@ describe('DriverPackagesScreen', () => {
     mockHasCatalogSnapshot = true;
     mockIsCatalogLoading = false;
     mockSyncWarning = null;
+    mockSyncGeneration = 'generation-1';
+    mockSaveLockedPackageOffer.mockImplementation(async offer => offer);
     mockGetActiveDriverRideCampaigns.mockReturnValue([]);
     mockActivatePackage.mockResolvedValue({
       id: 'activation:launch_starter:2026-06-08T10:00:00.000Z',
@@ -202,20 +215,20 @@ describe('DriverPackagesScreen', () => {
     jest.restoreAllMocks();
   });
 
-  test('opens the payment page only after buying the selected package', () => {
+  test('opens the payment page only after buying the selected package', async () => {
     render(<DriverPackagesScreen />);
 
     fireEvent.press(screen.getByText('Growth Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
     fireEvent.press(screen.getByText('Buy Selected Package'));
 
     expect(require('expo-router').router.push).toHaveBeenCalledWith({
       pathname: '/driver-package-payment',
       params: {
-        offer: expect.any(String),
+        offerId: expect.stringContaining('package-offer:'),
       },
     });
-    const navigation = require('expo-router').router.push.mock.calls[0][0];
-    expect(JSON.parse(navigation.params.offer)).toMatchObject({
+    expect(mockSaveLockedPackageOffer.mock.calls[0][0]).toMatchObject({
       offerId: expect.stringContaining('package-offer:'),
       packageId: 'growth',
       packageVersion: 'v1',
@@ -224,16 +237,32 @@ describe('DriverPackagesScreen', () => {
       ridesGranted: 60,
       bonusRidesGranted: 15,
       source: 'local_catalog',
+      ownerUserId: 'driver-user-1',
+      quoteAuthority: 'local',
     });
   });
 
-  test('deselects a package when it is pressed again', () => {
+  test('deselects a package when it is pressed again', async () => {
     render(<DriverPackagesScreen />);
 
     fireEvent.press(screen.getByText('Growth Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
     fireEvent.press(screen.getByText('Growth Package'));
     fireEvent.press(screen.getByText('Buy Selected Package'));
 
+    expect(require('expo-router').router.push).not.toHaveBeenCalled();
+  });
+
+  test('clears the selected offer when the catalog/campaign generation changes', async () => {
+    const view = render(<DriverPackagesScreen />);
+    fireEvent.press(screen.getByText('Growth Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
+
+    mockSyncGeneration = 'generation-2';
+    view.rerender(<DriverPackagesScreen />);
+
+    expect(await screen.findByText('Package offers were refreshed. Please select again.')).toBeTruthy();
+    fireEvent.press(screen.getByText('Buy Selected Package'));
     expect(require('expo-router').router.push).not.toHaveBeenCalled();
   });
 

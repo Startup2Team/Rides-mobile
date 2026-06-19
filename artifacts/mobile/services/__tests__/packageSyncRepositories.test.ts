@@ -2,12 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   CachedPackageCampaignRepository,
   CachedPackageCatalogRepository,
+  CachedPackageOfferSourceRepository,
   type PackageCampaignBackendAdapter,
   type PackageCatalogBackendAdapter,
 } from '../packageSyncRepositories';
 import {
   loadPackageCampaignCache,
   loadPackageCatalogCache,
+  loadPackageOfferSourceCache,
   savePackageCampaignCache,
   savePackageCatalogCache,
 } from '@/persistence/packageSyncPersistence';
@@ -116,6 +118,44 @@ describe('package sync repositories', () => {
   test('returns null when no cache exists', async () => {
     await expect(new CachedPackageCatalogRepository().getCatalog()).resolves.toBeNull();
     await expect(new CachedPackageCampaignRepository().getCampaigns()).resolves.toBeNull();
+  });
+
+  test('commits catalog and campaigns as one generation', async () => {
+    const repository = new CachedPackageOfferSourceRepository(
+      { fetchPackages: jest.fn().mockResolvedValue({ data: catalog, sourceVersion: 'catalog-v2' }) },
+      { fetchCampaigns: jest.fn().mockResolvedValue({ data: campaigns, sourceVersion: 'campaign-v2' }) },
+      () => new Date('2026-06-19T11:00:00.000Z'),
+    );
+
+    await repository.refreshOfferSource();
+
+    await expect(loadPackageOfferSourceCache()).resolves.toMatchObject({
+      data: {
+        catalog,
+        campaigns,
+        catalogLoaded: true,
+        campaignsLoaded: true,
+        generation: expect.stringContaining('catalog-v2:campaign-v2'),
+        lastSuccessfulGenerationAt: '2026-06-19T11:00:00.000Z',
+      },
+    });
+  });
+
+  test('partial refresh failure preserves the previous complete generation', async () => {
+    const initialRepository = new CachedPackageOfferSourceRepository(
+      { fetchPackages: jest.fn().mockResolvedValue({ data: catalog, sourceVersion: 'catalog-v1' }) },
+      { fetchCampaigns: jest.fn().mockResolvedValue({ data: campaigns, sourceVersion: 'campaign-v1' }) },
+      () => new Date('2026-06-19T10:00:00.000Z'),
+    );
+    const initial = await initialRepository.refreshOfferSource();
+    const changedCatalog = [{ ...catalog[0], priceRwf: 99_000 }];
+    const failingRepository = new CachedPackageOfferSourceRepository(
+      { fetchPackages: jest.fn().mockResolvedValue({ data: changedCatalog, sourceVersion: 'catalog-v2' }) },
+      { fetchCampaigns: jest.fn().mockRejectedValue(new Error('campaign offline')) },
+    );
+
+    await expect(failingRepository.refreshOfferSource()).rejects.toThrow('campaign offline');
+    await expect(failingRepository.getOfferSource()).resolves.toEqual(initial);
   });
 
   test('catalog and campaign refreshes cannot mutate an existing locked offer', async () => {

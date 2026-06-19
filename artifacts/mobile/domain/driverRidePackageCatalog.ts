@@ -226,11 +226,18 @@ export const DRIVER_RIDE_PACKAGE_CATALOG: DriverRidePackageCatalogEntry[] = [
 export function getActivePackages(
   vehicleType?: VehicleType | null,
   catalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG,
+  now = new Date(),
 ) {
-  return catalog.filter(entry =>
-    entry.status === 'active' &&
-    (!vehicleType || entry.vehicleType === vehicleType),
-  );
+  const currentTime = now.getTime();
+  return catalog.filter(entry => {
+    const effectiveFrom = new Date(entry.effectiveFrom).getTime();
+    const effectiveUntil = entry.effectiveUntil ? new Date(entry.effectiveUntil).getTime() : null;
+    return entry.status === 'active'
+      && !Number.isNaN(effectiveFrom)
+      && effectiveFrom <= currentTime
+      && (effectiveUntil === null || (!Number.isNaN(effectiveUntil) && currentTime <= effectiveUntil))
+      && (!vehicleType || entry.vehicleType === vehicleType);
+  });
 }
 
 export function getPackageByVersion(
@@ -270,6 +277,15 @@ const VEHICLE_TYPES: VehicleType[] = ['moto', 'rifani', 'cab', 'fuso', 'hilux'];
 export function isValidPackageCatalogEntry(value: unknown): value is DriverRidePackageCatalogEntry {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const entry = value as Partial<DriverRidePackageCatalogEntry>;
+  const createdAt = typeof entry.createdAt === 'string' ? new Date(entry.createdAt).getTime() : Number.NaN;
+  const effectiveFrom = typeof entry.effectiveFrom === 'string'
+    ? new Date(entry.effectiveFrom).getTime()
+    : Number.NaN;
+  const effectiveUntil = entry.effectiveUntil === null
+    ? null
+    : typeof entry.effectiveUntil === 'string'
+      ? new Date(entry.effectiveUntil).getTime()
+      : Number.NaN;
   return typeof entry.packageId === 'string'
     && entry.packageId.trim().length > 0
     && typeof entry.packageVersion === 'string'
@@ -288,7 +304,10 @@ export function isValidPackageCatalogEntry(value: unknown): value is DriverRideP
     && entry.ridesGranted >= 0
     && typeof entry.bonusRidesGranted === 'number'
     && Number.isInteger(entry.bonusRidesGranted)
-    && entry.bonusRidesGranted >= 0;
+    && entry.bonusRidesGranted >= 0
+    && !Number.isNaN(createdAt)
+    && !Number.isNaN(effectiveFrom)
+    && (effectiveUntil === null || (!Number.isNaN(effectiveUntil) && effectiveUntil > effectiveFrom));
 }
 
 export function validatePackageCatalog(catalog: unknown): DriverRidePackageCatalogEntry[] {

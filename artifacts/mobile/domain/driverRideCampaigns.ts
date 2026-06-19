@@ -183,6 +183,15 @@ export function validatePackageCampaigns(value: unknown): DriverRidePackageCampa
   const valid = value.every(item => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
     const campaign = item as Partial<DriverRidePackageCampaign>;
+    const startDate = typeof campaign.startDate === 'string'
+      ? new Date(campaign.startDate).getTime()
+      : Number.NaN;
+    const endDate = typeof campaign.endDate === 'string'
+      ? new Date(campaign.endDate).getTime()
+      : Number.NaN;
+    const createdAt = typeof campaign.createdAt === 'string'
+      ? new Date(campaign.createdAt).getTime()
+      : Number.NaN;
     return typeof campaign.campaignId === 'string'
       && campaign.campaignId.trim().length > 0
       && typeof campaign.campaignName === 'string'
@@ -193,6 +202,10 @@ export function validatePackageCampaigns(value: unknown): DriverRidePackageCampa
       && statuses.includes(campaign.status as DriverRideCampaignStatus)
       && typeof campaign.startDate === 'string'
       && typeof campaign.endDate === 'string'
+      && !Number.isNaN(startDate)
+      && !Number.isNaN(endDate)
+      && !Number.isNaN(createdAt)
+      && endDate > startDate
       && (!campaign.packageIds || campaign.packageIds.every(id => typeof id === 'string' && id.trim().length > 0))
       && (!campaign.vehicleTypes || campaign.vehicleTypes.every(type => vehicleTypes.includes(type)))
       && [campaign.priceRwf, campaign.ridesGranted, campaign.bonusRidesGranted]

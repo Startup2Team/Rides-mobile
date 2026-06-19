@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { DriverPackageOfferSnapshot } from '@/domain/driverRidePackages';
 import DriverPackagePaymentScreen from '../driver-package-payment';
 
 const mockCreatePackagePurchase = jest.fn();
-let mockParams: { offer?: string } = {};
+let mockParams: { offerId?: string; priceRwf?: string; ridesGranted?: string } = {};
+const mockLoadLockedPackageOffer = jest.fn();
 
 const lockedOffer: DriverPackageOfferSnapshot = {
   offerId: 'package-offer:vehicle-moto-1:growth:v1:1',
@@ -22,6 +23,7 @@ const lockedOffer: DriverPackageOfferSnapshot = {
   createdAt: '2026-06-19T10:00:00.000Z',
   expiresAt: '2099-06-19T10:15:00.000Z',
   source: 'local_catalog',
+  quoteAuthority: 'local',
 };
 
 jest.mock('react-native', () => {
@@ -104,6 +106,7 @@ jest.mock('@expo/vector-icons', () => {
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
+    user: { id: 'driver-user-1' },
     driverProfile: {
       activeVehicle: { vehicleId: 'vehicle-moto-1' },
       vehicles: [{
@@ -122,14 +125,23 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
     activatePackage: jest.fn(),
     createPackagePurchase: mockCreatePackagePurchase,
+    entitlement: {
+      vehicleId: null,
+      vehicleType: null,
+    },
     updatePackagePurchaseStatus: jest.fn(),
   }),
+}));
+
+jest.mock('@/persistence/lockedPackageOfferPersistence', () => ({
+  loadLockedPackageOffer: (...args: unknown[]) => mockLoadLockedPackageOffer(...args),
 }));
 
 describe('DriverPackagePaymentScreen offer lock', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockParams = { offer: JSON.stringify(lockedOffer) };
+    mockParams = { offerId: lockedOffer.offerId };
+    mockLoadLockedPackageOffer.mockResolvedValue({ offer: lockedOffer, failure: null });
     mockCreatePackagePurchase.mockResolvedValue({
       ...lockedOffer,
       amount: lockedOffer.priceRwf,
@@ -140,10 +152,10 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     });
   });
 
-  test('displays and purchases the locked offer without resolving current campaign values', () => {
+  test('displays and purchases the locked offer without resolving current campaign values', async () => {
     render(<DriverPackagePaymentScreen />);
 
-    expect(screen.getByText('Locked Growth')).toBeTruthy();
+    expect(await screen.findByText('Locked Growth')).toBeTruthy();
     expect(screen.getByText('Locked Campaign')).toBeTruthy();
     expect(screen.getByText('44')).toBeTruthy();
     expect(screen.getByText('+6')).toBeTruthy();
@@ -158,31 +170,44 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     });
   });
 
-  test('expired offer blocks confirmation and returns to packages', () => {
-    mockParams = {
-      offer: JSON.stringify({
-        ...lockedOffer,
-        createdAt: '2019-12-31T23:45:00.000Z',
-        expiresAt: '2020-01-01T00:00:00.000Z',
-      }),
-    };
+  test('expired offer blocks confirmation and returns to packages', async () => {
+    mockLoadLockedPackageOffer.mockResolvedValue({ offer: null, failure: 'expired' });
 
     render(<DriverPackagePaymentScreen />);
 
-    expect(screen.getByText('This package offer expired. Please refresh packages.')).toBeTruthy();
+    expect(await screen.findByText('This package offer expired. Please refresh packages.')).toBeTruthy();
     expect(screen.queryByText('Send Payment Prompt')).toBeNull();
     fireEvent.press(screen.getByText('Return to Packages'));
     expect(require('expo-router').router.replace).toHaveBeenCalledWith('/driver-packages');
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
   });
 
-  test('missing or invalid offer shows a safe state and cannot purchase', () => {
-    mockParams = { offer: '{"packageId":"growth"}' };
+  test('missing or invalid offer shows a safe state and cannot purchase', async () => {
+    mockParams = {};
+    mockLoadLockedPackageOffer.mockResolvedValue({ offer: null, failure: 'missing' });
 
     render(<DriverPackagePaymentScreen />);
 
-    expect(screen.getByText('Package offer unavailable')).toBeTruthy();
+    expect(await screen.findByText('Package offer unavailable')).toBeTruthy();
     expect(screen.queryByText('Send Payment Prompt')).toBeNull();
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
+  });
+
+  test('ignores tampered route values and purchases the stored offer', async () => {
+    mockParams = {
+      offerId: lockedOffer.offerId,
+      priceRwf: '1',
+      ridesGranted: '999999',
+    };
+
+    render(<DriverPackagePaymentScreen />);
+    await screen.findByText('Locked Growth');
+    fireEvent.press(screen.getByText('Send Payment Prompt'));
+
+    await waitFor(() => expect(mockCreatePackagePurchase).toHaveBeenCalledWith({
+      offer: lockedOffer,
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }));
   });
 });

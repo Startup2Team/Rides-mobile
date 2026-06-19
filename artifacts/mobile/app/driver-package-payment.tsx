@@ -11,7 +11,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
   isPackageOfferExpired,
-  parsePackageOfferSnapshot,
+  type DriverEntitlementVehicleRef,
+  type DriverPackageOfferSnapshot,
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
   type MobileMoneyPackageProvider,
@@ -19,6 +20,7 @@ import {
 } from '@/domain/driverRidePackages';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
+import { loadLockedPackageOffer, type LockedOfferLoadFailure } from '@/persistence/lockedPackageOfferPersistence';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -29,12 +31,18 @@ export default function DriverPackagePaymentScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { offer: serializedOffer } = useLocalSearchParams<{ offer?: string }>();
-  const { driverProfile } = useAuth();
-  const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus } = useDriverEntitlement();
+  const { offerId } = useLocalSearchParams<{ offerId?: string }>();
+  const { driverProfile, user } = useAuth();
+  const { activatePackage, createPackagePurchase, entitlement, updatePackagePurchaseStatus } = useDriverEntitlement();
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
-  const ridePackage = parsePackageOfferSnapshot(serializedOffer, activeVehicle);
-  const offerExpired = Boolean(ridePackage && isPackageOfferExpired(ridePackage));
+  const checkoutVehicle: DriverEntitlementVehicleRef | null = activeVehicle
+    ?? (entitlement.vehicleId && entitlement.vehicleType
+      ? { vehicleId: entitlement.vehicleId, vehicleType: entitlement.vehicleType }
+      : null);
+  const checkoutVehicleId = activeVehicle?.id ?? entitlement.vehicleId ?? null;
+  const [ridePackage, setRidePackage] = useState<DriverPackageOfferSnapshot | null>(null);
+  const [offerFailure, setOfferFailure] = useState<LockedOfferLoadFailure | null>(null);
+  const [offerLoading, setOfferLoading] = useState(true);
   const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
     driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
   );
@@ -52,6 +60,23 @@ export default function DriverPackagePaymentScreen() {
   };
 
   useEffect(() => () => clearPaymentTimers(), []);
+
+  useEffect(() => {
+    let active = true;
+    setOfferLoading(true);
+    void loadLockedPackageOffer(offerId, {
+      ownerUserId: user?.id,
+      vehicle: checkoutVehicle,
+    }).then(result => {
+      if (!active) return;
+      setRidePackage(result.offer);
+      setOfferFailure(result.failure);
+      setOfferLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [checkoutVehicleId, checkoutVehicle?.vehicleType, offerId, user?.id]);
 
   const schedulePaymentSuccess = (purchase: DriverPackagePurchase) => {
     const processingTimer = setTimeout(() => {
@@ -130,8 +155,14 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
   };
 
-  if (!ridePackage || offerExpired) {
-    const expired = Boolean(ridePackage && offerExpired);
+  if (offerLoading) {
+    return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+      <Text style={[styles.invalidText, { color: colors.mutedForeground }]}>Loading package offer...</Text>
+    </View>;
+  }
+
+  if (!ridePackage) {
+    const expired = offerFailure === 'expired';
     return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <View style={[styles.invalidIconHalo, { backgroundColor: colors.destructiveHex + '14' }]}>
         <Feather name="package" size={28} color={colors.destructive} />
