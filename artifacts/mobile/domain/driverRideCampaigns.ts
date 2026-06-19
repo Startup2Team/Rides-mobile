@@ -1,4 +1,4 @@
-import type { DriverRidePackageId, DriverPackagePurchase } from './driverRidePackages';
+import type { DriverPackagePurchase } from './driverRidePackages';
 import type { DriverRidePackageCatalogEntry } from './driverRidePackageCatalog';
 import type { VehicleType } from '@/types';
 
@@ -14,7 +14,7 @@ export interface DriverRidePackageCampaign {
   endDate: string;
   createdAt: string;
   description: string;
-  packageIds?: DriverRidePackageId[];
+  packageIds?: string[];
   vehicleTypes?: VehicleType[];
   priceRwf?: number;
   ridesGranted?: number;
@@ -83,7 +83,7 @@ function hasPreviousPaidPackagePurchase(
 
 function campaignMatchesPackage(
   campaign: DriverRidePackageCampaign,
-  packageId: DriverRidePackageId,
+  packageId: string,
 ) {
   return !campaign.packageIds || campaign.packageIds.length === 0 || campaign.packageIds.includes(packageId);
 }
@@ -98,7 +98,7 @@ function campaignMatchesVehicleType(
 function isCampaignEligible(
   campaign: DriverRidePackageCampaign,
   input: {
-    packageId: DriverRidePackageId;
+    packageId: string;
     vehicleType: VehicleType;
     driver?: CampaignPurchaseSource | null;
   },

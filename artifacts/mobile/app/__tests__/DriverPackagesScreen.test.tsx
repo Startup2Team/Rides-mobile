@@ -4,6 +4,7 @@ import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import * as campaignModule from '@/domain/driverRideCampaigns';
+import type { DriverRidePackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
 import DriverPackagesScreen from '../driver-packages';
 
 const mockRouterReplace = jest.fn();
@@ -256,10 +257,9 @@ describe('DriverPackagesScreen', () => {
     expect(screen.getByLabelText('30 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getAllByText('Launch Offer').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('60 Rides + 15 Bonus Rides')).toBeTruthy();
-    expect(screen.getAllByText('Most Popular Plan').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ride Package').length).toBeGreaterThan(0);
     expect(screen.getByText('Pro Package')).toBeTruthy();
     expect(screen.getByLabelText('120 Rides + 30 Bonus Rides')).toBeTruthy();
-    expect(screen.getAllByText('Best Value Plan').length).toBeGreaterThan(0);
     expect(screen.getByText('3,500 RWF')).toBeTruthy();
     const renderedText = screen.UNSAFE_getAllByType(Text)
       .map(node => String(node.props.children))
@@ -308,5 +308,44 @@ describe('DriverPackagesScreen', () => {
     expect(screen.getByLabelText('40 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('1,500 RWF')).toBeTruthy();
     expect(screen.getByText('Promotional Offer')).toBeTruthy();
+  });
+
+  test('renders variable package counts and unknown package IDs from the supplied catalog', () => {
+    const catalog: DriverRidePackageCatalogEntry[] = [
+      {
+        packageId: 'moto_weekend_special',
+        packageVersion: '2026-weekend-1',
+        packageName: 'Moto Weekend Special',
+        vehicleType: 'moto',
+        priceRwf: 900,
+        ridesGranted: 25,
+        bonusRidesGranted: 5,
+        status: 'active',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        effectiveFrom: '2026-06-19T00:00:00.000Z',
+        effectiveUntil: null,
+      },
+      {
+        packageId: 'moto_premium',
+        packageVersion: 'v4',
+        packageName: 'Moto Premium',
+        vehicleType: 'moto',
+        priceRwf: 7_500,
+        ridesGranted: 250,
+        bonusRidesGranted: 75,
+        status: 'active',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        effectiveFrom: '2026-06-19T00:00:00.000Z',
+        effectiveUntil: null,
+      },
+    ];
+
+    render(<DriverPackagesScreen catalog={catalog} />);
+
+    expect(screen.getByText('Moto Weekend Special')).toBeTruthy();
+    expect(screen.getByText('Moto Premium')).toBeTruthy();
+    expect(screen.getByLabelText('25 Rides + 5 Bonus Rides')).toBeTruthy();
+    expect(screen.getByLabelText('250 Rides + 75 Bonus Rides')).toBeTruthy();
+    expect(screen.queryByText('Growth Package')).toBeNull();
   });
 });

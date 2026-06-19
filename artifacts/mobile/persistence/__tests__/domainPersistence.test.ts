@@ -275,6 +275,74 @@ describe('domain persistence validation', () => {
     });
   });
 
+  test('migrates and persists existing and dynamic package identifiers without data loss', async () => {
+    const vehicle = { id: 'driver-vehicle:moto:dynamic', vehicleType: 'moto' as const };
+    const entitlement = {
+      ...EMPTY_DRIVER_ENTITLEMENT,
+      vehicleId: vehicle.id,
+      vehicleType: vehicle.vehicleType,
+      activePackageId: 'moto_premium',
+      remainingRideCredits: 240,
+      remainingBonusRides: 75,
+      activations: [{
+        id: 'activation:moto-premium',
+        packageId: 'moto_premium',
+        packageVersion: 'v9',
+        packageName: 'Moto Premium',
+        vehicleId: vehicle.id,
+        vehicleType: vehicle.vehicleType,
+        activatedAt: '2026-06-19T10:02:00.000Z',
+        pricePaidRwf: 7_500,
+        pricePaid: 7_500,
+        ridesGranted: 250,
+        bonusRidesGranted: 75,
+        purchasedAt: '2026-06-19T10:01:00.000Z',
+        creditsGranted: 325,
+        authority: 'local_prototype' as const,
+      }],
+      purchaseHistory: [{
+        offerId: 'offer:moto-premium',
+        packageId: 'moto_premium',
+        packageVersion: 'v9',
+        packageName: 'Moto Premium',
+        vehicleId: vehicle.id,
+        vehicleType: vehicle.vehicleType,
+        amount: 7_500,
+        pricePaid: 7_500,
+        ridesGranted: 250,
+        bonusRidesGranted: 75,
+        purchasedAt: '2026-06-19T10:01:00.000Z',
+        provider: 'mtn' as const,
+        phoneNumber: '+250788000000',
+        transactionId: 'purchase:moto-premium',
+        status: 'successful' as const,
+        createdAt: '2026-06-19T10:01:00.000Z',
+      }],
+      vehicleEntitlements: [],
+      updatedAt: '2026-06-19T10:02:00.000Z',
+      authority: 'local_prototype' as const,
+    };
+
+    await saveStoredDriverEntitlement(entitlement);
+    const loaded = await loadStoredDriverEntitlement();
+
+    expect(loaded.data).toMatchObject({
+      activePackageId: 'moto_premium',
+      remainingRideCredits: 240,
+      remainingBonusRides: 75,
+      activations: [expect.objectContaining({
+        packageId: 'moto_premium',
+        packageName: 'Moto Premium',
+      })],
+      purchaseHistory: [expect.objectContaining({
+        packageId: 'moto_premium',
+        packageVersion: 'v9',
+        ridesGranted: 250,
+        bonusRidesGranted: 75,
+      })],
+    });
+  });
+
   test('saves a local driver rating securely', async () => {
     const rating = buildLocalDriverRating({
       comment: ' Careful driver ',

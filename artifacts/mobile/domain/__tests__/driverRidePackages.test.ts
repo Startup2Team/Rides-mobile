@@ -18,12 +18,14 @@ import {
   isLowRideCreditBalance,
   normalizeEntitlement,
   updatePackagePurchaseStatus,
+  validatePackageOfferSnapshot,
 } from '../driverRidePackages';
 import { resolvePackageOffer } from '../driverRideCampaigns';
 import {
   getActivePackages,
   getPackageByVersion,
   getPackageCatalogEntry,
+  validatePackageCatalog,
 } from '../driverRidePackageCatalog';
 
 const approvedDriver = { verificationStatus: 'approved', isVerified: true } as DriverProfile;
@@ -239,6 +241,82 @@ describe('driver ride packages', () => {
     }, '2026-06-08T10:00:00.500Z', motoVehicle)).toThrow('offer is invalid');
   });
 
+  test('locked offers and purchases accept package IDs unknown to the mobile build', () => {
+    const lockedOffer = {
+      offerId: 'package-offer:vehicle-moto-1:moto-premium:v9:1',
+      packageId: 'moto_premium',
+      packageVersion: 'v9',
+      packageName: 'Moto Premium',
+      vehicleId: motoVehicle.id,
+      vehicleType: 'moto' as const,
+      priceRwf: 7_500,
+      ridesGranted: 250,
+      bonusRidesGranted: 75,
+      campaignId: null,
+      campaignName: null,
+      campaignType: null,
+      createdAt: '2026-06-19T10:00:00.000Z',
+      expiresAt: '2026-06-19T10:15:00.000Z',
+      source: 'local_catalog' as const,
+    };
+
+    expect(validatePackageOfferSnapshot(lockedOffer, motoVehicle)).toEqual(lockedOffer);
+    const started = createPackagePurchaseFromOffer(EMPTY_DRIVER_ENTITLEMENT, {
+      offer: lockedOffer,
+      provider: 'mtn',
+      phoneNumber: '+250788000000',
+    }, '2026-06-19T10:01:00.000Z', motoVehicle);
+    const completed = updatePackagePurchaseStatus(
+      started.entitlement,
+      started.purchase.transactionId,
+      'successful',
+      '2026-06-19T10:02:00.000Z',
+      motoVehicle,
+    );
+
+    expect(completed.purchase).toMatchObject({
+      packageId: 'moto_premium',
+      packageVersion: 'v9',
+      packageName: 'Moto Premium',
+      ridesGranted: 250,
+      bonusRidesGranted: 75,
+    });
+    expect(completed.activation).toMatchObject({
+      packageId: 'moto_premium',
+      ridesGranted: 250,
+      bonusRidesGranted: 75,
+    });
+  });
+
+  test('purchase history snapshots survive removed or archived catalog entries', () => {
+    const removedPurchase = {
+      packageId: 'black_friday_package',
+      packageVersion: '2026',
+      packageName: 'Black Friday Package',
+      vehicleId: motoVehicle.id,
+      vehicleType: 'moto' as const,
+      amount: 1_000,
+      pricePaid: 1_000,
+      ridesGranted: 80,
+      bonusRidesGranted: 20,
+      purchasedAt: '2026-11-27T08:00:00.000Z',
+      provider: 'mtn' as const,
+      phoneNumber: '+250788000000',
+      transactionId: 'purchase:black-friday',
+      status: 'successful' as const,
+      createdAt: '2026-11-27T08:00:00.000Z',
+    };
+
+    expect(getPackagePurchaseSnapshot(removedPurchase)).toMatchObject({
+      packageId: 'black_friday_package',
+      packageVersion: '2026',
+      packageName: 'Black Friday Package',
+      ridesGranted: 80,
+      bonusRidesGranted: 20,
+      pricePaid: 1_000,
+    });
+  });
+
   test('package catalog versions can coexist while active lookup stays singular', () => {
     const catalog = [
       {
@@ -286,6 +364,28 @@ describe('driver ride packages', () => {
     expect(getActivePackages('moto', catalog)[0]).toMatchObject({ packageVersion: 'v2', status: 'active' });
     expect(getPackageByVersion('growth', 'v1', 'moto', catalog)).toMatchObject({ status: 'archived', ridesGranted: 60 });
     expect(getPackageCatalogEntry('growth', 'moto', undefined, catalog)).toMatchObject({ packageVersion: 'v2', priceRwf: 2_500 });
+  });
+
+  test('catalog validation accepts dynamic IDs and rejects invalid identity or values', () => {
+    const dynamicEntry = {
+      packageId: 'cab_gold',
+      packageVersion: 'gold-v1',
+      packageName: 'Cab Gold',
+      vehicleType: 'cab' as const,
+      priceRwf: 8_000,
+      ridesGranted: 20,
+      bonusRidesGranted: 10,
+      status: 'active' as const,
+      createdAt: '2026-06-19T00:00:00.000Z',
+      effectiveFrom: '2026-06-19T00:00:00.000Z',
+      effectiveUntil: null,
+    };
+
+    expect(validatePackageCatalog([dynamicEntry])).toEqual([dynamicEntry]);
+    expect(() => validatePackageCatalog([{ ...dynamicEntry, packageId: '' }])).toThrow('catalog is invalid');
+    expect(() => validatePackageCatalog([{ ...dynamicEntry, packageVersion: '' }])).toThrow('catalog is invalid');
+    expect(() => validatePackageCatalog([{ ...dynamicEntry, ridesGranted: -1 }])).toThrow('catalog is invalid');
+    expect(() => validatePackageCatalog([{ ...dynamicEntry, vehicleType: 'plane' }])).toThrow('catalog is invalid');
   });
 
   test('package ID must match the selected vehicle type', () => {

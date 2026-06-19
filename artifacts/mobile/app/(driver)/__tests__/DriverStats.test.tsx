@@ -172,7 +172,7 @@ describe('DriverStats', () => {
   test('renders package history from purchase snapshots', async () => {
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
-      activePackageId: 'growth',
+      activePackageId: 'archived_growth_2026',
       remainingRideCredits: 70,
       purchaseHistory: [
         {
@@ -180,7 +180,7 @@ describe('DriverStats', () => {
           bonusRidesGranted: 20,
           createdAt: '2026-06-09T10:00:00.000Z',
           packageName: 'Growth Package v2',
-          packageId: 'growth',
+          packageId: 'archived_growth_2026',
           packageVersion: 'v2',
           phoneNumber: '+250788000000',
           provider: 'mtn',

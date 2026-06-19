@@ -6,23 +6,7 @@ const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
 const driverVerificationStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
 const driverVehicleStatusSchema = z.enum(['draft', 'pending_review', 'approved', 'rejected']);
-const driverRidePackageIdSchema = z.enum([
-  'launch_starter',
-  'growth',
-  'pro',
-  'cab_starter',
-  'cab_growth',
-  'cab_pro',
-  'hilux_starter',
-  'hilux_growth',
-  'hilux_pro',
-  'rifani_starter',
-  'rifani_growth',
-  'rifani_pro',
-  'fuso_starter',
-  'fuso_growth',
-  'fuso_pro',
-]);
+const driverRidePackageIdSchema = z.string().trim().min(1);
 const locationTypeSchema = z.enum(['precise', 'generic']);
 const rideStatusSchema = z.enum([
   'idle',

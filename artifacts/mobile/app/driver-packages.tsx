@@ -10,16 +10,15 @@ import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import {
   createPackageOfferSnapshot,
-  getPackagesForVehicleType,
-  hasUsedCabStarterOffer,
-  hasUsedFusoStarterOffer,
-  hasUsedHiluxStarterOffer,
-  hasUsedLaunchOffer,
-  hasUsedRifaniStarterOffer,
+  hasUsedPackageOffer,
   serializePackageOfferSnapshot,
   type DriverPackageOfferSnapshot,
 } from '@/domain/driverRidePackages';
-import { getPackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
+import {
+  DRIVER_RIDE_PACKAGE_CATALOG,
+  getActivePackages,
+  type DriverRidePackageCatalogEntry,
+} from '@/domain/driverRidePackageCatalog';
 import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePackageOffer } from '@/domain/driverRideCampaigns';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS } from '@/types';
@@ -28,7 +27,11 @@ function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
 
-export default function DriverPackagesScreen() {
+export default function DriverPackagesScreen({
+  catalog = DRIVER_RIDE_PACKAGE_CATALOG,
+}: {
+  catalog?: DriverRidePackageCatalogEntry[];
+} = {}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
@@ -44,8 +47,7 @@ export default function DriverPackagesScreen() {
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
-  const packageIds = getPackagesForVehicleType(vehicleType);
-  const isCab = vehicleType === 'cab';
+  const packages = getActivePackages(vehicleType, catalog);
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
   const activeCampaigns = getActiveDriverRideCampaigns();
 
@@ -89,9 +91,7 @@ export default function DriverPackagesScreen() {
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
     </View>
 
-    {packageIds.map(id => {
-      const catalogEntry = getPackageCatalogEntry(id, vehicleType);
-      if (!catalogEntry) return null;
+    {packages.map(catalogEntry => {
       const pkg = resolvePackageOffer({
         package: catalogEntry,
         vehicleType,
@@ -99,26 +99,16 @@ export default function DriverPackagesScreen() {
         entitlement,
         activeCampaigns,
       });
-      const isOfferUsed = id === 'cab_starter'
-        ? hasUsedCabStarterOffer(entitlement)
-        : id === 'hilux_starter'
-          ? hasUsedHiluxStarterOffer(entitlement)
-          : id === 'rifani_starter'
-            ? hasUsedRifaniStarterOffer(entitlement)
-            : id === 'fuso_starter'
-              ? hasUsedFusoStarterOffer(entitlement)
-              : id === 'launch_starter'
-                ? hasUsedLaunchOffer(entitlement)
-                : false;
+      const isOfferUsed = pkg.priceRwf === 0 && hasUsedPackageOffer(entitlement, pkg.packageId);
       return (
         <PackageCard
-          key={id}
+          key={`${pkg.packageId}:${pkg.packageVersion}`}
           ridePackage={pkg}
           cardFill={cardFill}
           colors={colors}
           disabled={isOfferUsed}
           unavailable={isEntitlementLoading}
-          selected={selectedOffer?.packageId === id}
+          selected={selectedOffer?.packageId === pkg.packageId}
           onPress={() => handleSelectPackage(pkg)}
         />
       );
@@ -177,9 +167,7 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
           ? 'Promotional Offer'
           : ridePackage.priceRwf === 0
             ? 'Launch Offer'
-            : ridePackage.packageId === 'growth' || ridePackage.packageId === 'cab_growth'
-            ? 'Most Popular Plan'
-            : 'Best Value Plan'}
+            : 'Ride Package'}
       </Text>
       <View style={styles.priceRow}>
         <Text style={[styles.price, { color: ridePackage.priceRwf === 0 ? colors.primary : colors.foreground }]}>

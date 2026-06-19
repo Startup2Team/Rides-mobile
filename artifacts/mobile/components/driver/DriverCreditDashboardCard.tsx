@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { DRIVER_RIDE_PACKAGES, getRideCreditBalanceMessage, getRideCreditProgress, type DriverEntitlement } from '@/domain/driverRidePackages';
+import { getActivePackageActivation, getRideCreditBalanceMessage, getRideCreditProgress, type DriverEntitlement } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
 
 interface DriverCreditDashboardCardProps {
@@ -16,7 +16,7 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const progress = getRideCreditProgress(entitlement);
   const message = getRideCreditBalanceMessage(entitlement);
-  const activePackage = entitlement.activePackageId ? DRIVER_RIDE_PACKAGES[entitlement.activePackageId] : null;
+  const activePackage = getActivePackageActivation(entitlement);
 
   if (isLoading) {
     return (
@@ -53,7 +53,7 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
       <View style={styles.progressHeader}>
         <View style={styles.content}>
           <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>ACTIVE RIDE PACKAGE</Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>{activePackage?.name ?? 'Combined package rides'}</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>{activePackage?.packageName ?? 'Combined package rides'}</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{balanceLabel}</Text>
         </View>
         <Feather name="chevron-right" size={18} color={colors.mutedForeground} />

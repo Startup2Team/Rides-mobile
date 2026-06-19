@@ -1,10 +1,9 @@
-import type { DriverRidePackageId } from './driverRidePackages';
 import type { VehicleType } from '@/types';
 
 export type DriverRidePackageCatalogStatus = 'draft' | 'active' | 'scheduled' | 'expired' | 'archived';
 
 export interface DriverRidePackageCatalogEntry {
-  packageId: DriverRidePackageId;
+  packageId: string;
   packageVersion: string;
   packageName: string;
   vehicleType: VehicleType;
@@ -235,7 +234,7 @@ export function getActivePackages(
 }
 
 export function getPackageByVersion(
-  packageId: DriverRidePackageId,
+  packageId: string,
   packageVersion: string,
   vehicleType?: VehicleType | null,
   catalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG,
@@ -248,7 +247,7 @@ export function getPackageByVersion(
 }
 
 export function getPackageCatalogEntry(
-  packageId: DriverRidePackageId,
+  packageId: string,
   vehicleType?: VehicleType | null,
   packageVersion?: string | null,
   catalog: DriverRidePackageCatalogEntry[] = DRIVER_RIDE_PACKAGE_CATALOG,
@@ -266,3 +265,35 @@ export function getPackageCatalogEntry(
   ) ?? null;
 }
 
+const VEHICLE_TYPES: VehicleType[] = ['moto', 'rifani', 'cab', 'fuso', 'hilux'];
+
+export function isValidPackageCatalogEntry(value: unknown): value is DriverRidePackageCatalogEntry {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const entry = value as Partial<DriverRidePackageCatalogEntry>;
+  return typeof entry.packageId === 'string'
+    && entry.packageId.trim().length > 0
+    && typeof entry.packageVersion === 'string'
+    && entry.packageVersion.trim().length > 0
+    && typeof entry.packageName === 'string'
+    && entry.packageName.trim().length > 0
+    && typeof entry.vehicleType === 'string'
+    && VEHICLE_TYPES.includes(entry.vehicleType as VehicleType)
+    && typeof entry.status === 'string'
+    && ['draft', 'active', 'scheduled', 'expired', 'archived'].includes(entry.status)
+    && typeof entry.priceRwf === 'number'
+    && Number.isFinite(entry.priceRwf)
+    && entry.priceRwf >= 0
+    && typeof entry.ridesGranted === 'number'
+    && Number.isInteger(entry.ridesGranted)
+    && entry.ridesGranted >= 0
+    && typeof entry.bonusRidesGranted === 'number'
+    && Number.isInteger(entry.bonusRidesGranted)
+    && entry.bonusRidesGranted >= 0;
+}
+
+export function validatePackageCatalog(catalog: unknown): DriverRidePackageCatalogEntry[] {
+  if (!Array.isArray(catalog) || !catalog.every(isValidPackageCatalogEntry)) {
+    throw new Error('Package catalog is invalid.');
+  }
+  return catalog;
+}

@@ -30,6 +30,41 @@ function makeCampaign(overrides: Partial<DriverRidePackageCampaign> = {}): Drive
 }
 
 describe('driver ride campaigns', () => {
+  test('campaigns target dynamic package IDs', () => {
+    const dynamicPackage = {
+      packageId: 'world_cup_growth',
+      packageVersion: 'wc-2026',
+      packageName: 'World Cup Growth',
+      vehicleType: 'moto' as const,
+      priceRwf: 3_000,
+      ridesGranted: 90,
+      bonusRidesGranted: 10,
+      status: 'active' as const,
+      createdAt: '2026-06-01T00:00:00.000Z',
+      effectiveFrom: '2026-06-01T00:00:00.000Z',
+      effectiveUntil: null,
+    };
+    const offer = resolvePackageOffer({
+      package: dynamicPackage,
+      vehicleType: 'moto',
+      activeCampaigns: [makeCampaign({
+        packageIds: ['world_cup_growth'],
+        priceRwf: 2_000,
+        ridesGranted: 100,
+        bonusRidesGranted: 25,
+      })],
+      now: new Date('2026-06-15T00:00:00.000Z'),
+    });
+
+    expect(offer).toMatchObject({
+      packageId: 'world_cup_growth',
+      campaignId: 'world-cup',
+      priceRwf: 2_000,
+      ridesGranted: 100,
+      bonusRidesGranted: 25,
+    });
+  });
+
   test('campaign overrides package values', () => {
     const offer = resolvePackageOffer({
       package: getPackageCatalogEntry('growth', 'moto')!,
