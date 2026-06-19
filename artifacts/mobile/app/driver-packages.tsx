@@ -9,16 +9,16 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import {
-  DRIVER_RIDE_PACKAGES,
   getPackagesForVehicleType,
   hasUsedCabStarterOffer,
   hasUsedFusoStarterOffer,
   hasUsedHiluxStarterOffer,
   hasUsedLaunchOffer,
   hasUsedRifaniStarterOffer,
-  type DriverRidePackage,
   type DriverRidePackageId,
 } from '@/domain/driverRidePackages';
+import { getPackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
+import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePackageOffer } from '@/domain/driverRideCampaigns';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS } from '@/types';
 
@@ -45,6 +45,7 @@ export default function DriverPackagesScreen() {
   const packageIds = getPackagesForVehicleType(vehicleType);
   const isCab = vehicleType === 'cab';
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
+  const activeCampaigns = getActiveDriverRideCampaigns();
 
   const handleSelectPackage = (packageId: DriverRidePackageId) => {
     setSelectedPackageId(current => current === packageId ? null : packageId);
@@ -79,7 +80,15 @@ export default function DriverPackagesScreen() {
     </View>
 
     {packageIds.map(id => {
-      const pkg = DRIVER_RIDE_PACKAGES[id];
+      const catalogEntry = getPackageCatalogEntry(id, vehicleType);
+      if (!catalogEntry) return null;
+      const pkg = resolvePackageOffer({
+        package: catalogEntry,
+        vehicleType,
+        driver: driverProfile,
+        entitlement,
+        activeCampaigns,
+      });
       const isOfferUsed = id === 'cab_starter'
         ? hasUsedCabStarterOffer(entitlement)
         : id === 'hilux_starter'
@@ -118,7 +127,7 @@ export default function DriverPackagesScreen() {
 }
 
 function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage, selected, unavailable = false }: {
-  cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; onPress: () => void; ridePackage: DriverRidePackage; selected?: boolean; unavailable?: boolean;
+  cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; onPress: () => void; ridePackage: DriverRidePackageOffer; selected?: boolean; unavailable?: boolean;
 }) {
   const isDisabled = disabled || unavailable;
   const fill = selected ? colors.primaryHex + '0A' : cardFill;
@@ -139,23 +148,35 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
     ]}
   >
     <View style={styles.packageContent}>
-      <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
+      <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</Text>
       <View
-        accessibilityLabel={`${ridePackage.includedRides} Rides + ${ridePackage.bonusRides} Bonus Rides`}
+        accessibilityLabel={`${ridePackage.ridesGranted} Rides + ${ridePackage.bonusRidesGranted} Bonus Rides`}
         style={styles.creditRow}
       >
-        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.includedRides} Rides</Text>
-        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRides} Bonus Rides</Text>
+        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.ridesGranted} Rides</Text>
+        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRidesGranted} Bonus Rides</Text>
       </View>
+      {ridePackage.campaignName ? (
+        <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
+          <Feather name="tag" size={11} color={colors.primary} />
+          <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</Text>
+        </View>
+      ) : null}
       <Text style={[styles.planLabel, { color: colors.mutedForeground }]}>
-        {ridePackage.launchOffer ? 'Launch Offer' : ridePackage.id === 'growth' || ridePackage.id === 'cab_growth' ? 'Most Popular Plan' : 'Best Value Plan'}
+        {ridePackage.isPromotional
+          ? 'Promotional Offer'
+          : ridePackage.priceRwf === 0
+            ? 'Launch Offer'
+            : ridePackage.packageId === 'growth' || ridePackage.packageId === 'cab_growth'
+            ? 'Most Popular Plan'
+            : 'Best Value Plan'}
       </Text>
       <View style={styles.priceRow}>
-        <Text style={[styles.price, { color: ridePackage.launchOffer ? colors.primary : colors.foreground }]}>
-          {ridePackage.currentPriceRwf === 0 ? 'FREE NOW' : formatRwf(ridePackage.currentPriceRwf)}
+        <Text style={[styles.price, { color: ridePackage.priceRwf === 0 ? colors.primary : colors.foreground }]}>
+          {ridePackage.priceRwf === 0 ? 'FREE NOW' : formatRwf(ridePackage.priceRwf)}
         </Text>
-        {ridePackage.currentPriceRwf === 0 ? (
-          <Text style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.normalPriceRwf)}</Text>
+        {ridePackage.basePriceRwf !== ridePackage.priceRwf ? (
+          <Text style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.basePriceRwf)}</Text>
         ) : null}
       </View>
       {disabled ? <Text style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</Text> : null}
@@ -182,6 +203,8 @@ const styles = StyleSheet.create({
   creditRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 },
   creditTotal: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 19 },
   bonusCredits: { fontSize: 13, fontFamily: 'Inter_700Bold', lineHeight: 18 },
+  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
+  campaignBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   planLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   price: { fontSize: 15, fontFamily: 'Inter_700Bold' },

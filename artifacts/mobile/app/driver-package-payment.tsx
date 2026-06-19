@@ -17,6 +17,9 @@ import {
   type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
+import { getPackageCatalogEntry } from '@/domain/driverRidePackageCatalog';
+import { getActiveDriverRideCampaigns, resolvePackageOffer } from '@/domain/driverRideCampaigns';
+import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
 
 function formatRwf(amount: number) {
@@ -30,10 +33,20 @@ export default function DriverPackagePaymentScreen() {
   const isDark = useColorScheme() === 'dark';
   const { packageId } = useLocalSearchParams<{ packageId?: string }>();
   const { driverProfile } = useAuth();
-  const { activatePackage, createPackagePurchase, updatePackagePurchaseStatus } = useDriverEntitlement();
+  const { activatePackage, createPackagePurchase, entitlement, updatePackagePurchaseStatus } = useDriverEntitlement();
   const validPackageId: DriverRidePackageId | null =
     packageId && packageId in DRIVER_RIDE_PACKAGES ? packageId as DriverRidePackageId : null;
-  const ridePackage = validPackageId ? DRIVER_RIDE_PACKAGES[validPackageId] : null;
+  const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
+  const catalogEntry = validPackageId ? getPackageCatalogEntry(validPackageId, activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null) : null;
+  const ridePackage = catalogEntry
+    ? resolvePackageOffer({
+        package: catalogEntry,
+        vehicleType: activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? catalogEntry.vehicleType,
+        driver: driverProfile,
+        entitlement,
+        activeCampaigns: getActiveDriverRideCampaigns(),
+      })
+    : null;
   const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
     driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
   );
@@ -75,7 +88,7 @@ export default function DriverPackagePaymentScreen() {
     setLoading(true);
     setError(null);
     try {
-      setReceipt(await activatePackage(ridePackage.id));
+      setReceipt(await activatePackage(ridePackage.packageId));
     } catch (activationError) {
       setError(activationError instanceof Error ? activationError.message : 'Unable to activate this package.');
     } finally {
@@ -85,7 +98,7 @@ export default function DriverPackagePaymentScreen() {
 
   const handleSendPaymentPrompt = async () => {
     if (!ridePackage) return;
-    if (ridePackage.currentPriceRwf <= 0) {
+    if (ridePackage.priceRwf <= 0) {
       await handleActivateFreePackage();
       return;
     }
@@ -94,7 +107,7 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
     try {
       const purchase = await createPackagePurchase({
-        packageId: ridePackage.id,
+        packageId: ridePackage.packageId,
         provider: selectedProvider,
         phoneNumber,
       });
@@ -131,7 +144,7 @@ export default function DriverPackagePaymentScreen() {
     </View>;
   }
 
-  const isFree = ridePackage.currentPriceRwf === 0;
+  const isFree = ridePackage.priceRwf === 0;
   const isWaiting = paymentStatus === 'pending' || paymentStatus === 'processing';
   const isIncomplete = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'expired';
 
@@ -156,22 +169,28 @@ export default function DriverPackagePaymentScreen() {
               </View>
               <View style={styles.summaryTitleBlock}>
                 <Text style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</Text>
-                <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.name}</Text>
+                <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</Text>
+                {ridePackage.campaignName ? (
+                  <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
+                    <Feather name="tag" size={11} color={colors.primary} />
+                    <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Rides</Text>
-              <Text style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.includedRides}</Text>
+              <Text style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.ridesGranted}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus Rides</Text>
-              <Text style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRides}</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRidesGranted}</Text>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryRow}>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total due</Text>
-              <Text style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.currentPriceRwf)}</Text>
+              <Text style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.priceRwf)}</Text>
             </View>
           </View>
 
@@ -291,8 +310,6 @@ function Notice({ colors, icon, text, tone }: {
 function ReceiptCard({ activation, colors }: {
   activation: PackageActivation; colors: ReturnType<typeof useColors>;
 }) {
-  const ridePackage = DRIVER_RIDE_PACKAGES[activation.packageId];
-
   return <View style={[styles.paymentContent, styles.receiptCard]}>
     <View style={[styles.receiptIconHalo, { backgroundColor: colors.successHex + '18' }]}>
       <View style={[styles.receiptIcon, { backgroundColor: colors.success }]}>
@@ -300,9 +317,15 @@ function ReceiptCard({ activation, colors }: {
       </View>
     </View>
     <Text style={[styles.receiptTitle, { color: colors.foreground }]}>Package Activated</Text>
+    {activation.campaignName ? (
+      <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
+        <Feather name="tag" size={11} color={colors.primary} />
+        <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{activation.campaignName}</Text>
+      </View>
+    ) : null}
     <Text style={[styles.receiptText, { color: colors.mutedForeground }]}>You can now go online and start receiving ride requests.</Text>
-    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Rides Added: {ridePackage.includedRides}</Text>
-    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Rides Added: {ridePackage.bonusRides}</Text>
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Rides Added: {activation.ridesGranted ?? 0}</Text>
+    <Text style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Rides Added: {activation.bonusRidesGranted ?? 0}</Text>
     <View style={styles.receiptAction}>
       <AppButton title="Go to Dashboard" onPress={() => router.replace('/(driver)')} fullWidth size="lg" />
     </View>
@@ -322,6 +345,8 @@ const styles = StyleSheet.create({
   summaryTitleBlock: { flex: 1, gap: 2 },
   summaryEyebrow: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
   packageName: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
+  campaignBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   summaryDivider: { height: StyleSheet.hairlineWidth },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
   summaryLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },

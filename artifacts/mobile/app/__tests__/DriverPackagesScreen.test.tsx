@@ -3,6 +3,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import type { DriverEntitlement, DriverPackagePurchase } from '@/domain/driverRidePackages';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import * as campaignModule from '@/domain/driverRideCampaigns';
 import DriverPackagesScreen from '../driver-packages';
 
 const mockRouterReplace = jest.fn();
@@ -11,6 +12,7 @@ const mockActivatePackage = jest.fn();
 const mockCreatePackagePurchase = jest.fn();
 const mockUpdatePackagePurchaseStatus = jest.fn();
 let mockEntitlement: DriverEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+let mockGetActiveDriverRideCampaigns: jest.SpiedFunction<typeof campaignModule.getActiveDriverRideCampaigns>;
 
 const successfulPurchase: DriverPackagePurchase = {
   amount: 2_000,
@@ -134,11 +136,13 @@ describe('DriverPackagesScreen', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockGetActiveDriverRideCampaigns = jest.spyOn(campaignModule, 'getActiveDriverRideCampaigns').mockReturnValue([]);
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
       console.warn(...args);
     });
     mockEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+    mockGetActiveDriverRideCampaigns.mockReturnValue([]);
     mockActivatePackage.mockResolvedValue({
       id: 'activation:launch_starter:2026-06-08T10:00:00.000Z',
       packageId: 'launch_starter',
@@ -267,5 +271,29 @@ describe('DriverPackagesScreen', () => {
     expect(renderedText).not.toContain('prototype');
     expect(renderedText).not.toContain('backend');
     expect(renderedText).not.toContain('simulated');
+  });
+
+  test('shows campaign values when a promotion is active', () => {
+    mockGetActiveDriverRideCampaigns.mockReturnValue([{
+      campaignId: 'world-cup',
+      campaignName: 'World Cup',
+      campaignType: 'global',
+      status: 'active',
+      startDate: '2026-06-01T00:00:00.000Z',
+      endDate: '2026-07-01T00:00:00.000Z',
+      createdAt: '2026-06-01T00:00:00.000Z',
+      description: 'Temporary promotion',
+      packageIds: ['growth'],
+      priceRwf: 1_500,
+      ridesGranted: 40,
+      bonusRidesGranted: 5,
+    }]);
+
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('World Cup')).toBeTruthy();
+    expect(screen.getByLabelText('40 Rides + 5 Bonus Rides')).toBeTruthy();
+    expect(screen.getByText('1,500 RWF')).toBeTruthy();
+    expect(screen.getByText('Promotional Offer')).toBeTruthy();
   });
 });
