@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
-import { DatePickerField } from '@/components/DatePickerField';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { DocumentUploadSection } from '@/components/driver-onboarding/DocumentUploadSection';
 import { useAuth } from '@/context/AuthContext';
@@ -100,7 +99,7 @@ export default function DriverAddVehicleScreen() {
   const sourceVehicleId = typeof params.sourceVehicleId === 'string' ? params.sourceVehicleId : null;
   const sourceVehicle = getVehicleById(driverProfile, sourceVehicleId);
   const { form, setForm, update } = useDriverOnboardingForm();
-  const { docs, pickDocument, setDocs, takeDocumentPhoto } = useDriverDocumentUpload(() => undefined);
+  const { docs, setDocs, takeDocumentPhoto } = useDriverDocumentUpload(() => undefined);
   const nationalId = driverProfile?.nationalId ?? sourceVehicle?.documents?.nationalId.documentNumber ?? '';
   const [brand, setBrand] = React.useState(sourceVehicle?.brand ?? '');
   const [model, setModel] = React.useState(sourceVehicle?.model ?? '');
@@ -110,7 +109,6 @@ export default function DriverAddVehicleScreen() {
     inside: sourceVehicle?.photos?.inside ?? null,
   });
   const [saving, setSaving] = React.useState(false);
-  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const missingSubmissionItems = React.useMemo(() => getMissingVehicleSubmissionItems(docs, vehiclePhotos), [docs, vehiclePhotos]);
 
   React.useEffect(() => {
@@ -129,22 +127,6 @@ export default function DriverAddVehicleScreen() {
     if (!result.canceled && result.assets[0]) {
       if (!isValidImageAsset(result.assets[0])) {
         Alert.alert('Invalid image', 'Please take a valid image.');
-        return;
-      }
-      setVehiclePhotos(current => ({ ...current, [key]: result.assets[0].uri }));
-    }
-  };
-
-  const pickVehicleImage = async (key: VehiclePhotoKey) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please allow photo access to upload vehicle photos.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.88, allowsEditing: false });
-    if (!result.canceled && result.assets[0]) {
-      if (!isValidImageAsset(result.assets[0])) {
-        Alert.alert('Invalid image', 'Please select a valid image file.');
         return;
       }
       setVehiclePhotos(current => ({ ...current, [key]: result.assets[0].uri }));
@@ -245,7 +227,7 @@ export default function DriverAddVehicleScreen() {
           gap: 16,
         }}
       >
-        <View style={[styles.sectionCard, { backgroundColor: cardFill }]}>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle type</Text>
           <View style={styles.vehicleGrid}>
             {(['moto', 'rifani', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(type => (
@@ -267,7 +249,7 @@ export default function DriverAddVehicleScreen() {
           </View>
         </View>
 
-        <View style={[styles.sectionCard, { backgroundColor: cardFill }]}>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle details</Text>
           <AppInput label="Brand" value={brand} onChangeText={setBrand} placeholder="Toyota" />
           <AppInput label="Model" value={model} onChangeText={setModel} placeholder="Corolla" />
@@ -280,47 +262,33 @@ export default function DriverAddVehicleScreen() {
           {canShowLoadCapacity ? (
             <AppInput label="Load Capacity (kg)" value={form.loadCapacityKg} onChangeText={value => update('loadCapacityKg', value.replace(/\D/g, '').slice(0, 5))} keyboardType="numeric" placeholder="5000" />
           ) : null}
-          <DatePickerField label="Licence expiry date" value={form.licenseExpiryDate} onChange={value => update('licenseExpiryDate', value)} placeholder="DD/MM/YYYY" minimumDate={new Date()} />
-          <DatePickerField label="Insurance expiry date" value={form.insuranceExpiryDate} onChange={value => update('insuranceExpiryDate', value)} placeholder="DD/MM/YYYY" minimumDate={new Date()} />
-          <DatePickerField label="Authorization expiry date" value={form.authorizationExpiryDate} onChange={value => update('authorizationExpiryDate', value)} placeholder="DD/MM/YYYY" minimumDate={new Date()} />
         </View>
 
-        <View style={[styles.sectionCard, { backgroundColor: cardFill }]}>
+        <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <DocumentUploadSection
             colors={colors}
             docs={docs}
             errors={{}}
             form={form}
-            pickDocument={pickDocument}
             takeDocumentPhoto={takeDocumentPhoto}
             update={update}
           />
         </View>
 
-        <View style={[styles.sectionCard, { backgroundColor: cardFill }]}>
+        <View style={styles.sectionLast}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</Text>
           <PhotoRow
             colors={colors}
             label="Outside photo"
             uri={vehiclePhotos.outside}
-            onPick={() => void pickVehicleImage('outside')}
             onCamera={() => void pickVehiclePhoto('outside')}
           />
           <PhotoRow
             colors={colors}
             label="Inside photo"
             uri={vehiclePhotos.inside}
-            onPick={() => void pickVehicleImage('inside')}
             onCamera={() => void pickVehiclePhoto('inside')}
           />
-          {missingSubmissionItems.length > 0 ? (
-            <View style={[styles.warningBox, { borderColor: colors.warningHex, backgroundColor: colors.warningHex + '10' }]}>
-              <Text style={[styles.warningTitle, { color: colors.foreground }]}>Missing</Text>
-              {missingSubmissionItems.map(item => (
-                <Text key={item} style={[styles.warningItem, { color: colors.mutedForeground }]}>• {item}</Text>
-              ))}
-            </View>
-          ) : null}
         </View>
 
         <AppButton title="Submit Vehicle" onPress={() => void submit()} fullWidth size="lg" loading={saving} disabled={missingSubmissionItems.length > 0} />
@@ -329,45 +297,80 @@ export default function DriverAddVehicleScreen() {
   );
 }
 
-function PhotoRow({ colors, label, onCamera, onPick, uri }: {
+function PhotoRow({ colors, label, onCamera, uri }: {
   colors: ReturnType<typeof useColors>;
   label: string;
   onCamera: () => void;
-  onPick: () => void;
   uri: string | null;
 }) {
   return (
     <View style={styles.photoRow}>
       <Text style={[styles.photoLabel, { color: colors.foreground }]}>{label}</Text>
-      <View style={styles.photoActions}>
-        {uri ? <Image source={{ uri }} style={styles.photoPreview} /> : <View style={[styles.photoPreview, { backgroundColor: colors.muted }]}><Feather name="image" size={18} color={colors.mutedForeground} /></View>}
-        <TouchableOpacity style={[styles.photoButton, { borderColor: colors.border }]} onPress={onPick}>
-          <Feather name="upload" size={14} color={colors.foreground} />
-          <Text style={[styles.photoButtonText, { color: colors.foreground }]}>Gallery</Text>
+      {uri ? (
+        <View style={styles.photoPreviewCard}>
+          <Image source={{ uri }} style={styles.photoPreview} />
+          <View style={styles.photoPreviewContent}>
+            <View style={styles.photoCapturedRow}>
+              <View style={[styles.photoCapturedIcon, { backgroundColor: colors.successHex + '18' }]}>
+                <Feather name="check" size={14} color={colors.success} />
+              </View>
+              <View style={styles.photoCapturedCopy}>
+                <Text style={[styles.photoCapturedTitle, { color: colors.foreground }]}>Photo captured</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={[styles.photoButton, { borderColor: colors.border }]} onPress={onCamera}>
+              <Feather name="camera" size={13} color={colors.foreground} />
+              <Text style={[styles.photoButtonText, { color: colors.foreground }]}>Retake Photo</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[styles.photoCaptureButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+          onPress={onCamera}
+        >
+          <Feather name="camera" size={20} color={colors.primary} />
+          <Text style={[styles.photoCaptureText, { color: colors.primary }]}>Take Photo</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.photoButton, { borderColor: colors.border }]} onPress={onCamera}>
-          <Feather name="camera" size={14} color={colors.foreground} />
-          <Text style={[styles.photoButtonText, { color: colors.foreground }]}>Camera</Text>
-        </TouchableOpacity>
-      </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  sectionCard: { borderRadius: 18, padding: 14, gap: 12 },
+  section: {
+    gap: 14,
+    paddingBottom: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sectionLast: {
+    gap: 14,
+    paddingBottom: 4,
+  },
   sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   vehicleTypeChip: { borderWidth: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
   vehicleTypeText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   photoRow: { gap: 8 },
   photoLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  photoActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  photoPreview: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  photoButton: { minHeight: 42, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  photoButtonText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  warningBox: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
-  warningTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  warningItem: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  photoPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  photoPreview: { width: 76, height: 76, borderRadius: 10 },
+  photoPreviewContent: { flex: 1, gap: 10 },
+  photoCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  photoCapturedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  photoCapturedCopy: { flex: 1, gap: 1 },
+  photoCapturedTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  photoCaptureButton: {
+    height: 80,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  photoCaptureText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  photoButton: { alignSelf: 'flex-start', minHeight: 34, paddingHorizontal: 12, borderWidth: 1, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  photoButtonText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
 });

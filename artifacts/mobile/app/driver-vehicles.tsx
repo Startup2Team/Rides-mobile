@@ -48,7 +48,7 @@ export default function DriverVehiclesScreen() {
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader
         title="My Vehicles"
-        subtitle="Manage the vehicles linked to your driver account"
+        subtitle="Manage your linked vehicles"
         onBackPress={() => router.back()}
       />
       <ScrollView
@@ -60,15 +60,15 @@ export default function DriverVehiclesScreen() {
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
       >
         <View style={styles.headerBand}>
-          <View style={styles.headerBandCopy}>
+          <View style={styles.headerBandTop}>
             <Text style={[styles.headerBandTitle, { color: colors.foreground }]}>
               {vehicles.length} linked vehicle{vehicles.length === 1 ? '' : 's'}
             </Text>
-            <Text style={[styles.headerBandDetail, { color: colors.mutedForeground }]}>
-              Approved {statusCounts.approved} • Pending {statusCounts.pendingReview} • Rejected {statusCounts.rejected}
-            </Text>
+            <AppButton title="Add Vehicle" onPress={handleAddVehicle} size="sm" icon="plus" />
           </View>
-          <AppButton title="Add Vehicle" onPress={handleAddVehicle} size="sm" compact />
+          <Text style={[styles.headerBandDetail, { color: colors.mutedForeground }]} numberOfLines={1}>
+            Approved {statusCounts.approved} • Pending {statusCounts.pendingReview} • Rejected {statusCounts.rejected}
+          </Text>
         </View>
 
         <View style={styles.list}>
@@ -185,14 +185,11 @@ const styles = StyleSheet.create({
   headerBand: {
     marginHorizontal: 16,
     marginBottom: 14,
-    paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    gap: 8,
   },
-  headerBandCopy: { flex: 1, gap: 4 },
+  headerBandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   headerBandTitle: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   headerBandDetail: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   list: { gap: 12, paddingHorizontal: 16 },

@@ -6,6 +6,10 @@ import DriverVehicleDetailsScreen from '../driver-vehicle-details';
 const mockBack = jest.fn();
 const mockPush = jest.fn();
 const mockSaveDriverProfile = jest.fn(() => Promise.resolve());
+const mockLaunchCamera = jest.fn((_options?: unknown) => Promise.resolve({
+  canceled: false,
+  assets: [{ uri: 'file:///updated-document.jpg' }],
+}));
 let mockDriverProfile: DriverProfile | null = null;
 let mockParams: Record<string, string> = {};
 
@@ -61,6 +65,17 @@ jest.mock('@/components/AppButton', () => ({
   },
 }));
 
+jest.mock('@/components/DatePickerField', () => ({
+  DatePickerField: ({ label, onChange }: { label: string; onChange: (value: string) => void }) => {
+    const React = require('react');
+    return React.createElement(
+      'TouchableOpacity',
+      { accessibilityLabel: label, onPress: () => onChange('01/01/2099') },
+      React.createElement('Text', null, label),
+    );
+  },
+}));
+
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
 }));
@@ -68,7 +83,7 @@ jest.mock('@expo/vector-icons', () => ({
 jest.mock('expo-image-picker', () => ({
   requestCameraPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
   requestMediaLibraryPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
-  launchCameraAsync: jest.fn(),
+  launchCameraAsync: (options: unknown) => mockLaunchCamera(options),
   launchImageLibraryAsync: jest.fn(() => Promise.resolve({ canceled: false, assets: [{ uri: 'file:///updated-document.jpg' }] })),
 }));
 
@@ -109,10 +124,10 @@ function makeVehicle(overrides: Partial<DriverVehicleProfile> = {}): DriverVehic
       inside: 'vehicle-inside://photo',
     },
     documents: {
-      license: { key: 'license', faces: ['license-front://photo', 'license-back://photo'], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
+      license: { key: 'license', faces: ['license-front://photo', 'license-back://photo'], expiryDate: '01/01/2099', reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
       nationalId: { key: 'nationalId', faces: ['national-front://photo', 'national-back://photo'], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
-      insurance: { key: 'insurance', faces: ['insurance-front://photo', null], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
-      authorization: { key: 'authorization', faces: ['authorization-front://photo', null], reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
+      insurance: { key: 'insurance', faces: ['insurance-front://photo', null], expiryDate: '01/01/2099', reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
+      authorization: { key: 'authorization', faces: ['authorization-front://photo', null], expiryDate: '01/01/2099', reviewStatus: 'verified', submissionKind: 'initial', submittedAt: '2026-06-08T09:00:00.000Z', updatedAt: '2026-06-08T09:00:00.000Z' },
     },
     reviewHistory: [
       { id: 'event-1', type: 'submitted', at: '2026-06-08T09:00:00.000Z' },
@@ -183,6 +198,30 @@ describe('DriverVehicleDetailsScreen', () => {
 
     expect(screen.getByText('Pending Review')).toBeTruthy();
     expect(screen.getByText('Submitted date: 2026-06-08T09:00:00.000Z')).toBeTruthy();
+    expect(screen.queryByText('Replace')).toBeNull();
+    expect(screen.queryByText('Resubmit Application')).toBeNull();
+  });
+
+  test('locks replacements while an approved vehicle update is under review', () => {
+    const vehicle = makeVehicle();
+    mockDriverProfile = {
+      ...mockDriverProfile!,
+      vehicles: [{
+        ...vehicle,
+        pendingDocumentUpdate: {
+          status: 'pending_review',
+          submittedAt: '2026-06-10T09:00:00.000Z',
+          documents: vehicle.documents!,
+          photos: vehicle.photos,
+        },
+      }],
+    };
+
+    render(<DriverVehicleDetailsScreen />);
+
+    expect(screen.getByText('Updated documents submitted for review')).toBeTruthy();
+    expect(screen.queryByText('Replace')).toBeNull();
+    expect(screen.queryByText('Resubmit Application')).toBeNull();
   });
 
   test('shows rejection reason and routes to update application', () => {
@@ -251,15 +290,21 @@ describe('DriverVehicleDetailsScreen', () => {
   test('submits a document update without changing the vehicle identity', async () => {
     render(<DriverVehicleDetailsScreen />);
 
-    fireEvent.press(screen.getAllByText('Replace Front')[0]);
-    await waitFor(() => expect(screen.getByText('Upload from Gallery')).toBeTruthy());
-    fireEvent.press(screen.getByText('Upload from Gallery'));
-    fireEvent.press(screen.getByText('Submit Updated Documents'));
+    fireEvent.press(screen.getAllByText('Replace')[0]);
+    await waitFor(() => expect(mockLaunchCamera).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('Driver License-front-image').props.source).toEqual({
+      uri: 'file:///updated-document.jpg',
+    }));
+    expect(screen.getByText('New Expiry Date')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Expiry date'));
+    fireEvent.press(screen.getByText('Save Expiry Date'));
+    fireEvent.press(screen.getByText('Resubmit Application'));
 
     await waitFor(() => expect(mockSaveDriverProfile).toHaveBeenCalled());
     const savedProfile = ((mockSaveDriverProfile as unknown as jest.Mock).mock.calls[0]?.[0]) as DriverProfile;
     expect(savedProfile.vehicles?.[0].id).toBe('driver-vehicle:moto:rad-001-a');
     expect(savedProfile.vehicles?.[0].pendingDocumentUpdate?.status).toBe('pending_review');
+    expect(savedProfile.vehicles?.[0].pendingDocumentUpdate?.documents.license.expiryDate).toBe('01/01/2099');
     expect(savedProfile.vehicles?.[0].reviewHistory?.some(entry => entry.type === 'documents_updated')).toBe(true);
   });
 });

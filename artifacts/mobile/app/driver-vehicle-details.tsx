@@ -5,6 +5,7 @@ import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, Vi
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
+import { DatePickerField } from '@/components/DatePickerField';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { useAuth } from '@/context/AuthContext';
 import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
@@ -27,6 +28,7 @@ type PreviewTarget = { label: string; uri: string } | null;
 type UpdateTarget =
   | { kind: 'document'; key: keyof DriverVehicleDocumentSet; face: 0 | 1; label: string }
   | { kind: 'photo'; key: 'outside' | 'inside'; label: string };
+type ExpiryDocumentKey = 'license' | 'insurance' | 'authorization';
 
 export default function DriverVehicleDetailsScreen() {
   const colors = useColors();
@@ -42,7 +44,11 @@ export default function DriverVehicleDetailsScreen() {
   const [updateTarget, setUpdateTarget] = React.useState<UpdateTarget | null>(null);
   const [draftDocuments, setDraftDocuments] = React.useState<DriverVehicleDocumentSet | null>(null);
   const [draftPhotos, setDraftPhotos] = React.useState<{ outside: string | null; inside: string | null } | null>(null);
+  const [expiryTarget, setExpiryTarget] = React.useState<{ key: ExpiryDocumentKey; label: string } | null>(null);
+  const [replacementExpiryDate, setReplacementExpiryDate] = React.useState('');
+  const [replacementExpiryError, setReplacementExpiryError] = React.useState<string | undefined>();
   const [savingUpdate, setSavingUpdate] = React.useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
   const updateDocumentAutoOpenedRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -55,11 +61,13 @@ export default function DriverVehicleDetailsScreen() {
       },
     );
     setUpdateTarget(null);
+    setHasUnsavedChanges(false);
     updateDocumentAutoOpenedRef.current = false;
   }, [vehicle]);
 
   React.useEffect(() => {
     if (!vehicle || !requestedUpdateDocument || updateDocumentAutoOpenedRef.current) return;
+    if (vehicle.status !== 'approved' || vehicle.pendingDocumentUpdate) return;
     if (requestedUpdateDocument !== 'license') return;
     updateDocumentAutoOpenedRef.current = true;
     setUpdateTarget({ kind: 'document', key: 'license', face: 0, label: 'Driver License' });
@@ -96,6 +104,34 @@ export default function DriverVehicleDetailsScreen() {
     setDraftPhotos(current => current ? { ...current, [key]: uri } : current);
   };
 
+  const updateDraftDocumentExpiry = (key: ExpiryDocumentKey, expiryDate?: string) => {
+    setDraftDocuments(current => current ? {
+      ...current,
+      [key]: {
+        ...current[key],
+        expiryDate,
+      },
+    } : current);
+  };
+
+  const requiresExpiryDate = (key: keyof DriverVehicleDocumentSet): key is ExpiryDocumentKey =>
+    key === 'license' || key === 'insurance' || key === 'authorization';
+
+  const confirmReplacementExpiry = () => {
+    if (!expiryTarget) return;
+    const expiry = parseDateDdMmYyyy(replacementExpiryDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (!expiry || expiry <= today) {
+      setReplacementExpiryError('Select a future expiry date');
+      return;
+    }
+    updateDraftDocumentExpiry(expiryTarget.key, replacementExpiryDate);
+    setExpiryTarget(null);
+    setReplacementExpiryDate('');
+    setReplacementExpiryError(undefined);
+  };
+
   const pickImageForUpdate = async (target: UpdateTarget, fromCamera: boolean) => {
     const requestPermission = fromCamera
       ? ImagePicker.requestCameraPermissionsAsync
@@ -119,14 +155,32 @@ export default function DriverVehicleDetailsScreen() {
 
     if (target.kind === 'document') {
       updateDraftDocumentFace(target.key, target.face, result.assets[0].uri);
+      setHasUnsavedChanges(true);
+      if (requiresExpiryDate(target.key)) {
+        updateDraftDocumentExpiry(target.key, undefined);
+        setReplacementExpiryDate('');
+        setReplacementExpiryError(undefined);
+        setExpiryTarget({ key: target.key, label: target.label });
+      }
     } else {
       updateDraftPhoto(target.key, result.assets[0].uri);
+      setHasUnsavedChanges(true);
     }
     setUpdateTarget(null);
   };
 
   const submitVehicleDocumentUpdate = async () => {
     if (!vehicle || !driverProfile || !draftDocuments || !draftPhotos) return;
+    const missingExpiry = (['license', 'insurance', 'authorization'] as const).find(key => {
+      const expiry = parseDateDdMmYyyy(draftDocuments[key].expiryDate ?? '');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return !expiry || expiry <= today;
+    });
+    if (missingExpiry) {
+      Alert.alert('Expiry date required', 'Select a future expiry date for each replaced document.');
+      return;
+    }
     setSavingUpdate(true);
     const updatedVehicle = submitDriverVehicleDocumentUpdate(vehicle, {
       documents: draftDocuments,
@@ -152,6 +206,7 @@ export default function DriverVehicleDetailsScreen() {
   const reviewHistory = getDriverVehicleReviewHistory(vehicle);
   const timeline = getDriverVehicleTimeline(vehicle);
   const pendingDocumentUpdate = vehicle.pendingDocumentUpdate;
+  const canReplaceDocuments = vehicle.status === 'approved' && !pendingDocumentUpdate;
   const licenseComplianceStatus = getLicenseComplianceStatus(vehicle.licenseExpiryDate);
   const insuranceComplianceStatus = getInsuranceComplianceStatus(vehicle.insuranceExpiryDate);
   const authorizationComplianceStatus = getAuthorizationComplianceStatus(vehicle.authorizationExpiryDate);
@@ -159,15 +214,15 @@ export default function DriverVehicleDetailsScreen() {
   const insuranceComplianceMessage = getInsuranceComplianceMessage(vehicle.insuranceExpiryDate);
   const authorizationComplianceMessage = getAuthorizationComplianceMessage(vehicle.authorizationExpiryDate);
   const documentCards = [
-    { key: 'license', label: 'Driver License', record: vehicle.documents?.license, faces: 2 },
-    { key: 'nationalId', label: 'National ID', record: vehicle.documents?.nationalId, faces: 2 },
-    { key: 'insurance', label: 'Insurance', record: vehicle.documents?.insurance, faces: 1 },
-    { key: 'authorization', label: 'Authorization Certificate', record: vehicle.documents?.authorization, faces: 1 },
+    { key: 'license', label: 'Driver License', record: draftDocuments?.license ?? vehicle.documents?.license, faces: 2 },
+    { key: 'nationalId', label: 'National ID', record: draftDocuments?.nationalId ?? vehicle.documents?.nationalId, faces: 2 },
+    { key: 'insurance', label: 'Insurance', record: draftDocuments?.insurance ?? vehicle.documents?.insurance, faces: 1 },
+    { key: 'authorization', label: 'Authorization Certificate', record: draftDocuments?.authorization ?? vehicle.documents?.authorization, faces: 1 },
   ] as const;
 
   const photoCards = [
-    { key: 'outside', label: 'Vehicle Outside Photo', uri: vehicle.photos?.outside ?? null },
-    { key: 'inside', label: 'Vehicle Inside Photo', uri: vehicle.photos?.inside ?? null },
+    { key: 'outside', label: 'Vehicle Outside Photo', uri: draftPhotos?.outside ?? vehicle.photos?.outside ?? null },
+    { key: 'inside', label: 'Vehicle Inside Photo', uri: draftPhotos?.inside ?? vehicle.photos?.inside ?? null },
   ] as const;
 
   return (
@@ -249,7 +304,12 @@ export default function DriverVehicleDetailsScreen() {
               faces={card.faces}
               warningText={getDocumentExpiryWarning(card.label, card.record?.expiryDate)}
               onPreview={target => setPreviewTarget(target)}
-              onReplaceFace={(face) => setUpdateTarget({ kind: 'document', key: card.key, face, label: card.label })}
+              onReplaceFace={canReplaceDocuments
+                ? (face) => void pickImageForUpdate(
+                    { kind: 'document', key: card.key, face, label: card.label },
+                    true,
+                  )
+                : undefined}
             />
           ))}
         </View>
@@ -263,10 +323,32 @@ export default function DriverVehicleDetailsScreen() {
               label={photo.label}
               uri={photo.uri}
               onPreview={target => setPreviewTarget(target)}
-              onReplace={() => setUpdateTarget({ kind: 'photo', key: photo.key, label: photo.label })}
+              onReplace={canReplaceDocuments
+                ? () => void pickImageForUpdate(
+                    { kind: 'photo', key: photo.key, label: photo.label },
+                    true,
+                  )
+                : undefined}
             />
           ))}
         </View>
+
+        {canReplaceDocuments && hasUnsavedChanges ? (
+          <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Changes Ready</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              Submit the updated photos and document details for review.
+            </Text>
+            <AppButton
+              title="Resubmit Application"
+              onPress={() => void submitVehicleDocumentUpdate()}
+              size="md"
+              fullWidth
+              loading={savingUpdate}
+              disabled={!draftDocuments || !draftPhotos || Boolean(expiryTarget)}
+            />
+          </View>
+        ) : null}
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle History</Text>
@@ -315,20 +397,6 @@ export default function DriverVehicleDetailsScreen() {
           </View>
         ) : null}
 
-        {vehicle.status === 'approved' ? (
-          <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Document Actions</Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>Replace any document or vehicle photo. Current approved documents stay active until review completes.</Text>
-            <AppButton
-              title="Submit Updated Documents"
-              onPress={() => void submitVehicleDocumentUpdate()}
-              size="md"
-              fullWidth
-              loading={savingUpdate}
-              disabled={!draftDocuments || !draftPhotos}
-            />
-          </View>
-        ) : null}
       </ScrollView>
 
       <Modal visible={Boolean(previewTarget)} transparent animationType="fade" onRequestClose={() => setPreviewTarget(null)}>
@@ -392,6 +460,38 @@ export default function DriverVehicleDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={Boolean(expiryTarget)} transparent animationType="fade" onRequestClose={() => undefined}>
+        <View style={styles.previewOverlay}>
+          <View style={[styles.previewSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.previewHeader}>
+              <Text style={[styles.previewTitle, { color: colors.foreground }]}>
+                New Expiry Date
+              </Text>
+            </View>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              Enter the expiry date shown on the new {expiryTarget?.label.toLowerCase()} photo.
+            </Text>
+            <DatePickerField
+              label="Expiry date"
+              value={replacementExpiryDate}
+              onChange={value => {
+                setReplacementExpiryDate(value);
+                setReplacementExpiryError(undefined);
+              }}
+              error={replacementExpiryError}
+              placeholder="DD/MM/YYYY"
+              minimumDate={new Date(Date.now() + 24 * 60 * 60 * 1000)}
+            />
+            <AppButton
+              title="Save Expiry Date"
+              onPress={confirmReplacementExpiry}
+              fullWidth
+              size="md"
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -409,7 +509,7 @@ function DocumentBlock({
   faces: 1 | 2;
   label: string;
   onPreview: (target: PreviewTarget) => void;
-  onReplaceFace: (face: 0 | 1) => void;
+  onReplaceFace?: (face: 0 | 1) => void;
   warningText?: string | null;
   record?: DriverVehicleDocumentRecord;
 }) {
@@ -426,39 +526,64 @@ function DocumentBlock({
           <Text style={[styles.blockStatus, { color: statusColor }]}>{statusLabel}</Text>
         </View>
       </View>
-      <View style={styles.thumbnailRow}>
+      <View style={styles.documentFaces}>
         {visibleFaces.map((uri, index) => (
-          <TouchableOpacity
-            key={`${label}-${index}`}
-            style={[styles.thumbnail, { backgroundColor: colors.muted }]}
-            onPress={() => uri ? onPreview({ label: `${label} ${index === 0 ? 'Front' : 'Back'}`, uri }) : onPreview(null)}
-            accessibilityRole="button"
-            accessibilityLabel={`${label} ${index === 0 ? 'front' : 'back'} preview`}
-          >
-            {uri ? <Image source={{ uri }} style={styles.thumbnailImage} /> : <Feather name="image" size={18} color={colors.mutedForeground} />}
-          </TouchableOpacity>
+          <View key={`${label}-${index}`} style={styles.documentFaceRow}>
+            <TouchableOpacity
+              style={[styles.thumbnail, { backgroundColor: colors.muted }]}
+              onPress={() => uri ? onPreview({ label: `${label} ${index === 0 ? 'Front' : 'Back'}`, uri }) : onPreview(null)}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} ${index === 0 ? 'front' : 'back'} preview`}
+            >
+              {uri ? (
+                <Image
+                  source={{ uri }}
+                  style={styles.thumbnailImage}
+                  testID={`${label}-${index === 0 ? 'front' : 'back'}-image`}
+                />
+              ) : <Feather name="image" size={18} color={colors.mutedForeground} />}
+            </TouchableOpacity>
+            <Text style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>
+              {faces === 2 ? (index === 0 ? 'Front photo' : 'Back photo') : 'Document photo'}
+            </Text>
+            {onReplaceFace ? (
+              <ReplaceFaceButton
+                colors={colors}
+                onPress={() => onReplaceFace(index as 0 | 1)}
+              />
+            ) : null}
+          </View>
         ))}
-        <View style={styles.documentActionStack}>
-          <AppButton
-            title={faces === 2 ? 'Replace Front' : 'Replace'}
-            onPress={() => onReplaceFace(0)}
-            variant="secondary"
-            size="sm"
-            compact
-          />
-          {faces === 2 ? (
-            <AppButton
-              title="Replace Back"
-              onPress={() => onReplaceFace(1)}
-              variant="secondary"
-              size="sm"
-              compact
-            />
-          ) : null}
-        </View>
       </View>
       {warningText ? <Text style={[styles.warningText, { color: colors.warningHex }]}>{warningText}</Text> : null}
     </View>
+  );
+}
+
+function ReplaceFaceButton({
+  colors,
+  onPress,
+}: {
+  colors: ReturnType<typeof useColors>;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.replaceFaceButton,
+        {
+          backgroundColor: colors.primaryHex + '0D',
+          borderColor: colors.primaryHex + '35',
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.72}
+      accessibilityRole="button"
+      accessibilityLabel="Replace photo"
+    >
+      <Feather name="camera" size={15} color={colors.primary} />
+      <Text style={[styles.replaceFaceButtonText, { color: colors.primary }]}>Replace</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -472,7 +597,7 @@ function PhotoBlock({
   colors: ReturnType<typeof useColors>;
   label: string;
   onPreview: (target: PreviewTarget) => void;
-  onReplace: () => void;
+  onReplace?: () => void;
   uri: string | null;
 }) {
   return (
@@ -483,16 +608,17 @@ function PhotoBlock({
           <Text style={[styles.blockStatus, { color: uri ? colors.successHex : colors.mutedForeground }]}>{uri ? 'Saved' : 'Missing'}</Text>
         </View>
       </View>
-      <View style={styles.thumbnailRow}>
+      <View style={styles.documentFaceRow}>
         <TouchableOpacity
           style={[styles.thumbnailLarge, { backgroundColor: colors.muted }]}
           onPress={() => uri ? onPreview({ label, uri }) : onPreview(null)}
           accessibilityRole="button"
           accessibilityLabel={`${label} preview`}
         >
-          {uri ? <Image source={{ uri }} style={styles.thumbnailImage} /> : <Feather name="image" size={18} color={colors.mutedForeground} />}
+          {uri ? <Image source={{ uri }} style={styles.thumbnailImage} testID={`${label}-image`} /> : <Feather name="image" size={18} color={colors.mutedForeground} />}
         </TouchableOpacity>
-        <AppButton title="Replace" onPress={onReplace} variant="secondary" size="sm" compact />
+        <Text style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>Vehicle photo</Text>
+        {onReplace ? <ReplaceFaceButton colors={colors} onPress={onReplace} /> : null}
       </View>
     </View>
   );
@@ -655,7 +781,20 @@ const styles = StyleSheet.create({
   thumbnail: { width: 66, height: 66, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailLarge: { width: 106, height: 84, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailImage: { width: '100%', height: '100%' },
-  documentActionStack: { gap: 6, justifyContent: 'center' },
+  documentFaces: { gap: 10 },
+  documentFaceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  documentFaceLabel: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
+  replaceFaceButton: {
+    minHeight: 42,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  replaceFaceButtonText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   warningText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
   timeline: { gap: 14 },
   timelineRow: { flexDirection: 'row', gap: 12 },
