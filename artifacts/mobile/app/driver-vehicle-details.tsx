@@ -7,6 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
 import { DatePickerField } from '@/components/DatePickerField';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import {
+  ImageGalleryPreview,
+  type GalleryImage,
+} from '@/components/ImageGalleryPreview';
 import { useAuth } from '@/context/AuthContext';
 import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
 import {
@@ -24,7 +28,7 @@ import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDoc
 import { parseDateDdMmYyyy } from '@/utils/dateUtils';
 import { isValidImageAsset } from '@/utils/documentValidation';
 
-type PreviewTarget = { label: string; uri: string } | null;
+type PreviewTarget = { index: number } | null;
 type UpdateTarget =
   | { kind: 'document'; key: keyof DriverVehicleDocumentSet; face: 0 | 1; label: string }
   | { kind: 'photo'; key: 'outside' | 'inside'; label: string };
@@ -214,16 +218,30 @@ export default function DriverVehicleDetailsScreen() {
   const insuranceComplianceMessage = getInsuranceComplianceMessage(vehicle.insuranceExpiryDate);
   const authorizationComplianceMessage = getAuthorizationComplianceMessage(vehicle.authorizationExpiryDate);
   const documentCards = [
-    { key: 'license', label: 'Driver License', record: draftDocuments?.license ?? vehicle.documents?.license, faces: 2 },
-    { key: 'nationalId', label: 'National ID', record: draftDocuments?.nationalId ?? vehicle.documents?.nationalId, faces: 2 },
-    { key: 'insurance', label: 'Insurance', record: draftDocuments?.insurance ?? vehicle.documents?.insurance, faces: 1 },
-    { key: 'authorization', label: 'Authorization Certificate', record: draftDocuments?.authorization ?? vehicle.documents?.authorization, faces: 1 },
+    { key: 'license', label: 'Driver License', record: draftDocuments?.license ?? vehicle.documents?.license, faces: 2, galleryStartIndex: 0 },
+    { key: 'nationalId', label: 'National ID', record: draftDocuments?.nationalId ?? vehicle.documents?.nationalId, faces: 2, galleryStartIndex: 2 },
+    { key: 'insurance', label: 'Insurance', record: draftDocuments?.insurance ?? vehicle.documents?.insurance, faces: 1, galleryStartIndex: 4 },
+    { key: 'authorization', label: 'Authorization Certificate', record: draftDocuments?.authorization ?? vehicle.documents?.authorization, faces: 1, galleryStartIndex: 5 },
   ] as const;
 
   const photoCards = [
     { key: 'outside', label: 'Vehicle Outside Photo', uri: draftPhotos?.outside ?? vehicle.photos?.outside ?? null },
     { key: 'inside', label: 'Vehicle Inside Photo', uri: draftPhotos?.inside ?? vehicle.photos?.inside ?? null },
   ] as const;
+  const galleryItems: GalleryImage[] = [
+    ...documentCards.flatMap(card =>
+      Array.from({ length: card.faces }, (_, index): GalleryImage => ({
+        id: `document-${card.key}-${index}`,
+        title: `${card.label} ${card.faces === 2 ? (index === 0 ? 'Front' : 'Back') : ''}`.trim(),
+        uri: card.record?.faces[index] ?? null,
+      })),
+    ),
+    ...photoCards.map(photo => ({
+      id: `photo-${photo.key}`,
+      title: photo.label,
+      uri: photo.uri,
+    })),
+  ];
 
   return (
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
@@ -303,7 +321,8 @@ export default function DriverVehicleDetailsScreen() {
               record={card.record}
               faces={card.faces}
               warningText={getDocumentExpiryWarning(card.label, card.record?.expiryDate)}
-              onPreview={target => setPreviewTarget(target)}
+              galleryStartIndex={card.galleryStartIndex}
+              onPreview={(index) => setPreviewTarget({ index })}
               onReplaceFace={canReplaceDocuments
                 ? (face) => void pickImageForUpdate(
                     { kind: 'document', key: card.key, face, label: card.label },
@@ -322,7 +341,8 @@ export default function DriverVehicleDetailsScreen() {
               colors={colors}
               label={photo.label}
               uri={photo.uri}
-              onPreview={target => setPreviewTarget(target)}
+              galleryIndex={photo.key === 'outside' ? 6 : 7}
+              onPreview={(index) => setPreviewTarget({ index })}
               onReplace={canReplaceDocuments
                 ? () => void pickImageForUpdate(
                     { kind: 'photo', key: photo.key, label: photo.label },
@@ -399,29 +419,12 @@ export default function DriverVehicleDetailsScreen() {
 
       </ScrollView>
 
-      <Modal visible={Boolean(previewTarget)} transparent animationType="fade" onRequestClose={() => setPreviewTarget(null)}>
-        <View style={styles.previewOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setPreviewTarget(null)} activeOpacity={1} />
-          <View style={[styles.previewSheet, { backgroundColor: colors.card }]}>
-            <View style={styles.previewHeader}>
-              <Text style={[styles.previewTitle, { color: colors.foreground }]} numberOfLines={1}>
-                {previewTarget?.label ?? 'Preview'}
-              </Text>
-              <TouchableOpacity onPress={() => setPreviewTarget(null)} accessibilityLabel="Close preview">
-                <Feather name="x" size={22} color={colors.foreground} />
-              </TouchableOpacity>
-            </View>
-            {previewTarget?.uri ? (
-              <Image source={{ uri: previewTarget.uri }} style={styles.previewImage} resizeMode="contain" />
-            ) : (
-              <View style={[styles.previewPlaceholder, { backgroundColor: colors.muted }]}>
-                <Feather name="image" size={28} color={colors.mutedForeground} />
-                <Text style={[styles.previewPlaceholderText, { color: colors.mutedForeground }]}>No image available</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <ImageGalleryPreview
+        images={galleryItems}
+        initialIndex={previewTarget?.index ?? 0}
+        onClose={() => setPreviewTarget(null)}
+        visible={Boolean(previewTarget)}
+      />
 
       <Modal visible={Boolean(updateTarget)} transparent animationType="fade" onRequestClose={() => setUpdateTarget(null)}>
         <View style={styles.previewOverlay}>
@@ -500,6 +503,7 @@ function DocumentBlock({
   colors,
   faces,
   label,
+  galleryStartIndex,
   onPreview,
   onReplaceFace,
   warningText,
@@ -507,8 +511,9 @@ function DocumentBlock({
 }: {
   colors: ReturnType<typeof useColors>;
   faces: 1 | 2;
+  galleryStartIndex: number;
   label: string;
-  onPreview: (target: PreviewTarget) => void;
+  onPreview: (index: number) => void;
   onReplaceFace?: (face: 0 | 1) => void;
   warningText?: string | null;
   record?: DriverVehicleDocumentRecord;
@@ -529,20 +534,15 @@ function DocumentBlock({
       <View style={styles.documentFaces}>
         {visibleFaces.map((uri, index) => (
           <View key={`${label}-${index}`} style={styles.documentFaceRow}>
-            <TouchableOpacity
-              style={[styles.thumbnail, { backgroundColor: colors.muted }]}
-              onPress={() => uri ? onPreview({ label: `${label} ${index === 0 ? 'Front' : 'Back'}`, uri }) : onPreview(null)}
-              accessibilityRole="button"
+            <PreviewThumbnail
               accessibilityLabel={`${label} ${index === 0 ? 'front' : 'back'} preview`}
-            >
-              {uri ? (
-                <Image
-                  source={{ uri }}
-                  style={styles.thumbnailImage}
-                  testID={`${label}-${index === 0 ? 'front' : 'back'}-image`}
-                />
-              ) : <Feather name="image" size={18} color={colors.mutedForeground} />}
-            </TouchableOpacity>
+              imageTestID={`${label}-${index === 0 ? 'front' : 'back'}-image`}
+              galleryIndex={galleryStartIndex + index}
+              onPreview={onPreview}
+              uri={uri}
+              style={[styles.thumbnail, { backgroundColor: colors.muted }]}
+              placeholderColor={colors.mutedForeground}
+            />
             <Text style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>
               {faces === 2 ? (index === 0 ? 'Front photo' : 'Back photo') : 'Document photo'}
             </Text>
@@ -589,14 +589,16 @@ function ReplaceFaceButton({
 
 function PhotoBlock({
   colors,
+  galleryIndex,
   label,
   onPreview,
   onReplace,
   uri,
 }: {
   colors: ReturnType<typeof useColors>;
+  galleryIndex: number;
   label: string;
-  onPreview: (target: PreviewTarget) => void;
+  onPreview: (index: number) => void;
   onReplace?: () => void;
   uri: string | null;
 }) {
@@ -609,18 +611,57 @@ function PhotoBlock({
         </View>
       </View>
       <View style={styles.documentFaceRow}>
-        <TouchableOpacity
-          style={[styles.thumbnailLarge, { backgroundColor: colors.muted }]}
-          onPress={() => uri ? onPreview({ label, uri }) : onPreview(null)}
-          accessibilityRole="button"
+        <PreviewThumbnail
           accessibilityLabel={`${label} preview`}
-        >
-          {uri ? <Image source={{ uri }} style={styles.thumbnailImage} testID={`${label}-image`} /> : <Feather name="image" size={18} color={colors.mutedForeground} />}
-        </TouchableOpacity>
+          imageTestID={`${label}-image`}
+          galleryIndex={galleryIndex}
+          onPreview={onPreview}
+          uri={uri}
+          style={[styles.thumbnailLarge, { backgroundColor: colors.muted }]}
+          placeholderColor={colors.mutedForeground}
+        />
         <Text style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>Vehicle photo</Text>
         {onReplace ? <ReplaceFaceButton colors={colors} onPress={onReplace} /> : null}
       </View>
     </View>
+  );
+}
+
+function PreviewThumbnail({
+  accessibilityLabel,
+  imageTestID,
+  galleryIndex,
+  onPreview,
+  placeholderColor,
+  style,
+  uri,
+}: {
+  accessibilityLabel: string;
+  imageTestID: string;
+  galleryIndex: number;
+  onPreview: (index: number) => void;
+  placeholderColor: string;
+  style: object;
+  uri: string | null;
+}) {
+  const openPreview = () => {
+    onPreview(galleryIndex);
+  };
+
+  return (
+    <TouchableOpacity
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      activeOpacity={0.82}
+      onPress={openPreview}
+      style={style}
+    >
+      {uri ? (
+        <Image source={{ uri }} style={styles.thumbnailImage} testID={imageTestID} resizeMode="cover" />
+      ) : (
+        <Feather name="image" size={18} color={placeholderColor} />
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -812,9 +853,6 @@ const styles = StyleSheet.create({
   previewSheet: { borderRadius: 20, padding: 14, gap: 14, maxHeight: '88%' },
   previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   previewTitle: { flex: 1, fontSize: 16, fontFamily: 'Inter_700Bold' },
-  previewImage: { width: '100%', aspectRatio: 0.78, borderRadius: 16, backgroundColor: '#000' },
-  previewPlaceholder: { alignItems: 'center', justifyContent: 'center', aspectRatio: 0.78, borderRadius: 16, gap: 10 },
-  previewPlaceholderText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
   emptyStateTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   emptyStateText: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 18 },

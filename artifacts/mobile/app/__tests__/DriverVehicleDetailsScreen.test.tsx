@@ -58,6 +58,31 @@ jest.mock('@/components/GlassHeader', () => ({
   useGlassHeaderMetrics: () => ({ contentTop: 0, indicatorTop: 0 }),
 }));
 
+jest.mock('@/components/ImageGalleryPreview', () => ({
+  ImageGalleryPreview: ({
+    images,
+    initialIndex,
+    onClose,
+    visible,
+  }: {
+    images: Array<{ id: string; title: string }>;
+    initialIndex: number;
+    onClose: () => void;
+    visible: boolean;
+  }) => {
+    if (!visible) return null;
+    const React = require('react');
+    const itemIndex = Math.max(0, Math.min(images.length - 1, initialIndex));
+    return React.createElement(
+      'View',
+      null,
+      React.createElement('Text', null, images[itemIndex]?.title),
+      React.createElement('Text', { accessibilityLabel: 'Image counter' }, `${itemIndex + 1} of ${images.length}`),
+      React.createElement('TouchableOpacity', { accessibilityLabel: 'Back from preview', onPress: onClose }),
+    );
+  },
+}));
+
 jest.mock('@/components/AppButton', () => ({
   AppButton: ({ title, onPress }: { title: string; onPress: () => void }) => {
     const React = require('react');
@@ -177,6 +202,39 @@ describe('DriverVehicleDetailsScreen', () => {
     fireEvent.press(screen.getByLabelText('Driver License front preview'));
 
     expect(screen.getByText('Driver License Front')).toBeTruthy();
+    expect(screen.getByLabelText('Image counter').props.children).toBe('1 of 8');
+    fireEvent.press(screen.getByLabelText('Back from preview'));
+    expect(screen.queryByText('Driver License Front')).toBeNull();
+  });
+
+  test('opens the second document thumbnail at its exact gallery index', () => {
+    render(<DriverVehicleDetailsScreen />);
+
+    fireEvent.press(screen.getByLabelText('Driver License back preview'));
+
+    expect(screen.getByText('Driver License Back')).toBeTruthy();
+    expect(screen.getByLabelText('Image counter').props.children).toBe('2 of 8');
+  });
+
+  test('keeps document indexes stable when an earlier image is missing', () => {
+    mockDriverProfile = {
+      ...mockDriverProfile!,
+      vehicles: [makeVehicle({
+        documents: {
+          ...makeVehicle().documents!,
+          license: {
+            ...makeVehicle().documents!.license!,
+            faces: ['license-front://photo', null],
+          },
+        },
+      })],
+    };
+    render(<DriverVehicleDetailsScreen />);
+
+    fireEvent.press(screen.getByLabelText('National ID front preview'));
+
+    expect(screen.getByText('National ID Front')).toBeTruthy();
+    expect(screen.getByLabelText('Image counter').props.children).toBe('3 of 8');
   });
 
   test('shows the pending review state with submission date', () => {
