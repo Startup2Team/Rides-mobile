@@ -16,6 +16,7 @@ import { ProgressHeader } from '@/components/driver-onboarding/ProgressHeader';
 import { RequirementsSection } from '@/components/driver-onboarding/RequirementsSection';
 import { ReviewSubmissionSection } from '@/components/driver-onboarding/ReviewSubmissionSection';
 import { VehicleInformationSection } from '@/components/driver-onboarding/VehicleInformationSection';
+import { DriverApplicationRejectionBanner } from '@/components/driver-onboarding/DriverApplicationRejectionBanner';
 import { styles } from '@/components/driver-onboarding/onboardingStyles';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
@@ -28,7 +29,7 @@ import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, sav
 import { saveStoredProfileImage } from '@/persistence/profilePersistence';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
-import { submitDriverApplication } from '@/domain/verificationSubmissions';
+import { getLatestDriverApplicationRejectionSummary, submitDriverApplication, type DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
 import { DOCUMENTS } from '@/components/driver-onboarding/onboardingData';
 import type { DocFaces, DocumentKey, VehiclePhotoKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardingTypes';
@@ -44,6 +45,7 @@ export default function DriverOnboarding() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [rejectionSummary, setRejectionSummary] = useState<DriverApplicationRejectionSummary | null>(null);
   const [vehiclePhotos, setVehiclePhotos] = useState<Record<VehiclePhotoKey, string | null>>({
     outside: null,
     inside: null,
@@ -97,6 +99,22 @@ export default function DriverOnboarding() {
       setDraftLoaded(true);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!draftLoaded) return;
+    if (driverProfile?.verificationStatus !== 'rejected' || !user?.id) {
+      setRejectionSummary(null);
+      return;
+    }
+
+    void (async () => {
+      const summary = await getLatestDriverApplicationRejectionSummary(user.id);
+      setRejectionSummary(summary);
+      if (summary) {
+        setErrors(current => ({ ...current, ...buildRejectionErrors(summary) }));
+      }
+    })();
+  }, [draftLoaded, driverProfile?.verificationStatus, setErrors, user?.id]);
 
   useEffect(() => {
     if (!draftLoaded) return;
@@ -168,17 +186,24 @@ export default function DriverOnboarding() {
       <ProgressHeader colors={colors} onExit={saveDraftAndExit} safeAreaTop={insets.top} setStep={setStep} step={step} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 0 && (
-          <PersonalInformationSection
-            colors={colors}
-            errors={errors}
-            form={form}
-            maxDobDate={maxDobDate}
-            selfieUri={selfieUri}
-            takeSelfie={takeSelfie}
-            update={update}
-            updateCascade={updateCascade}
-            user={user}
-          />
+          <>
+            <DriverApplicationRejectionBanner
+              colors={colors}
+              rejectionReason={driverProfile?.rejectionReason}
+              rejectionSummary={rejectionSummary}
+            />
+            <PersonalInformationSection
+              colors={colors}
+              errors={errors}
+              form={form}
+              maxDobDate={maxDobDate}
+              selfieUri={selfieUri}
+              takeSelfie={takeSelfie}
+              update={update}
+              updateCascade={updateCascade}
+              user={user}
+            />
+          </>
         )}
         {step === 1 && (
           <VehicleInformationSection
@@ -204,6 +229,7 @@ export default function DriverOnboarding() {
               const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.88, allowsEditing: false });
               if (result.canceled || !result.assets[0] || !isValidImageAsset(result.assets[0])) return;
               setVehiclePhotos(current => ({ ...current, [key]: result.assets[0].uri }));
+              setErrors(current => ({ ...current, [key === 'outside' ? 'vehicleOutsidePhoto' : 'vehicleInsidePhoto']: '' }));
             }}
             takeDocumentPhoto={takeDocumentPhoto}
             update={update}
@@ -221,15 +247,22 @@ export default function DriverOnboarding() {
           />
         )}
         {step === 4 && (
-          <ReviewSubmissionSection
-            colors={colors}
-            form={form}
-            onOpenImagePreview={index => {
-              setPreviewIndex(index);
-              setPreviewVisible(true);
-            }}
-            previewImages={reviewImages}
-          />
+          <>
+            <DriverApplicationRejectionBanner
+              colors={colors}
+              rejectionReason={driverProfile?.rejectionReason}
+              rejectionSummary={rejectionSummary}
+            />
+            <ReviewSubmissionSection
+              colors={colors}
+              form={form}
+              onOpenImagePreview={index => {
+                setPreviewIndex(index);
+                setPreviewVisible(true);
+              }}
+              previewImages={reviewImages}
+            />
+          </>
         )}
         <AppButton
           title={step < 4 ? 'Continue' : 'Submit Registration'}
@@ -241,8 +274,8 @@ export default function DriverOnboarding() {
         />
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <AppButton title="Save & exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
-          <AppButton title="Contact Support" onPress={() => router.push('/help-support')} size="sm" compact variant="plain" style={{ flex: 1 }} />
-        </View>
+        <AppButton title="Contact Support" onPress={() => router.push('/help-support')} size="sm" compact variant="plain" style={{ flex: 1 }} />
+      </View>
       </ScrollView>
       <ImageGalleryPreview
         images={reviewImages}
@@ -309,4 +342,15 @@ function buildVehiclePhotosPayload(
     acc[key] = vehiclePhotos[key];
     return acc;
   }, {});
+}
+
+function buildRejectionErrors(summary: DriverApplicationRejectionSummary) {
+  const errors: Record<string, string> = {};
+  summary.rejectedFields.forEach(field => {
+    errors[field] = 'Please update this item.';
+  });
+  summary.rejectedDocuments.forEach(document => {
+    errors[document] = 'Please retake this photo.';
+  });
+  return errors;
 }

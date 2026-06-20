@@ -34,6 +34,15 @@ interface SubmissionCreationBase {
   submittedAt?: string;
 }
 
+export interface DriverApplicationRejectionSummary {
+  submissionId: string;
+  reason?: string;
+  rejectedFields: string[];
+  rejectedDocuments: string[];
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
 export interface SubmitDriverApplicationInput extends SubmissionCreationBase {
   userId: string;
   fullName: string;
@@ -139,6 +148,25 @@ function withDecision<T extends SubmissionWithKind>(submission: T, decision: Ver
 async function loadStore(): Promise<VerificationSubmissionStore> {
   const stored = await loadStoredVerificationSubmissions();
   return stored.data ?? EMPTY_VERIFICATION_SUBMISSION_STORE;
+}
+
+export async function getLatestDriverApplicationRejectionSummary(userId: string) {
+  const store = await loadStore();
+  const rejectedSubmission = [...store.driverApplications].reverse().find(submission =>
+    submission.userId === userId && submission.reviewStatus === 'rejected',
+  );
+  if (!rejectedSubmission) return null;
+
+  const decision = rejectedSubmission.reviewDecision;
+  const latestRejectedEvent = [...rejectedSubmission.history].reverse().find(event => event.type === 'rejected');
+  return {
+    submissionId: rejectedSubmission.id,
+    reason: decision?.reason ?? latestRejectedEvent?.reason,
+    rejectedFields: decision?.rejectedFields ?? latestRejectedEvent?.rejectedFields ?? [],
+    rejectedDocuments: decision?.rejectedDocuments ?? latestRejectedEvent?.rejectedDocuments ?? [],
+    reviewedAt: decision?.reviewedAt ?? latestRejectedEvent?.at,
+    reviewedBy: decision?.reviewedBy ?? latestRejectedEvent?.reviewedBy,
+  } satisfies DriverApplicationRejectionSummary;
 }
 
 function dedupeSubmission<T extends SubmissionWithKind>(collection: T[], next: T): T[] {

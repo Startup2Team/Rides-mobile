@@ -17,6 +17,45 @@ const mockSubmitApplication = jest.fn(() => Promise.resolve());
 const mockImageGalleryPreview = jest.fn(({ visible }: { visible?: boolean }) => (
   <View testID={visible ? 'image-gallery-preview-visible' : 'image-gallery-preview-hidden'} />
 ));
+const mockDriverProfile = {
+  verificationStatus: 'rejected',
+  rejectionReason: 'National ID is blurry.',
+};
+const mockVerificationStore = {
+  driverApplications: [
+    {
+      id: 'driver-submission:rejected',
+      clientSubmissionId: 'driver-submission:rejected',
+      kind: 'driver_application',
+      status: 'rejected',
+      reviewStatus: 'rejected',
+      submittedAt: '2026-06-20T08:00:00.000Z',
+      updatedAt: '2026-06-20T09:00:00.000Z',
+      reviewDecision: {
+        status: 'rejected',
+        reviewedAt: '2026-06-20T09:00:00.000Z',
+        reviewedBy: 'agent-7',
+        reason: 'National ID is blurry.',
+        rejectedFields: ['brand', 'momoCode'],
+        rejectedDocuments: ['nationalId', 'vehicleOutsidePhoto'],
+      },
+      history: [
+        {
+          id: 'driver-submission:rejected:rejected',
+          type: 'rejected',
+          at: '2026-06-20T09:00:00.000Z',
+          reason: 'National ID is blurry.',
+          rejectedFields: ['brand', 'momoCode'],
+          rejectedDocuments: ['nationalId', 'vehicleOutsidePhoto'],
+          reviewedBy: 'agent-7',
+        },
+      ],
+      userId: 'user-1',
+    },
+  ],
+  vehicleApplications: [],
+  vehicleDocumentUpdates: [],
+};
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -51,7 +90,7 @@ jest.mock('expo-image-picker', () => ({
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
-    driverProfile: null,
+    driverProfile: mockDriverProfile,
     saveDriverProfile: mockSaveDriverProfile,
     switchMode: mockSwitchMode,
     user: { id: 'user-1', name: 'Driver User', phone: '250788000000' },
@@ -140,16 +179,22 @@ jest.mock('@/persistence/driverOnboardingPersistence', () => ({
   saveStoredDriverOnboardingDraft: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('@/persistence/verificationSubmissionPersistence', () => ({
+  EMPTY_VERIFICATION_SUBMISSION_STORE: {
+    driverApplications: [],
+    vehicleApplications: [],
+    vehicleDocumentUpdates: [],
+  },
+  loadStoredVerificationSubmissions: jest.fn(async () => ({ data: mockVerificationStore, source: 'current' })),
+  saveStoredVerificationSubmissions: jest.fn(async () => undefined),
+}));
+
 jest.mock('@/persistence/profilePersistence', () => ({
   saveStoredProfileImage: mockSaveProfileImage,
 }));
 
 jest.mock('@/persistence/driverDocumentsPersistence', () => ({
   saveStoredDriverDocuments: mockSaveDocuments,
-}));
-
-jest.mock('@/domain/verificationSubmissions', () => ({
-  submitDriverApplication: mockSubmitApplication,
 }));
 
 jest.mock('@/components/driver-onboarding/ProgressHeader', () => ({
@@ -225,6 +270,22 @@ describe('DriverOnboarding', () => {
         expect.objectContaining({ id: 'license-front', uri: 'license-front://photo' }),
         expect.objectContaining({ id: 'license-back', uri: 'license-back://photo' }),
       ]),
+    }));
+  });
+
+  test('shows rejection guidance and seeds field errors for rejected applications', async () => {
+    render(<DriverOnboarding />);
+
+    await waitFor(() => expect(screen.getByText('Reviewer requested changes')).toBeTruthy());
+    expect(screen.getByText('National ID is blurry.')).toBeTruthy();
+    await waitFor(() => expect(mockSetErrors).toHaveBeenCalled());
+    const updater = mockSetErrors.mock.calls.at(-1)?.[0];
+    expect(typeof updater).toBe('function');
+    expect(updater({})).toEqual(expect.objectContaining({
+      brand: 'Please update this item.',
+      momoCode: 'Please update this item.',
+      nationalId: 'Please retake this photo.',
+      vehicleOutsidePhoto: 'Please retake this photo.',
     }));
   });
 });

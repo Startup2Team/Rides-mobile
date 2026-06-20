@@ -131,7 +131,7 @@ export default function HistoryScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <GlassHeader title="My Rides" showBack={false} />
+      <GlassHeader title="My Trips" showBack={false} />
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
@@ -147,9 +147,9 @@ export default function HistoryScreen() {
         {rideHistory.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="map" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No rides yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No trips yet</Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-              Your completed rides will appear here
+              Your completed trips will appear here
             </Text>
           </View>
         ) : (

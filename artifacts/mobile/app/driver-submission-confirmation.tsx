@@ -11,10 +11,11 @@ import {
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AppButton } from '@/components/AppButton';
+import { DriverApplicationRejectionBanner } from '@/components/driver-onboarding/DriverApplicationRejectionBanner';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { getLatestDriverApplicationRejectionSummary, type DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
 import { isDriverApprovalDevtoolEnabled } from '@/utils/driverDevTools';
 
 const STEPS = [
@@ -43,30 +44,25 @@ export default function DriverSubmissionConfirmation() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { driverProfile, switchMode, saveDriverProfile } = useAuth();
+  const { driverProfile, switchMode, saveDriverProfile, user } = useAuth();
+  const [rejectionSummary, setRejectionSummary] = React.useState<DriverApplicationRejectionSummary | null>(null);
 
-  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
+  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const separatorColor = isDark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)';
-  const accent = isDark ? colors.successHex : colors.primaryHex;
-  const accentSoft = isDark ? `${colors.successHex}18` : `${colors.primaryHex}18`;
-  const accentSoftStrong = isDark ? `${colors.successHex}20` : `${colors.primaryHex}20`;
-  const accentBorder = isDark ? `${colors.successHex}28` : `${colors.primaryHex}28`;
-  const heroColors = (isDark
-    ? ['#171717', '#111111', 'transparent']
-    : [`${accent}14`, `${accent}04`, 'transparent']) as [string, string, ...string[]];
+  const accent = colors.primaryHex;
+  const accentSoft = `${accent}18`;
+  const accentSoftStrong = `${accent}20`;
+  const accentBorder = `${accent}28`;
+  const titleColor = colors.foreground;
+  const bodyColor = colors.mutedForeground;
+  const mutedColor = colors.mutedForeground;
 
-  const iconScale = useRef(new Animated.Value(0.4)).current;
-  const iconOpacity = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentSlide = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.sequence([
-      Animated.parallel([
-        Animated.spring(iconScale, { toValue: 1, useNativeDriver: true, bounciness: 14 }),
-        Animated.timing(iconOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-      ]),
       Animated.parallel([
         Animated.timing(contentOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
         Animated.spring(contentSlide, { toValue: 0, useNativeDriver: true, bounciness: 4 }),
@@ -83,6 +79,18 @@ export default function DriverSubmissionConfirmation() {
     __DEV__,
     process.env.EXPO_PUBLIC_ENABLE_DRIVER_APPROVAL_DEVTOOLS,
   );
+
+  useEffect(() => {
+    if (!isRejected || !user?.id) {
+      setRejectionSummary(null);
+      return;
+    }
+
+    void (async () => {
+      const summary = await getLatestDriverApplicationRejectionSummary(user.id);
+      setRejectionSummary(summary);
+    })();
+  }, [isRejected, user?.id]);
 
   const handlePrimaryAction = async () => {
     if (isApproved) {
@@ -107,29 +115,18 @@ export default function DriverSubmissionConfirmation() {
     <View style={[styles.root, { backgroundColor: pageBackground, paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
 
       {/* ── Hero ── */}
-      <LinearGradient
-        colors={heroColors}
-        style={styles.hero}
-      >
-        <Animated.View style={{ transform: [{ scale: iconScale }], opacity: iconOpacity }}>
-          <View style={[styles.iconRing, { borderColor: accentBorder }]}>
-            <View style={[styles.iconCircle, { backgroundColor: accentSoft }]}>
-              <Feather name="check-circle" size={42} color={accent} />
-            </View>
-          </View>
-        </Animated.View>
-
+      <View style={styles.hero}>
         <Animated.View style={[styles.heroText, { opacity: contentOpacity, transform: [{ translateY: contentSlide }] }]}>
-          <Text style={[styles.heroTitle, { color: colors.foreground }]}>
+          <Text style={[styles.heroTitle, { color: titleColor }]}>
             {isApproved ? 'Application Approved!' : 'Application Submitted!'}
           </Text>
-          <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
+          <Text style={[styles.heroSub, { color: bodyColor }]}>
             {isApproved
               ? 'Your application is approved. Continue to driver mode to start driving.'
               : 'Your application has been received successfully.'}
           </Text>
         </Animated.View>
-      </LinearGradient>
+      </View>
 
       {/* ── Body ── */}
       <Animated.View style={[styles.body, { opacity: contentOpacity, transform: [{ translateY: contentSlide }] }]}>
@@ -144,7 +141,7 @@ export default function DriverSubmissionConfirmation() {
 
         {/* Timeline card */}
         <View style={[styles.card, { backgroundColor: cardFill }]}>
-          <Text style={[styles.cardHeading, { color: colors.foreground }]}>What happens next</Text>
+          <Text style={[styles.cardHeading, { color: titleColor }]}>What happens next</Text>
           <View style={[styles.divider, { backgroundColor: separatorColor }]} />
           {timelineSteps.map((step, i) => (
             <View key={step.label}>
@@ -169,12 +166,12 @@ export default function DriverSubmissionConfirmation() {
                   )}
                 </View>
                 <View style={styles.timelineContent}>
-                  <Text style={[styles.timelineLabel, { color: step.done || step.active ? colors.foreground : colors.mutedForeground }]}>
+                  <Text style={[styles.timelineLabel, { color: step.done || step.active ? titleColor : mutedColor }]}>
                     {step.label}
                   </Text>
-                  <Text style={[styles.timelineDesc, { color: colors.mutedForeground }]}>{step.desc}</Text>
+                  <Text style={[styles.timelineDesc, { color: bodyColor }]}>{step.desc}</Text>
                 </View>
-                <Feather name={step.icon} size={17} color={step.done || step.active ? accent : colors.mutedForeground} />
+                <Feather name={step.icon} size={17} color={step.done || step.active ? accent : mutedColor} />
               </View>
               {i < STEPS.length - 1 && <View style={[styles.divider, { backgroundColor: separatorColor, marginLeft: 52 }]} />}
             </View>
@@ -182,15 +179,12 @@ export default function DriverSubmissionConfirmation() {
         </View>
 
         {/* Rejection feedback */}
-        {isRejected && driverProfile?.rejectionReason && (
-          <View style={[styles.card, { backgroundColor: cardFill }]}>
-            <View style={styles.rejectionHeader}>
-              <Feather name="alert-circle" size={15} color={colors.destructive} />
-              <Text style={[styles.cardHeading, { color: colors.destructive, paddingVertical: 0 }]}>Reviewer Feedback</Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: separatorColor }]} />
-            <Text style={[styles.rejectionText, { color: colors.foreground }]}>{driverProfile.rejectionReason}</Text>
-          </View>
+        {isRejected && (
+          <DriverApplicationRejectionBanner
+            colors={colors}
+            rejectionReason={driverProfile.rejectionReason}
+            rejectionSummary={rejectionSummary}
+          />
         )}
 
       </Animated.View>
@@ -229,33 +223,17 @@ export default function DriverSubmissionConfirmation() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, justifyContent: 'center' },
   hero: {
     alignItems: 'center',
     paddingHorizontal: 28,
-    paddingTop: 36,
-    paddingBottom: 24,
-    gap: 18,
-  },
-  iconRing: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: 10,
+    paddingBottom: 18,
   },
   heroText: { alignItems: 'center', gap: 8 },
   heroTitle: { fontSize: 24, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   heroSub: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 21, textAlign: 'center', maxWidth: 300 },
-  body: { flex: 1, paddingHorizontal: 16, gap: 12 },
+  body: { paddingHorizontal: 16, gap: 12 },
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -295,7 +273,7 @@ const styles = StyleSheet.create({
   },
   noticeIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   noticeText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  actions: { paddingHorizontal: 16, gap: 10 },
+  actions: { paddingHorizontal: 16, gap: 10, paddingTop: 34 },
   supportBtn: { height: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   supportText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   devBtn: { height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, borderStyle: 'dashed' },

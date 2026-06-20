@@ -169,7 +169,7 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.foreground }]}>{driverAction.label}</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
-              {driverAction.label === 'In Review' ? 'Review usually takes 5–10 minutes' : `Earn money driving on ${APP_NAME}`}
+              {driverAction.label === 'In Review' ? 'Review usually takes not too long' : `Earn money driving on ${APP_NAME}`}
             </Text>
           </View>
           <Feather name="chevron-right" size={18} color={colors.mutedForeground} />

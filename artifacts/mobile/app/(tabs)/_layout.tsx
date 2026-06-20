@@ -16,8 +16,8 @@ function NativeTabLayout() {
         <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="history">
-        <Icon sf={{ default: 'clock', selected: 'clock.fill' }} />
-        <Label>Rides</Label>
+        <Icon sf={{ default: 'list.bullet', selected: 'list.bullet' }} />
+        <Label>Trips</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="share">
         <Icon sf={{ default: 'square.and.arrow.up', selected: 'square.and.arrow.up.fill' }} />
@@ -77,11 +77,11 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'Rides',
+          title: 'Trips',
           tabBarIcon: ({ color }) =>
             isIOS
-              ? <SymbolView name="clock" tintColor={color} size={24} />
-              : <Feather name="clock" size={22} color={color} />,
+              ? <SymbolView name="list.bullet" tintColor={color} size={24} />
+              : <Feather name="list" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
