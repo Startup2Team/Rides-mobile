@@ -275,6 +275,9 @@ export interface DriverOnlineVehicleSession {
 export interface DriverProfile {
   verificationStatus?: Exclude<DriverVerificationStatus, 'not_started'>;
   vehicleType: VehicleType;
+  brand?: string;
+  model?: string;
+  manufactureYear?: number;
   plateNumber: string;
   licenseNumber: string;
   nationalId?: string;
@@ -301,6 +304,7 @@ export interface DriverProfile {
   policyAccepted: boolean;
   policyAcceptedAt?: string;
   earningsTotal: number;
+  driverApprovalAcknowledgedAt?: string;
   passengerSeats?: number;
   loadCapacityKg?: number;
   rejectionReason?: string;

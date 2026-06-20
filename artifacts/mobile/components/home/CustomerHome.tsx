@@ -46,6 +46,7 @@ import {
   SavedLocation,
   VEHICLE_LABELS,
 } from '@/types';
+import { loadStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
 import { BookingSheet } from './BookingSheet';
 import { HomeMap } from './HomeMap';
 import { LocationSearchOverlay } from './LocationSearchOverlay';
@@ -197,6 +198,7 @@ export default function CustomerHome() {
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
 
   // Booking sheet state
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
@@ -381,6 +383,19 @@ export default function CustomerHome() {
     useCallback(() => {
       void reloadSavedPlaces();
     }, [reloadSavedPlaces]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void loadStoredDriverOnboardingDraft().then(stored => {
+        if (!active) return;
+        setDriverApplicationDraftUpdatedAt(stored.data?.updatedAt ?? null);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
   );
 
   useFocusEffect(
@@ -769,6 +784,8 @@ export default function CustomerHome() {
           profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
           driverVerificationStatus={getDriverVerificationStatus(driverProfile)}
           canSwitchToDriverMode={canAccessDriverMode(driverProfile)}
+          driverApplicationDraftUpdatedAt={driverApplicationDraftUpdatedAt}
+          driverApprovalAcknowledgedAt={driverProfile?.driverApprovalAcknowledgedAt ?? null}
         />
       ) : null}
 

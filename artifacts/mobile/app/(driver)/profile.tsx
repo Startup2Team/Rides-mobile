@@ -77,7 +77,13 @@ export default function DriverProfileScreen() {
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', onPress: logout },
+      {
+        text: 'Log Out',
+        onPress: async () => {
+          await logout();
+          router.replace('/(auth)/welcome');
+        },
+      },
     ]);
   };
 

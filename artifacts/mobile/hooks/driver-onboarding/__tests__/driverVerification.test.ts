@@ -44,9 +44,31 @@ describe('driver verification lifecycle', () => {
     expect(canDriverGoOnline(profile({ verificationStatus: 'approved', isVerified: true }))).toBe(true);
   });
 
+  test('approved driver cta requires acknowledgment before switching to driver mode', () => {
+    expect(getDriverApplicationAction(profile({ verificationStatus: 'approved', isVerified: true }))).toEqual({
+      label: "🎉You're approved",
+      route: '/driver-submission-confirmation',
+    });
+    expect(getDriverApplicationAction(profile({ verificationStatus: 'approved', isVerified: true, driverApprovalAcknowledgedAt: '2026-06-20T00:00:00.000Z' }), null, '2026-06-20T00:00:00.000Z')).toEqual({
+      label: 'Slide to Driver',
+      route: '/(driver)',
+    });
+  });
+
   test('rejected driver can update and resubmit', () => {
     expect(getDriverApplicationAction(profile({ verificationStatus: 'rejected' }))).toEqual({
       label: 'Update application',
+      route: '/driver-onboarding',
+    });
+  });
+
+  test('draft driver stays on resume form for fresh drafts and re-prompts after 7 days', () => {
+    expect(getDriverApplicationAction(profile({ verificationStatus: 'draft' }), new Date().toISOString())).toEqual({
+      label: 'Resume form',
+      route: '/driver-onboarding',
+    });
+    expect(getDriverApplicationAction(profile({ verificationStatus: 'draft' }), new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString())).toEqual({
+      label: 'Join as Driver',
       route: '/driver-onboarding',
     });
   });

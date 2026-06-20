@@ -211,8 +211,15 @@ describe('domain persistence validation', () => {
 
   test('persists and removes a driver onboarding draft', async () => {
     const draft = {
-      form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalId: '1199080012345678' },
+      form: {
+        ...INITIAL_DRIVER_ONBOARDING_FORM,
+        brand: 'Toyota',
+        model: 'Corolla',
+        manufactureYear: '2020',
+        nationalId: '1199080012345678',
+      },
       docs: INITIAL_DRIVER_DOCUMENTS,
+      vehiclePhotos: { outside: null, inside: null },
       selfieUri: 'file:///selfie.jpg',
       acceptedTerms: false,
       step: 2,

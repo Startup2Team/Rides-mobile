@@ -1,6 +1,7 @@
 import type { DocFaces, DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { normalizeRwandaPhoneNumber, normalizeRwandaPlateNumber } from '@/utils/rwandaValidation';
+import { isAtLeastAge } from '@/utils/dateUtils';
 import type {
   DriverApplicationSubmission,
   DriverProfile,
@@ -13,6 +14,7 @@ import type {
   VehicleDocumentUpdateSubmission,
   VehicleType,
 } from '@/types';
+import { requiresVehiclePhotos } from '@/hooks/driver-onboarding/onboardingTypes';
 import {
   EMPTY_VERIFICATION_SUBMISSION_STORE,
   loadStoredVerificationSubmissions,
@@ -39,6 +41,10 @@ export interface SubmitDriverApplicationInput extends SubmissionCreationBase {
   driverProfile: DriverProfile;
   form: DriverOnboardingForm;
   docs: Record<keyof DriverVehicleDocumentSet, DocFaces>;
+  vehiclePhotos?: {
+    outside?: string | null;
+    inside?: string | null;
+  };
   selfieUri: string | null;
 }
 
@@ -144,6 +150,9 @@ function dedupeSubmission<T extends SubmissionWithKind>(collection: T[], next: T
 }
 
 function buildDriverApplicationSubmission(input: SubmitDriverApplicationInput) {
+  if (!isAtLeastAge(input.form.dob, 18)) {
+    throw new Error('Driver applicants must be at least 18 years old.');
+  }
   const submittedAt = input.submittedAt ?? new Date().toISOString();
   const clientSubmissionId = input.clientSubmissionId ?? createSubmissionId('driver_application', input.userId, submittedAt);
   const isResubmission = input.driverProfile.verificationStatus === 'rejected';
@@ -180,6 +189,9 @@ function buildDriverApplicationSubmission(input: SubmitDriverApplicationInput) {
       vehicleType: input.form.vehicleType,
       plateNumber: normalizeRwandaPlateNumber(input.form.plateNumber),
       licenseNumber: input.form.licenseNumber,
+      brand: input.form.brand.trim() || undefined,
+      model: input.form.model.trim() || undefined,
+      manufactureYear: input.form.manufactureYear ? Number.parseInt(input.form.manufactureYear, 10) : undefined,
       licenseExpiryDate: input.form.licenseExpiryDate,
       insuranceExpiryDate: input.form.insuranceExpiryDate,
       authorizationExpiryDate: input.form.authorizationExpiryDate,
@@ -187,7 +199,7 @@ function buildDriverApplicationSubmission(input: SubmitDriverApplicationInput) {
       loadCapacityKg: input.form.loadCapacityKg ? Number.parseInt(input.form.loadCapacityKg, 10) : undefined,
     },
     documents: buildInitialDriverDocuments(input.form, input.docs, submittedAt),
-    photos: undefined,
+    photos: requiresVehiclePhotos(input.form.vehicleType) ? input.vehiclePhotos : undefined,
   } satisfies DriverApplicationSubmission;
 }
 

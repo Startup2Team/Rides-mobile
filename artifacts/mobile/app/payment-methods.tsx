@@ -67,8 +67,8 @@ export default function PaymentMethodsScreen() {
   const phoneInputRef = useRef<TextInput>(null);
 
   const PROVIDER_PLACEHOLDER: Record<'mtn' | 'airtel', string> = {
-    mtn: '7x xxx xxxx',
-    airtel: '7x xxx xxxx',
+    mtn: '7xxxxxxxx',
+    airtel: '7xxxxxxxx',
   };
   const [methods, setMethods] = useState<PaymentMethod[]>(DEFAULT_METHODS);
   const [adding, setAdding] = useState<PaymentProvider | null>(null);

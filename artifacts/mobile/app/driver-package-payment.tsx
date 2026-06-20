@@ -254,7 +254,7 @@ export default function DriverPackagePaymentScreen() {
               </View>
               <AppInput
                 label="Mobile Money Phone Number"
-                placeholder="+250 7x xxx xxxx"
+                placeholder="+250 7xxxxxxxx"
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
                 keyboardType="phone-pad"

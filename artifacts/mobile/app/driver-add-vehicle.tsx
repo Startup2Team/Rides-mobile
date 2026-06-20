@@ -29,6 +29,7 @@ import { formatRwandaPlateInput, normalizeRwandaPlateNumber, isValidRwandaPlateN
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
 import { submitVehicleApplication } from '@/domain/verificationSubmissions';
+import { getRequiredVehiclePhotoKeys, getVehicleBrandModelPlaceholders } from '@/hooks/driver-onboarding/onboardingTypes';
 
 type VehiclePhotoKey = 'outside' | 'inside';
 
@@ -72,6 +73,7 @@ function createVehicleFormFromSource(source?: ReturnType<typeof getVehicleById>)
 }
 
 function getMissingVehicleSubmissionItems(
+  vehicleType: VehicleType,
   docs: Record<DocumentKey, DocFaces>,
   vehiclePhotos: Record<VehiclePhotoKey, string | null>,
 ) {
@@ -82,11 +84,22 @@ function getMissingVehicleSubmissionItems(
     if (REQUIRED_DOCUMENT_LABELS[key].back && !docs[key][1]) missing.push(REQUIRED_DOCUMENT_LABELS[key].back!);
   });
 
-  (Object.keys(REQUIRED_PHOTO_LABELS) as VehiclePhotoKey[]).forEach(key => {
+  getRequiredVehiclePhotoKeys(vehicleType).forEach(key => {
     if (!vehiclePhotos[key]) missing.push(REQUIRED_PHOTO_LABELS[key]);
   });
 
   return missing;
+}
+
+function buildVehiclePhotosPayload(
+  vehicleType: VehicleType,
+  vehiclePhotos: Record<VehiclePhotoKey, string | null>,
+) {
+  const requiredKeys = getRequiredVehiclePhotoKeys(vehicleType);
+  return requiredKeys.reduce<{ outside?: string | null; inside?: string | null }>((acc, key) => {
+    acc[key] = vehiclePhotos[key];
+    return acc;
+  }, {});
 }
 
 export default function DriverAddVehicleScreen() {
@@ -109,7 +122,11 @@ export default function DriverAddVehicleScreen() {
     inside: sourceVehicle?.photos?.inside ?? null,
   });
   const [saving, setSaving] = React.useState(false);
-  const missingSubmissionItems = React.useMemo(() => getMissingVehicleSubmissionItems(docs, vehiclePhotos), [docs, vehiclePhotos]);
+  const missingSubmissionItems = React.useMemo(
+    () => getMissingVehicleSubmissionItems(form.vehicleType, docs, vehiclePhotos),
+    [docs, form.vehicleType, vehiclePhotos],
+  );
+  const vehiclePlaceholders = getVehicleBrandModelPlaceholders(form.vehicleType);
 
   React.useEffect(() => {
     const nextForm = createVehicleFormFromSource(sourceVehicle ?? undefined);
@@ -183,7 +200,7 @@ export default function DriverAddVehicleScreen() {
       licenseExpiryDate: form.licenseExpiryDate,
       insuranceExpiryDate: form.insuranceExpiryDate,
       authorizationExpiryDate: form.authorizationExpiryDate,
-      photos: { outside: vehiclePhotos.outside, inside: vehiclePhotos.inside },
+      photos: buildVehiclePhotosPayload(form.vehicleType, vehiclePhotos),
       documents,
       submittedAt: new Date().toISOString(),
     };
@@ -201,7 +218,7 @@ export default function DriverAddVehicleScreen() {
       vehicle: sourceVehicleId ? { ...vehicle, id: sourceVehicleId } : vehicle,
       sourceVehicleStatus: sourceVehicle?.status,
       docs: documents,
-      photos: { outside: vehiclePhotos.outside, inside: vehiclePhotos.inside },
+      photos: buildVehiclePhotosPayload(form.vehicleType, vehiclePhotos),
       submittedAt: applicationInput.submittedAt,
     });
     setSaving(false);
@@ -251,8 +268,8 @@ export default function DriverAddVehicleScreen() {
 
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle details</Text>
-          <AppInput label="Brand" value={brand} onChangeText={setBrand} placeholder="Toyota" />
-          <AppInput label="Model" value={model} onChangeText={setModel} placeholder="Corolla" />
+          <AppInput label="Brand" value={brand} onChangeText={setBrand} placeholder={vehiclePlaceholders.brand} />
+          <AppInput label="Model" value={model} onChangeText={setModel} placeholder={vehiclePlaceholders.model} />
           <AppInput label="Manufacture Year" value={manufactureYear} onChangeText={text => setManufactureYear(text.replace(/\D/g, '').slice(0, 4))} keyboardType="numeric" placeholder="2020" />
           <AppInput label="Plate Number" value={form.plateNumber} onChangeText={value => update('plateNumber', formatRwandaPlateInput(value))} placeholder="RAD 000 A" />
           <AppInput label="Licence Number" value={form.licenseNumber} onChangeText={value => update('licenseNumber', value.replace(/\D/g, '').slice(0, 16))} keyboardType="numeric" placeholder="16 digits" maxLength={16} />
@@ -275,21 +292,25 @@ export default function DriverAddVehicleScreen() {
           />
         </View>
 
-        <View style={styles.sectionLast}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</Text>
-          <PhotoRow
-            colors={colors}
-            label="Outside photo"
-            uri={vehiclePhotos.outside}
-            onCamera={() => void pickVehiclePhoto('outside')}
-          />
-          <PhotoRow
-            colors={colors}
-            label="Inside photo"
-            uri={vehiclePhotos.inside}
-            onCamera={() => void pickVehiclePhoto('inside')}
-          />
-        </View>
+        {getRequiredVehiclePhotoKeys(form.vehicleType).length > 0 ? (
+          <View style={styles.sectionLast}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</Text>
+            <PhotoRow
+              colors={colors}
+              label="Outside photo"
+              uri={vehiclePhotos.outside}
+              onCamera={() => void pickVehiclePhoto('outside')}
+            />
+            {getRequiredVehiclePhotoKeys(form.vehicleType).includes('inside') ? (
+              <PhotoRow
+                colors={colors}
+                label="Inside photo"
+                uri={vehiclePhotos.inside}
+                onCamera={() => void pickVehiclePhoto('inside')}
+              />
+            ) : null}
+          </View>
+        ) : null}
 
         <AppButton title="Submit Vehicle" onPress={() => void submit()} fullWidth size="lg" loading={saving} disabled={missingSubmissionItems.length > 0} />
       </ScrollView>
