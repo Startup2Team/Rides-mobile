@@ -91,7 +91,7 @@ export default function ReportRideIssueScreen() {
                   style={styles.row}
                 >
                   <View style={styles.icon}>
-                    <Feather name={report.icon} size={20} color={colors.foreground} />
+                    <Feather name={report.icon} size={20} color={colors.primary} />
                   </View>
                   <View style={styles.copy}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>

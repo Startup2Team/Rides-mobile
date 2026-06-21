@@ -18,6 +18,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { useColors } from '@/hooks/useColors';
 
 type ToastVariant = 'success' | 'error' | 'info';
 
@@ -38,6 +40,7 @@ const TOAST_DURATION_MS = 2000;
 const TOAST_BOTTOM_OFFSET = Platform.OS === 'web' ? 96 : 88;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -159,6 +162,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             ) : null}
             <View style={scrimStyle} />
             <View style={styles.content}>
+              <View style={styles.iconWrap}>
+                {toast.variant === 'success' ? (
+                  <Feather name="check-circle" size={14} color={colors.primary} />
+                ) : toast.variant === 'error' ? (
+                  <Feather name="x-circle" size={14} color={colors.destructive} />
+                ) : (
+                  <Feather name="info" size={14} color={colors.primary} />
+                )}
+              </View>
               <Text style={styles.message} numberOfLines={2}>
                 {toast.message}
               </Text>
@@ -227,10 +239,16 @@ const styles = StyleSheet.create({
     backgroundColor: Platform.OS === 'ios' ? 'rgba(58,58,60,0.72)' : 'transparent',
   },
   content: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
+    gap: 8,
+  },
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   message: {
     flexShrink: 1,

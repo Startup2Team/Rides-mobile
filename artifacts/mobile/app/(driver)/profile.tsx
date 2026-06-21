@@ -2,8 +2,9 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback } from 'react';
 import { Alert, Image, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -148,7 +149,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open my vehicles"
           >
-            <Feather name="truck" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons name="truck" size={20} color={colors.foreground} />
             <View style={styles.vehicleSummaryCopy}>
               <Text style={[styles.vehicleSummaryTitle, { color: colors.foreground }]}>
                 {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} linked
@@ -170,7 +171,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={activePackage ? 'Manage active ride package' : 'Explore ride packages'}
           >
-            <Feather name="layers" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons name="layers-triple" size={20} color={colors.foreground} />
             <View style={styles.packageCopy}>
               <View style={styles.packageTitleRow}>
                 <Text style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -196,8 +197,8 @@ export default function DriverProfileScreen() {
             <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
               <InfoRow colors={colors} icon="star" label="Rating Summary" value={formatDriverRatingSummary(ratingSummary)} />
               <InfoRow colors={colors} icon="shield" label="Verification Status" value={driverProfile.verificationStatus === 'approved' && driverProfile.isVerified ? 'Verified' : driverProfile.verificationStatus === 'pending_review' ? 'Pending Review' : driverProfile.verificationStatus === 'rejected' ? 'Rejected' : 'Draft'} />
-              <InfoRow colors={colors} icon="map-pin" label="Location" value={driverProfile.city ?? driverProfile.province} />
-              <InfoRow colors={colors} icon="smartphone" label="Mobile Money Details" value={driverProfile.momoCode} last />
+              <InfoRow colors={colors} icon="map-marker" label="Location" value={driverProfile.city ?? driverProfile.province} />
+              <InfoRow colors={colors} icon="cellphone" label="Mobile Money Details" value={driverProfile.momoCode} last />
             </View>
           </View>
         ) : null}
@@ -205,12 +206,12 @@ export default function DriverProfileScreen() {
         <View style={styles.section}>
           <SectionTitle title="Account" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-            <MenuItem colors={colors} icon="edit-2" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
-            <MenuItem colors={colors} icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
+            <MenuItem colors={colors} icon="account-edit" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
             <MenuItem colors={colors} icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
-            <MenuItem colors={colors} icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
-            <MenuItem colors={colors} icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />
-            <MenuItem colors={colors} icon="settings" label="Settings" onPress={() => router.push('/settings')} last />
+            <MenuItem colors={colors} iconFamily="feather" icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />
+            <MenuItem colors={colors} icon="cog" label="Settings" onPress={() => router.push('/settings')} last />
           </View>
         </View>
 
@@ -221,7 +222,7 @@ export default function DriverProfileScreen() {
             onPress={handleSwitchToCustomer}
             activeOpacity={0.72}
           >
-            <Feather name="repeat" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.foreground} />
             <View style={styles.modeCopy}>
               <Text style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</Text>
               <Text style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</Text>
@@ -233,9 +234,9 @@ export default function DriverProfileScreen() {
         <View style={styles.section}>
           <SectionTitle title="Community" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-            <MenuItem colors={colors} icon="star" label={`Rate ${APP_NAME}`} detail="Enjoying the app? Take a moment to rate it and share your feedback." onPress={() => { void rateRides(); }} />
-            <MenuItem colors={colors} icon="message-square" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
-            <MenuItem colors={colors} icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => router.push(getShareRouteForMode(user?.mode))} last />
+            <MenuItem colors={colors} iconFamily="feather" icon="star" label={`Rate ${APP_NAME}`} detail="Enjoying the app? Take a moment to rate it and share your feedback." onPress={() => { void rateRides(); }} />
+            <MenuItem colors={colors} iconFamily="feather" icon="message-square" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
+            <MenuItem colors={colors} iconFamily="symbol" icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => router.push(getShareRouteForMode(user?.mode))} last />
           </View>
         </View>
 
@@ -284,11 +285,11 @@ function QuickStat({ colors, label, onPress, value }: {
 }
 
 function InfoRow({ colors, icon, label, last = false, value }: {
-  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; value?: string;
+  colors: ReturnType<typeof useColors>; icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; last?: boolean; value?: string;
 }) {
   return <>
     <View style={styles.infoRow}>
-      <Feather name={icon} size={17} color={colors.foreground} />
+            <MaterialCommunityIcons name={icon} size={20} color={colors.primary} />
       <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</Text>
       <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{value || 'Not set'}</Text>
     </View>
@@ -296,12 +297,18 @@ function InfoRow({ colors, icon, label, last = false, value }: {
   </>;
 }
 
-function MenuItem({ colors, detail, icon, label, last = false, onPress }: {
-  colors: ReturnType<typeof useColors>; detail?: string; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; onPress: () => void;
+function MenuItem({ colors, detail, iconFamily = 'mci', icon, label, last = false, onPress }: {
+  colors: ReturnType<typeof useColors>; detail?: string; iconFamily?: 'feather' | 'mci' | 'symbol'; icon: keyof typeof Feather.glyphMap | keyof typeof MaterialCommunityIcons.glyphMap; label: string; last?: boolean; onPress: () => void;
 }) {
   return <>
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
-      <Feather name={icon} size={19} color={colors.foreground} />
+      {iconFamily === 'symbol' ? (
+        <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={20} />
+      ) : iconFamily === 'feather' ? (
+        <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+      ) : (
+        <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+      )}
       <View style={styles.menuCopy}>
         <Text style={[styles.menuText, { color: colors.foreground }]}>{label}</Text>
         {detail ? <Text style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</Text> : null}

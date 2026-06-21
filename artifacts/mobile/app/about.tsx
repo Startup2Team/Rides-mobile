@@ -88,7 +88,7 @@ export default function AboutScreen() {
                 activeOpacity={0.75}
               >
                 <View style={styles.linkIcon}>
-                  <Feather name={link.icon} size={16} color={colors.foreground} />
+                  <Feather name={link.icon} size={20} color={colors.primary} />
                 </View>
                 <Text style={[styles.linkLabel, { color: colors.foreground, flex: 1 }]}>{link.label}</Text>
                 <Feather name="external-link" size={14} color={colors.mutedForeground} />

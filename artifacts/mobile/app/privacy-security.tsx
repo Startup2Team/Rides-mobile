@@ -84,14 +84,14 @@ export default function PrivacySecurityScreen() {
           <View key={section.title} style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIcon}>
-                <Feather name={section.icon} size={16} color={colors.foreground} />
+                <Feather name={section.icon} size={20} color={colors.primary} />
               </View>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{section.title}</Text>
             </View>
             <View style={[styles.card, { backgroundColor: colors.card }]}>
               {section.items.map((item, i) => (
                 <View key={i} style={styles.itemRow}>
-                  <View style={[styles.bullet, { backgroundColor: colors.primary }]} />
+                  <View style={[styles.bullet, { backgroundColor: colors.foreground }]} />
                   <Text style={[styles.itemText, { color: colors.mutedForeground }]}>{item}</Text>
                 </View>
               ))}
@@ -105,7 +105,7 @@ export default function PrivacySecurityScreen() {
           onPress={() => Linking.openURL(PRIVACY_URL)}
           activeOpacity={0.75}
         >
-          <Feather name="external-link" size={16} color={colors.primary} />
+          <Feather name="external-link" size={20} color={colors.primary} />
           <Text style={[styles.linkText, { color: colors.primary }]}>Read full Privacy Policy</Text>
         </TouchableOpacity>
 

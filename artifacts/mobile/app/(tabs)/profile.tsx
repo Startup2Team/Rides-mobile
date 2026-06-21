@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
@@ -25,6 +26,7 @@ import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverV
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 
 function MenuItem({
+  iconFamily = 'feather',
   icon,
   label,
   onPress,
@@ -33,7 +35,8 @@ function MenuItem({
   showSeparator = true,
   separatorColor,
 }: {
-  icon: keyof typeof Feather.glyphMap;
+  iconFamily?: 'feather' | 'mci' | 'symbol';
+  icon: keyof typeof Feather.glyphMap | keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
   onPress: () => void;
   destructive?: boolean;
@@ -52,7 +55,17 @@ function MenuItem({
         accessibilityLabel={label}
       >
         <View style={styles.menuIcon}>
-          <Feather name={icon} size={20} color={destructive ? colors.destructive : colors.foreground} />
+          {iconFamily === 'symbol' ? (
+            <SymbolView
+              name="square.and.arrow.up"
+              tintColor={destructive ? colors.destructive : colors.primary}
+              size={20}
+            />
+          ) : iconFamily === 'feather' ? (
+            <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={destructive ? colors.destructive : colors.primary} />
+          ) : (
+            <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={destructive ? colors.destructive : colors.primary} />
+          )}
         </View>
         <View style={styles.menuCopy}>
           <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</Text>
@@ -164,7 +177,7 @@ export default function ProfileScreen() {
           activeOpacity={0.6}
         >
           <View style={styles.driverBannerIcon}>
-            <MaterialCommunityIcons name="steering" size={30} color={colors.primary} />
+            <MaterialCommunityIcons name="steering" size={25} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.foreground }]}>{driverAction.label}</Text>
@@ -191,39 +204,38 @@ export default function ProfileScreen() {
       <View style={styles.sectionGroup}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Account</Text>
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
-        <MenuItem
-          icon="user"
-          label="Edit Profile"
-          onPress={() => router.push('/edit-profile')}
-          separatorColor={separatorColor}
-        />
-        <MenuItem
-          icon="credit-card"
-          label="Payment Methods"
-          onPress={() => router.push('/payment-methods')}
-          separatorColor={separatorColor}
-        />
-        <MenuItem
+          <MenuItem
+            iconFamily="feather"
+            icon="user"
+            label="Edit Profile"
+            onPress={() => router.push('/edit-profile')}
+            separatorColor={separatorColor}
+          />
+          <MenuItem
+          iconFamily="feather"
           icon="shield"
           label="Privacy & Security"
           onPress={() => router.push('/privacy-security')}
           separatorColor={separatorColor}
         />
         <MenuItem
+          iconFamily="feather"
           icon="help-circle"
           label="Help & Support"
           onPress={() => router.push('/help-support')}
           separatorColor={separatorColor}
         />
         <MenuItem
-          icon="alert-circle"
+          iconFamily="feather"
+          icon="alert-triangle"
           label="Report a Ride Issue"
           detail="Driver behavior, lost items, payment, or safety concerns"
           onPress={() => router.push('/report-ride-issue')}
           separatorColor={separatorColor}
         />
         <MenuItem
-          icon="info"
+          iconFamily="mci"
+          icon="information-outline"
           label={`About ${APP_NAME}`}
           onPress={() => router.push('/about')}
           separatorColor={separatorColor}
@@ -242,6 +254,7 @@ export default function ProfileScreen() {
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Community</Text>
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
           <MenuItem
+            iconFamily="feather"
             icon="star"
             label={`Rate ${APP_NAME}`}
             detail="Enjoying the app? Take a moment to rate it and share your feedback."
@@ -249,13 +262,15 @@ export default function ProfileScreen() {
             separatorColor={separatorColor}
           />
           <MenuItem
-            icon="message-square"
+            iconFamily="mci"
+            icon="message-text"
             label="Leave Feedback"
             detail="We'd love to hear from you."
             onPress={() => { void leaveRidesFeedback(); }}
             separatorColor={separatorColor}
           />
           <MenuItem
+            iconFamily="symbol"
             icon="share-2"
             label="Share the App"
             detail={`Invite friends and family to experience ${APP_NAME}.`}
@@ -270,6 +285,7 @@ export default function ProfileScreen() {
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Actions</Text>
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
         <MenuItem
+          iconFamily="feather"
           icon="log-out"
           label="Log Out"
           onPress={handleLogout}

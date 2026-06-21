@@ -39,6 +39,8 @@ export const styles = StyleSheet.create({
     paddingTop: 22,
     paddingHorizontal: 22,
     gap: 10,
+    zIndex: 30,
+    overflow: 'visible',
   },
   greeting: { fontSize: 20, fontFamily: 'Inter_700Bold', textAlign: 'left', marginLeft: GREETING_LEFT_INSET },
   selectRide: { fontSize: 14, fontFamily: 'Inter_500Medium', textAlign: 'left', marginTop: -4, marginLeft: GREETING_LEFT_INSET },
