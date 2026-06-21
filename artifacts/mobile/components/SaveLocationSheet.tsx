@@ -22,6 +22,7 @@ import { Feather } from '@expo/vector-icons';
 import { CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { TAB_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import {
   SAVE_LABEL_WIDTHS,
@@ -42,9 +43,10 @@ interface SaveLocationSheetProps {
   location: RideLocation | null;
   onClose: () => void;
   onSaved?: () => void;
+  bottomOffset?: number;
 }
 
-export function SaveLocationSheet({ location, onClose, onSaved }: SaveLocationSheetProps) {
+export function SaveLocationSheet({ location, onClose, onSaved, bottomOffset = 0 }: SaveLocationSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { saveLocation } = useSavedLocations();
@@ -259,7 +261,8 @@ export function SaveLocationSheet({ location, onClose, onSaved }: SaveLocationSh
           styles.sheetRaised,
           sheetSurface,
           {
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 88 : 72),
+            bottom: bottomOffset,
+            paddingBottom: insets.bottom + TAB_SCREEN_BOTTOM_PADDING,
             transform: [
               {
                 translateY: Animated.add(

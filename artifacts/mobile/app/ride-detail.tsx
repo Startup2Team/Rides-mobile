@@ -14,6 +14,7 @@ import { SaveLocationSheet } from '@/components/SaveLocationSheet';
 import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { RideLocation, VEHICLE_LABELS } from '@/types';
@@ -145,7 +146,7 @@ export default function RideDetailScreen() {
           styles.scroll,
           {
             paddingTop: headerMetrics.contentTop,
-            paddingBottom: insets.bottom + 40,
+            paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           },
         ]}
       >

@@ -1,9 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import React, { createRef } from 'react';
+import React from 'react';
 import {
-  Animated,
-  PanResponder,
   Pressable,
   Text,
   View,
@@ -12,7 +10,6 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { BookingSheet } from '@/components/home/BookingSheet';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { RideProvider, useRide } from '@/context/ride/RideProvider';
-import type { CloseButtonHandle } from '@/components/BackButton';
 import type { RideLocation, User } from '@/types';
 
 let mockRideDriverProfile: any = null;
@@ -51,6 +48,7 @@ jest.mock('react-native', () => {
     Platform: { OS: 'android' },
     Pressable: host('Pressable'),
     StyleSheet: { create: (styles: object) => styles, flatten: (style: object) => style },
+    ScrollView: host('ScrollView'),
     Text: host('Text'),
     TouchableOpacity: host('TouchableOpacity'),
     View: host('View'),
@@ -137,12 +135,9 @@ function CustomerBookingWorkflow() {
       <BookingSheet
         visible
         height={500}
+        bottomOffset={0}
         bottomPadding={0}
         colors={colors}
-        animation={new Animated.Value(0)}
-        panResponder={PanResponder.create({})}
-        closeButtonRef={createRef<CloseButtonHandle>()}
-        onClose={jest.fn()}
         pickup={pickup}
         destination={destination}
         destinationText={destination.address ?? ''}

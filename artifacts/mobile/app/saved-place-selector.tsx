@@ -18,6 +18,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
@@ -193,7 +194,7 @@ export default function SavedPlaceSelectorScreen() {
           indicatorTop={8}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
         >
           {hasQuery ? (
             <TouchableOpacity

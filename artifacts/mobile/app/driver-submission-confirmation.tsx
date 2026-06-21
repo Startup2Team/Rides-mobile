@@ -13,6 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
 import { DriverApplicationRejectionBanner } from '@/components/driver-onboarding/DriverApplicationRejectionBanner';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { getLatestDriverApplicationRejectionSummary, type DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
@@ -112,7 +113,7 @@ export default function DriverSubmissionConfirmation() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: pageBackground, paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
+    <View style={[styles.root, { backgroundColor: pageBackground, paddingTop: insets.top, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}>
 
       {/* ── Hero ── */}
       <View style={styles.hero}>

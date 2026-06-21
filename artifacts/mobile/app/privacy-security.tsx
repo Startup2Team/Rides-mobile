@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, PRIVACY_EMAIL, PRIVACY_URL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 
 const SECTIONS = [
@@ -67,7 +68,7 @@ export default function PrivacySecurityScreen() {
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}
       >
         {/* Shield banner */}
         <View style={[styles.banner, { backgroundColor: colors.primaryHex + '12' }]}>

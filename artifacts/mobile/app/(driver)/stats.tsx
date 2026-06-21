@@ -17,7 +17,7 @@ import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
-import { TAB_BAR_BOTTOM_GAP, TAB_BAR_CONTENT_HEIGHT } from '@/constants/tabBar';
+import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -76,7 +76,7 @@ export default function DriverStats() {
         style={styles.container}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + TAB_BAR_CONTENT_HEIGHT + TAB_BAR_BOTTOM_GAP,
+          paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
           paddingHorizontal: 16,
           gap: 24,
         }}

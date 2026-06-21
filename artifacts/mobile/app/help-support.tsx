@@ -12,6 +12,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 
 const FAQS = [
@@ -78,7 +79,7 @@ export default function HelpSupportScreen() {
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}
       >
         {/* Contact */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CONTACT US</Text>

@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { DocumentUploadSection } from '@/components/driver-onboarding/DocumentUploadSection';
 import { useAuth } from '@/context/AuthContext';
 import { appendDriverVehicle, buildDriverVehicleFromApplication, getVehicleById, resubmitDriverVehicleApplication } from '@/domain/driverVehicles';
@@ -239,7 +240,7 @@ export default function DriverAddVehicleScreen() {
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 32,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           gap: 16,
         }}

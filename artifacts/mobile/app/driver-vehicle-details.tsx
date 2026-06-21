@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
 import { DatePickerField } from '@/components/DatePickerField';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import {
   ImageGalleryPreview,
   type GalleryImage,
@@ -253,7 +254,7 @@ export default function DriverVehicleDetailsScreen() {
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 32,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           gap: 16,
         }}

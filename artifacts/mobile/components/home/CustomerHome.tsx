@@ -47,19 +47,20 @@ import {
   VEHICLE_LABELS,
 } from '@/types';
 import { loadStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
+import { BottomShell } from './BottomShell';
 import { BookingSheet } from './BookingSheet';
 import { HomeMap } from './HomeMap';
 import { LocationSearchOverlay } from './LocationSearchOverlay';
 import { MapPickerOverlay } from './MapPickerOverlay';
 import { SaveLocationSheet } from './SaveLocationSheet';
 import { styles } from './homeStyles';
+import { getBookingLayoutKey, getBookingSheetInstanceKey } from './bookingSheetLayout';
 import {
   COMPACT_PANEL_HEIGHT,
   DRIVER_OFFSETS,
   EXPANDED_PANEL_HEIGHT,
   HOME_FLOATING_PANEL_FALLBACK_HEIGHT,
   HOME_LOCATION_DELTA,
-  HOME_TAB_BAR_HEIGHT,
   MAP_TYPES,
   type AppMapType,
   type MapPickerTarget,
@@ -197,6 +198,9 @@ export default function CustomerHome() {
   });
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
+  const [bookingPanelHeight, setBookingPanelHeight] = useState(COMPACT_PANEL_HEIGHT);
+  const [bookingContentRevision, setBookingContentRevision] = useState(0);
+  const [bookingShellState, setBookingShellState] = useState<'home' | 'booking' | 'closingBooking'>('home');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
 
@@ -229,13 +233,10 @@ export default function CustomerHome() {
       }),
     [formSheetDragAnim, formSheetMeasuredHeight],
   );
-  const hasRideActions = destination !== null || destText.trim().length > 0;
-  const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
-  const bookingPanelMapInset = activePanelHeight;
-  const homePanelNavPadding = Platform.OS === 'web'
-    ? HOME_TAB_BAR_HEIGHT + 12
-    : HOME_TAB_BAR_HEIGHT + insets.bottom;
-  const homePanelBottomInset = 0;
+  const homePanelBottomOffset = 0;
+  const homePanelNavPadding = 12;
+  const bookingPanelMapInset = bookingPanelHeight + homePanelBottomOffset;
+  const homePanelBottomInset = homePanelBottomOffset;
   const homePanelMapInset = homePanelHeight + homePanelBottomInset;
   const recenterBottomOffset = showBooking ? bookingPanelMapInset + 16 : homePanelMapInset + 16;
   const hasPreciseRouteLocations =
@@ -319,11 +320,14 @@ export default function CustomerHome() {
 
   const applyCancelledSearchDraft = useCallback(
     (draft: BookingFormDraft) => {
+      setBookingContentRevision(value => value + 1);
       setSelectedVehicle(draft.vehicleType);
       setPickup({ ...draft.pickup });
       setDestination({ ...draft.destination });
       setDestText(draft.destText);
       setSuggestions([]);
+      setBookingPanelHeight(COMPACT_PANEL_HEIGHT);
+      setBookingShellState('booking');
       setShowBooking(true);
       sheetAnim.setValue(0);
       setRouteRecenterRequest(value => value + 1);
@@ -338,11 +342,14 @@ export default function CustomerHome() {
     if (cancelledSearchDraft) {
       applyCancelledSearchDraft(cancelledSearchDraft);
     } else if (currentRide?.status === 'cancelled') {
+      setBookingContentRevision(value => value + 1);
       setSelectedVehicle(currentRide.vehicleType);
       setPickup({ ...currentRide.pickup });
       setDestination({ ...currentRide.destination });
       setDestText(currentRide.destination.address ?? '');
       setSuggestions([]);
+      setBookingPanelHeight(COMPACT_PANEL_HEIGHT);
+      setBookingShellState('booking');
       setShowBooking(true);
       sheetAnim.setValue(0);
       setRouteRecenterRequest(value => value + 1);
@@ -455,6 +462,10 @@ export default function CustomerHome() {
     && (!showBooking || !shouldShowBookingRoute);
 
   const openBooking = () => {
+    setBookingContentRevision(value => value + 1);
+    setBookingPanelHeight(COMPACT_PANEL_HEIGHT);
+    sheetAnim.setValue(0);
+    setBookingShellState('booking');
     setShowBooking(true);
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
   };
@@ -462,12 +473,16 @@ export default function CustomerHome() {
   const doCloseBooking = useCallback(() => {
     clearCancelledSearchDraft();
     bookingCloseRef.current?.spinShut();
-    Animated.timing(sheetAnim, { toValue: activePanelHeight, duration: 250, useNativeDriver: true }).start(() => {
+    setBookingShellState('closingBooking');
+    Animated.timing(sheetAnim, { toValue: bookingPanelHeight, duration: 250, useNativeDriver: true }).start(() => {
       setShowBooking(false);
       setDestText('');
       setDestination(null);
       setSuggestions([]);
       clearRoutePreview();
+      setBookingPanelHeight(COMPACT_PANEL_HEIGHT);
+      sheetAnim.setValue(0);
+      setBookingShellState('home');
       setPickup(gpsLocation
         ? {
             ...gpsLocation,
@@ -478,12 +493,12 @@ export default function CustomerHome() {
       if (gpsLocation) requestAnimationFrame(() => centerMapOnUser(400, homePanelMapInset));
     });
   }, [
-    activePanelHeight,
     clearCancelledSearchDraft,
     clearRoutePreview,
     currentLocationAddress,
     gpsLocation,
     homePanelMapInset,
+    bookingPanelHeight,
     sheetAnim,
   ]);
 
@@ -511,7 +526,24 @@ export default function CustomerHome() {
   };
 
   closeBookingRef.current = closeBooking;
-  activePanelHeightRef.current = activePanelHeight;
+  activePanelHeightRef.current = bookingPanelHeight;
+  const bookingLayoutKey = getBookingLayoutKey({
+    showBooking,
+    destination: destination !== null,
+    destinationText: destText,
+    routeVisible: Boolean(route && routeFitCoords.length > 1),
+  });
+  const bookingSheetKey = getBookingSheetInstanceKey(bookingContentRevision, bookingLayoutKey);
+
+  useEffect(() => {
+    if (!showBooking) {
+      setBookingPanelHeight(COMPACT_PANEL_HEIGHT);
+      return;
+    }
+    if (destination === null && destText.trim().length === 0 && !(route && routeFitCoords.length > 1)) {
+      setBookingPanelHeight(COMPACT_PANEL_HEIGHT);
+    }
+  }, [destText, destination, route, routeFitCoords.length, showBooking]);
 
   const bookingSheetPanResponder = useMemo(
     () =>
@@ -529,7 +561,7 @@ export default function CustomerHome() {
         },
         onPanResponderMove: (_, gestureState) => {
           const max = activePanelHeightRef.current;
-          const next = Math.max(0, Math.min(max, sheetDragStart.current + gestureState.dy));
+          const next = Math.max(0, Math.min(max, sheetDragStart.current + Math.max(0, gestureState.dy)));
           sheetAnim.setValue(next);
           if (max > 0) {
             bookingCloseRef.current?.setSpinProgress(1 - next / max);
@@ -537,7 +569,7 @@ export default function CustomerHome() {
         },
         onPanResponderRelease: (_, gestureState) => {
           const max = activePanelHeightRef.current;
-          const current = Math.max(0, Math.min(max, sheetDragStart.current + gestureState.dy));
+          const current = Math.max(0, Math.min(max, sheetDragStart.current + Math.max(0, gestureState.dy)));
           const shouldClose = current > max * 0.28 || gestureState.vy > 0.65;
           const hadVerticalDrag = Math.abs(gestureState.dy) > 8;
           if (shouldClose) {
@@ -814,120 +846,125 @@ export default function CustomerHome() {
         <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
       </TouchableOpacity>
 
-      {/* Home bottom panel */}
-      {!showBooking && (
-        <View
-          onLayout={event => {
-            const height = event.nativeEvent.layout.height;
-            if (height > 0) setHomePanelHeight(height);
-          }}
-          style={[
-            styles.bottomPanel,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              paddingBottom: homePanelNavPadding,
-            },
-          ]}
-        >
-          <Text style={[styles.greeting, { color: colors.foreground }]}>
-            Hi {user?.name?.split(' ')[0]} 👋
-          </Text>
-          <Text style={[styles.selectRide, { color: colors.mutedForeground }]}>
-            Select your ride
-          </Text>
-          {locationStatus === 'unavailable' ? (
-            <View style={[styles.locationUnavailable, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.locationUnavailableText, { color: colors.foreground }]}>
-                Unable to determine your location.
-              </Text>
-              <View style={styles.locationUnavailableActions}>
-                <TouchableOpacity onPress={() => void refreshHereLocation()} activeOpacity={0.75}>
-                  <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
-                    Retry location
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    openBooking();
-                    requestLocationSearch('pickup');
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
-                    Select pickup manually
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : null}
-          <View style={styles.vehicleRow}>
-            {CUSTOMER_VEHICLE_TYPES.map(v => (
-              <TouchableOpacity
-                key={v}
-                style={[styles.vehicleChip, { backgroundColor: selectedVehicle === v ? colors.primary : colors.muted, borderWidth: selectedVehicle === v ? 0 : 1, borderColor: colors.border }]}
-                onPress={() => setSelectedVehicle(v)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={VEHICLE_LABELS[v]}
-                accessibilityState={{ selected: selectedVehicle === v }}
-              >
-                <VehicleTypeIcon type={v} selected={selectedVehicle === v} />
-                <Text style={[styles.vehicleLabel, { color: selectedVehicle === v ? colors.primaryForeground : colors.foreground }]}>
-                  {VEHICLE_LABELS[v]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity style={[styles.continueBtn, { backgroundColor: colors.primary }]} onPress={openBooking} activeOpacity={0.85}>
-            <Text style={[styles.continueBtnText, { color: colors.primaryForeground }]}>
-              Continue with {VEHICLE_LABELS[selectedVehicle]}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <BookingSheet
-        visible={showBooking}
-        height={activePanelHeight}
-        bottomPadding={homePanelNavPadding}
-        colors={colors}
-        animation={sheetAnim}
+      <BottomShell
+        state={bookingShellState}
+        homeHeight={homePanelHeight}
+        bookingHeight={bookingPanelHeight}
+        translateY={sheetAnim}
         panResponder={bookingSheetPanResponder}
-        closeButtonRef={bookingCloseRef}
-        onClose={closeBooking}
-        pickup={pickup}
-        destination={destination}
-        destinationText={destText}
-        focusedField={focusedField}
-        userLocation={{ ...userLocation, address: '', locationType: 'generic' }}
-        gpsLocation={gpsLocation}
-        onOpenLocationSearch={openLocationSearch}
-        onUseMap={(target, location) => {
-          setPinCoords({ latitude: location.latitude, longitude: location.longitude });
-          setMapPicker(target);
-        }}
-        onUseGpsPickup={() => gpsLocation && setPickup({
-          ...gpsLocation,
-          address: 'Current Location',
-          locationType: 'precise',
-        })}
-        onUseGpsDestination={() => {
-          if (!gpsLocation) return;
-          setDestText('Current Location');
-          setDestination({
-            ...gpsLocation,
-            address: 'Current Location',
-            locationType: 'precise',
-          });
-        }}
-        route={route}
-        routeLoading={routeLoading}
-        distance={dist}
-        onBook={handleBook}
-        booking={bookLoading}
+        colors={colors}
+        homeContent={
+          <View
+            onLayout={event => {
+              const height = event.nativeEvent.layout.height;
+              if (height > 0) setHomePanelHeight(height);
+            }}
+            style={[
+              styles.bottomPanel,
+              {
+                bottom: homePanelBottomOffset,
+                paddingBottom: homePanelNavPadding,
+              },
+            ]}
+          >
+            <Text style={[styles.greeting, { color: colors.foreground }]}>
+              Hi, {user?.name?.split(' ')[0]} {'\u{1F44B}'}
+            </Text>
+            <Text style={[styles.selectRide, { color: colors.mutedForeground }]}>
+              Select your ride
+            </Text>
+            {locationStatus === 'unavailable' ? (
+              <View style={[styles.locationUnavailable, { backgroundColor: colors.muted }]}>
+                <Text style={[styles.locationUnavailableText, { color: colors.foreground }]}>
+                  Unable to determine your location.
+                </Text>
+                <View style={styles.locationUnavailableActions}>
+                  <TouchableOpacity onPress={() => void refreshHereLocation()} activeOpacity={0.75}>
+                    <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
+                      Retry location
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      openBooking();
+                      requestLocationSearch('pickup');
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
+                      Select pickup manually
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+            <View style={styles.vehicleRow}>
+              {CUSTOMER_VEHICLE_TYPES.map(v => (
+                <TouchableOpacity
+                  key={v}
+                  style={[styles.vehicleChip, { backgroundColor: selectedVehicle === v ? colors.primary : colors.muted, borderWidth: selectedVehicle === v ? 0 : 1, borderColor: colors.border }]}
+                  onPress={() => setSelectedVehicle(v)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={VEHICLE_LABELS[v]}
+                  accessibilityState={{ selected: selectedVehicle === v }}
+                >
+                  <VehicleTypeIcon type={v} selected={selectedVehicle === v} />
+                  <Text style={[styles.vehicleLabel, { color: selectedVehicle === v ? colors.primaryForeground : colors.foreground }]}>
+                    {VEHICLE_LABELS[v]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={[styles.continueBtn, { backgroundColor: colors.primary }]} onPress={openBooking} activeOpacity={0.85}>
+              <Text style={[styles.continueBtnText, { color: colors.primaryForeground }]}>
+                Continue with {VEHICLE_LABELS[selectedVehicle]}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+        bookingContent={
+          <BookingSheet
+            key={bookingSheetKey}
+            visible
+            onHeightChange={setBookingPanelHeight}
+            bottomOffset={homePanelBottomOffset}
+            bottomPadding={homePanelNavPadding}
+            colors={colors}
+            pickup={pickup}
+            destination={destination}
+            destinationText={destText}
+            focusedField={focusedField}
+            userLocation={{ ...userLocation, address: '', locationType: 'generic' }}
+            gpsLocation={gpsLocation}
+            onOpenLocationSearch={openLocationSearch}
+            onUseMap={(target, location) => {
+              setPinCoords({ latitude: location.latitude, longitude: location.longitude });
+              setMapPicker(target);
+            }}
+            onUseGpsPickup={() => gpsLocation && setPickup({
+              ...gpsLocation,
+              address: 'Current Location',
+              locationType: 'precise',
+            })}
+            onUseGpsDestination={() => {
+              if (!gpsLocation) return;
+              setDestText('Current Location');
+              setDestination({
+                ...gpsLocation,
+                address: 'Current Location',
+                locationType: 'precise',
+              });
+            }}
+            route={route}
+            routeLoading={routeLoading}
+            distance={dist}
+            onBook={handleBook}
+            booking={bookLoading}
+          />
+        }
       />
-      {/* Map picker â€” full screen pin drag */}
+      {/* Map picker Ã¢â‚¬â€ full screen pin drag */}
       {locationSearchTarget && (
         <LocationSearchOverlay
           bottomInset={insets.bottom}
@@ -956,6 +993,7 @@ export default function CustomerHome() {
           <SaveLocationSheet
             animatedOpacity={formSheetBackdropOpacity}
             bottomInset={insets.bottom}
+            bottomOffset={homePanelBottomOffset}
             closeButtonRef={saveFormCloseRef}
             colors={colors}
             customLabel={customSaveLabel}
@@ -979,6 +1017,7 @@ export default function CustomerHome() {
           {editingSavedLocation && (
             <EditSavedLocationSheet
               location={editingSavedLocation}
+              bottomOffset={homePanelBottomOffset}
               label={editingSavedLabel}
               address={editingSavedAddress}
               fieldErrors={editSavedFieldErrors}

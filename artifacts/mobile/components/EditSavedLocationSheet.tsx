@@ -10,6 +10,7 @@ import {
   EDIT_SAVED_FORM_TAB_BAR_PADDING,
   styles,
 } from '@/components/edit-saved-location/editSavedLocationSheetStyles';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { useEditSavedLocationKeyboard } from '@/hooks/edit-saved-location/useEditSavedLocationKeyboard';
@@ -23,6 +24,7 @@ export type EditSavedLocationSheetProps = {
   location: SavedLocation;
   label: string;
   address: string;
+  bottomOffset?: number;
   fieldErrors?: EditSavedFieldErrors;
   suggestions: GeocodeSuggestion[];
   searchLoading: boolean;
@@ -44,6 +46,7 @@ export function EditSavedLocationSheet({
   location,
   label,
   address,
+  bottomOffset = 0,
   fieldErrors,
   suggestions,
   searchLoading,
@@ -111,7 +114,8 @@ export function EditSavedLocationSheet({
           isSearchMode && styles.sheetSearch,
           sheetHeight > 0 ? { height: sheetHeight } : null,
           {
-            paddingBottom: isSearchMode ? 12 : insets.bottom + EDIT_SAVED_FORM_TAB_BAR_PADDING,
+            bottom: bottomOffset,
+            paddingBottom: isSearchMode ? FORM_BOTTOM_PADDING : insets.bottom + EDIT_SAVED_FORM_TAB_BAR_PADDING,
             transform: [{ translateY }],
           },
         ]}

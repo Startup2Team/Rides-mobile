@@ -15,6 +15,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useToast } from '@/context/ToastContext';
 import { loadNotificationReadState, saveNotificationReadState, type NotificationReadState } from '@/persistence/notificationPersistence';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
@@ -531,7 +532,7 @@ export default function NotificationsScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.list,
-          { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 28 },
+          { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
           notifications.length === 0 && { flex: 1 },
         ]}
       >

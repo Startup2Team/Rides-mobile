@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { BRAND_GREEN_HEX } from '@/constants/systemColors';
@@ -152,7 +153,7 @@ export default function PaymentMethodsScreen() {
             styles.scroll,
             {
               paddingTop: headerMetrics.contentTop,
-              paddingBottom: insets.bottom + (adding ? 1 : 88),
+              paddingBottom: insets.bottom + (adding ? 1 : FORM_BOTTOM_PADDING),
             },
           ]}
           keyboardShouldPersistTaps="handled"

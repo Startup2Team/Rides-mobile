@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { usePackageSync } from '@/context/PackageSyncContext';
@@ -124,7 +125,7 @@ export default function DriverPackagesScreen() {
     />
     <ScrollView
       style={styles.root}
-      contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
       scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
     >
 

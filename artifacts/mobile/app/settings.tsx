@@ -16,6 +16,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 
@@ -67,7 +68,7 @@ export default function SettingsScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 40,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           gap: 22,
         }}

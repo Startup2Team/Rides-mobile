@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 
 const REPORT_TYPES = [
@@ -67,7 +68,7 @@ export default function ReportRideIssueScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 36,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           flexGrow: 1,
         }}

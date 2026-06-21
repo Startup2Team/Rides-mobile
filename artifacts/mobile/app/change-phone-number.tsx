@@ -17,6 +17,7 @@ import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
@@ -97,7 +98,7 @@ export default function ChangePhoneNumberScreen() {
           flexGrow: 1,
           justifyContent: 'center',
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 36,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 20,
         }}
       >

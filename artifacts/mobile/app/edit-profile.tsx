@@ -18,6 +18,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
@@ -131,7 +132,7 @@ export default function EditProfileScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: headerMetrics.contentTop + 28, paddingBottom: insets.bottom + 40 },
+          { paddingTop: headerMetrics.contentTop + 28, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
         ]}
         keyboardShouldPersistTaps="handled"
       >

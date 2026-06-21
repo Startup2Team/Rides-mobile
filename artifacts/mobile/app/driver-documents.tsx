@@ -7,6 +7,7 @@ import { AppInput } from '@/components/AppInput';
 import { DatePickerField } from '@/components/DatePickerField';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import {
   DOCUMENTS_REQUIRING_BACK,
@@ -114,7 +115,7 @@ export default function DriverDocumentsScreen() {
       <GlassHeader title="Driver Documents" subtitle="Manage submitted verification documents" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32, paddingHorizontal: 16, gap: 18 }}
+        contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING, paddingHorizontal: 16, gap: 18 }}
       >
         <View style={[styles.notice, { backgroundColor: colors.primaryHex + '10' }]}>
           <Feather name="shield" size={18} color={colors.primary} />

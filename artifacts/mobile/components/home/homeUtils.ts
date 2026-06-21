@@ -1,13 +1,18 @@
 import { Dimensions } from 'react-native';
 import { VEHICLE_BASE_FARE, VehicleType } from '@/types';
 import { getCoordDistance } from '@/utils/locationUtils';
-import { TAB_BAR_CONTENT_HEIGHT } from '@/constants/tabBar';
+import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 
-export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const windowDimensions =
+  typeof Dimensions?.get === 'function'
+    ? Dimensions.get('window')
+    : { width: 0, height: 0 };
+
+export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = windowDimensions;
 
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
 // ~0.3 cm shorter than prior compact/expanded sizes (~11pt)
-export const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.375, 297);
+export const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.315, 258);
 export const EXPANDED_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
 export const ROUTE_DRAW_STEP = 0.055;
 export const ROUTE_DRAW_INTERVAL_MS = 45;
@@ -16,6 +21,7 @@ export const ROUTE_FIT_SIDE_PADDING = 32;
 /** Space below top location card overlay on booking map. */
 export const BOOKING_MAP_TOP_OVERLAY = 88;
 export const HOME_TAB_BAR_HEIGHT = TAB_BAR_CONTENT_HEIGHT;
+export const HOME_TAB_BAR_BOTTOM_PADDING = TAB_BAR_SCREEN_BOTTOM_PADDING;
 
 /** Lift save-form overlay (translateY) above the software keyboard. */
 export function computeOverlayFormKeyboardLift(keyboardHeight: number, bottomInset: number): number {
