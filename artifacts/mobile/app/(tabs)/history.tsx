@@ -17,6 +17,7 @@ import { Ride, VEHICLE_LABELS } from '@/types';
 import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { TAB_BAR_BOTTOM_GAP, TAB_BAR_CONTENT_HEIGHT } from '@/constants/tabBar';
 
 /** Matches card horizontal padding — space before calendar / after RWF. */
 const CARD_CONTENT_INSET = 16;
@@ -139,7 +140,7 @@ export default function HistoryScreen() {
           styles.list,
           {
             paddingTop: headerMetrics.contentTop,
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 16,
+            paddingBottom: insets.bottom + TAB_BAR_CONTENT_HEIGHT + TAB_BAR_BOTTOM_GAP,
           },
         ]}
         scrollEnabled={rideHistory.length > 0}

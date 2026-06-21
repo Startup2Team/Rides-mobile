@@ -233,7 +233,7 @@ export default function CustomerHome() {
   const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
   const bookingPanelMapInset = activePanelHeight;
   const homePanelNavPadding = Platform.OS === 'web'
-    ? HOME_TAB_BAR_HEIGHT + 20
+    ? HOME_TAB_BAR_HEIGHT + 12
     : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const homePanelBottomInset = 0;
   const homePanelMapInset = homePanelHeight + homePanelBottomInset;

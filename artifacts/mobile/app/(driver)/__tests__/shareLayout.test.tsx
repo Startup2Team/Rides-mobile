@@ -45,7 +45,7 @@ jest.mock('expo-router', () => {
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
-  return { Feather: host('Feather') };
+  return { Feather: host('Feather'), MaterialCommunityIcons: host('MaterialCommunityIcons') };
 });
 
 jest.mock('expo-symbols', () => ({
@@ -66,6 +66,10 @@ jest.mock('expo-router/unstable-native-tabs', () => {
     Label: () => null,
   };
 });
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => mockUseAuth(),

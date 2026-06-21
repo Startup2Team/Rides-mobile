@@ -1,6 +1,7 @@
-import { Dimensions, Platform } from 'react-native';
+import { Dimensions } from 'react-native';
 import { VEHICLE_BASE_FARE, VehicleType } from '@/types';
 import { getCoordDistance } from '@/utils/locationUtils';
+import { TAB_BAR_CONTENT_HEIGHT } from '@/constants/tabBar';
 
 export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -14,7 +15,7 @@ export const HOME_LOCATION_DELTA = 0.012;
 export const ROUTE_FIT_SIDE_PADDING = 32;
 /** Space below top location card overlay on booking map. */
 export const BOOKING_MAP_TOP_OVERLAY = 88;
-export const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
+export const HOME_TAB_BAR_HEIGHT = TAB_BAR_CONTENT_HEIGHT;
 
 /** Lift save-form overlay (translateY) above the software keyboard. */
 export function computeOverlayFormKeyboardLift(keyboardHeight: number, bottomInset: number): number {

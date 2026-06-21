@@ -46,7 +46,7 @@ describe('driver verification lifecycle', () => {
 
   test('approved driver cta requires acknowledgment before switching to driver mode', () => {
     expect(getDriverApplicationAction(profile({ verificationStatus: 'approved', isVerified: true }))).toEqual({
-      label: "🎉You're approved",
+      label: "You're approved",
       route: '/driver-submission-confirmation',
     });
     expect(getDriverApplicationAction(profile({ verificationStatus: 'approved', isVerified: true, driverApprovalAcknowledgedAt: '2026-06-20T00:00:00.000Z' }), null, '2026-06-20T00:00:00.000Z')).toEqual({

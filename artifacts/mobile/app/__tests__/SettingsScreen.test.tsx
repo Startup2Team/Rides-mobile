@@ -48,7 +48,8 @@ jest.mock('expo-linear-gradient', () => {
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
-  return { Feather: ({ name }: { name: string }) => <Text>{name}</Text> };
+  const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
+  return { Feather: Icon, MaterialCommunityIcons: Icon };
 });
 
 jest.mock('@/components/GlassScrollView', () => {

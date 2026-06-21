@@ -54,6 +54,10 @@ jest.mock('@expo/vector-icons', () => ({
   MaterialCommunityIcons: () => null,
 }));
 
+jest.mock('expo-symbols', () => ({
+  SymbolView: () => null,
+}));
+
 jest.mock('@/components/GlassHeader', () => ({
   GlassHeader: () => null,
   useGlassHeaderMetrics: () => ({ contentTop: 0, indicatorTop: 0 }),

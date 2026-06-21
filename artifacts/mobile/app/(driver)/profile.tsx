@@ -19,6 +19,7 @@ import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
+import { TAB_BAR_BOTTOM_GAP, TAB_BAR_CONTENT_HEIGHT } from '@/constants/tabBar';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -97,7 +98,7 @@ export default function DriverProfileScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 24,
+          paddingBottom: insets.bottom + TAB_BAR_CONTENT_HEIGHT + TAB_BAR_BOTTOM_GAP,
           paddingHorizontal: 16,
           gap: 22,
         }}
