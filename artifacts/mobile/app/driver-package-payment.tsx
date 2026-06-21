@@ -50,12 +50,15 @@ export default function DriverPackagePaymentScreen() {
     const pkgs = await getDriverPackages(vt);
     const match = pkgs.find(p => p.name === BACKEND_PACKAGE_NAME[ridePackage.id]);
     if (!match) throw new Error('This package is not available for your vehicle type.');
-    // Promotional packages (the free launch offer) are granted automatically by
-    // the backend when the driver is approved — they cannot be "purchased"
-    // (POST /driver/packages/purchase returns PACKAGE_PROMOTIONAL). Just refresh
-    // to surface the auto-granted credits.
-    if (!match.is_promotional) {
-      await purchaseDriverPackage(match.id);
+    // Promotional packages (the free launch offer) are auto-granted on driver
+    // approval — don't re-purchase them, just refresh to surface the credits.
+    // Paid packages open a MoMo charge; in dev the backend auto-confirms, in
+    // prod the MoMo webhook confirms and the ledger is granted.
+    if (!match.is_promotional && !match.launch_offer) {
+      await purchaseDriverPackage(match.id, {
+        momoPhone: phoneNumber,
+        momoProvider: selectedProvider,
+      });
     }
     await refreshCredits();
   };

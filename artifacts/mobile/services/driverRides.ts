@@ -153,8 +153,19 @@ export interface DriverStats {
 
 export interface RidePackage {
   id: string;
+  code: string;
   name: string;
   vehicle_type_code: string;
+  // v4 fields: base vs campaign price, and the rides/bonus split.
+  normal_price_rwf: number;
+  current_price_rwf: number;
+  included_rides: number;
+  bonus_rides: number;
+  total_credits: number;
+  launch_offer: boolean;
+  version_id: string;
+  campaign_code?: string | null;
+  // Legacy mirrors (kept for older screens).
   ride_count: number;
   validity_days: number;
   price_rwf: number;
@@ -167,9 +178,91 @@ export async function getDriverPackages(vehicleType: string): Promise<RidePackag
   return Array.isArray(data) ? (data as RidePackage[]) : [];
 }
 
-/** Buy a package — deducts its price from the wallet and grants ride credits. */
-export async function purchaseDriverPackage(packageId: string): Promise<void> {
-  await api.post('/driver/packages/purchase', { package_id: packageId });
+export interface DriverCampaign {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  override_price_rwf?: number | null;
+  override_rides?: number | null;
+  override_bonus_rides?: number | null;
+}
+
+/** Active campaigns/promotions for a vehicle type (GET /driver/campaigns/active). */
+export async function getActiveCampaigns(vehicleType: string): Promise<DriverCampaign[]> {
+  try {
+    const { data } = await api.get(`/driver/campaigns/active?vehicle_type=${encodeURIComponent(vehicleType)}`);
+    return Array.isArray(data) ? (data as DriverCampaign[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface PackagePurchase {
+  id: string;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+  package_id: string;
+  package_name: string;
+  price_paid_rwf: number;
+  rides_granted: number;
+  bonus_rides_granted: number;
+  vehicle_type_code: string;
+  payment_ref: string;
+  created_at: string;
+  paid_at?: string | null;
+}
+
+/**
+ * Buy a package (POST /driver/packages/purchase). Free/promotional packages are
+ * granted immediately (status PAID); paid packages open a PENDING MoMo charge —
+ * poll getPurchaseStatus until PAID. Idempotent via idempotency_key.
+ */
+export async function purchaseDriverPackage(
+  packageId: string,
+  opts?: { momoPhone?: string; momoProvider?: 'mtn' | 'airtel'; idempotencyKey?: string },
+): Promise<PackagePurchase> {
+  const idempotency_key =
+    opts?.idempotencyKey ?? `pur-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const { data } = await api.post('/driver/packages/purchase', {
+    package_id: packageId,
+    idempotency_key,
+    momo_phone: opts?.momoPhone,
+    momo_provider: opts?.momoProvider,
+  });
+  return data as PackagePurchase;
+}
+
+/** Poll a purchase's status (GET /driver/packages/purchases/{id}). */
+export async function getPurchaseStatus(purchaseId: string): Promise<PackagePurchase> {
+  const { data } = await api.get(`/driver/packages/purchases/${purchaseId}`);
+  return data as PackagePurchase;
+}
+
+/** The driver's purchase history (GET /driver/packages/history). */
+export async function getPurchaseHistory(): Promise<PackagePurchase[]> {
+  try {
+    const { data } = await api.get('/driver/packages/history');
+    return (data?.purchases ?? []) as PackagePurchase[];
+  } catch {
+    return [];
+  }
+}
+
+export interface DriverEntitlement {
+  vehicle_type_code: string;
+  rides_remaining: number;
+  bonus_remaining: number;
+  total_remaining: number;
+}
+
+/** Per-vehicle-type credit balances from the ledger (GET /driver/entitlements). */
+export async function getDriverEntitlements(): Promise<DriverEntitlement[]> {
+  try {
+    const { data } = await api.get('/driver/entitlements');
+    return (data?.entitlements ?? []) as DriverEntitlement[];
+  } catch {
+    return [];
+  }
 }
 
 /** Active ride-credits remaining for this driver (GET /driver/credits). 0 = none. */
