@@ -1,20 +1,23 @@
 // =====================================================
-// TARAVELIS DATABASE SCHEMA v4
+// RIDES DATABASE SCHEMA v4
 // Ride Hailing Platform — Rwanda
 // PostgreSQL 15 + PostGIS 3 + pgcrypto
 // =====================================================
 //
 // DESIGN RULES
 // 1. PostGIS GEOGRAPHY(POINT,4326) for all spatial columns — never plain decimals for geospatial queries.
-// 2. BRIN indexes on append-only time-series tables (ride_events, analytics_events, wallet_transactions, payment_request_events).
+// 2. BRIN indexes on append-only time-series tables (ride_events, analytics_events, wallet_transactions, ride_credit_ledger, admin_audit_log).
 // 3. Composite PKs on high-write time-series tables (zone_demand_stats) — no UUID overhead.
-// 4. Partial indexes on active rides, available drivers, open disputes, pending payments.
+// 4. Partial indexes on active rides, available drivers, open disputes, pending purchases.
 // 5. approval_status values: PENDING_REVIEW | APPROVED | REJECTED | SUSPENDED
 // 6. driver_profiles has two ids: id (UUID PK, used by Redis & matching engine) and user_id (auth identity).
-// 7. Wallet exists per user for ride fare payments (customer) and admin credits. It is NOT used for package purchases — those go through the direct MoMo flow (payment_requests).
-// 8. ride_packages are 100% admin-managed — no hardcoded seed data. cost_per_ride_rwf is per-package.
-// 9. platform_settings is a JSONB key-value store for admin-configurable platform parameters.
-// 10. Package purchases use a direct MoMo flow: driver initiates → MTN sends USSD push → webhook confirms → rides credited atomically. No wallet intermediary. payment_requests is the session anchor for this entire flow.
+// 7. Wallet exists per user for ride fare payments and admin credits. It is NOT used for package purchases (those charge MoMo directly). Wallet-funded purchases are a v2 item.
+// 8. PACKAGES ARE VERSIONED: ride_packages = stable identity; ride_package_versions = immutable offer values. Change an offer by creating a new ACTIVE version — existing purchases never change (immutability rule).
+// 9. CAMPAIGNS override price/rides/bonus at purchase time (World Cup, weekend, first-purchase). Resolved server-side; highest priority wins.
+// 10. CREDITS ARE A LEDGER: ride_credit_ledger is the append-only source of truth (grant / deduct / refund / admin / expiry); driver_entitlements is a cache updated only inside the same transaction. Balances are never edited silently. Bonus rides are spent before regular rides.
+// 11. Package purchases: direct MoMo flow — driver initiates → package_purchases row (PENDING, immutable snapshot) → MTN USSD push → /webhooks/momo/callback confirms (idempotent) → ledger credited atomically + credits_granted=TRUE. Free/promotional packages skip MoMo and grant inline. Every attempt is kept (PENDING/PAID/FAILED/CANCELLED/EXPIRED).
+// 12. admin_audit_log records every admin write (package/version/campaign/entitlement) with actor + before/after + reason.
+// 13. Entitlements are vehicle-type specific (per driver_profiles + vehicle_type); vehicle_id is captured where known for future per-vehicle support.
 // =====================================================
 
 
@@ -292,159 +295,213 @@ Table driver_sessions {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PACKAGES & CREDITS
-// — Admin-managed: no hardcoded seed data. All packages created via API.
-// — Purchases go through the direct MoMo flow (payment_requests), not wallet.
+// PACKAGES — versioned catalog (v4)
+// — Package identity is stable; the buyable offer VALUES live in immutable
+//   versions, so changing price/rides never alters existing purchases.
 // ─────────────────────────────────────────────────────────────────────────────
 
 Table ride_packages {
+  id              uuid        [pk, default: `gen_random_uuid()`]
+  vehicle_type_id uuid        [not null, note: 'FK → vehicle_types.id']
+  code            varchar(40) [unique, not null, note: 'Stable key: launch_starter | growth | pro']
+  display_name    varchar(60) [not null, note: 'Launch Starter Package | Growth Package | Pro Package']
+  sort_order      integer     [not null, default: 0]
+  is_active       boolean     [not null, default: true, note: 'Visible in the catalog']
+  created_at      timestamptz [not null, default: `now()`]
+  updated_at      timestamptz [not null, default: `now()`]
+
+  indexes { (vehicle_type_id, is_active) [name: 'idx_packages_active'] }
+
+  Note: 'Identity + metadata only. The buyable offer (rides, bonus, price, validity) lives in ride_package_versions — change an offer by creating a NEW version, never by editing in place.'
+}
+
+Table ride_package_versions {
   id                uuid        [pk, default: `gen_random_uuid()`]
-  name              varchar(50) [not null, note: 'Moto Starter | Moto Pro | Cab Standard | Free Trial... — admin sets this']
-  vehicle_type_id   uuid        [not null, note: 'FK → vehicle_types.id']
-  ride_count        integer     [not null, note: '0 = use is_unlimited flag']
+  package_id        uuid        [not null, note: 'FK → ride_packages.id']
+  version_number    integer     [not null, note: 'Increments per package: 1, 2, 3...']
+  rides             integer     [not null, note: 'Base ride credits']
+  bonus_rides       integer     [not null, default: 0, note: 'Extra credits included with this version']
   is_unlimited      boolean     [not null, default: false]
+  price_rwf         integer     [not null, note: 'Base price. 0 = promotional/free.']
+  cost_per_ride_rwf integer     [not null, default: 30, note: 'Platform cost per completed ride for this version']
   validity_days     integer     [not null, default: 30]
-  price_rwf         integer     [not null, note: '0 for promotional packages. This is the display price shown to drivers. The actual amount collected is in payment_requests.amount_rwf which must match this value — validated at initiation.']
-  cost_per_ride_rwf integer     [not null, default: 30, note: 'Platform fee deducted per COMPLETED ride for credits in this package. Snapshot is taken at payment initiation and stored in payment_requests.cost_per_ride_rwf so price changes do not affect in-flight payments.']
-  is_promotional    boolean     [not null, default: false, note: 'TRUE = free trial / admin grant — skips the MoMo flow entirely. Granted directly via GrantFreeTrialIfEligible.']
-  is_active         boolean     [not null, default: true, note: 'Soft-delete: set FALSE to hide from drivers. Admin can re-activate.']
+  is_promotional    boolean     [not null, default: false, note: 'TRUE = free trial: auto-granted on approval, never sold']
+  status            varchar(12) [not null, default: 'DRAFT', note: 'DRAFT | SCHEDULED | ACTIVE | ARCHIVED']
+  active_from       timestamptz [note: 'Scheduling window start']
+  active_until      timestamptz
+  created_by        uuid        [note: 'FK → users.id (admin)']
   created_at        timestamptz [not null, default: `now()`]
-  updated_at        timestamptz [not null, default: `now()`]
 
   indexes {
-    (vehicle_type_id, is_active) [name: 'idx_packages_active']
+    (package_id, version_number) [unique, name: 'uniq_pkg_version']
+    (package_id) [unique, name: 'uniq_active_version', note: 'partial WHERE status = ACTIVE — one live version per package']
   }
 
-  Note: 'Admin CRUD via POST/PATCH/DELETE /admin/packages. Drivers see only is_active = TRUE, is_promotional = FALSE rows filtered by their vehicle type. Promotional packages are granted by system only.'
-}
-
-Table driver_ride_credits {
-  id                 uuid        [pk, default: `gen_random_uuid()`]
-  driver_id          uuid        [not null, note: 'FK → users.id (NOT driver_profiles.id — uses the auth identity)']
-  package_id         uuid        [not null, note: 'FK → ride_packages.id']
-  vehicle_type_id    uuid        [not null, note: 'FK → vehicle_types.id — denorm from package for fast credit check']
-  payment_request_id uuid        [note: 'FK → payment_requests.id. NULL for promotional grants, admin credits, and bonus rides. SET for all MoMo-purchased credits. Links credits back to the payment that created them.']
-  rides_total        integer     [not null]
-  rides_remaining    integer     [not null, note: 'CHECK rides_remaining >= 0. Decremented only on COMPLETED ride, never on cancellation.']
-  is_unlimited       boolean     [not null, default: false]
-  is_promotional     boolean     [not null, default: false]
-  expires_at         timestamptz [not null]
-  is_active          boolean     [not null, default: true]
-  purchased_at       timestamptz [not null, default: `now()`]
-
-  indexes {
-    (driver_id, is_active, expires_at) [name: 'idx_credits_check', note: 'partial WHERE is_active = TRUE AND rides_remaining > 0']
-    payment_request_id [name: 'idx_credits_payment_req', note: 'partial WHERE payment_request_id IS NOT NULL — look up all credits for a payment']
-  }
-
-  Note: 'HasCredits: rides_remaining > 0 OR is_unlimited = true, AND is_active = true AND expires_at > now(). Credits are inserted atomically inside the webhook handler transaction: UPDATE payment_requests (status=SUCCESSFUL) + INSERT driver_ride_credits + optional INSERT bonus_grants. All or nothing.'
+  Note: 'Value columns are WRITE-ONCE (immutability rule). Only status/active_from/active_until change. Purchases snapshot these values, so editing strategy never rewrites history.'
 }
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOMO PAYMENT REQUESTS
-// — One row per purchase attempt (successful, failed, expired — all kept).
-// — This is the session anchor for the entire direct MoMo → rides flow.
+// CAMPAIGNS — price/ride/bonus overrides resolved at purchase time
 // ─────────────────────────────────────────────────────────────────────────────
 
-Table payment_requests {
-  id                  uuid        [pk, default: `gen_random_uuid()`]
-  driver_id           uuid        [not null, note: 'FK → users.id — who gets the rides. Payer may be a different person.']
-  package_id          uuid        [note: 'FK → ride_packages.id. NULL = driver typed a custom amount (no preset package selected).']
-  vehicle_type_id     uuid        [not null, note: 'FK → vehicle_types.id — determines cost_per_ride fallback for custom amounts']
-  amount_rwf          integer     [not null, note: 'Exact amount (RWF) sent to MTN. Validated against platform_settings.payment_limits min/max before calling MTN. Locked at creation — never changed.']
-  rides_to_grant      integer     [not null, note: 'floor(amount_rwf / cost_per_ride_rwf). Calculated once at initiation and locked. Never recalculated at webhook time — protects driver from price changes during in-flight payment.']
-  cost_per_ride_rwf   integer     [not null, note: 'Snapshot of package.cost_per_ride_rwf (or vehicle_type.credit_cost_rwf for custom amounts) at initiation time. Immutable after creation.']
-  payer_phone         varchar(20) [not null, note: 'MSISDN sent to MTN as payer.partyId (E.164 format). May differ from driver phone — a friend or manager can pay on the driver behalf. MTN deducts from this number; the momo_reference_id UUID is what links the callback back to driver_id.']
-  provider            varchar(20) [not null, note: 'MTN_MOMO | AIRTEL — determines which gateway client is used for this request']
-  momo_reference_id   uuid        [unique, not null, note: 'The X-Reference-Id header sent to MTN. UNIQUE — used by the webhook handler to find this row in O(1). Never reused across requests.']
-  idempotency_key     varchar(64) [unique, not null, note: 'SHA256(driver_id || coalesce(package_id, amount_rwf::text) || floor(unix_epoch/300)). Changes every 5 minutes. Prevents accidental double-submit within the same purchase window — second request within 5 min returns the existing row.']
-  status              varchar(20) [not null, default: 'PENDING', note: 'PENDING → SUCCESSFUL | FAILED | EXPIRED | CANCELLED. Terminal states are immutable — the webhook handler uses WHERE status = PENDING as a guard against double-processing.']
-  failure_reason      text        [note: 'Human-readable reason: MTN error code, EXPIRED by cron, CANCELLED by driver. NULL for SUCCESSFUL payments.']
-  external_txn_id     varchar(100) [note: 'MTN own internal transaction reference from the webhook payload. Null until webhook fires. Useful for MTN-side reconciliation.']
-  webhook_payload     jsonb       [note: 'Full raw MTN webhook body stored verbatim. Never modified after write — immutable evidence for payment disputes.']
-  webhook_received_at timestamptz [note: 'Timestamp when our server received the MTN callback. NULL if payment expired without a webhook (can happen if driver phone offline and MTN gave up retrying).']
-  credits_granted     boolean     [not null, default: false, note: 'Set to TRUE atomically in the same transaction that inserts driver_ride_credits. Safety-net for crash recovery: a background job queries WHERE status=SUCCESSFUL AND credits_granted=FALSE and re-runs the grant. Prevents both double-credit and missed credit.']
-  bonus_rides_granted integer     [not null, default: 0, note: 'Bonus rides inserted in the same atomic transaction. 0 = no bonus tier matched this purchase.']
-  expires_at          timestamptz [not null, note: 'initiated_at + 5 minutes. After this, the expiry cron sets status=EXPIRED. Driver polling endpoint returns EXPIRED → app shows "Payment timed out. Try again."']
-  initiated_at        timestamptz [not null, default: `now()`, note: 'When POST /collection/v1_0/requesttopay was called on MTN. NOT the same as created_at if row creation and MTN call happen in two steps (they should not — row is created only after 202 from MTN).']
-  completed_at        timestamptz [note: 'When status transitioned to a terminal state. NULL while PENDING.']
-  created_at          timestamptz [not null, default: `now()`]
-  updated_at          timestamptz [not null, default: `now()`]
+Table campaigns {
+  id                     uuid         [pk, default: `gen_random_uuid()`]
+  code                   varchar(40)  [unique, not null]
+  name                   varchar(100) [not null, note: 'World Cup | Weekend Boost | First Purchase...']
+  type                   varchar(20)  [not null, note: 'GLOBAL | VEHICLE_TYPE | PACKAGE | FIRST_PURCHASE | REFERRAL']
+  status                 varchar(12)  [not null, default: 'DRAFT', note: 'DRAFT | SCHEDULED | ACTIVE | EXPIRED | ARCHIVED']
+  starts_at              timestamptz
+  ends_at                timestamptz
+  target_vehicle_type_id uuid         [note: 'FK → vehicle_types.id. NULL = any vehicle type']
+  target_package_id      uuid         [note: 'FK → ride_packages.id. NULL = any package']
+  override_price_rwf     integer      [note: 'NULL = keep version price']
+  override_rides         integer      [note: 'NULL = keep version rides']
+  override_bonus_rides   integer      [note: 'NULL = keep version bonus']
+  priority               integer      [not null, default: 0, note: 'Highest wins when several campaigns match']
+  max_redemptions        integer
+  per_driver_limit       integer
+  created_by             uuid
+  created_at             timestamptz  [not null, default: `now()`]
+  updated_at             timestamptz  [not null, default: `now()`]
 
-  indexes {
-    momo_reference_id [unique, name: 'uniq_pmt_momo_ref', note: 'Primary webhook lookup key — must be O(1)']
-    idempotency_key   [unique, name: 'uniq_pmt_idempotency', note: 'Double-submit guard at DB level']
-    (driver_id, status, created_at) [name: 'idx_pmt_driver_status', note: 'Driver payment history list + "does driver have a PENDING payment?" check']
-    (status, expires_at) [name: 'idx_pmt_expiry', note: 'partial WHERE status = PENDING — expiry cron touches only PENDING rows']
-    (status, credits_granted) [name: 'idx_pmt_recovery', note: 'partial WHERE status = SUCCESSFUL AND credits_granted = FALSE — crash-recovery job']
-  }
+  indexes { (status, starts_at, ends_at) [name: 'idx_campaigns_window'] }
 
-  Note: 'One row per payment attempt — includes FAILED/EXPIRED rows (never deleted). Webhook handler flow: (1) UPDATE SET status=SUCCESSFUL WHERE momo_reference_id=? AND status=PENDING RETURNING ..., (2) if 0 rows returned → already processed → ack MTN and stop, (3) INSERT driver_ride_credits, (4) check bonus_tiers and INSERT bonus_grants if applicable, (5) SET credits_granted=TRUE. All steps in one SERIALIZABLE transaction.'
-}
-
-Table payment_request_events {
-  id                 uuid        [pk, default: `gen_random_uuid()`]
-  payment_request_id uuid        [not null, note: 'FK → payment_requests.id']
-  from_status        varchar(20) [note: 'NULL for the initial PENDING row creation event']
-  to_status          varchar(20) [not null]
-  actor              varchar(20) [not null, note: 'DRIVER — initiated payment | MTN_WEBHOOK — status update from MTN | SYSTEM_CRON — expiry job | ADMIN — manual override']
-  notes              text        [note: 'Free-text context: failure reason from MTN, admin justification, cron run ID']
-  occurred_at        timestamptz [not null, default: `now()`]
-
-  indexes {
-    payment_request_id [name: 'idx_pmt_events_req']
-    occurred_at [name: 'idx_pmt_events_time', type: brin, note: 'BRIN — append-only, monotone inserts']
-  }
-
-  Note: 'APPEND-ONLY immutable audit log. Every status transition of payment_requests writes one row here. Used for customer support, financial reconciliation, and payment dispute resolution.'
+  Note: 'Resolution: status=ACTIVE, within window, targeting matches; FIRST_PURCHASE applies only when the driver has no prior PAID purchase. GET /driver/packages shows the resolved current price; the same logic re-runs at purchase to freeze the snapshot.'
 }
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BONUS SYSTEM
-// — Admin-configurable purchase bonuses + registration free rides.
+// PACKAGE PURCHASES — immutable snapshot + direct-MoMo lifecycle (v4)
+// — One row per attempt (PENDING/PAID/FAILED/CANCELLED/EXPIRED — never deleted).
+// — Direct MoMo: initiate → MTN USSD push → webhook confirms → ledger credited
+//   atomically. No wallet intermediary. Crash-recovery + webhook evidence folded
+//   in from the team's payment_requests design.
 // ─────────────────────────────────────────────────────────────────────────────
 
-Table bonus_tiers {
-  id              uuid         [pk, default: `gen_random_uuid()`]
-  name            varchar(100) [not null, note: 'First Purchase Bonus | Loyal Rider Bonus | Registration Welcome']
-  description     text         [note: 'Shown to driver in app — e.g. "Get +10 rides free on your first package!"']
-  trigger_type    varchar(20)  [not null, default: 'PURCHASE_COUNT', note: 'PURCHASE_COUNT | REGISTRATION']
-  purchase_number integer      [note: 'For PURCHASE_COUNT: which purchase number fires this tier. NULL = catch-all for every purchase beyond the last explicit tier.']
-  bonus_rides     integer      [not null, note: 'Ride credits granted as bonus. CHECK bonus_rides > 0.']
-  vehicle_type_id uuid         [note: 'FK → vehicle_types.id. NULL = applies to all vehicle types.']
-  is_active       boolean      [not null, default: true, note: 'Admin can deactivate to stop future grants without deleting history.']
-  created_at      timestamptz  [not null, default: `now()`]
-  updated_at      timestamptz  [not null, default: `now()`]
+Table package_purchases {
+  id                     uuid        [pk, default: `gen_random_uuid()`]
+  driver_id              uuid        [not null, note: 'FK → driver_profiles.id — who gets the rides']
+  vehicle_id             uuid        [note: 'FK → driver_vehicles.id — the driver vehicle, if resolved']
+  vehicle_type_id        uuid        [not null, note: 'FK → vehicle_types.id']
+
+  // ── Frozen offer snapshot (plain values, NOT live FKs — history never moves) ──
+  package_id             uuid        [not null, note: 'Snapshot reference to ride_packages.id']
+  package_version_id     uuid        [not null, note: 'Snapshot reference to ride_package_versions.id']
+  package_version_number integer     [not null]
+  package_name           varchar(60) [not null]
+  campaign_id            uuid        [note: 'Campaign applied, if any']
+  campaign_code          varchar(40)
+  price_paid_rwf         integer     [not null, note: 'Exact amount collected (after campaign). Locked at initiation.']
+  rides_granted          integer     [not null, note: 'Locked at initiation — never recomputed at webhook time']
+  bonus_rides_granted    integer     [not null, default: 0]
+  is_unlimited           boolean     [not null, default: false]
+
+  // ── MoMo payment lifecycle ──
+  status                 varchar(12)  [not null, default: 'PENDING', note: 'PENDING → PAID | FAILED | CANCELLED | EXPIRED. Terminal states immutable; webhook guards on WHERE status = PENDING.']
+  payment_provider       varchar(10)  [note: 'mtn | airtel']
+  payment_phone          varchar(20)  [note: 'MSISDN charged — may differ from the driver phone (someone can pay on their behalf)']
+  payment_ref            varchar(100) [unique, not null, note: 'Our reference sent to MTN (X-Reference-Id). UNIQUE — O(1) webhook lookup.']
+  provider_txn_id        varchar(100) [note: 'MTN transaction id from the webhook. Dedup key for repeat callbacks.']
+  idempotency_key        varchar(100) [unique, not null, note: 'Client-supplied; a repeat returns the existing row (double-submit guard).']
+  webhook_payload        jsonb        [note: 'Raw MTN callback body, stored verbatim — immutable evidence for disputes.']
+  credits_granted        boolean      [not null, default: false, note: 'Set TRUE in the same tx that writes the ledger grant. Crash-recovery job re-runs grants WHERE status=PAID AND credits_granted=FALSE.']
+  expires_at             timestamptz  [note: 'initiated_at + 5 min. Expiry worker sets EXPIRED; driver poll then shows "payment timed out".']
+  created_at             timestamptz  [not null, default: `now()`]
+  paid_at                timestamptz
+  updated_at             timestamptz  [not null, default: `now()`]
 
   indexes {
-    (trigger_type, is_active, purchase_number) [name: 'idx_bonus_tiers_lookup']
+    payment_ref     [unique, name: 'uniq_purchase_ref', note: 'Primary webhook lookup']
+    idempotency_key [unique, name: 'uniq_purchase_idem']
+    (driver_id, created_at) [name: 'idx_purchases_driver']
+    status [name: 'idx_purchases_status']
+    (status, credits_granted) [name: 'idx_purchases_recovery', note: 'partial WHERE status = PAID AND credits_granted = FALSE — crash recovery']
+    provider_txn_id [name: 'idx_purchases_provider_txn', note: 'partial WHERE provider_txn_id IS NOT NULL']
   }
 
-  Note: 'Default seed: purchase 1 → +10, purchase 2 → +20, purchase 3+ (NULL) → +30, REGISTRATION → +30. Admin manages via POST/DELETE /admin/bonuses/tiers.'
+  Note: 'Webhook flow (one tx): UPDATE status=PAID WHERE payment_ref=? AND status=PENDING; if 0 rows → already processed, ack & stop; else write PURCHASE_GRANT/BONUS_GRANT ledger rows + bump driver_entitlements + SET credits_granted=TRUE. Promotional/free packages skip MoMo and grant inline at PAID.'
 }
 
-Table bonus_grants {
-  id                 uuid        [pk, default: `gen_random_uuid()`]
-  driver_id          uuid        [not null, note: 'FK → users.id']
-  tier_id            uuid        [not null, note: 'FK → bonus_tiers.id — which tier fired']
-  trigger_credit_id  uuid        [note: 'FK → driver_ride_credits.id. The primary credit row that triggered this bonus. NULL for REGISTRATION grants.']
-  payment_request_id uuid        [note: 'FK → payment_requests.id. The MoMo payment that triggered this bonus. NULL for REGISTRATION grants and admin credits. Joins bonus directly to its payment source for reconciliation.']
-  vehicle_type_id    uuid        [not null, note: 'FK → vehicle_types.id — vehicle the bonus credits apply to']
-  bonus_rides        integer     [not null, note: 'Snapshot of tier.bonus_rides at grant time']
-  expires_at         timestamptz [not null, note: 'Inherits validity window from the triggering package or 30 days for REGISTRATION.']
-  granted_at         timestamptz [not null, default: `now()`]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTITLEMENT LEDGER — append-only credit truth + cached balance (v4)
+// — Replaces driver_ride_credits. Every balance change is a ledger row; the
+//   cache (driver_entitlements) is only ever updated inside the same tx.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table ride_credit_ledger {
+  id                 uuid         [pk, default: `gen_random_uuid()`]
+  driver_id          uuid         [not null, note: 'FK → driver_profiles.id']
+  vehicle_id         uuid         [note: 'FK → driver_vehicles.id']
+  vehicle_type_id    uuid         [not null, note: 'FK → vehicle_types.id']
+  entry_type         varchar(20)  [not null, note: 'PURCHASE_GRANT | BONUS_GRANT | RIDE_DEDUCTION | RIDE_REFUND | ADMIN_GRANT | ADMIN_REVOKE | EXPIRY']
+  rides_delta        integer      [not null, default: 0, note: '+grant / -deduct (regular rides)']
+  bonus_delta        integer      [not null, default: 0, note: '+grant / -deduct (bonus rides)']
+  balance_rides      integer      [not null, note: 'Running regular balance after this entry']
+  balance_bonus      integer      [not null, note: 'Running bonus balance after this entry']
+  source_purchase_id uuid         [note: 'FK → package_purchases.id (grants)']
+  source_ride_id     uuid         [note: 'FK → rides.id (deductions/refunds)']
+  admin_id           uuid         [note: 'FK → users.id (admin grants/revokes)']
+  reason             text
+  idempotency_key    varchar(100) [unique, note: 'ride_id for a deduction, refund:<ride_id> for a refund — prevents double apply']
+  expires_at         timestamptz  [note: 'Grant entries carry the credit expiry; the expiry worker reads this']
+  created_at         timestamptz  [not null, default: `now()`]
 
   indexes {
-    (driver_id, granted_at) [name: 'idx_bonus_grants_driver']
-    tier_id [name: 'idx_bonus_grants_tier']
-    (trigger_credit_id) [name: 'idx_bonus_grants_credit', note: 'partial WHERE trigger_credit_id IS NOT NULL']
-    payment_request_id [name: 'idx_bonus_grants_payment', note: 'partial WHERE payment_request_id IS NOT NULL']
-    (driver_id, tier_id) [unique, name: 'uniq_bonus_registration', note: 'partial WHERE trigger_credit_id IS NULL — prevents duplicate REGISTRATION grants']
+    (driver_id, vehicle_type_id, created_at) [name: 'idx_ledger_balance']
+    created_at [name: 'idx_ledger_time', type: brin, note: 'BRIN — append-only monotone inserts']
   }
 
-  Note: 'APPEND-ONLY audit log. bonus_grants + corresponding driver_ride_credits inserted atomically in the same SERIALIZABLE transaction as the payment_requests status update. Double-grant prevented by partial unique index.'
+  Note: 'APPEND-ONLY (same self-auditing pattern as wallet_transactions). Bonus rides are spent before regular rides on deduction. Balance = last row per (driver, vehicle_type).'
+}
+
+Table driver_entitlements {
+  id              uuid        [pk, default: `gen_random_uuid()`]
+  driver_id       uuid        [not null, note: 'FK → driver_profiles.id']
+  vehicle_id      uuid        [note: 'FK → driver_vehicles.id']
+  vehicle_type_id uuid        [not null, note: 'FK → vehicle_types.id']
+  rides_remaining integer     [not null, default: 0]
+  bonus_remaining integer     [not null, default: 0]
+  unlimited_until timestamptz [note: 'Set while an unlimited package is active']
+  updated_at      timestamptz [not null, default: `now()`]
+
+  indexes { (driver_id, vehicle_type_id) [unique, name: 'uniq_entitlement'] }
+
+  Note: 'Fast balance cache — the accept-gate and GET /driver/entitlements read this. Updated only inside a ride_credit_ledger transaction; never edited directly.'
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BONUSES (v4) — folded into campaigns + the ledger.
+// The old bonus_tiers / bonus_grants tables are REMOVED in v4. Purchase bonuses
+// come from a version's bonus_rides or a campaign's override_bonus_rides, and
+// every bonus lands as a BONUS_GRANT row in ride_credit_ledger (audited there).
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN AUDIT LOG — every admin write (package / version / campaign / entitlement)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table admin_audit_log {
+  id             uuid        [pk, default: `gen_random_uuid()`]
+  actor_admin_id uuid        [not null, note: 'FK → users.id (admin)']
+  action         varchar(50) [not null, note: 'PACKAGE_VERSION_CREATE | CAMPAIGN_ACTIVATE | ENTITLEMENT_GRANT | ENTITLEMENT_REVOKE | ...']
+  entity_type    varchar(30) [not null, note: 'package | package_version | campaign | entitlement | purchase']
+  entity_id      uuid
+  before         jsonb       [note: 'State before the change']
+  after          jsonb       [note: 'State after the change']
+  reason         text
+  created_at     timestamptz [not null, default: `now()`]
+
+  indexes {
+    created_at [name: 'idx_audit_time', type: brin]
+    (entity_type, entity_id) [name: 'idx_audit_entity']
+    actor_admin_id [name: 'idx_audit_actor']
+  }
+
+  Note: 'APPEND-ONLY. Every admin mutation records actor + before/after + reason.'
 }
 
 
@@ -884,26 +941,29 @@ Ref: driver_sessions.vehicle_id > driver_vehicles.id
 Ref: vehicle_pricing_configs.vehicle_type_code > vehicle_types.code
 Ref: vehicle_pricing_configs.created_by > users.id
 
-// Packages & Credits
+// Packages, versions & campaigns
 Ref: ride_packages.vehicle_type_id > vehicle_types.id
-Ref: driver_ride_credits.driver_id > users.id
-Ref: driver_ride_credits.package_id > ride_packages.id
-Ref: driver_ride_credits.vehicle_type_id > vehicle_types.id
-Ref: driver_ride_credits.payment_request_id > payment_requests.id
+Ref: ride_package_versions.package_id > ride_packages.id [delete: cascade]
+Ref: campaigns.target_vehicle_type_id > vehicle_types.id
+Ref: campaigns.target_package_id > ride_packages.id
 
-// MoMo Payment Requests
-Ref: payment_requests.driver_id > users.id
-Ref: payment_requests.package_id > ride_packages.id
-Ref: payment_requests.vehicle_type_id > vehicle_types.id
-Ref: payment_request_events.payment_request_id > payment_requests.id [delete: cascade]
+// Package purchases (snapshot columns are values, not enforced FKs)
+Ref: package_purchases.driver_id > driver_profiles.id
+Ref: package_purchases.vehicle_id > driver_vehicles.id
+Ref: package_purchases.vehicle_type_id > vehicle_types.id
 
-// Bonus system
-Ref: bonus_tiers.vehicle_type_id > vehicle_types.id
-Ref: bonus_grants.driver_id > users.id
-Ref: bonus_grants.tier_id > bonus_tiers.id
-Ref: bonus_grants.trigger_credit_id > driver_ride_credits.id
-Ref: bonus_grants.payment_request_id > payment_requests.id
-Ref: bonus_grants.vehicle_type_id > vehicle_types.id
+// Entitlement ledger + balance cache
+Ref: ride_credit_ledger.driver_id > driver_profiles.id
+Ref: ride_credit_ledger.vehicle_id > driver_vehicles.id
+Ref: ride_credit_ledger.vehicle_type_id > vehicle_types.id
+Ref: ride_credit_ledger.source_purchase_id > package_purchases.id
+Ref: ride_credit_ledger.source_ride_id > rides.id
+Ref: driver_entitlements.driver_id > driver_profiles.id
+Ref: driver_entitlements.vehicle_id > driver_vehicles.id
+Ref: driver_entitlements.vehicle_type_id > vehicle_types.id
+
+// Admin audit
+Ref: admin_audit_log.actor_admin_id > users.id
 
 // Hot zones
 Ref: zone_demand_stats.vehicle_type_id > vehicle_types.id
