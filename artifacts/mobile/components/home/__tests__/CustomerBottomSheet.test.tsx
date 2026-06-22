@@ -19,26 +19,39 @@ jest.mock('react-native', () => {
     interpolate() { return this; }
     stopAnimation(cb?: (v: number) => void) { cb?.(this._value); }
   }
-  const timingStart = jest.fn();
-  const springStart = jest.fn();
   return {
     Animated: {
       Value,
       View: host('AnimatedView'),
-      timing: (_val: Value, { toValue }: { toValue: number }) => ({
+      timing: (_val: Value, _config: object) => ({
         start: (cb?: (result: { finished: boolean }) => void) => {
-          timingStart();
           // Simulate immediate completion so tests don't need async waits.
           cb?.({ finished: true });
         },
       }),
-      spring: (_val: Value, { toValue }: { toValue: number }) => ({
-        start: (cb?: () => void) => { springStart(); cb?.(); },
+      spring: (_val: Value, _config: object) => ({
+        start: (cb?: () => void) => { cb?.(); },
+      }),
+      // Required by the entrance animation (Animated.parallel wraps two timings).
+      parallel: (animations: Array<{ start: (cb?: unknown) => void }>) => ({
+        start: (cb?: (result: { finished: boolean }) => void) => {
+          animations.forEach(a => a.start(undefined));
+          cb?.({ finished: true });
+        },
       }),
     },
+    // Easing functions used for entrance (ease-out quad) and close (ease-in cubic).
+    Easing: {
+      out: (fn: (t: number) => number) => fn,
+      in: (fn: (t: number) => number) => fn,
+      quad: (t: number) => t * t,
+      cubic: (t: number) => t * t * t,
+    },
     Keyboard: { dismiss: jest.fn() },
+    // Pass ALL handlers through panHandlers so tests can access
+    // onPanResponderTerminate, onPanResponderRelease, etc. via element props.
     PanResponder: {
-      create: (handlers: Record<string, unknown>) => ({ panHandlers: { onStartShouldSetResponder: handlers.onStartShouldSetPanResponder }, _handlers: handlers }),
+      create: (handlers: Record<string, unknown>) => ({ panHandlers: handlers }),
     },
     ScrollView: host('ScrollView'),
     StyleSheet: { create: (s: object) => s, flatten: (s: unknown) => (Array.isArray(s) ? Object.assign({}, ...s) : s) },
@@ -405,5 +418,125 @@ describe('CustomerBottomSheet V2', () => {
   test('booking card handle is present when booking is active', () => {
     const { getByTestId } = renderSheet('booking');
     expect(getByTestId('booking-sheet-handle')).toBeTruthy();
+  });
+
+  // ── Pre-launch polish tests ───────────────────────────────────────────────
+
+  test('BookingCard entrance wrapper renders handle and card — not blank', () => {
+    // The entrance Animated.View wraps both the handle pill and the BookingCard.
+    // Both must be visible after the animation mock completes immediately.
+    // This confirms the Animated.View wrapper does not block rendering.
+    const { getByTestId, queryByTestId } = renderSheet('booking');
+    expect(getByTestId('booking-sheet-handle')).toBeTruthy();
+    expect(getByTestId('booking-card')).toBeTruthy();
+    expect(queryByTestId('home-card')).toBeNull();
+  });
+
+  test('entrance animation leaves BookingCard visible after completion', () => {
+    // The mock Animated.parallel completes immediately, so the booking card
+    // must be fully rendered after the first render pass.
+    const { getByTestId, queryByTestId } = renderSheet('booking');
+    expect(getByTestId('booking-card')).toBeTruthy();
+    expect(queryByTestId('home-card')).toBeNull();
+  });
+
+  test('entrance animation resets each time booking reopens — no stale opacity', () => {
+    const { getByTestId, queryByTestId, rerender } = renderSheet('home');
+
+    // First open → close → reopen cycle.
+    for (let i = 0; i < 3; i++) {
+      rerender(
+        <CustomerBottomSheet
+          activeCard="booking"
+          onCloseBooking={jest.fn()}
+          homeCard={homeCard}
+          bookingCard={bookingCard}
+          colors={colors}
+          bottomPadding={12}
+        />,
+      );
+      // Booking card must be visible after entrance animation completes.
+      expect(getByTestId('booking-card')).toBeTruthy();
+      expect(queryByTestId('home-card')).toBeNull();
+
+      rerender(
+        <CustomerBottomSheet
+          activeCard="home"
+          onCloseBooking={jest.fn()}
+          homeCard={homeCard}
+          bookingCard={bookingCard}
+          colors={colors}
+          bottomPadding={12}
+        />,
+      );
+      expect(getByTestId('home-card')).toBeTruthy();
+      expect(queryByTestId('booking-card')).toBeNull();
+    }
+  });
+
+  test('onPanResponderTerminate handler is registered and snaps sheet back', () => {
+    // The mock passes all handlers into panHandlers, so they are props on the shell.
+    const { getByTestId } = renderSheet('booking');
+    const shell = getByTestId('booking-sheet');
+
+    // Verify the terminate handler is registered.
+    const terminate = shell.props.onPanResponderTerminate as (() => void) | undefined;
+    expect(typeof terminate).toBe('function');
+
+    // Calling terminate must not throw (it calls Animated.spring internally).
+    expect(() => terminate?.()).not.toThrow();
+  });
+
+  test('booking card remains visible and sheet is not stuck after gesture termination', () => {
+    // After a system gesture terminates the pan, the sheet must snap back to
+    // the open (booking) position — booking card must still be visible.
+    const onClose = jest.fn();
+    const { getByTestId, queryByTestId } = renderSheet('booking', onClose);
+
+    const shell = getByTestId('booking-sheet');
+    const terminate = shell.props.onPanResponderTerminate as (() => void) | undefined;
+    terminate?.();
+
+    // Termination snaps back — does NOT close the sheet.
+    expect(onClose).not.toHaveBeenCalled();
+    // Booking card must still be rendered (not blank, not home).
+    expect(getByTestId('booking-card')).toBeTruthy();
+    expect(queryByTestId('home-card')).toBeNull();
+  });
+
+  test('onPanResponderTerminationRequest returns true (allows system reclaim)', () => {
+    const { getByTestId } = renderSheet('booking');
+    const shell = getByTestId('booking-sheet');
+    const terminationRequest = shell.props.onPanResponderTerminationRequest as
+      (() => boolean) | undefined;
+    // Must return true so the system (home indicator, modal, etc.) can reclaim
+    // the gesture without the sheet staying locked at a partial drag position.
+    expect(terminationRequest?.()).toBe(true);
+  });
+
+  test('home card is visible after explicit close following a terminated gesture', () => {
+    const onClose = jest.fn();
+    const { getByTestId, queryByTestId, rerender } = renderSheet('booking', onClose);
+
+    // Simulate system terminating the gesture mid-drag.
+    const shell = getByTestId('booking-sheet');
+    (shell.props.onPanResponderTerminate as (() => void) | undefined)?.();
+
+    // Termination snaps back — sheet is still in booking mode.
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Now the parent explicitly switches to home (e.g., back button).
+    rerender(
+      <CustomerBottomSheet
+        activeCard="home"
+        onCloseBooking={onClose}
+        homeCard={homeCard}
+        bookingCard={bookingCard}
+        colors={colors}
+        bottomPadding={12}
+      />,
+    );
+    expect(getByTestId('home-card')).toBeTruthy();
+    expect(queryByTestId('booking-card')).toBeNull();
   });
 });

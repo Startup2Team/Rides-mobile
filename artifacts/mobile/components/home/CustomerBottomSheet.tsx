@@ -2,18 +2,24 @@
  * CustomerBottomSheet — V2 card-stack bottom sheet.
  *
  * Architecture:
- *  - One Animated.Value (slideAnim) drives the sheet's translateY during the
- *    booking-close swipe. It is never used for opacity.
- *  - One PanResponder owns the gesture. It activates only when activeCard === 'booking'.
- *  - Exactly one card is rendered at a time (CardStack). No overlapping absolute layers.
- *  - Height is content-driven: onLayout on the inner content View reports the current
- *    card's natural height to the parent via onSheetHeightChange.
- *  - The pan handlers are detached while the sheet is animating closed to avoid
- *    capturing a second gesture mid-flight.
+ *  - One Animated.Value (slideAnim) drives translateY during the booking-close
+ *    swipe. It is never used for opacity.
+ *  - One PanResponder owns the gesture. It activates only when
+ *    activeCard === 'booking'.
+ *  - Exactly one card is rendered at a time (CardStack). No overlapping layers.
+ *  - Height is content-driven: onLayout on the inner content View reports the
+ *    current card's natural height to the parent via onSheetHeightChange.
+ *
+ * Polish (pre-launch):
+ *  - BookingCard entrance: slides up 28 px + fades in, 180/160 ms ease-out.
+ *  - Close animation: ease-in-cubic (accelerates away) at 180 ms — natural.
+ *  - Termination: returns true so the system can reclaim the gesture; snaps
+ *    the sheet back to open if terminated mid-drag.
  */
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
+  Easing,
   Keyboard,
   PanResponder,
   StyleSheet,
@@ -27,7 +33,11 @@ export type { HomeCardData, BookingCardData };
 
 const DISMISS_THRESHOLD_RATIO = 0.28;
 const DISMISS_VELOCITY = 0.65;
-const DISMISS_DURATION_MS = 220;
+const DISMISS_DURATION_MS = 180;
+
+const ENTRANCE_TRANSLATE_Y = 28;
+const ENTRANCE_SLIDE_MS = 180;
+const ENTRANCE_OPACITY_MS = 160;
 
 type Props = {
   activeCard: 'home' | 'booking';
@@ -48,32 +58,61 @@ export function CustomerBottomSheet({
   colors,
   bottomPadding,
 }: Props) {
+  // ── Animated values ──────────────────────────────────────────────────────
   const slideAnim = useRef(new Animated.Value(0)).current;
+  // Entrance animation for BookingCard — reset before each entry.
+  const enterSlide = useRef(new Animated.Value(ENTRANCE_TRANSLATE_Y)).current;
+  const enterOpacity = useRef(new Animated.Value(0)).current;
+
   const isAnimatingClose = useRef(false);
 
-  // Keep refs so the stable PanResponder closure sees current values.
+  // ── Stable refs for PanResponder closure ─────────────────────────────────
   const activeCardRef = useRef(activeCard);
   activeCardRef.current = activeCard;
   const onCloseBookingRef = useRef(onCloseBooking);
   onCloseBookingRef.current = onCloseBooking;
   const cardHeightRef = useRef(0);
 
-  // Reset the slide position each time booking opens so the card always enters at 0.
+  // Reset slideAnim and entrance values synchronously during the render where
+  // activeCard switches to 'booking', so the very first painted frame is at the
+  // correct initial animation state (no flash of the settled position).
   const prevActiveCard = useRef(activeCard);
   if (prevActiveCard.current !== activeCard) {
     prevActiveCard.current = activeCard;
     if (activeCard === 'booking') {
       slideAnim.setValue(0);
+      enterSlide.setValue(ENTRANCE_TRANSLATE_Y);
+      enterOpacity.setValue(0);
     }
   }
 
+  // ── Entrance animation (runs after the first render of BookingCard) ───────
+  useEffect(() => {
+    if (activeCard !== 'booking') return;
+    // Values already at initial state (set in the render phase above).
+    Animated.parallel([
+      Animated.timing(enterSlide, {
+        toValue: 0,
+        duration: ENTRANCE_SLIDE_MS,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }),
+      Animated.timing(enterOpacity, {
+        toValue: 1,
+        duration: ENTRANCE_OPACITY_MS,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [activeCard, enterSlide, enterOpacity]);
+
+  // ── Gesture ───────────────────────────────────────────────────────────────
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         // Never claim the gesture on touch-down (lets children handle taps).
         onStartShouldSetPanResponder: () => false,
-        // Claim a downward vertical move only while booking is the active card
-        // and no close animation is in flight.
+        // Claim a downward vertical move only while booking is active and the
+        // close animation is not already in flight.
         onMoveShouldSetPanResponder: (_, g) =>
           !isAnimatingClose.current
           && activeCardRef.current === 'booking'
@@ -81,11 +120,8 @@ export function CustomerBottomSheet({
           && g.dy > Math.abs(g.dx),
         onPanResponderGrant: () => {
           Keyboard.dismiss();
-          // slideAnim is driven by setValue during the gesture (no running animation
-          // to stop), so we just start from 0 as the resting position.
         },
         onPanResponderMove: (_, g) => {
-          // Only allow downward movement.
           slideAnim.setValue(Math.max(0, g.dy));
         },
         onPanResponderRelease: (_, g) => {
@@ -96,15 +132,14 @@ export function CustomerBottomSheet({
 
           if (shouldDismiss) {
             isAnimatingClose.current = true;
+            // Ease-in-cubic: the sheet accelerates away naturally, like dropping.
             Animated.timing(slideAnim, {
               toValue: height,
               duration: DISMISS_DURATION_MS,
               useNativeDriver: true,
+              easing: Easing.in(Easing.cubic),
             }).start(() => {
               isAnimatingClose.current = false;
-              // Notify the parent — it switches activeCard to 'home', which will
-              // re-render this component with activeCard==='home', making the
-              // transform irrelevant (style ignores slideAnim in home state).
               onCloseBookingRef.current();
             });
           } else {
@@ -115,10 +150,20 @@ export function CustomerBottomSheet({
             }).start();
           }
         },
-        // Never hand the gesture back to the system (prevents iOS scroll hijack).
-        onPanResponderTerminationRequest: () => false,
+        // Allow the system to reclaim the gesture (home indicator, modal, etc.).
+        // If terminated mid-drag, snap back to the open position so the sheet
+        // is never left stuck at a partial translateY.
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderTerminate: () => {
+          if (!isAnimatingClose.current) {
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 2,
+            }).start();
+          }
+        },
       }),
-    // slideAnim is stable (created once via useRef); this memo never re-runs.
     [slideAnim],
   );
 
@@ -133,12 +178,21 @@ export function CustomerBottomSheet({
     [onSheetHeightChange],
   );
 
-  // Only apply the slide transform during booking — the sheet is always at 0
-  // in home state, and we do not want a stale slideAnim value to offset it.
+  // Only apply the slide transform while booking is active — the sheet is
+  // always at translateY 0 in home state so a stale slideAnim value cannot
+  // offset it between sessions.
   const transform = activeCard === 'booking' ? [{ translateY: slideAnim }] : undefined;
+
+  // Entrance style for the Animated.View that wraps booking content.
+  // Both values are stable Animated.Values; the style object is created once.
+  const entranceStyle = useMemo(
+    () => ({ transform: [{ translateY: enterSlide }], opacity: enterOpacity }),
+    [enterSlide, enterOpacity],
+  );
 
   return (
     <Animated.View
+      testID="booking-sheet"
       style={[
         sheetStyles.shell,
         { backgroundColor: colors.card },
@@ -150,16 +204,8 @@ export function CustomerBottomSheet({
         : undefined)}
     >
       {/* onLayout on the content View (not the Animated.View) gives the natural
-          height of whichever card is currently rendered, including the handle. */}
+          height of the active card including the handle, unaffected by transform. */}
       <View onLayout={handleContentLayout}>
-        {/* Sheet-level drag handle — rendered at the top of the sheet, not inside
-            the card's horizontal padding, so it is always centered on the full
-            sheet width regardless of card content margins. */}
-        {activeCard === 'booking' && (
-          <View style={sheetStyles.handleBar} testID="booking-sheet-handle">
-            <View style={sheetStyles.handlePill} />
-          </View>
-        )}
         {activeCard === 'home' && (
           <HomeCard
             {...homeCard}
@@ -168,11 +214,20 @@ export function CustomerBottomSheet({
           />
         )}
         {activeCard === 'booking' && (
-          <BookingCard
-            {...bookingCard}
-            bottomPadding={bottomPadding}
-            colors={colors}
-          />
+          // Animated.View is required here so opacity and translateY run on
+          // the native thread (useNativeDriver: true). Opacity on a plain
+          // View with a native-driver value is a crash source — do not change.
+          <Animated.View style={entranceStyle}>
+            {/* Sheet-level drag handle — outside card padding for true centering. */}
+            <View style={sheetStyles.handleBar} testID="booking-sheet-handle">
+              <View style={sheetStyles.handlePill} />
+            </View>
+            <BookingCard
+              {...bookingCard}
+              bottomPadding={bottomPadding}
+              colors={colors}
+            />
+          </Animated.View>
         )}
       </View>
     </Animated.View>
@@ -189,8 +244,6 @@ const sheetStyles = StyleSheet.create({
     borderTopRightRadius: 22,
     overflow: 'hidden',
   },
-  // Full-width handle area — sits outside card padding so alignItems:'center'
-  // centers on the true sheet width, not on the padded content area.
   handleBar: {
     alignItems: 'center',
     paddingTop: 8,
