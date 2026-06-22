@@ -110,7 +110,7 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Danger Zone">
+        <Section title="Danger zone">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
             <SettingsRow icon="trash-2" label="Delete Account" detail="Permanently remove your account" onPress={handleDeleteAccount} destructive />
           </View>

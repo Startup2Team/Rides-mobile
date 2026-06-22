@@ -40,6 +40,25 @@ export const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 export const GREETING_LEFT_INSET = 14;
 export const BOOKING_SHEET_PADDING_H = 22;
+/** Overlay drag handle inset from the top of the booking sheet. */
+export const BOOKING_HANDLE_TOP = 8;
+export const BOOKING_HANDLE_HEIGHT = 4;
+/** Vertical gap from handle to the "Book a Ride" title. */
+export const BOOKING_HANDLE_TO_TITLE_GAP = 14;
+export const BOOKING_TITLE_LINE_HEIGHT = 20;
+/** Vertical gap from title to the pickup card — fixed across compact/expanded states. */
+export const BOOKING_TITLE_TO_CONTENT_GAP = 18;
+/** Fixed booking header band; route preview grows in the scroll body below this. */
+export const BOOKING_SHEET_HEADER_HEIGHT =
+  BOOKING_HANDLE_TOP
+  + BOOKING_HANDLE_HEIGHT
+  + BOOKING_HANDLE_TO_TITLE_GAP
+  + BOOKING_TITLE_LINE_HEIGHT
+  + BOOKING_TITLE_TO_CONTENT_GAP;
+/** Space below the action row before the sheet edge / navbar. */
+export const BOOKING_SHEET_BOTTOM_PADDING = 18;
+/** Initial shell height before BookingSheet reports its first measurement. */
+export const BOOKING_SHEET_PRE_MEASURE_HEIGHT = COMPACT_PANEL_HEIGHT;
 /** Equal inset from top + right form edges for the booking close control. */
 export const BOOKING_CLOSE_EDGE_INSET = 16;
 /** Extra room so the close icon can spin during sheet drag without clipping. */

@@ -4,7 +4,13 @@ import { floatingPanelSurface } from '@/constants/surfaces';
 import {
   BOOKING_CLOSE_EDGE_INSET,
   BOOKING_CLOSE_ROTATION_PAD,
+  BOOKING_HANDLE_HEIGHT,
+  BOOKING_HANDLE_TO_TITLE_GAP,
+  BOOKING_HANDLE_TOP,
+  BOOKING_SHEET_HEADER_HEIGHT,
   BOOKING_SHEET_PADDING_H,
+  BOOKING_TITLE_LINE_HEIGHT,
+  BOOKING_TITLE_TO_CONTENT_GAP,
   GREETING_LEFT_INSET,
   SCREEN_WIDTH,
 } from './homeUtils';
@@ -53,9 +59,9 @@ export const styles = StyleSheet.create({
   // Booking sheet
   bookingSheetWrapper: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
-    width: SCREEN_WIDTH,
+    right: 0,
     zIndex: 30,
     overflow: 'visible',
   },
@@ -63,6 +69,10 @@ export const styles = StyleSheet.create({
     paddingTop: 0,
     gap: 0,
     overflow: 'visible',
+  },
+  bookingSheetViewport: {
+    flex: 1,
+    overflow: 'hidden',
   },
   bookingSheetContent: {
     paddingTop: 0,
@@ -91,15 +101,51 @@ export const styles = StyleSheet.create({
   formSheetBody: {
     paddingHorizontal: BOOKING_SHEET_PADDING_H,
     gap: 10,
+    paddingTop: 4,
+  },
+  bookingFormSheetBody: {
+    paddingTop: 0,
+  },
+  bookingSheetHeader: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingLeft: BOOKING_SHEET_PADDING_H,
+    paddingRight: 52,
+    paddingTop: BOOKING_HANDLE_TOP,
+    paddingBottom: BOOKING_TITLE_TO_CONTENT_GAP,
+    height: BOOKING_SHEET_HEADER_HEIGHT,
+  },
+  bookingSheetHandleSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: BOOKING_HANDLE_HEIGHT,
+    marginBottom: BOOKING_HANDLE_TO_TITLE_GAP,
+  },
+  bookingSheetHandle: {
+    width: 40,
+    height: BOOKING_HANDLE_HEIGHT,
+    borderRadius: 2,
+    backgroundColor: '#3A3A3A',
+  },
+  bookingSheetTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    lineHeight: BOOKING_TITLE_LINE_HEIGHT,
   },
   formSheetDragZone: { paddingTop: 0, paddingBottom: 0, marginTop: 0 },
   formSheetHandleTouch: { paddingTop: 6, paddingBottom: 4, marginBottom: 0 },
   formSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: GREETING_LEFT_INSET,
+    paddingLeft: BOOKING_SHEET_PADDING_H,
     paddingRight: 52,
-    minHeight: 44,
+    minHeight: 56,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
+  formSheetHandleSpacer: {
+    width: 0,
+    height: 0,
   },
   formSheetSubheader: {
     paddingLeft: GREETING_LEFT_INSET,
@@ -130,7 +176,6 @@ export const styles = StyleSheet.create({
   locationCard: {
     borderRadius: 15,
     padding: 10,
-    marginHorizontal: GREETING_LEFT_INSET,
   },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   locDot: { width: 12, height: 12, borderRadius: 6 },
@@ -141,10 +186,10 @@ export const styles = StyleSheet.create({
   locDivider: { height: 1, marginLeft: 24 },
   currentLocBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 1, flexShrink: 1, maxWidth: '52%' },
   currentLocText: { fontSize: 12, fontFamily: 'Inter_500Medium', flexShrink: 1 },
-  locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginHorizontal: GREETING_LEFT_INSET },
-  rideInfoRow: { flexDirection: 'row', gap: 6, marginHorizontal: GREETING_LEFT_INSET },
+  locationActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  rideInfoRow: { flexDirection: 'row', gap: 6 },
   rideInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 14, gap: 5 },
-  findDriverAction: { marginTop: 4, paddingTop: 4, paddingBottom: 2, marginHorizontal: GREETING_LEFT_INSET },
+  findDriverAction: { marginTop: 4, paddingTop: 4, paddingBottom: 2 },
   rideInfoText: { flex: 1, gap: 2 },
   rideInfoValue: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   rideInfoLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },

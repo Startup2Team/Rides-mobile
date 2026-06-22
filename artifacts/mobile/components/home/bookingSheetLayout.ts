@@ -1,3 +1,4 @@
+/** @deprecated Pre-measure estimate only — not a post-layout floor. */
 export const BOOKING_SHEET_MIN_HEIGHT = 224;
 
 export function getBookingSheetMaxHeight(screenHeight: number) {
@@ -9,10 +10,8 @@ export function resolveBookingSheetHeight(
   explicitHeight: number | undefined,
   maxHeight: number,
 ) {
-  return Math.max(
-    BOOKING_SHEET_MIN_HEIGHT,
-    Math.min(explicitHeight ?? contentHeight, maxHeight),
-  );
+  const target = Math.round(explicitHeight ?? contentHeight);
+  return Math.min(Math.max(1, target), maxHeight);
 }
 
 export function getBookingLayoutKey({
