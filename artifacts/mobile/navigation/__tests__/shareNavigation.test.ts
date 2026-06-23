@@ -1,9 +1,9 @@
 import { getShareRouteForMode } from '../shareNavigation';
 
 describe('share navigation', () => {
-  test('routes customer users to the customer share tab and drivers to the driver share tab', () => {
-    expect(getShareRouteForMode('customer')).toBe('/(tabs)/share');
-    expect(getShareRouteForMode('driver')).toBe('/(driver)/share');
-    expect(getShareRouteForMode(null)).toBe('/(tabs)/share');
+  test('routes both customer and driver users to the root share route', () => {
+    expect(getShareRouteForMode('customer')).toBe('/share');
+    expect(getShareRouteForMode('driver')).toBe('/share');
+    expect(getShareRouteForMode(null)).toBe('/share');
   });
 });
