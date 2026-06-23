@@ -9,6 +9,7 @@ import React, {
 import {
   BookingFormDraft,
   Coords,
+  KIGALI_CENTER,
   Ride,
   RideLocation,
   RideStatus,
@@ -59,6 +60,13 @@ const RideContext = createContext<RideContextType | undefined>(undefined);
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const driverEntitlement = useOptionalDriverEntitlement();
   const auth = useOptionalAuth();
+  const [pickup, setPickup] = useState<RideLocation>({
+    ...KIGALI_CENTER,
+    address: '',
+    locationType: 'generic',
+  });
+  const [destination, setDestination] = useState<RideLocation | null>(null);
+  const [destText, setDestText] = useState('');
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [cancelledSearchDraft, setCancelledSearchDraft] = useState<BookingFormDraft | null>(null);
   const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
@@ -388,6 +396,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<RideContextType>(() => ({
+    pickup,
+    setPickup,
+    destination,
+    setDestination,
+    destText,
+    setDestText,
     currentRide,
     rideHistory,
     driverLocation,
@@ -415,6 +429,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     riderAcceptWithFare,
     loadHistory,
   }), [
+    pickup,
+    destination,
+    destText,
     acceptCustomerOffer,
     acceptDriverOffer,
     acceptRideRequest,

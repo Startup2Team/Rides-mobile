@@ -100,6 +100,7 @@ export function LocationSearchOverlay({
               placeholder="Address, hotel, or 1 KG 185 ST"
               placeholderTextColor={colors.mutedForeground}
               returnKeyType="search"
+              autoFocus
             />
             {loading ? (
               <View style={styles.locationSearchClear}>
@@ -197,7 +198,7 @@ export function LocationSearchOverlay({
                   onPress={() => onApplyLocation(target, buildTypedLocation())}
                 >
                   <View style={styles.locationOptionIcon}>
-                    <Feather name="edit-3" size={16} color={colors.foreground} />
+                    <Feather name="edit-2" size={16} color={colors.foreground} />
                   </View>
                   <View style={styles.locationOptionText}>
                     <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -205,17 +206,6 @@ export function LocationSearchOverlay({
                     </Text>
                     <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Confirm exact details in chat</Text>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.saveLocationButton, { borderColor: colors.border }]}
-                    onPress={event => {
-                      event.stopPropagation();
-                      onSaveCandidate(buildTypedLocation());
-                      Keyboard.dismiss();
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.saveLocationButtonText, { color: colors.primary }]}>Save</Text>
-                  </TouchableOpacity>
                 </TouchableOpacity>
               )}
 
@@ -248,17 +238,6 @@ export function LocationSearchOverlay({
                         {suggestion.subtitle ?? suggestion.place_name}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      style={[styles.saveLocationButton, { borderColor: colors.border }]}
-                      onPress={event => {
-                        event.stopPropagation();
-                        onSaveCandidate(location);
-                        Keyboard.dismiss();
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.saveLocationButtonText, { color: colors.primary }]}>Save</Text>
-                    </TouchableOpacity>
                   </TouchableOpacity>
                 );
               })}

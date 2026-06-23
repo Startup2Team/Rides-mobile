@@ -92,9 +92,9 @@ describe('customer tab layout', () => {
     mockUseAuth.mockReturnValue({ user: { id: 'u1' } });
   });
 
-  test('includes Share in the bottom navbar', () => {
+  test('excludes Share from the bottom navbar', () => {
     render(<TabLayout />);
 
-    expect(mockCapturedScreens).toContain('share');
+    expect(mockCapturedScreens).not.toContain('share');
   });
 });

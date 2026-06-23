@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useColorScheme,
   View,
 } from 'react-native';
 import MapView, { type Region } from 'react-native-maps';
@@ -34,6 +35,7 @@ export default function SavedPlaceSelectorScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
+  const scheme = useColorScheme();
 
   const {
     mode = 'add',
@@ -67,7 +69,7 @@ export default function SavedPlaceSelectorScreen() {
     if (mode === 'edit' && existing) {
       return existing.label;
     }
-    return rawLabel || 'Home';
+    return rawLabel || 'Other';
   }, [mode, existing, rawLabel]);
 
   const displayLabel = useMemo(() => {
@@ -106,6 +108,9 @@ export default function SavedPlaceSelectorScreen() {
 
   const [customLabel, setCustomLabel] = useState(() => {
     if (displayLabel === 'Other') {
+      if (mode === 'add' && label === 'Other') {
+        return '';
+      }
       return label;
     }
     return '';
@@ -113,10 +118,18 @@ export default function SavedPlaceSelectorScreen() {
 
   const mapRef = useRef<MapView>(null);
   const inputRef = useRef<TextInput>(null);
-  const search = useLocationSearch(initialCoords);
+  const {
+    text: searchText,
+    setText: setSearchText,
+    handleTextChange: handleSearchTextChange,
+    loading: searchLoading,
+    suggestions: searchSuggestions,
+    clearText: clearSearchText,
+    buildTypedLocation: buildSearchTypedLocation,
+  } = useLocationSearch(initialCoords);
 
   useEffect(() => {
-    if (initialCoords && initialCoords !== KIGALI_CENTER) {
+    if (initialCoords && (initialCoords.latitude !== KIGALI_CENTER.latitude || initialCoords.longitude !== KIGALI_CENTER.longitude)) {
       setMapCoords(initialCoords);
     }
   }, [initialCoords]);
@@ -124,15 +137,44 @@ export default function SavedPlaceSelectorScreen() {
   useEffect(() => {
     if (initialAddressStr) {
       setMapAddress(initialAddressStr);
-      search.setText(initialAddressStr);
+      setSearchText(initialAddressStr);
     }
-  }, [initialAddressStr, search.setText]);
+  }, [initialAddressStr, setSearchText]);
 
   useEffect(() => {
     if (displayLabel === 'Other' && label && label !== 'Other') {
       setCustomLabel(label);
     }
   }, [displayLabel, label]);
+  if (mode === 'edit' && !existing) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <GlassHeader title="Edit Place" />
+        <View
+          style={[
+            styles.searchBody,
+            {
+              paddingTop: headerMetrics.contentTop + 24,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 16,
+            },
+          ]}
+        >
+          <Feather name="alert-triangle" size={48} color={colors.destructive} />
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.foreground, textAlign: 'center' }}>
+            Saved place not found or has been deleted.
+          </Text>
+          <TouchableOpacity
+            style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.primary }}
+            onPress={() => router.back()}
+          >
+            <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   const savePlace = async (place: RideLocation) => {
     const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
@@ -238,11 +280,34 @@ export default function SavedPlaceSelectorScreen() {
     );
   }
 
-  const hasQuery = search.text.trim().length >= 2;
+  const hasQuery = searchText.trim().length >= 2;
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <GlassHeader
         title={displayLabel === 'Other' ? (mode === 'edit' ? 'Edit Place' : 'Add Place') : `${mode === 'edit' ? 'Edit' : 'Add'} ${label}`}
+        right={
+          mode === 'edit' && existing ? (
+            <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <TouchableOpacity
+                onPress={deletePlace}
+                activeOpacity={0.8}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: colors.primary,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Delete saved place"
+                testID="header-delete-button"
+              >
+                <Feather name="trash-2" size={16} color={colors.primaryForeground} />
+              </TouchableOpacity>
+            </View>
+          ) : undefined
+        }
       />
       <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - 4 }]}>
         {displayLabel === 'Other' ? (
@@ -258,6 +323,7 @@ export default function SavedPlaceSelectorScreen() {
               returnKeyType="next"
               accessibilityLabel="Place name"
               onSubmitEditing={() => inputRef.current?.focus()}
+              keyboardAppearance={scheme === 'dark' ? 'dark' : 'light'}
             />
           </View>
         ) : null}
@@ -266,22 +332,23 @@ export default function SavedPlaceSelectorScreen() {
           <TextInput
             ref={inputRef}
             autoFocus={displayLabel !== 'Other'}
-            value={search.text}
-            onChangeText={search.handleTextChange}
+            value={searchText}
+            onChangeText={handleSearchTextChange}
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder={`Search ${label.toLowerCase()} address`}
             placeholderTextColor={colors.mutedForeground}
             returnKeyType="search"
+            keyboardAppearance={scheme === 'dark' ? 'dark' : 'light'}
           />
-          {search.loading ? (
+          {searchLoading ? (
             <View style={styles.searchClear}>
               <ActivityIndicator size="small" color={colors.primary} />
             </View>
           ) : null}
-          {!search.loading && search.text.length > 0 ? (
+          {!searchLoading && searchText.length > 0 ? (
             <TouchableOpacity
               style={[styles.searchClear, { backgroundColor: colors.muted, borderColor: colors.border }]}
-              onPress={search.clearText}
+              onPress={clearSearchText}
               accessibilityLabel="Clear address search"
             >
               <Feather name="x" size={16} color={colors.mutedForeground} />
@@ -306,19 +373,19 @@ export default function SavedPlaceSelectorScreen() {
           {hasQuery ? (
             <TouchableOpacity
               style={[styles.resultRow, { borderBottomColor: colors.border }]}
-              onPress={() => savePlace(search.buildTypedLocation())}
+              onPress={() => savePlace(buildSearchTypedLocation())}
             >
-              <Feather name="edit-3" size={17} color={colors.foreground} />
+              <Feather name="edit-2" size={17} color={colors.foreground} />
               <View style={styles.resultCopy}>
                 <Text style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>
-                  Use "{search.text.trim()}"
+                  Use "{searchText.trim()}"
                 </Text>
                 <Text style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>Save the typed address</Text>
               </View>
             </TouchableOpacity>
           ) : null}
 
-          {search.suggestions.map(suggestion => (
+          {searchSuggestions.map(suggestion => (
             <TouchableOpacity
               key={suggestion.id}
               style={[styles.resultRow, { borderBottomColor: colors.border }]}
@@ -338,24 +405,13 @@ export default function SavedPlaceSelectorScreen() {
             </TouchableOpacity>
           ))}
 
-          {hasQuery && !search.loading && search.suggestions.length === 0 ? (
+          {hasQuery && !searchLoading && searchSuggestions.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               No matches yet. Try a full place name, street address, or set the location on the map.
             </Text>
           ) : null}
 
-          {mode === 'edit' && existing ? (
-            <TouchableOpacity
-              style={[styles.deleteButton, { borderColor: colors.border }]}
-              onPress={deletePlace}
-              activeOpacity={0.7}
-            >
-              <Feather name="trash-2" size={16} color={colors.destructive} />
-              <Text style={[styles.deleteButtonText, { color: colors.destructive }]}>
-                Delete Saved Place
-              </Text>
-            </TouchableOpacity>
-          ) : null}
+
         </GlassScrollView>
       </View>
     </View>
@@ -365,7 +421,7 @@ export default function SavedPlaceSelectorScreen() {
 function normalizeLabel(value?: string): SavedPlaceLabel {
   if (value === 'Home' || value === 'Work' || value === 'School' || value === 'Church' || value === 'Other') return value;
   if (value && value.trim().length > 0) return 'Other';
-  return 'Home';
+  return 'Other';
 }
 
 const styles = StyleSheet.create({
@@ -408,19 +464,5 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   resultSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
   emptyText: { paddingVertical: 22, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: buttonCornerRadius(50),
-    borderWidth: 1,
-    marginTop: 20,
-    marginHorizontal: 16,
-  },
-  deleteButtonText: {
-    fontSize: 15,
-    fontFamily: 'Inter_600SemiBold',
-  },
+
 });

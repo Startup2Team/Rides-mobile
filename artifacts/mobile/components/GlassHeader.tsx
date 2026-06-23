@@ -69,7 +69,7 @@ export function GlassHeader({
       />
       <View style={styles.headerContent}>
         {showBack ? (
-          <BackButton onPress={onBackPress ?? (() => router.back())} />
+          <BackButton exitOnPress={false} onPress={onBackPress ?? (() => router.back())} />
         ) : (
           <View style={styles.sideSlot} />
         )}

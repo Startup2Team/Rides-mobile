@@ -27,9 +27,29 @@ export function SavedLocationsSection({
   if (tab === 'saved') {
     return (
       <>
-        <Text style={[styles.locationSectionTitle, { color: colors.mutedForeground }, hasSearchResults && styles.locationSectionTitleAfterSearch]}>
-          Saved locations
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: hasSearchResults ? 18 : 4, marginBottom: 6 }}>
+          <Text style={[styles.locationSectionTitle, { color: colors.mutedForeground, marginTop: 0, marginBottom: 0 }]}>
+            Saved locations
+          </Text>
+          {savedLocations.length > 0 && (
+            <TouchableOpacity
+              onPress={onAddSavedLocation}
+              activeOpacity={0.8}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Add saved place"
+            >
+              <Feather name="plus" size={16} color={colors.primaryForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
         {savedLocations.length === 0 && (
           <View style={styles.locationEmptyState}>
             <Feather name="bookmark" size={18} color={colors.mutedForeground} />

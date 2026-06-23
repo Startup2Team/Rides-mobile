@@ -7,6 +7,12 @@ import type {
 } from '@/types';
 
 export interface RideContextType {
+  pickup: RideLocation;
+  destination: RideLocation | null;
+  destText: string;
+  setPickup: React.Dispatch<React.SetStateAction<RideLocation>>;
+  setDestination: React.Dispatch<React.SetStateAction<RideLocation | null>>;
+  setDestText: React.Dispatch<React.SetStateAction<string>>;
   currentRide: Ride | null;
   rideHistory: Ride[];
   driverLocation: Coords | null;

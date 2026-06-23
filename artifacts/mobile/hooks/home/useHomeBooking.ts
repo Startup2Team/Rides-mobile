@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useRide } from '@/context/RideContext';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import type { RideLocation, VehicleType } from '@/types';
@@ -28,9 +29,14 @@ export function useHomeBooking({
   userLocation: RideLocation;
 }) {
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('moto');
-  const [pickup, setPickup] = useState<RideLocation>({ ...userLocation, address: '' });
-  const [destText, setDestText] = useState('');
-  const [destination, setDestination] = useState<RideLocation | null>(null);
+  const {
+    pickup,
+    setPickup,
+    destination,
+    setDestination,
+    destText,
+    setDestText,
+  } = useRide();
   const [bookLoading, setBookLoading] = useState(false);
 
   const proceedWithBooking = useCallback(async (finalDestination: RideLocation) => {

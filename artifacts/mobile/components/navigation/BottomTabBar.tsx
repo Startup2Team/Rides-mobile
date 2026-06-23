@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM } from '@/constants/tabBar';
+import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
 
 const ACTIVE_LIGHT = '#007AFF';
 const ACTIVE_DARK = '#0A84FF';
-const INACTIVE = '#8E8E93';
+const INACTIVE = '#000000';
 const LIGHT_BACKGROUND = '#FFFFFF';
 const DARK_BACKGROUND = '#1C1C1E';
 const LIGHT_BORDER = '#E5E5EA';
@@ -138,6 +138,13 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
   const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
   const activeColor = isDark ? ACTIVE_DARK : ACTIVE_LIGHT;
 
+  const focusedRoute = state.routes[state.index];
+  const focusedOptions = descriptors[focusedRoute.key].options;
+  const isHidden = focusedOptions.tabBarStyle?.display === 'none';
+
+  const paddingBottomVal = Math.max(insets.bottom, TAB_BAR_SAFE_BOTTOM);
+  const totalHeight = computeTabBarHeight(insets.bottom);
+
   return (
     <View
       style={[
@@ -145,12 +152,21 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
         {
           backgroundColor,
           borderTopColor: borderColor,
-          paddingBottom: Math.max(insets.bottom, TAB_BAR_SAFE_BOTTOM),
+          borderTopWidth: isHidden ? 0 : StyleSheet.hairlineWidth,
+          height: isHidden ? 0 : totalHeight,
+          minHeight: 0,
+          paddingTop: isHidden ? 0 : 4,
+          paddingBottom: isHidden ? 0 : paddingBottomVal,
+          opacity: isHidden ? 0 : 1,
+          overflow: 'hidden',
         },
       ]}
     >
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
+        if (route.name === 'share' || options.href === null) {
+          return null;
+        }
         const isFocused = state.index === index;
         const label =
           typeof options.title === 'string'
@@ -230,47 +246,47 @@ const styles = StyleSheet.create({
 });
 
 export const customerTabBarIcons = {
-  index: ({ color, focused }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? 'map' : 'map-outline'} size={24} color={color} />
+  index: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="map" size={24} color={color} />
   ),
-  history: ({ color, focused }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? 'receipt-text' : 'receipt-text-outline'} size={24} color={color} />
+  history: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="receipt-text" size={24} color={color} />
   ),
-  share: ({ color, focused }: { color: string; focused: boolean }) => (
+  share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (
       <SymbolView
-        name={focused ? 'square.and.arrow.up.fill' : 'square.and.arrow.up'}
+        name="square.and.arrow.up.fill"
         size={24}
         tintColor={color}
       />
     ) : (
-      <Ionicons name={focused ? 'share-social' : 'share-social-outline'} size={24} color={color} />
+      <Ionicons name="share-social" size={24} color={color} />
     )
   ),
-  profile: ({ color, focused }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? 'account' : 'account-outline'} size={24} color={color} />
+  profile: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="account" size={24} color={color} />
   ),
 };
 
 export const driverTabBarIcons = {
-  index: ({ color, focused }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? 'car' : 'car-outline'} size={24} color={color} />
+  index: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="car" size={24} color={color} />
   ),
-  stats: ({ color, focused }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? 'chart-box' : 'chart-box-outline'} size={24} color={color} />
+  stats: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="chart-box" size={24} color={color} />
   ),
-  share: ({ color, focused }: { color: string; focused: boolean }) => (
+  share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (
       <SymbolView
-        name={focused ? 'square.and.arrow.up.fill' : 'square.and.arrow.up'}
+        name="square.and.arrow.up.fill"
         size={24}
         tintColor={color}
       />
     ) : (
-      <Ionicons name={focused ? 'share-social' : 'share-social-outline'} size={24} color={color} />
+      <Ionicons name="share-social" size={24} color={color} />
     )
   ),
-  profile: ({ color, focused }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name={focused ? 'account' : 'account-outline'} size={24} color={color} />
+  profile: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="account" size={24} color={color} />
   ),
 };

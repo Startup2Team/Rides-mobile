@@ -24,13 +24,7 @@ export default function TabLayout() {
           tabBarIcon: customerTabBarIcons.history,
         }}
       />
-      <Tabs.Screen
-        name="share"
-        options={{
-          title: 'Share',
-          tabBarIcon: customerTabBarIcons.share,
-        }}
-      />
+
       <Tabs.Screen
         name="profile"
         options={{
