@@ -27,8 +27,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="share"
         options={{
-          title: 'Share',
-          tabBarIcon: customerTabBarIcons.share,
+          href: null,
         }}
       />
       <Tabs.Screen

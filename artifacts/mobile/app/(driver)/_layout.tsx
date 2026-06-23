@@ -33,8 +33,7 @@ export default function DriverTabLayout() {
       <Tabs.Screen
         name="share"
         options={{
-          title: 'Share',
-          tabBarIcon: driverTabBarIcons.share,
+          href: null,
         }}
       />
       <Tabs.Screen

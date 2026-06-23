@@ -164,6 +164,9 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
     >
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
+        if (route.name === 'share' || options.href === null) {
+          return null;
+        }
         const isFocused = state.index === index;
         const label =
           typeof options.title === 'string'
