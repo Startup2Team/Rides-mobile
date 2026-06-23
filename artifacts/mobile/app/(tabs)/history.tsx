@@ -17,6 +17,7 @@ import { Ride, VEHICLE_LABELS } from '@/types';
 import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 
 /** Matches card horizontal padding — space before calendar / after RWF. */
 const CARD_CONTENT_INSET = 16;
@@ -131,7 +132,7 @@ export default function HistoryScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <GlassHeader title="My Rides" showBack={false} />
+      <GlassHeader title="My Trips" showBack={false} />
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
@@ -139,7 +140,7 @@ export default function HistoryScreen() {
           styles.list,
           {
             paddingTop: headerMetrics.contentTop,
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 84 : 80) + 16,
+            paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
           },
         ]}
         scrollEnabled={rideHistory.length > 0}
@@ -147,9 +148,9 @@ export default function HistoryScreen() {
         {rideHistory.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="map" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No rides yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No trips yet</Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-              Your completed rides will appear here
+              Your completed trips will appear here
             </Text>
           </View>
         ) : (

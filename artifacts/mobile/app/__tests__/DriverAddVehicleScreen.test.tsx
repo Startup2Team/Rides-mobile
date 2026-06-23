@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Alert, Text } from 'react-native';
-import type { DriverProfile, DriverVehicleProfile } from '@/types';
+import type { DriverProfile, DriverVehicleProfile, VehicleType } from '@/types';
 import type { DocFaces, DocumentKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { formatRwandaPlateInput } from '@/utils/rwandaValidation';
 import DriverAddVehicleScreen from '../driver-add-vehicle';
@@ -14,6 +14,7 @@ const mockPickDocument = jest.fn();
 const mockTakeDocumentPhoto = jest.fn();
 let mockDriverProfile: DriverProfile | null = null;
 let mockParams: Record<string, string> = {};
+let mockVehicleType: VehicleType = 'cab';
 let mockDocs: Record<DocumentKey, DocFaces> = {
   license: ['license-front://photo', 'license-back://photo'],
   nationalId: ['national-front://photo', 'national-back://photo'],
@@ -64,7 +65,7 @@ jest.mock('@/domain/verificationSubmissions', () => ({
 jest.mock('@/hooks/driver-onboarding/useDriverOnboardingForm', () => ({
   useDriverOnboardingForm: () => ({
     form: {
-      vehicleType: 'cab',
+      vehicleType: mockVehicleType,
       plateNumber: 'RAC 002 A',
       licenseNumber: '1234567890123456',
       nationalId: '1990010112345678',
@@ -164,6 +165,7 @@ describe('DriverAddVehicleScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockParams = {};
+    mockVehicleType = 'cab';
     mockDocs = {
       license: ['license-front://photo', 'license-back://photo'],
       nationalId: ['national-front://photo', 'national-back://photo'],
@@ -226,6 +228,28 @@ describe('DriverAddVehicleScreen', () => {
       },
     });
     useStateSpy.mockRestore();
+  });
+
+  test('shows vehicle-specific placeholders for moto and rifani', () => {
+    mockVehicleType = 'moto';
+    render(<DriverAddVehicleScreen />);
+    expect(screen.getByPlaceholderText('Yamaha')).toBeTruthy();
+    expect(screen.getByPlaceholderText('BWS')).toBeTruthy();
+  });
+
+  test('shows vehicle-specific placeholders for rifani', () => {
+    mockVehicleType = 'rifani';
+    render(<DriverAddVehicleScreen />);
+    expect(screen.getByPlaceholderText('Bajaj')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Boxer')).toBeTruthy();
+  });
+
+  test('shows only the outside vehicle photo for hilux', () => {
+    mockVehicleType = 'hilux';
+    render(<DriverAddVehicleScreen />);
+    expect(screen.getByText('Vehicle photos')).toBeTruthy();
+    expect(screen.getByText('Outside photo')).toBeTruthy();
+    expect(screen.queryByText('Inside photo')).toBeNull();
   });
 
   test('blocks submission when required documents are missing without showing a summary card', async () => {

@@ -6,6 +6,7 @@ import {
   buildDriverApplicationSubmissionPayload,
   buildVehicleApplicationSubmissionPayload,
   buildVehicleDocumentUpdateSubmissionPayload,
+  getLatestDriverApplicationRejectionSummary,
   submitDriverApplication,
   submitVehicleApplication,
   submitVehicleDocumentUpdate,
@@ -36,6 +37,7 @@ function makeDriverProfile(overrides: Partial<DriverProfile> = {}): DriverProfil
   return {
     ...buildPendingDriverProfile({
       ...INITIAL_DRIVER_ONBOARDING_FORM,
+      dob: '01/01/1990',
       vehicleType: 'cab',
       plateNumber: 'rac 002 a',
       licenseNumber: '1234567890123456',
@@ -96,6 +98,10 @@ describe('verification submissions', () => {
       driverProfile: profile,
       form: {
         ...INITIAL_DRIVER_ONBOARDING_FORM,
+        brand: 'Toyota',
+        model: 'Corolla',
+        manufactureYear: '2020',
+        dob: '01/01/1990',
         vehicleType: 'cab',
         plateNumber: 'rac 002 a',
         licenseNumber: '1234567890123456',
@@ -109,6 +115,7 @@ describe('verification submissions', () => {
         insurance: ['insurance-front://photo', null],
         authorization: ['authorization-front://photo', null],
       },
+      vehiclePhotos: { outside: 'outside://photo', inside: 'inside://photo' },
       selfieUri: 'selfie://photo',
       submittedAt: '2026-06-18T08:00:00.000Z',
       clientSubmissionId: 'driver-submission:1',
@@ -117,9 +124,37 @@ describe('verification submissions', () => {
     expect(submission.kind).toBe('driver_application');
     expect(submission.status).toBe('pending_review');
     expect(submission.selfieImage).toBe('selfie://photo');
+    expect(submission.firstVehicle).toMatchObject({
+      brand: 'Toyota',
+      model: 'Corolla',
+      manufactureYear: 2020,
+    });
+    expect(submission.photos).toEqual({ outside: 'outside://photo', inside: 'inside://photo' });
     expect(submission.documents.license.faces[0]).toBe('license-front://photo');
     const persistence = require('@/persistence/verificationSubmissionPersistence');
     expect(persistence.saveStoredVerificationSubmissions).toHaveBeenCalled();
+  });
+
+  test('rejects driver applications from applicants younger than 18', async () => {
+    await expect(submitDriverApplication({
+      userId: 'user-1',
+      fullName: 'Driver One',
+      phone: '250788000000',
+      driverProfile: makeDriverProfile(),
+      form: {
+        ...INITIAL_DRIVER_ONBOARDING_FORM,
+        dob: '31/12/2099',
+      },
+      docs: {
+        license: ['license-front://photo', 'license-back://photo'],
+        nationalId: ['national-front://photo', 'national-back://photo'],
+        insurance: ['insurance-front://photo', null],
+        authorization: ['authorization-front://photo', null],
+      },
+      selfieUri: 'selfie://photo',
+      submittedAt: '2026-06-18T08:00:00.000Z',
+      clientSubmissionId: 'driver-submission:underage',
+    })).rejects.toThrow('Driver applicants must be at least 18 years old.');
   });
 
   test('rejected driver application can be resubmitted', async () => {
@@ -128,13 +163,20 @@ describe('verification submissions', () => {
       fullName: 'Driver One',
       phone: '250788000000',
       driverProfile: makeDriverProfile({ verificationStatus: 'rejected', rejectionReason: 'Update required' }),
-      form: INITIAL_DRIVER_ONBOARDING_FORM,
+      form: {
+        ...INITIAL_DRIVER_ONBOARDING_FORM,
+        brand: 'Toyota',
+        model: 'Corolla',
+        manufactureYear: '2020',
+        dob: '01/01/1990',
+      },
       docs: {
         license: ['license-front://photo', 'license-back://photo'],
         nationalId: ['national-front://photo', 'national-back://photo'],
         insurance: ['insurance-front://photo', null],
         authorization: ['authorization-front://photo', null],
       },
+      vehiclePhotos: { outside: 'outside://photo', inside: 'inside://photo' },
       selfieUri: 'selfie://photo',
       submittedAt: '2026-06-18T08:00:00.000Z',
       clientSubmissionId: 'driver-submission:2',
@@ -144,19 +186,101 @@ describe('verification submissions', () => {
     expect(submission.history.some(entry => entry.type === 'resubmitted')).toBe(true);
   });
 
+  test('returns the latest rejection summary for a driver application', async () => {
+    mockStore.driverApplications = [
+      {
+        id: 'driver-submission:older',
+        clientSubmissionId: 'driver-submission:older',
+        kind: 'driver_application',
+        status: 'rejected',
+        reviewStatus: 'rejected',
+        submittedAt: '2026-06-18T08:00:00.000Z',
+        updatedAt: '2026-06-18T09:00:00.000Z',
+        history: [
+          {
+            id: 'driver-submission:older:rejected',
+            type: 'rejected',
+            at: '2026-06-18T09:00:00.000Z',
+            reason: 'Older reason',
+            rejectedFields: ['plateNumber'],
+            rejectedDocuments: ['license'],
+            reviewedBy: 'agent-1',
+          },
+        ],
+        userId: 'user-1',
+      } as unknown as DriverApplicationSubmission,
+      {
+        id: 'driver-submission:latest',
+        clientSubmissionId: 'driver-submission:latest',
+        kind: 'driver_application',
+        status: 'rejected',
+        reviewStatus: 'rejected',
+        submittedAt: '2026-06-19T08:00:00.000Z',
+        updatedAt: '2026-06-19T09:00:00.000Z',
+        reviewDecision: {
+          status: 'rejected',
+          reviewedAt: '2026-06-19T09:00:00.000Z',
+          reviewedBy: 'agent-7',
+          reason: 'Latest reason',
+          rejectedFields: ['brand', 'vehicleOutsidePhoto'],
+          rejectedDocuments: ['nationalId'],
+        },
+        history: [
+          {
+            id: 'driver-submission:latest:rejected',
+            type: 'rejected',
+            at: '2026-06-19T09:00:00.000Z',
+            reason: 'Latest reason',
+            rejectedFields: ['brand', 'vehicleOutsidePhoto'],
+            rejectedDocuments: ['nationalId'],
+            reviewedBy: 'agent-7',
+          },
+        ],
+        userId: 'user-1',
+      } as unknown as DriverApplicationSubmission,
+      {
+        id: 'driver-submission:other-user',
+        clientSubmissionId: 'driver-submission:other-user',
+        kind: 'driver_application',
+        status: 'rejected',
+        reviewStatus: 'rejected',
+        submittedAt: '2026-06-20T08:00:00.000Z',
+        updatedAt: '2026-06-20T09:00:00.000Z',
+        history: [],
+        userId: 'user-2',
+      } as unknown as DriverApplicationSubmission,
+    ];
+
+    expect(await getLatestDriverApplicationRejectionSummary('user-1')).toEqual({
+      submissionId: 'driver-submission:latest',
+      reason: 'Latest reason',
+      rejectedFields: ['brand', 'vehicleOutsidePhoto'],
+      rejectedDocuments: ['nationalId'],
+      reviewedAt: '2026-06-19T09:00:00.000Z',
+      reviewedBy: 'agent-7',
+    });
+  });
+
   test('approved review decision is only applied explicitly', async () => {
     const submission = await submitDriverApplication({
       userId: 'user-1',
       fullName: 'Driver One',
       phone: '250788000000',
       driverProfile: makeDriverProfile(),
-      form: INITIAL_DRIVER_ONBOARDING_FORM,
+      form: {
+        ...INITIAL_DRIVER_ONBOARDING_FORM,
+        brand: 'Toyota',
+        model: 'Corolla',
+        manufactureYear: '2020',
+        dob: '01/01/1990',
+      },
       docs: {
         license: ['license-front://photo', 'license-back://photo'],
         nationalId: ['national-front://photo', 'national-back://photo'],
         insurance: ['insurance-front://photo', null],
         authorization: ['authorization-front://photo', null],
       },
+      vehiclePhotos: { outside: 'outside://photo', inside: 'inside://photo' },
       selfieUri: 'selfie://photo',
       submittedAt: '2026-06-18T08:00:00.000Z',
       clientSubmissionId: 'driver-submission:3',
@@ -255,6 +379,7 @@ describe('verification submissions', () => {
       driverProfile: makeDriverProfile(),
       form: {
         ...INITIAL_DRIVER_ONBOARDING_FORM,
+        dob: '01/01/1990',
         vehicleType: 'cab',
         plateNumber: 'rac 002 a',
         licenseNumber: '1234567890123456',

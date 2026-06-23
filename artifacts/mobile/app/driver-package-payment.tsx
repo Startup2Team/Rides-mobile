@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardingData';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
@@ -189,7 +190,7 @@ export default function DriverPackagePaymentScreen() {
       style={styles.root}
       contentContainerStyle={[
         styles.paymentScrollContent,
-        { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 },
+        { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
       ]}
       scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
     >
@@ -254,7 +255,7 @@ export default function DriverPackagePaymentScreen() {
               </View>
               <AppInput
                 label="Mobile Money Phone Number"
-                placeholder="+250 7x xxx xxxx"
+                placeholder="+250 7xxxxxxxx"
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
                 keyboardType="phone-pad"

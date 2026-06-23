@@ -4,6 +4,7 @@ import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import MapView, { PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import { AppButton } from '@/components/AppButton';
 import { BackButton } from '@/components/BackButton';
+import { FLOATING_ACTION_BOTTOM_OFFSET, TAB_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import type { Coords } from '@/types';
 import type { useColors } from '@/hooks/useColors';
 import { darkMapStyle, styles } from './homeStyles';
@@ -117,7 +118,7 @@ export function MapPickerOverlay({
         </Text>
       </View>
 
-      <View style={[styles.mapPickerFooter, { paddingBottom: bottomInset + (Platform.OS === 'web' ? 84 : 80) + 16 }]}>
+      <View style={[styles.mapPickerFooter, { paddingBottom: bottomInset + TAB_SCREEN_BOTTOM_PADDING + FLOATING_ACTION_BOTTOM_OFFSET }]}>
         <AppButton
           title={
             target === 'pickup'

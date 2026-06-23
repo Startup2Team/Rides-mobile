@@ -30,14 +30,10 @@ export function rwandaPhoneToSubscriber(value: string): string {
 }
 
 /**
- * Formats subscriber digits (7XXXXXXXX) as "7x xxx xxxx" for display.
+ * Returns subscriber digits (7XXXXXXXX) in a compact form for display.
  */
 export function formatSubscriberDigits(digits: string): string {
-  const d = digits.replace(/\D/g, '').slice(0, 9);
-  const p1 = d.slice(0, 2);
-  const p2 = d.slice(2, 5);
-  const p3 = d.slice(5, 9);
-  return [p1, p2, p3].filter(Boolean).join(' ');
+  return digits.replace(/\D/g, '').slice(0, 9);
 }
 
 export function formatRwandaPlateInput(value: string): string {

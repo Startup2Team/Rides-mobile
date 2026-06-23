@@ -35,6 +35,7 @@ import { useColors } from '@/hooks/useColors';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
+import { getDriverApplicationAction } from '@/utils/driverVerification';
 import type { DriverVerificationStatus } from '@/types';
 
 const AVATAR_SIZE = 44;
@@ -66,6 +67,8 @@ export type HomeTopHeaderProps = {
   profileInitial: string;
   driverVerificationStatus: DriverVerificationStatus;
   canSwitchToDriverMode: boolean;
+  driverApplicationDraftUpdatedAt?: string | null;
+  driverApprovalAcknowledgedAt?: string | null;
 };
 
 /** Shared caption size for CTA label and compact location line. */
@@ -82,6 +85,8 @@ export function HomeTopHeader({
   profileInitial,
   driverVerificationStatus,
   canSwitchToDriverMode,
+  driverApplicationDraftUpdatedAt,
+  driverApprovalAcknowledgedAt,
 }: HomeTopHeaderProps) {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
@@ -97,16 +102,20 @@ export function HomeTopHeader({
   const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
   const switchModeAvatarSlide = useRef(new RNAnimated.Value(0)).current;
 
+  const driverApplicationAction = getDriverApplicationAction(
+    driverProfile,
+    driverApplicationDraftUpdatedAt,
+    driverApprovalAcknowledgedAt,
+  );
+  const shouldShowDriverModeSlider = canSwitchToDriverMode && driverApplicationAction.route === '/(driver)';
   const ctaMessage = driverVerificationStatus === 'pending_review'
     ? 'In Review'
     : driverVerificationStatus === 'rejected'
       ? 'Update application'
-      : canSwitchToDriverMode
-        ? 'Slide to Driver'
-        : driverVerificationStatus === 'approved'
-          ? 'Driver Mode'
+      : driverVerificationStatus === 'approved'
+        ? driverApplicationAction.label
         : driverVerificationStatus === 'draft'
-          ? 'Continue application'
+          ? driverApplicationAction.label
           : DRIVER_CTA_MESSAGES[messageIndex];
   const headerLocationLine = formatHomeHeaderLocation(locationText, locLoading);
 
@@ -231,7 +240,7 @@ export function HomeTopHeader({
 
   const handleDriverCtaPress = () => {
     if (driverVerificationStatus === 'pending_review') router.push('/driver-submission-confirmation');
-    else if (driverVerificationStatus === 'approved') router.push('/(driver)');
+    else if (driverVerificationStatus === 'approved') router.push(driverApplicationAction.route);
     else router.push('/driver-onboarding');
   };
 
@@ -346,7 +355,7 @@ export function HomeTopHeader({
 
   return (
     <View style={[styles.topBar, { paddingTop }]}>
-      {canSwitchToDriverMode ? (
+      {shouldShowDriverModeSlider ? (
         <View
           style={[
             styles.driverCtaPill,
@@ -359,7 +368,9 @@ export function HomeTopHeader({
           onLayout={handleSwitchModeCtaLayout}
           accessibilityRole="button"
           accessibilityLabel="Slide to switch to driver mode"
-          accessibilityHint="Double tap to switch to driver mode"
+          accessibilityHint={driverApplicationAction.route === '/(driver)'
+            ? 'Double tap to switch to driver mode'
+            : 'Double tap to review your approved application'}
           accessibilityActions={[{ name: 'activate', label: 'Switch to driver mode' }]}
           onAccessibilityAction={event => {
             if (event.nativeEvent.actionName === 'activate') void handleSwitchToDriver();
@@ -417,7 +428,9 @@ export function HomeTopHeader({
           ]}
           accessibilityRole="button"
           accessibilityLabel={ctaMessage}
-          accessibilityHint="Opens driver application or driver mode"
+          accessibilityHint={driverApplicationAction.route === '/(driver)'
+            ? 'Opens driver mode'
+            : 'Opens the submitted driver application'}
         >
           <View style={styles.ctaAvatarInset}>
             {renderAvatar(CTA_AVATAR_SIZE, true)}

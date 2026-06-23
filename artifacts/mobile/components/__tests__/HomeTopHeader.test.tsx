@@ -5,6 +5,7 @@ import { HomeTopHeader } from '../HomeTopHeader';
 
 const mockSwitchMode = jest.fn();
 const callOrder: string[] = [];
+let mockDriverProfile: { verificationStatus?: string; profileImage?: string | null; isVerified?: boolean; driverApprovalAcknowledgedAt?: string | null } | null = null;
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -99,7 +100,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ switchMode: mockSwitchMode }),
+  useAuth: () => ({ switchMode: mockSwitchMode, driverProfile: mockDriverProfile }),
 }));
 
 jest.mock('@/hooks/useColors', () => ({
@@ -119,7 +120,14 @@ jest.mock('@/persistence/profilePersistence', () => ({
 function renderHeader(
   driverVerificationStatus: React.ComponentProps<typeof HomeTopHeader>['driverVerificationStatus'],
   canSwitchToDriverMode = false,
+  driverApplicationDraftUpdatedAt?: string | null,
+  driverApprovalAcknowledgedAt?: string | null,
 ) {
+  mockDriverProfile = {
+    verificationStatus: driverVerificationStatus,
+    isVerified: driverVerificationStatus === 'approved',
+    driverApprovalAcknowledgedAt,
+  };
   return render(
     <HomeTopHeader
       paddingTop={12}
@@ -128,6 +136,8 @@ function renderHeader(
       profileInitial="T"
       driverVerificationStatus={driverVerificationStatus}
       canSwitchToDriverMode={canSwitchToDriverMode}
+      driverApplicationDraftUpdatedAt={driverApplicationDraftUpdatedAt}
+      driverApprovalAcknowledgedAt={driverApprovalAcknowledgedAt}
     />,
   );
 }
@@ -138,6 +148,7 @@ describe('HomeTopHeader driver CTA', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockDriverProfile = null;
     callOrder.length = 0;
     const originalConsoleError = console.error;
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((...args) => {
@@ -157,8 +168,18 @@ describe('HomeTopHeader driver CTA', () => {
     jest.useRealTimers();
   });
 
-  test('approved verified CTA slides to driver mode and switches before navigating', async () => {
-    renderHeader('approved', true);
+  test('approved but not yet acknowledged shows approved state and opens confirmation', () => {
+    renderHeader('approved', true, null, null);
+
+    expect(screen.getByText("You're approved")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("You're approved"));
+
+    expect(router.push).toHaveBeenCalledWith('/driver-submission-confirmation');
+    expect(mockSwitchMode).not.toHaveBeenCalled();
+  });
+
+  test('approved acknowledged CTA slides to driver mode and switches before navigating', async () => {
+    renderHeader('approved', true, null, '2026-06-20T00:00:00.000Z');
 
     expect(screen.getByText('Slide to Driver')).toBeTruthy();
     const dragHandle = screen.getByTestId('driver-mode-avatar-drag-handle');
@@ -172,8 +193,8 @@ describe('HomeTopHeader driver CTA', () => {
     expect(callOrder).toEqual(['switch:driver', 'replace']);
   });
 
-  test('approved verified CTA snaps back when released before the slide threshold', async () => {
-    renderHeader('approved', true);
+  test('approved acknowledged CTA snaps back when released before the slide threshold', async () => {
+    renderHeader('approved', true, null, '2026-06-20T00:00:00.000Z');
 
     const dragHandle = screen.getByTestId('driver-mode-avatar-drag-handle');
     fireEvent(dragHandle, 'responderGrant', {}, { dx: 0, dy: 0 });
@@ -185,8 +206,8 @@ describe('HomeTopHeader driver CTA', () => {
     expect(router.push).not.toHaveBeenCalledWith('/(driver)');
   });
 
-  test('approved verified CTA keeps accessibility activation fallback', async () => {
-    renderHeader('approved', true);
+  test('approved acknowledged CTA keeps accessibility activation fallback', async () => {
+    renderHeader('approved', true, null, '2026-06-20T00:00:00.000Z');
 
     const switchCta = screen.getByLabelText('Slide to switch to driver mode');
     fireEvent(switchCta, 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
@@ -205,10 +226,11 @@ describe('HomeTopHeader driver CTA', () => {
   });
 
   test.each([
-    ['draft' as const, 'Continue application'],
-    ['rejected' as const, 'Update application'],
-  ])('%s still opens driver onboarding', (status, label) => {
-    renderHeader(status);
+    ['draft' as const, 'Resume form', null],
+    ['draft' as const, 'Join as Driver', new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()],
+    ['rejected' as const, 'Update application', null],
+  ])('%s still opens driver onboarding', (status, label, updatedAt) => {
+    renderHeader(status, false, updatedAt);
 
     fireEvent.press(screen.getByLabelText(label));
 

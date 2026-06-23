@@ -4,6 +4,7 @@ import type { VehicleType } from '@/types';
 import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
 
@@ -136,7 +137,7 @@ export default function DriverRideCompleteScreen() {
         ))}
       </View>
 
-      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
+      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}>
         <Text style={styles.emoji}>🎉</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>Ride Complete!</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Great job, keep it up!</Text>

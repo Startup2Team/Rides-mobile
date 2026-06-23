@@ -4,6 +4,7 @@ import {
   type CascadeField,
   type DriverOnboardingForm,
 } from './onboardingTypes';
+import { getMaximumBirthDate } from '@/utils/dateUtils';
 import { formatRwandaPlateInput, isValidRwandaPlateNumber } from '@/utils/rwandaValidation';
 
 export function useDriverOnboardingForm() {
@@ -12,9 +13,7 @@ export function useDriverOnboardingForm() {
   const [plateWarning, setPlateWarning] = useState('');
 
   const maxDobDate = useMemo(() => {
-    const date = new Date();
-    date.setFullYear(date.getFullYear() - 16);
-    return date;
+    return getMaximumBirthDate(18);
   }, []);
 
   const update = (field: string, value: string) => {

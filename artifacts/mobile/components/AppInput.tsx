@@ -16,6 +16,7 @@ interface AppInputProps extends TextInputProps {
   error?: string;
   leftIcon?: keyof typeof Feather.glyphMap;
   leftLabel?: string;
+  leftLabelDivider?: boolean;
   rightIcon?: keyof typeof Feather.glyphMap;
   onRightIconPress?: () => void;
 }
@@ -26,6 +27,7 @@ export function AppInput({
   error,
   leftIcon,
   leftLabel,
+  leftLabelDivider = true,
   rightIcon,
   onRightIconPress,
   style,
@@ -74,7 +76,15 @@ export function AppInput({
           <Feather name={leftIcon} size={18} color={colors.mutedForeground} style={styles.leftIcon} />
         )}
         {leftLabel && (
-          <Text style={[styles.leftLabel, { color: colors.foreground }]}>{leftLabel}</Text>
+          <Text
+            style={[
+              styles.leftLabel,
+              leftLabelDivider ? styles.leftLabelDivider : styles.leftLabelNoDivider,
+              { color: colors.foreground },
+            ]}
+          >
+            {leftLabel}
+          </Text>
         )}
         <TextInput
           {...props}
@@ -140,9 +150,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     marginRight: 4,
     paddingRight: 8,
+    lineHeight: 20,
+  },
+  leftLabelDivider: {
     borderRightWidth: 1,
     borderRightColor: '#E5E7EB',
-    lineHeight: 20,
+  },
+  leftLabelNoDivider: {
+    borderRightWidth: 0,
+    paddingRight: 0,
+    marginRight: 6,
   },
   rightIcon: { padding: 4 },
   error: {

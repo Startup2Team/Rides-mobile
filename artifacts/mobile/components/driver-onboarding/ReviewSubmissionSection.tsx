@@ -1,21 +1,22 @@
 import React from 'react';
-import { Image, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Image, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
-import type { DocFaces, DocumentKey, DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
+import type { DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
 import { VEHICLE_LABELS } from '@/types';
-import { DOCUMENTS, PAYMENT_PROVIDER_LOGOS } from './onboardingData';
+import type { GalleryImage } from '@/components/ImageGalleryPreview';
+import { PAYMENT_PROVIDER_LOGOS } from './onboardingData';
 import { styles } from './onboardingStyles';
 
-export function ReviewSubmissionSection({ colors, docs, form }: {
+export function ReviewSubmissionSection({ colors, form, onOpenImagePreview, previewImages }: {
   colors: ReturnType<typeof useColors>;
-  docs: Record<DocumentKey, DocFaces>;
   form: DriverOnboardingForm;
+  onOpenImagePreview: (index: number) => void;
+  previewImages: GalleryImage[];
 }) {
   const isDark = useColorScheme() === 'dark';
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const separatorColor = isDark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)';
-  const totalImages = Object.values(docs).reduce((n, faces) => n + faces.filter(Boolean).length, 0);
   const providerLabel = form.momoProvider === 'mtn' ? 'MTN MoMo' : 'Airtel Money';
 
   return (
@@ -47,43 +48,41 @@ export function ReviewSubmissionSection({ colors, docs, form }: {
       {/* Vehicle */}
       <ReviewCard icon="truck" title="Vehicle Information" cardFill={cardFill} colors={colors}>
         <ReviewRow label="Vehicle Type" value={VEHICLE_LABELS[form.vehicleType]} separatorColor={separatorColor} colors={colors} />
+        <ReviewRow label="Brand" value={form.brand} separatorColor={separatorColor} colors={colors} />
+        <ReviewRow label="Model" value={form.model} separatorColor={separatorColor} colors={colors} />
+        <ReviewRow label="Manufacture Year" value={form.manufactureYear} separatorColor={separatorColor} colors={colors} />
         <ReviewRow label="Plate Number" value={form.plateNumber} separatorColor={separatorColor} colors={colors} />
         <ReviewRow label="Licence Number" value={form.licenseNumber} separatorColor={separatorColor} colors={colors} />
         <ReviewRow label="Licence Expiry" value={form.licenseExpiryDate} separatorColor={separatorColor} colors={colors} last />
       </ReviewCard>
 
       {/* Documents */}
-      <ReviewCard icon="file-text" title="Captured Documents" cardFill={cardFill} colors={colors}>
-        {DOCUMENTS.map((doc, index) => {
-          const front = docs[doc.key][0];
-          const back = docs[doc.key][1];
-          const count = [front, back].filter(Boolean).length;
-          return (
-            <View
-              key={doc.key}
-              style={[
-                reviewStyles.docRow,
-                index < DOCUMENTS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[reviewStyles.docName, { color: colors.foreground }]}>{doc.label}</Text>
-                <Text style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>
-                  {count === 0 ? 'No images' : `${count} image${count > 1 ? 's' : ''} attached`}
-                </Text>
-              </View>
-              {front ? (
-                <View style={reviewStyles.thumbRow}>
-                  <Image source={{ uri: front }} style={reviewStyles.thumb} resizeMode="cover" />
-                  {back && <Image source={{ uri: back }} style={reviewStyles.thumb} resizeMode="cover" />}
-                </View>
-              ) : (
-                <Feather name="alert-circle" size={16} color={colors.destructive} />
-              )}
+      <ReviewCard icon="file-text" title="Submitted Images" cardFill={cardFill} colors={colors}>
+        {previewImages.length ? previewImages.map((image, index) => (
+          <TouchableOpacity
+            key={image.id}
+            accessibilityLabel={`Preview ${image.title ?? 'submitted image'}`}
+            onPress={() => onOpenImagePreview(index)}
+            style={[
+              reviewStyles.imageRow,
+              index < previewImages.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[reviewStyles.docName, { color: colors.foreground }]}>{image.title ?? 'Submitted image'}</Text>
+              <Text style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>
+                {image.subtitle ?? 'Tap to preview'}
+              </Text>
             </View>
-          );
-        })}
-        <ReviewRow label="Total images" value={`${totalImages} attached`} separatorColor={separatorColor} colors={colors} last />
+            <Image source={{ uri: image.uri ?? undefined }} style={reviewStyles.thumb} resizeMode="cover" />
+          </TouchableOpacity>
+        )) : (
+          <View style={reviewStyles.emptyState}>
+            <Feather name="image" size={16} color={colors.mutedForeground} />
+            <Text style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>No images attached</Text>
+          </View>
+        )}
+        <ReviewRow label="Total images" value={`${previewImages.length} attached`} separatorColor={separatorColor} colors={colors} last />
       </ReviewCard>
 
       {/* Payment */}
@@ -205,14 +204,25 @@ const reviewStyles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     marginTop: 2,
   },
-  thumbRow: {
+  imageRow: {
     flexDirection: 'row',
-    gap: 4,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 64,
+    gap: 12,
   },
   thumb: {
     width: 40,
     height: 40,
     borderRadius: 8,
+  },
+  emptyState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   providerBadge: {
     flexDirection: 'row',

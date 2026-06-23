@@ -18,6 +18,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
@@ -33,54 +34,159 @@ export default function SavedPlaceSelectorScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { label: rawLabel } = useLocalSearchParams<{ label?: string }>();
-  const label = normalizeLabel(rawLabel);
+
+  const {
+    mode = 'add',
+    label: rawLabel,
+    savedPlaceId,
+    initialAddress,
+    initialLatitude,
+    initialLongitude,
+  } = useLocalSearchParams<{
+    mode?: 'add' | 'edit';
+    label?: string;
+    savedPlaceId?: string;
+    initialAddress?: string;
+    initialLatitude?: string;
+    initialLongitude?: string;
+  }>();
+
   const { savedPlaces, persistSavedPlaces } = useSavedLocations();
-  const existing = useMemo(
-    () => savedPlaces.find(place => place.label.toLowerCase() === label.toLowerCase()),
-    [label, savedPlaces],
-  );
-  const [mode, setMode] = useState<'search' | 'map'>('search');
-  const [mapCoords, setMapCoords] = useState(existing ?? KIGALI_CENTER);
-  const [mapAddress, setMapAddress] = useState(existing?.address ?? '');
+
+  const existing = useMemo(() => {
+    if (mode === 'edit' && savedPlaceId) {
+      return savedPlaces.find(place => place.id === savedPlaceId);
+    }
+    if (mode === 'add' && rawLabel && rawLabel !== 'Other') {
+      return savedPlaces.find(place => place.label.toLowerCase() === rawLabel.toLowerCase());
+    }
+    return undefined;
+  }, [mode, savedPlaceId, rawLabel, savedPlaces]);
+
+  const label = useMemo(() => {
+    if (mode === 'edit' && existing) {
+      return existing.label;
+    }
+    return rawLabel || 'Home';
+  }, [mode, existing, rawLabel]);
+
+  const displayLabel = useMemo(() => {
+    return normalizeLabel(label);
+  }, [label]);
+
+  const initialCoords = useMemo(() => {
+    if (initialLatitude && initialLongitude) {
+      const lat = parseFloat(initialLatitude);
+      const lng = parseFloat(initialLongitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng };
+      }
+    }
+    if (existing) {
+      return { latitude: existing.latitude, longitude: existing.longitude };
+    }
+    return KIGALI_CENTER;
+  }, [initialLatitude, initialLongitude, existing]);
+
+  const initialAddressStr = useMemo(() => {
+    if (initialAddress) {
+      return initialAddress;
+    }
+    if (existing) {
+      return existing.address ?? '';
+    }
+    return '';
+  }, [initialAddress, existing]);
+
+  const [uiMode, setUiMode] = useState<'search' | 'map'>('search');
+  const [mapCoords, setMapCoords] = useState(initialCoords);
+  const [mapAddress, setMapAddress] = useState(initialAddressStr);
   const [isDragging, setIsDragging] = useState(false);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [customLabel, setCustomLabel] = useState('');
+
+  const [customLabel, setCustomLabel] = useState(() => {
+    if (displayLabel === 'Other') {
+      return label;
+    }
+    return '';
+  });
+
   const mapRef = useRef<MapView>(null);
   const inputRef = useRef<TextInput>(null);
-  const search = useLocationSearch(existing ?? KIGALI_CENTER);
+  const search = useLocationSearch(initialCoords);
 
   useEffect(() => {
-    search.setText(existing?.address ?? '');
-  }, [existing?.address, search.setText]);
+    if (initialCoords && initialCoords !== KIGALI_CENTER) {
+      setMapCoords(initialCoords);
+    }
+  }, [initialCoords]);
+
+  useEffect(() => {
+    if (initialAddressStr) {
+      setMapAddress(initialAddressStr);
+      search.setText(initialAddressStr);
+    }
+  }, [initialAddressStr, search.setText]);
+
+  useEffect(() => {
+    if (displayLabel === 'Other' && label && label !== 'Other') {
+      setCustomLabel(label);
+    }
+  }, [displayLabel, label]);
 
   const savePlace = async (place: RideLocation) => {
-    const finalLabel = label === 'Other' ? customLabel.trim() : label;
+    const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
     if (!finalLabel) {
       Alert.alert('Name this place', 'Enter a label before saving this location.');
       return;
     }
     const saved: SavedLocation = {
       ...place,
-      id: existing?.id ?? `settings-${finalLabel.toLowerCase()}-${Date.now()}`,
+      id: (mode === 'edit' && existing) ? existing.id : `settings-${finalLabel.toLowerCase()}-${Date.now()}`,
       label: finalLabel,
     };
-    const next = [saved, ...savedPlaces.filter(item =>
-      item.id !== existing?.id && item.label.toLowerCase() !== finalLabel.toLowerCase()
-    )];
+    const next = [
+      saved,
+      ...savedPlaces.filter(item => {
+        const isCurrentItem = (mode === 'edit' && existing) ? item.id === existing.id : false;
+        const isSameLabel = item.label.toLowerCase() === finalLabel.toLowerCase();
+        const isSameId = item.id === saved.id;
+        return !isCurrentItem && !isSameLabel && !isSameId;
+      }),
+    ];
     await persistSavedPlaces(next);
     router.back();
   };
 
+  const deletePlace = () => {
+    if (!existing) return;
+    Alert.alert(
+      `Delete "${existing.label}"?`,
+      'This saved place will be removed from your list. This cannot be undone.',
+      [
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const next = savedPlaces.filter(place => place.id !== existing.id);
+            await persistSavedPlaces(next);
+            router.back();
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  };
+
   const openMap = async () => {
-    let coords: { latitude: number; longitude: number } = existing ?? KIGALI_CENTER;
+    let coords: { latitude: number; longitude: number } = initialCoords;
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
     } catch {}
     setMapCoords(coords);
-    setMapAddress(existing?.address ?? '');
-    setMode('map');
+    setMapAddress(initialAddressStr);
+    setUiMode('map');
     Keyboard.dismiss();
     requestAnimationFrame(() => {
       mapRef.current?.animateToRegion(
@@ -95,7 +201,7 @@ export default function SavedPlaceSelectorScreen() {
     setMapAddress(formatReverseGeocodeAddress(geo, 'Selected location'));
   };
 
-  if (mode === 'map') {
+  if (uiMode === 'map') {
     return (
       <MapPickerOverlay
           target="savedLocation"
@@ -114,7 +220,7 @@ export default function SavedPlaceSelectorScreen() {
             setMapCoords(coords);
             void syncMapAddress(coords);
           }}
-          onClose={() => setMode('search')}
+          onClose={() => setUiMode('search')}
           onCycleMapType={() => setMapType(previous => MAP_TYPES[(MAP_TYPES.indexOf(previous) + 1) % MAP_TYPES.length])}
           onCenterUser={() => mapRef.current?.animateToRegion({
             ...mapCoords,
@@ -135,9 +241,11 @@ export default function SavedPlaceSelectorScreen() {
   const hasQuery = search.text.trim().length >= 2;
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title={label === 'Other' ? 'Add Place' : `${existing ? 'Edit' : 'Add'} ${label}`} />
+      <GlassHeader
+        title={displayLabel === 'Other' ? (mode === 'edit' ? 'Edit Place' : 'Add Place') : `${mode === 'edit' ? 'Edit' : 'Add'} ${label}`}
+      />
       <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - 4 }]}>
-        {label === 'Other' ? (
+        {displayLabel === 'Other' ? (
           <View style={[styles.labelInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="bookmark" size={18} color={colors.mutedForeground} />
             <TextInput
@@ -157,7 +265,7 @@ export default function SavedPlaceSelectorScreen() {
           <Feather name="search" size={18} color={colors.mutedForeground} />
           <TextInput
             ref={inputRef}
-            autoFocus={label !== 'Other'}
+            autoFocus={displayLabel !== 'Other'}
             value={search.text}
             onChangeText={search.handleTextChange}
             style={[styles.searchInput, { color: colors.foreground }]}
@@ -193,7 +301,7 @@ export default function SavedPlaceSelectorScreen() {
           indicatorTop={8}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
         >
           {hasQuery ? (
             <TouchableOpacity
@@ -235,6 +343,19 @@ export default function SavedPlaceSelectorScreen() {
               No matches yet. Try a full place name, street address, or set the location on the map.
             </Text>
           ) : null}
+
+          {mode === 'edit' && existing ? (
+            <TouchableOpacity
+              style={[styles.deleteButton, { borderColor: colors.border }]}
+              onPress={deletePlace}
+              activeOpacity={0.7}
+            >
+              <Feather name="trash-2" size={16} color={colors.destructive} />
+              <Text style={[styles.deleteButtonText, { color: colors.destructive }]}>
+                Delete Saved Place
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </GlassScrollView>
       </View>
     </View>
@@ -242,7 +363,8 @@ export default function SavedPlaceSelectorScreen() {
 }
 
 function normalizeLabel(value?: string): SavedPlaceLabel {
-  if (value === 'Work' || value === 'School' || value === 'Church' || value === 'Other') return value;
+  if (value === 'Home' || value === 'Work' || value === 'School' || value === 'Church' || value === 'Other') return value;
+  if (value && value.trim().length > 0) return 'Other';
   return 'Home';
 }
 
@@ -286,4 +408,19 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   resultSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
   emptyText: { paddingVertical: 22, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: buttonCornerRadius(50),
+    borderWidth: 1,
+    marginTop: 20,
+    marginHorizontal: 16,
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
 });

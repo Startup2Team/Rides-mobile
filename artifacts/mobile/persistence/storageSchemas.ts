@@ -314,6 +314,9 @@ export const verificationSubmissionStoreSchema = verificationSubmissionStoreZodS
 export const driverOnboardingDraftSchema = z.object({
   form: z.object({
     vehicleType: vehicleTypeSchema,
+    brand: z.string().optional().default(''),
+    model: z.string().optional().default(''),
+    manufactureYear: z.string().optional().default(''),
     plateNumber: z.string(),
     licenseNumber: z.string(),
     nationalId: z.string(),
@@ -338,6 +341,10 @@ export const driverOnboardingDraftSchema = z.object({
     insurance: documentFacesSchema,
     authorization: documentFacesSchema,
   }),
+  vehiclePhotos: z.object({
+    outside: z.string().nullable().optional().default(null),
+    inside: z.string().nullable().optional().default(null),
+  }).optional().default({ outside: null, inside: null }),
   selfieUri: z.string().nullable(),
   acceptedTerms: z.boolean(),
   step: z.number().int().min(0).max(4),

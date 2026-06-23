@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, PRIVACY_EMAIL, PRIVACY_URL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 
 const SECTIONS = [
@@ -67,7 +68,7 @@ export default function PrivacySecurityScreen() {
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}
       >
         {/* Shield banner */}
         <View style={[styles.banner, { backgroundColor: colors.primaryHex + '12' }]}>
@@ -84,14 +85,14 @@ export default function PrivacySecurityScreen() {
           <View key={section.title} style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIcon}>
-                <Feather name={section.icon} size={16} color={colors.foreground} />
+                <Feather name={section.icon} size={20} color={colors.primary} />
               </View>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{section.title}</Text>
             </View>
             <View style={[styles.card, { backgroundColor: colors.card }]}>
               {section.items.map((item, i) => (
                 <View key={i} style={styles.itemRow}>
-                  <View style={[styles.bullet, { backgroundColor: colors.primary }]} />
+                  <View style={[styles.bullet, { backgroundColor: colors.foreground }]} />
                   <Text style={[styles.itemText, { color: colors.mutedForeground }]}>{item}</Text>
                 </View>
               ))}
@@ -105,7 +106,7 @@ export default function PrivacySecurityScreen() {
           onPress={() => Linking.openURL(PRIVACY_URL)}
           activeOpacity={0.75}
         >
-          <Feather name="external-link" size={16} color={colors.primary} />
+          <Feather name="external-link" size={20} color={colors.primary} />
           <Text style={[styles.linkText, { color: colors.primary }]}>Read full Privacy Policy</Text>
         </TouchableOpacity>
 

@@ -5,7 +5,7 @@ import { AppInput } from '@/components/AppInput';
 import { VehicleCard } from '@/components/VehicleCard';
 import type { useColors } from '@/hooks/useColors';
 import type { VehicleType } from '@/types';
-import type { DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
+import { getVehicleBrandModelPlaceholders, type DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
 import { VEHICLE_QUESTIONS } from './onboardingData';
 import { styles } from './onboardingStyles';
 
@@ -14,10 +14,15 @@ export function VehicleInformationSection({ colors, errors, form, handlePlateCha
   handlePlateChange: (text: string) => void; plateWarning: string;
   setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>; update: (field: string, value: string) => void;
 }) {
+  const vehiclePlaceholders = getVehicleBrandModelPlaceholders(form.vehicleType);
+
   return <View style={styles.section}>
     <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</Text>
     <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Vehicle Type</Text>
-    <View style={styles.vehicleGrid}>{(['moto', 'rifani', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(vehicle => <VehicleCard key={vehicle} type={vehicle} selected={form.vehicleType === vehicle} onSelect={() => { update('vehicleType', vehicle); setErrors(current => ({ ...current, passengerSeats: '', loadCapacityKg: '' })); }} compact />)}</View>
+    <View style={styles.vehicleGrid}>{(['moto', 'rifani', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(vehicle => <VehicleCard key={vehicle} type={vehicle} selected={form.vehicleType === vehicle} onSelect={() => { update('vehicleType', vehicle); setErrors(current => ({ ...current, passengerSeats: '', loadCapacityKg: '', vehicleOutsidePhoto: '', vehicleInsidePhoto: '' })); }} compact />)}</View>
+    <AppInput label="Brand" placeholder={vehiclePlaceholders.brand} value={form.brand} onChangeText={text => update('brand', text)} error={errors.brand} leftIcon="box" />
+    <AppInput label="Model" placeholder={vehiclePlaceholders.model} value={form.model} onChangeText={text => update('model', text)} error={errors.model} leftIcon="tag" />
+    <AppInput label="Manufacture Year" placeholder="2020" value={form.manufactureYear} onChangeText={text => update('manufactureYear', text.replace(/\D/g, '').slice(0, 4))} error={errors.manufactureYear} leftIcon="calendar" keyboardType="numeric" maxLength={4} />
     {VEHICLE_QUESTIONS[form.vehicleType].map(question => <AppInput key={question.field} label={question.label} placeholder={question.placeholder} value={form[question.field as keyof DriverOnboardingForm] as string} onChangeText={text => update(question.field, text.replace(/\D/g, ''))} error={errors[question.field]} leftIcon="info" keyboardType="numeric" />)}
     <View>
       <AppInput label="Plate Number" placeholder="RAD 000 A" value={form.plateNumber} onChangeText={handlePlateChange} error={errors.plateNumber} leftIcon="hash" autoCapitalize="characters" maxLength={9} />

@@ -33,6 +33,7 @@ export function SheetBackdrop({
   const scrimOpacity = scheme === 'dark' ? darkScrimOpacity : lightScrimOpacity;
   const scrimColor = `rgba(0,0,0,${scrimOpacity})`;
 
+
   const content = (
     <>
       <BlurView intensity={blurIntensity} tint={glassTint} style={StyleSheet.absoluteFill} />

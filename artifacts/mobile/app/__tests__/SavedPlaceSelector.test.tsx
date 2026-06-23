@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 import SavedPlaceSelectorScreen from '../saved-place-selector';
 
 const mockBack = jest.fn();
@@ -7,6 +8,7 @@ const mockPersist = jest.fn();
 const mockSetText = jest.fn();
 const mockClearText = jest.fn();
 const mockHandleTextChange = jest.fn();
+const mockAlert = jest.fn();
 const mockBuildTypedLocation = jest.fn(() => ({
   latitude: -1.94,
   longitude: 30.06,
@@ -14,6 +16,8 @@ const mockBuildTypedLocation = jest.fn(() => ({
   locationType: 'generic',
 }));
 
+let mockParams: Record<string, string> = { label: 'Home', mode: 'add' };
+let mockSavedPlaces: any[] = [];
 let mockSearch = {
   text: '',
   loading: false,
@@ -31,6 +35,7 @@ jest.mock('react-native', () => {
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
   return {
     ActivityIndicator: host('ActivityIndicator'),
+    Alert: { alert: (...args: any[]) => mockAlert(...args) },
     Keyboard: { dismiss: jest.fn() },
     Platform: { OS: 'android' },
     StyleSheet: { absoluteFill: {}, create: (styles: object) => styles, flatten: (style: object) => style, hairlineWidth: 1 },
@@ -48,11 +53,12 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('expo-router', () => ({
   router: { back: (...args: unknown[]) => mockBack(...args) },
-  useLocalSearchParams: () => ({ label: 'Home' }),
+  useLocalSearchParams: () => mockParams,
 }));
 
 jest.mock('expo-location', () => ({
   reverseGeocodeAsync: jest.fn(() => Promise.resolve([])),
+  getCurrentPositionAsync: jest.fn(() => Promise.resolve({ coords: { latitude: -1.97, longitude: 30.10 } })),
 }));
 
 jest.mock('react-native-maps', () => {
@@ -94,7 +100,9 @@ jest.mock('@/components/home/MapPickerOverlay', () => {
     }) => (
       <View>
         <Text>{savedLocationHint}</Text>
-        <TouchableOpacity onPress={onConfirm}><Text>{savedLocationConfirmTitle}</Text></TouchableOpacity>
+        <TouchableOpacity testID="confirm-map-picker" onPress={onConfirm}>
+          <Text>{savedLocationConfirmTitle}</Text>
+        </TouchableOpacity>
       </View>
     ),
   };
@@ -107,7 +115,10 @@ jest.mock('@/components/AppButton', () => {
 });
 
 jest.mock('@/context/SavedLocationsContext', () => ({
-  useSavedLocations: () => ({ savedPlaces: [], persistSavedPlaces: (...args: unknown[]) => mockPersist(...args) }),
+  useSavedLocations: () => ({
+    savedPlaces: mockSavedPlaces,
+    persistSavedPlaces: (...args: unknown[]) => mockPersist(...args),
+  }),
 }));
 
 jest.mock('@/hooks/home/useLocationSearch', () => ({
@@ -123,10 +134,12 @@ jest.mock('@/hooks/home/useLocationSearch', () => ({
 describe('SavedPlaceSelectorScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockParams = { label: 'Home', mode: 'add' };
+    mockSavedPlaces = [];
     mockSearch = { text: '', loading: false, suggestions: [] };
   });
 
-  test('offers address search and map selection', () => {
+  test('offers address search and map selection in add mode', () => {
     render(<SavedPlaceSelectorScreen />);
 
     expect(screen.getByText('Add Home')).toBeTruthy();
@@ -136,7 +149,7 @@ describe('SavedPlaceSelectorScreen', () => {
     expect(screen.getByText('Confirm Home Location')).toBeTruthy();
   });
 
-  test('saves a selected search suggestion', async () => {
+  test('saves a selected search suggestion in add mode (creates new place)', async () => {
     mockSearch = {
       text: 'Kigali',
       loading: false,
@@ -155,6 +168,128 @@ describe('SavedPlaceSelectorScreen', () => {
     await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
       expect.objectContaining({ label: 'Home', address: 'Kigali Heights, Kigali' }),
     ]));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('prefills address and coords if provided as search params', () => {
+    mockParams = {
+      mode: 'add',
+      label: 'Other',
+      initialAddress: 'Kigali Marriott',
+      initialLatitude: '-1.96',
+      initialLongitude: '30.08',
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    expect(screen.getByPlaceholderText('Place name')).toBeTruthy();
+    expect(mockSetText).toHaveBeenCalledWith('Kigali Marriott');
+  });
+
+  test('saves and updates in edit mode without creating duplicate', async () => {
+    mockParams = {
+      mode: 'edit',
+      savedPlaceId: 'place-home',
+    };
+    mockSavedPlaces = [{
+      id: 'place-home',
+      label: 'Home',
+      address: 'KG 10 Street',
+      latitude: -1.94,
+      longitude: 30.06,
+    }];
+    mockSearch = {
+      text: 'KG 10 Street',
+      loading: false,
+      suggestions: [{
+        id: 'place-home-new',
+        title: 'KG 10 Street New Address',
+        subtitle: 'Kigali',
+        place_name: 'KG 10 Street New Address, Kigali',
+        coords: { latitude: -1.945, longitude: 30.065 },
+      }],
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    expect(screen.getByText('Edit Home')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('KG 10 Street New Address'));
+
+    await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'place-home', // same ID preserved
+        label: 'Home',
+        address: 'KG 10 Street New Address, Kigali',
+      }),
+    ]));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('map picker works in add mode', async () => {
+    mockParams = { mode: 'add', label: 'Work' };
+    render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Set location on map'));
+    fireEvent.press(screen.getByTestId('confirm-map-picker'));
+
+    await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
+      expect.objectContaining({ label: 'Work', address: 'Selected location' }),
+    ]));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('map picker works in edit mode', async () => {
+    mockParams = { mode: 'edit', savedPlaceId: 'place-work' };
+    mockSavedPlaces = [{
+      id: 'place-work',
+      label: 'Work',
+      address: '123 Main St',
+      latitude: -1.94,
+      longitude: 30.06,
+    }];
+
+    render(<SavedPlaceSelectorScreen />);
+    fireEvent.press(screen.getByText('Set location on map'));
+    fireEvent.press(screen.getByTestId('confirm-map-picker'));
+
+    await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'place-work', label: 'Work' }),
+    ]));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('delete flow triggers confirmation and deletes saved place', async () => {
+    mockParams = { mode: 'edit', savedPlaceId: 'place-home' };
+    mockSavedPlaces = [{
+      id: 'place-home',
+      label: 'Home',
+      address: 'KG 10 Street',
+      latitude: -1.94,
+      longitude: 30.06,
+    }];
+
+    render(<SavedPlaceSelectorScreen />);
+
+    const deleteBtn = screen.getByText('Delete Saved Place');
+    expect(deleteBtn).toBeTruthy();
+
+    fireEvent.press(deleteBtn);
+
+    expect(mockAlert).toHaveBeenCalledWith(
+      'Delete "Home"?',
+      expect.any(String),
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Delete', style: 'destructive' }),
+        expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+      ])
+    );
+
+    // Call the delete handler
+    const deleteHandler = mockAlert.mock.calls[0][2].find((btn: any) => btn.text === 'Delete').onPress;
+    await deleteHandler();
+
+    expect(mockPersist).toHaveBeenCalledWith([]);
     expect(mockBack).toHaveBeenCalled();
   });
 });

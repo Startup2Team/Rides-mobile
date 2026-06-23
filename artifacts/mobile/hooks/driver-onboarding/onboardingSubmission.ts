@@ -6,6 +6,9 @@ export function buildPendingDriverProfile(form: DriverOnboardingForm, selfieUri:
   return {
     verificationStatus: 'pending_review',
     vehicleType: form.vehicleType,
+    brand: form.brand.trim() || undefined,
+    model: form.model.trim() || undefined,
+    manufactureYear: form.manufactureYear ? Number.parseInt(form.manufactureYear, 10) : undefined,
     plateNumber: normalizeRwandaPlateNumber(form.plateNumber),
     licenseNumber: form.licenseNumber,
     nationalId: form.nationalId,
@@ -48,6 +51,9 @@ export function buildDraftDriverProfile(form: DriverOnboardingForm, selfieUri: s
 export function formFromDriverProfile(profile: DriverProfile): DriverOnboardingForm {
   return {
     vehicleType: profile.vehicleType,
+    brand: profile.brand ?? '',
+    model: profile.model ?? '',
+    manufactureYear: profile.manufactureYear?.toString() ?? '',
     plateNumber: profile.plateNumber,
     licenseNumber: profile.licenseNumber,
     nationalId: profile.nationalId ?? '',
