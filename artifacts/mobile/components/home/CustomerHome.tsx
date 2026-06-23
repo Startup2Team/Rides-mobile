@@ -145,12 +145,12 @@ export default function CustomerHome() {
       const target = triggerMapPicker;
       router.setParams({ triggerMapPicker: undefined });
       const coords = target === 'dropoff'
-        ? (destination ?? userLocation)
-        : { latitude: pickup.latitude, longitude: pickup.longitude };
+        ? (destination ?? gpsLocation ?? userLocation)
+        : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation));
       setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
       setMapPicker(target);
     }
-  }, [triggerMapPicker, destination, userLocation, pickup]);
+  }, [triggerMapPicker, destination, gpsLocation, userLocation, pickup]);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
