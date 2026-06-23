@@ -548,7 +548,10 @@ export default function CustomerHome() {
           gpsLocation,
           onOpenLocationSearch: openLocationSearch,
           onUseMap: (target, location) => {
-            setPinCoords({ latitude: location.latitude, longitude: location.longitude });
+            const coords = target === 'dropoff'
+              ? (destination ?? gpsLocation ?? userLocation ?? location)
+              : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation ?? location));
+            setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
             setMapPicker(target);
           },
           onUseGpsPickup: () => gpsLocation && setPickup({
