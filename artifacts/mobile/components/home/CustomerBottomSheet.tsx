@@ -242,7 +242,12 @@ const sheetStyles = StyleSheet.create({
     bottom: 0,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    overflow: 'hidden',
+    overflow: 'visible',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 12,
   },
   handleBar: {
     alignItems: 'center',
