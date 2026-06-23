@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import { BlurView } from 'expo-blur';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
 
 const ACTIVE_LIGHT = '#007AFF';
@@ -134,7 +135,7 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-  const backgroundColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
+  const backgroundColor = isDark ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)';
   const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
   const activeColor = isDark ? ACTIVE_DARK : ACTIVE_LIGHT;
   const inactiveColor = isDark ? '#FFFFFF' : INACTIVE;
@@ -151,7 +152,7 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
       style={[
         styles.container,
         {
-          backgroundColor,
+          backgroundColor: isHidden ? 'transparent' : backgroundColor,
           borderTopColor: borderColor,
           borderTopWidth: isHidden ? 0 : StyleSheet.hairlineWidth,
           height: isHidden ? 0 : totalHeight,
@@ -163,6 +164,13 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
         },
       ]}
     >
+      {!isHidden && (
+        <BlurView
+          intensity={90}
+          tint={isDark ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         if (route.name === 'share' || options.href === null) {
@@ -219,6 +227,10 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
 
 const styles = StyleSheet.create({
   container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     minHeight: TAB_BAR_CONTENT_HEIGHT,
     borderTopWidth: StyleSheet.hairlineWidth,

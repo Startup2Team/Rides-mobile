@@ -19,8 +19,8 @@ export function useGlassHeaderMetrics() {
 
   return {
     headerInset,
-    contentTop: headerInset + 90,
-    indicatorTop: headerInset + 88,
+    contentTop: headerInset + 62,
+    indicatorTop: headerInset + 60,
   };
 }
 
@@ -52,21 +52,14 @@ export function GlassHeader({
       style={[
         styles.header,
         {
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 0,
+          backgroundColor: scheme === 'dark' ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)',
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
         },
       ]}
     >
-      <BlurView intensity={60} tint={glassTint} style={StyleSheet.absoluteFill} />
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          `rgba(${materialRgb},0.52)`,
-          `rgba(${materialRgb},0.22)`,
-          `rgba(${materialRgb},0)`,
-        ]}
-        locations={[0, 0.48, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      <BlurView intensity={90} tint={glassTint} style={StyleSheet.absoluteFill} />
       <View style={styles.headerContent}>
         {showBack ? (
           <BackButton exitOnPress={false} onPress={onBackPress ?? (() => router.back())} />
@@ -99,7 +92,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingBottom: 14,
+    paddingBottom: 0,
     overflow: 'hidden',
   },
   headerContent: {
