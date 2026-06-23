@@ -137,6 +137,7 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
   const backgroundColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
   const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
   const activeColor = isDark ? ACTIVE_DARK : ACTIVE_LIGHT;
+  const inactiveColor = isDark ? '#FFFFFF' : INACTIVE;
 
   const focusedRoute = state.routes[state.index];
   const focusedOptions = descriptors[focusedRoute.key].options;
@@ -203,7 +204,7 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
               | ((props: { color: string; size: number; focused: boolean }) => React.ReactNode)
               | undefined}
             activeColor={activeColor}
-            inactiveColor={INACTIVE}
+            inactiveColor={inactiveColor}
             onPress={onPress}
             onLongPress={onLongPress}
             testID={options.tabBarTestID}
