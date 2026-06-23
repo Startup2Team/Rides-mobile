@@ -34,19 +34,19 @@ export function SavedLocationsSection({
           {savedLocations.length > 0 && (
             <TouchableOpacity
               onPress={onAddSavedLocation}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
               style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: colors.primaryHex + '12',
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: colors.primary,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
               accessibilityRole="button"
               accessibilityLabel="Add saved place"
             >
-              <Feather name="plus" size={16} color={colors.primary} />
+              <Feather name="plus" size={16} color={colors.primaryForeground} />
             </TouchableOpacity>
           )}
         </View>
