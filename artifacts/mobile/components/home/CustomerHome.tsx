@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Easing,
   Keyboard,
   PanResponder,
   Platform,
@@ -17,16 +18,12 @@ import {
 import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { type CloseButtonHandle } from '@/components/BackButton';
-import { EditSavedLocationSheet } from '@/components/EditSavedLocationSheet';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { useColors } from '@/hooks/useColors';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
-import { useKeyboardHandling } from '@/hooks/home/useKeyboardHandling';
 import { useHomeBooking } from '@/hooks/home/useHomeBooking';
 import { useHomeLocation } from '@/hooks/home/useHomeLocation';
 import { useLocationSearch, type LocationSearchTarget } from '@/hooks/home/useLocationSearch';
-import { useSavedLocationEditor } from '@/hooks/home/useSavedLocationEditor';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
@@ -48,7 +45,6 @@ import { CustomerBottomSheet } from './CustomerBottomSheet';
 import { HomeMap } from './HomeMap';
 import { LocationSearchOverlay } from './LocationSearchOverlay';
 import { MapPickerOverlay } from './MapPickerOverlay';
-import { SaveLocationSheet } from './SaveLocationSheet';
 import { styles } from './homeStyles';
 import {
   BOOKING_SHEET_BOTTOM_PADDING,
@@ -160,75 +156,18 @@ export default function CustomerHome() {
     target: locationSearchTarget,
     text: locationSearchText,
   } = locationSearch;
-  const {
-    applyEditSavedAddressSuggestion,
-    applyEditTypedAddress,
-    closeEditSavedLocation,
-    closePendingSaveLocation,
-    confirmDeleteSavedLocation,
-    customSaveLabel,
-    editSavedFieldErrors,
-    editingSavedAddress,
-    editingSavedFocusedField,
-    editingSavedLabel,
-    editingSavedLocation,
-    handleEditSavedAddressText,
-    handleSaveLocationLabelPress,
-    isCustomSaveLabel,
-    pendingSaveLocation,
-    renameSavedLocation,
-    resetEditor: resetSavedLocationEditor,
-    saveLocationAs,
-    setCustomSaveLabel,
-    setEditSavedFieldErrors,
-    setEditingSavedAddress,
-    setEditingSavedFocusedField,
-    setEditingSavedLabel,
-    setEditingSavedLocation,
-    setPendingSaveLocation,
-    showEditAddressSuggestions,
-    showSavedLocationActions,
-  } = useSavedLocationEditor({
-    onLocationSaved: useCallback(() => setLocationListTab('saved'), [setLocationListTab]),
-    persistSavedPlaces,
-    resetSearchResults: resetLocationSearchResults,
-    saveLocation,
-    savedPlaces,
-    schedulePlaceSearch,
-    setSearchLoading: setLocationSearchLoading,
-    setSuggestions,
-    showToast,
-    userLocation,
-  });
 
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
 
-  // Overlay state (map picker, location search, saved-place form)
+  // Overlay state (map picker, location search)
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
   const [pickerMapSize, setPickerMapSize] = useState({ width: 0, height: 0 });
   const [isPickerDragging, setIsPickerDragging] = useState(false);
   const [focusedField, setFocusedField] = useState<'pickup' | 'dropoff' | null>(null);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
-  const saveFormCloseRef = useRef<CloseButtonHandle>(null);
-  const saveSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
-  const formSheetDragAnim = useRef(new Animated.Value(0)).current;
-  const formSheetDragStart = useRef(0);
-  const formSheetHeightRef = useRef(280);
-  const [formSheetMeasuredHeight, setFormSheetMeasuredHeight] = useState(280);
-  const closePendingSaveLocationRef = useRef<() => void>(() => {});
-  const dismissFormSheetAnimatedRef = useRef<(close: () => void, onAnimateStart?: () => void) => void>(() => {});
-  const formSheetBackdropOpacity = useMemo(
-    () =>
-      formSheetDragAnim.interpolate({
-        inputRange: [0, Math.max(formSheetMeasuredHeight, 1)],
-        outputRange: [1, 0],
-        extrapolate: 'clamp',
-      }),
-    [formSheetDragAnim, formSheetMeasuredHeight],
-  );
 
   // ── Derived / layout ──────────────────────────────────────────────────────
   const recenterBottomOffset = sheetHeight + 16;
@@ -406,21 +345,6 @@ export default function CustomerHome() {
   );
 
   const {
-    applyLift: applySaveFormKeyboardLift,
-    estimatedKeyboardOffset,
-  } = useKeyboardHandling({
-    enabled: Boolean(pendingSaveLocation),
-    bottomInset: insets.bottom,
-    animation: saveSheetKeyboardAnim,
-  });
-
-  useEffect(() => {
-    if (!pendingSaveLocation) return;
-    formSheetDragAnim.setValue(formSheetHeightRef.current);
-    Animated.spring(formSheetDragAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-  }, [pendingSaveLocation, formSheetDragAnim]);
-
-  const {
     route,
     routeLoading,
     routeFitCoords,
@@ -444,102 +368,16 @@ export default function CustomerHome() {
   const shouldShowYouAreHere =
     locationStatus === 'available' && mapPicker === null && (!showBooking || !shouldShowBookingRoute);
 
-  // ── Overlay: save-form sheet gesture ─────────────────────────────────────
-  const snapFormSheetOpen = useCallback((onSnapOpen?: () => void) => {
-    onSnapOpen?.();
-    Animated.spring(formSheetDragAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-  }, [formSheetDragAnim]);
-
-  const dismissFormSheetAnimated = useCallback(
-    (close: () => void, onAnimateStart?: () => void) => {
-      onAnimateStart?.();
-      const max = formSheetHeightRef.current;
-      Animated.timing(formSheetDragAnim, { toValue: max, duration: 250, useNativeDriver: true }).start(() => {
-        close();
-      });
-    },
-    [formSheetDragAnim],
-  );
-  dismissFormSheetAnimatedRef.current = dismissFormSheetAnimated;
-
-  const createFormSheetPanResponder = useCallback(
-    (
-      close: () => void,
-      onDismissStart?: () => void,
-      onDragProgress?: (progress: number) => void,
-      onSnapOpen?: () => void,
-    ) =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
-        onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 8 && g.dy > Math.abs(g.dx) * 1.2,
-        onPanResponderGrant: () => {
-          Keyboard.dismiss();
-          formSheetDragAnim.stopAnimation(value => { formSheetDragStart.current = value; });
-        },
-        onPanResponderMove: (_, g) => {
-          const max = formSheetHeightRef.current;
-          const next = Math.max(0, Math.min(max, formSheetDragStart.current + g.dy));
-          formSheetDragAnim.setValue(next);
-          if (max > 0) onDragProgress?.(1 - next / max);
-        },
-        onPanResponderRelease: (_, g) => {
-          const max = formSheetHeightRef.current;
-          const current = Math.max(0, Math.min(max, formSheetDragStart.current + g.dy));
-          const shouldClose = current > max * 0.28 || g.vy > 0.65;
-          const hadVerticalDrag = Math.abs(g.dy) > 8;
-          if (shouldClose) {
-            dismissFormSheetAnimatedRef.current(close, onDismissStart);
-          } else if (hadVerticalDrag) {
-            snapFormSheetOpen(onSnapOpen);
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [formSheetDragAnim, snapFormSheetOpen],
-  );
-
-  const dismissSaveFormSheet = useCallback(
-    () => dismissFormSheetAnimated(
-      () => closePendingSaveLocationRef.current(),
-      () => saveFormCloseRef.current?.spinShut(),
-    ),
-    [dismissFormSheetAnimated],
-  );
-
-  const saveFormSheetPanResponder = useMemo(
-    () => createFormSheetPanResponder(
-      () => closePendingSaveLocationRef.current(),
-      () => saveFormCloseRef.current?.spinShut(),
-      progress => saveFormCloseRef.current?.setSpinProgress(progress),
-      () => saveFormCloseRef.current?.spinOpen(),
-    ),
-    [createFormSheetPanResponder],
-  );
-
-  const openSavedLocationMap = () => {
-    if (!editingSavedLocation) return;
-    Keyboard.dismiss();
-    setPinCoords(userLocation);
-    setMapPicker('savedLocation');
-  };
-
-  const deleteSavedLocation = () => {
-    if (!editingSavedLocation) return;
-    confirmDeleteSavedLocation(editingSavedLocation);
-  };
-
   const openLocationSearch = (target: 'pickup' | 'dropoff') => {
     setFocusedField(target);
     openLocationSearchState(target, target === 'pickup' ? pickup.address ?? '' : destText);
   };
   openLocationSearchRef.current = openLocationSearch;
 
-  const closeLocationSearch = () => {
+  const closeLocationSearch = useCallback(() => {
     closeLocationSearchState();
-    resetSavedLocationEditor();
     Keyboard.dismiss();
-  };
+  }, [closeLocationSearchState]);
 
   const applyLocation = (target: 'pickup' | 'dropoff', location: RideLocation) => {
     if (target === 'pickup') {
@@ -553,15 +391,64 @@ export default function CustomerHome() {
 
   const openSavedPlaceSelector = () => {
     Alert.alert('Add saved place', 'Choose the place you want to save.', [
-      { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Home' } }) },
-      { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Work' } }) },
-      { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'School' } }) },
-      { text: 'Church', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Church' } }) },
-      { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Other' } }) },
+      { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Home' } }) },
+      { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Work' } }) },
+      { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'School' } }) },
+      { text: 'Church', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Church' } }) },
+      { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Other' } }) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
-  closePendingSaveLocationRef.current = closePendingSaveLocation;
+
+  const showSavedLocationActions = useCallback((location: SavedLocation) => {
+    Alert.alert(location.label, location.address ?? '', [
+      {
+        text: 'Edit',
+        onPress: () => {
+          router.push({
+            pathname: '/saved-place-selector',
+            params: { mode: 'edit', savedPlaceId: location.id },
+          });
+        },
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            `Delete "${location.label}"?`,
+            'This saved place will be removed from your list. This cannot be undone.',
+            [
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  const next = savedPlaces.filter(place => place.id !== location.id);
+                  await persistSavedPlaces(next);
+                  showToast('Location removed', 'error');
+                },
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [savedPlaces, persistSavedPlaces, showToast]);
+
+  const handleSaveCandidate = useCallback((location: RideLocation) => {
+    router.push({
+      pathname: '/saved-place-selector',
+      params: {
+        mode: 'add',
+        label: 'Other',
+        initialAddress: location.address || '',
+        initialLatitude: location.latitude.toString(),
+        initialLongitude: location.longitude.toString(),
+      },
+    });
+  }, []);
 
   const handleChooseOnMap = () => {
     if (!locationSearchTarget) return;
@@ -749,7 +636,7 @@ export default function CustomerHome() {
           onChooseMap={handleChooseOnMap}
           onClear={clearLocationSearchText}
           onClose={closeLocationSearch}
-          onSaveCandidate={setPendingSaveLocation}
+          onSaveCandidate={handleSaveCandidate}
           onSetListTab={setLocationListTab}
           onShowSavedLocationActions={showSavedLocationActions}
           onTextChange={handleLocationSearchText}
@@ -760,70 +647,7 @@ export default function CustomerHome() {
           text={locationSearchText}
           userLocation={userLocation}
           gpsLocation={gpsLocation}
-        >
-          <SaveLocationSheet
-            animatedOpacity={formSheetBackdropOpacity}
-            bottomInset={insets.bottom}
-            bottomOffset={0}
-            closeButtonRef={saveFormCloseRef}
-            colors={colors}
-            customLabel={customSaveLabel}
-            dragAnimation={formSheetDragAnim}
-            estimatedKeyboardOffset={estimatedKeyboardOffset}
-            keyboardAnimation={saveSheetKeyboardAnim}
-            onClose={dismissSaveFormSheet}
-            onCustomLabelChange={setCustomSaveLabel}
-            onKeyboardLift={applySaveFormKeyboardLift}
-            onLayoutHeight={height => {
-              formSheetHeightRef.current = height;
-              setFormSheetMeasuredHeight(height);
-            }}
-            onSave={label => { void saveLocationAs(label); }}
-            onSelectLabel={handleSaveLocationLabelPress}
-            panResponder={saveFormSheetPanResponder}
-            pendingLocation={pendingSaveLocation}
-            showCustomLabel={isCustomSaveLabel}
-            surfaceStyle={formSheetSurface}
-          />
-          {editingSavedLocation && (
-            <EditSavedLocationSheet
-              location={editingSavedLocation}
-              bottomOffset={0}
-              label={editingSavedLabel}
-              address={editingSavedAddress}
-              fieldErrors={editSavedFieldErrors}
-              suggestions={suggestions}
-              searchLoading={locationSearchLoading}
-              showAddressSuggestions={showEditAddressSuggestions}
-              onLabelChange={text => {
-                setEditingSavedLabel(text);
-                setEditSavedFieldErrors(prev => ({ ...prev, label: undefined }));
-              }}
-              onAddressChange={text => {
-                handleEditSavedAddressText(text);
-                setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
-              }}
-              onLabelFocus={() => setEditingSavedFocusedField('label')}
-              onAddressFocus={() => {
-                setEditingSavedFocusedField('address');
-                if (editingSavedAddress.trim().length >= 2) schedulePlaceSearch(editingSavedAddress);
-              }}
-              onClearAddress={() => {
-                cancelPendingSearch();
-                setEditingSavedAddress('');
-                setEditSavedFieldErrors(prev => ({ ...prev, address: undefined }));
-                setSuggestions([]);
-                setLocationSearchLoading(false);
-              }}
-              onSelectSuggestion={applyEditSavedAddressSuggestion}
-              onUseTypedAddress={applyEditTypedAddress}
-              onSave={renameSavedLocation}
-              onDelete={deleteSavedLocation}
-              onUseGps={openSavedLocationMap}
-              onClose={closeEditSavedLocation}
-            />
-          )}
-        </LocationSearchOverlay>
+        />
       )}
 
       <MapPickerOverlay
@@ -846,12 +670,7 @@ export default function CustomerHome() {
         onCenterUser={centerPickerOnUser}
         onConfirm={async () => {
           await syncPickerCoordsFromMapCenter();
-          let address =
-            mapPicker === 'pickup'
-              ? 'Selected Pickup'
-              : mapPicker === 'savedLocation'
-                ? 'Selected Saved Location'
-                : 'Selected Drop Off';
+          let address = mapPicker === 'pickup' ? 'Selected Pickup' : 'Selected Drop Off';
           try {
             const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
             if (geo) address = formatReverseGeocodeAddress(geo, address);
@@ -861,20 +680,6 @@ export default function CustomerHome() {
           } else if (mapPicker === 'dropoff') {
             setDestText(address);
             setDestination({ ...pinCoords, address, locationType: 'precise' });
-          } else if (editingSavedLocation) {
-            const updated: SavedLocation = {
-              ...editingSavedLocation,
-              ...pinCoords,
-              address,
-              locationType: 'precise',
-            };
-            const next = savedPlaces.map(place =>
-              place.id === editingSavedLocation.id ? updated : place,
-            );
-            await persistSavedPlaces(next);
-            setEditingSavedLocation(updated);
-            setEditingSavedAddress(address);
-            showToast('Location updated', 'info');
           }
           setMapPicker(null);
         }}

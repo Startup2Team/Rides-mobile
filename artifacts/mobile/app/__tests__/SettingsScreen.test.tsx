@@ -101,7 +101,7 @@ describe('SettingsScreen', () => {
 
     expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({
       pathname: '/saved-place-selector',
-      params: expect.objectContaining({ label: 'Home' }),
+      params: expect.objectContaining({ mode: 'edit', savedPlaceId: 'home' }),
     }));
   });
 });

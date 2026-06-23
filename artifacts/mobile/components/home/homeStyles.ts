@@ -91,12 +91,17 @@ export const styles = StyleSheet.create({
   },
   formSheetSurface: {
     ...floatingPanelSurface,
+    // Override the hairline border inherited from floatingPanelSurface — the
+    // overlay sheets are now anchored to the tab-bar top edge, so a border
+    // would create a visible seam exactly where the sheet meets the navbar.
+    // CustomerBottomSheet has no border; these sheets now match.
+    borderWidth: 0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     borderTopWidth: 0,
     paddingTop: 0,
     gap: 0,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   formSheetBody: {
     paddingHorizontal: BOOKING_SHEET_PADDING_H,
@@ -511,20 +516,22 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
   },
+  // Adaptive pill chips for "Save location as" — wrap naturally, width by content.
   saveAsLocationLabels: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   saveAsLocationLabel: {
-    minHeight: 44,
-    borderRadius: 22,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 4,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveAsLocationLabelText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
   },
   saveAsCustomLabelSection: {

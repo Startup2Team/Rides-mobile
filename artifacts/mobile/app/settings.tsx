@@ -30,7 +30,12 @@ export default function SettingsScreen() {
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
 
   const openSavedPlace = (label: 'Home' | 'Work' | 'School') => {
-    router.push({ pathname: '/saved-place-selector', params: { label } });
+    const existing = savedPlaces.find(place => place.label.toLowerCase() === label.toLowerCase());
+    if (existing) {
+      router.push({ pathname: '/saved-place-selector', params: { mode: 'edit', savedPlaceId: existing.id } });
+    } else {
+      router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label } });
+    }
   };
 
   const confirmDelete = () => {

@@ -1,5 +1,5 @@
-import { useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -10,7 +10,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { SaveLocationSheet } from '@/components/SaveLocationSheet';
 import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
@@ -72,14 +71,25 @@ function RouteLocationRow({
   label,
   address,
   location,
-  onSave,
 }: {
   label: string;
   address: string;
   location: RideLocation;
-  onSave: (location: RideLocation) => void;
 }) {
   const colors = useColors();
+
+  const handleSave = () => {
+    router.push({
+      pathname: '/saved-place-selector',
+      params: {
+        mode: 'add',
+        label: 'Other',
+        initialAddress: address || '',
+        initialLatitude: location.latitude.toString(),
+        initialLongitude: location.longitude.toString(),
+      },
+    });
+  };
 
   return (
     <View style={styles.routeItem}>
@@ -91,7 +101,7 @@ function RouteLocationRow({
         accessibilityRole="button"
         accessibilityLabel={`Save ${label.toLowerCase()} location`}
         accessibilityHint="Opens options to save this place for future rides"
-        onPress={() => onSave(location)}
+        onPress={handleSave}
         style={({ pressed }) => [
           styles.saveLocationButton,
           { borderColor: colors.border, opacity: pressed ? 0.72 : 1 },
@@ -109,7 +119,6 @@ export default function RideDetailScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const { rideId } = useLocalSearchParams<{ rideId: string }>();
   const { rideHistory, loadHistory } = useRide();
-  const [pendingSaveLocation, setPendingSaveLocation] = useState<RideLocation | null>(null);
 
   React.useEffect(() => {
     loadHistory();
@@ -194,14 +203,12 @@ export default function RideDetailScreen() {
                 label="Pickup"
                 address={ride.pickup.address ?? 'Pickup location'}
                 location={ride.pickup}
-                onSave={setPendingSaveLocation}
               />
               <View style={[styles.routeDivider, { backgroundColor: colors.border }]} />
               <RouteLocationRow
                 label="Drop off"
                 address={ride.destination.address ?? 'Destination'}
                 location={ride.destination}
-                onSave={setPendingSaveLocation}
               />
             </View>
           </View>
@@ -248,11 +255,6 @@ export default function RideDetailScreen() {
           </>
         )}
       </GlassScrollView>
-
-      <SaveLocationSheet
-        location={pendingSaveLocation}
-        onClose={() => setPendingSaveLocation(null)}
-      />
     </View>
   );
 }
