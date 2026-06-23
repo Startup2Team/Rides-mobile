@@ -92,9 +92,9 @@ describe('driver tab layout', () => {
     mockUseAuth.mockReturnValue({ driverProfile: { isVerified: true, verificationStatus: 'approved' } });
   });
 
-  test('includes Share in the bottom navbar', () => {
+  test('excludes Share from the bottom navbar', () => {
     render(<DriverTabLayout />);
 
-    expect(mockCapturedScreens).toContain('share');
+    expect(mockCapturedScreens).not.toContain('share');
   });
 });

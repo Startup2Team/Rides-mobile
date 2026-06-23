@@ -138,7 +138,6 @@ export default function CustomerHome() {
     userLocation,
   });
   pickupSetterRef.current = setPickup;
-
   const { triggerMapPicker } = useLocalSearchParams<{ triggerMapPicker?: 'pickup' | 'dropoff' }>();
 
   useEffect(() => {
@@ -152,7 +151,6 @@ export default function CustomerHome() {
       setMapPicker(target);
     }
   }, [triggerMapPicker, destination, userLocation, pickup]);
-
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
@@ -179,9 +177,6 @@ export default function CustomerHome() {
       }).start();
     }
   }, [mapPicker, pickerTranslateX]);
-
-
-
   // ── Derived / layout ──────────────────────────────────────────────────────
   const recenterBottomOffset = sheetHeight + 16;
   const hasPreciseRouteLocations =
@@ -260,6 +255,7 @@ export default function CustomerHome() {
     setActiveCard('home');
     setDestText('');
     setDestination(null);
+
     clearRoutePreview();
     setPickup(
       gpsLocation
@@ -284,6 +280,7 @@ export default function CustomerHome() {
       setPickup({ ...draft.pickup });
       setDestination({ ...draft.destination });
       setDestText(draft.destText);
+
       setActiveCard('booking');
       setRouteRecenterRequest(value => value + 1);
     },
@@ -301,6 +298,7 @@ export default function CustomerHome() {
       setPickup({ ...currentRide.pickup });
       setDestination({ ...currentRide.destination });
       setDestText(currentRide.destination.address ?? '');
+
       setActiveCard('booking');
       setRouteRecenterRequest(value => value + 1);
     }
@@ -326,7 +324,6 @@ export default function CustomerHome() {
   );
 
   // Focus effects for reloading database states
-
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   useEffect(() => {
@@ -571,7 +568,6 @@ export default function CustomerHome() {
           booking: bookLoading,
         }}
       />
-
       {/* Location search is now a separate route page: app/location-search.tsx */}
 
       <Modal

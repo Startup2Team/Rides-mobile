@@ -161,6 +161,20 @@ jest.mock('@/context/AuthContext', () => ({
   }),
 }));
 
+jest.mock('@/hooks/home/useHomeLocation', () => ({
+  useHomeLocation: () => ({
+    currentLocationAddress: 'Initial Pickup',
+    gpsLocation: { latitude: -1.9441, longitude: 30.0619, address: 'Initial Pickup', locationType: 'precise' },
+    locLoading: false,
+    locationError: null,
+    locationStatus: 'available',
+    refreshHereLocation: jest.fn(),
+    startHereLocationWatch: jest.fn(),
+    stopHereLocationWatch: jest.fn(),
+    userLocation: { latitude: -1.9441, longitude: 30.0619 },
+  }),
+}));
+
 jest.mock('@/context/ToastContext', () => ({
   useToast: () => ({
     showToast: jest.fn(),

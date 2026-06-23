@@ -146,7 +146,6 @@ export default function SavedPlaceSelectorScreen() {
       setCustomLabel(label);
     }
   }, [displayLabel, label]);
-
   if (mode === 'edit' && !existing) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
