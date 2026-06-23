@@ -34,6 +34,10 @@ export default function LocationSearchScreen() {
   useFocusEffect(
     useCallback(() => {
       void reloadSavedPlaces();
+      const timer = setTimeout(() => {
+        locationSearchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
     }, [reloadSavedPlaces])
   );
 

@@ -100,6 +100,7 @@ export function LocationSearchOverlay({
               placeholder="Address, hotel, or 1 KG 185 ST"
               placeholderTextColor={colors.mutedForeground}
               returnKeyType="search"
+              autoFocus
             />
             {loading ? (
               <View style={styles.locationSearchClear}>
