@@ -625,7 +625,7 @@ export default function CustomerHome() {
 
       {locationSearchTarget && (
         <LocationSearchOverlay
-          bottomInset={insets.bottom}
+          bottomInset={0}
           buildTypedLocation={buildTypedLocation}
           colors={colors}
           inputRef={locationSearchInputRef}
