@@ -308,7 +308,7 @@ export default function SavedPlaceSelectorScreen() {
               style={[styles.resultRow, { borderBottomColor: colors.border }]}
               onPress={() => savePlace(search.buildTypedLocation())}
             >
-              <Feather name="edit-3" size={17} color={colors.foreground} />
+              <Feather name="edit-2" size={17} color={colors.foreground} />
               <View style={styles.resultCopy}>
                 <Text style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>
                   Use "{search.text.trim()}"

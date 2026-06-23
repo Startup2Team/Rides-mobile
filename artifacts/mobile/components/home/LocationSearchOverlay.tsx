@@ -197,7 +197,7 @@ export function LocationSearchOverlay({
                   onPress={() => onApplyLocation(target, buildTypedLocation())}
                 >
                   <View style={styles.locationOptionIcon}>
-                    <Feather name="edit-3" size={16} color={colors.foreground} />
+                    <Feather name="edit-2" size={16} color={colors.foreground} />
                   </View>
                   <View style={styles.locationOptionText}>
                     <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
