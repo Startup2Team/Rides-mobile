@@ -205,17 +205,6 @@ export function LocationSearchOverlay({
                     </Text>
                     <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Confirm exact details in chat</Text>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.saveLocationButton, { borderColor: colors.border }]}
-                    onPress={event => {
-                      event.stopPropagation();
-                      onSaveCandidate(buildTypedLocation());
-                      Keyboard.dismiss();
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.saveLocationButtonText, { color: colors.primary }]}>Save</Text>
-                  </TouchableOpacity>
                 </TouchableOpacity>
               )}
 
@@ -248,17 +237,6 @@ export function LocationSearchOverlay({
                         {suggestion.subtitle ?? suggestion.place_name}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      style={[styles.saveLocationButton, { borderColor: colors.border }]}
-                      onPress={event => {
-                        event.stopPropagation();
-                        onSaveCandidate(location);
-                        Keyboard.dismiss();
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.saveLocationButtonText, { color: colors.primary }]}>Save</Text>
-                    </TouchableOpacity>
                   </TouchableOpacity>
                 );
               })}
