@@ -14,6 +14,7 @@ import {
   saveStoredUser,
 } from '@/persistence/authPersistence';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
+import { getApprovedDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { api } from '@/services/api';
@@ -31,6 +32,7 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
   setDriverOnline: (isOnline: boolean) => Promise<void>;
+  setActiveVehicle: (vehicleId: string | null) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
   /** Hydrate the driver profile from the backend (GET /driver/profile). */
@@ -170,6 +172,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const setActiveVehicle = useCallback(async (vehicleId: string | null) => {
+    const prev = driverProfileRef.current;
+    if (!prev || prev.isOnline) return;
+    if (vehicleId !== null && !getApprovedDriverVehicles(prev).some(v => v.id === vehicleId)) return;
+    const updated = setDriverActiveVehicle(prev, vehicleId);
+    setDriverProfile(updated);
+    await saveStoredDriverProfile(updated);
+  }, []);
+
   const switchMode = useCallback(async (mode: AppMode) => {
     if (!userRef.current) return;
     if (mode === 'driver' && !canAccessDriverMode(driverProfileRef.current)) return;
@@ -205,6 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateUser,
     saveDriverProfile,
     setDriverOnline,
+    setActiveVehicle,
     switchMode,
     recordCompletedRide,
     loadDriverProfile,
@@ -217,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     recordCompletedRide,
     saveDriverProfile,
     setDriverOnline,
+    setActiveVehicle,
     switchMode,
     updateUser,
     user,
@@ -233,4 +246,9 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+/** Like useAuth but returns undefined outside a provider (no throw). */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
 }

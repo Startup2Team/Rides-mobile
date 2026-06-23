@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { DriverCreditDashboardCard } from '../DriverCreditDashboardCard';
 import { DriverPackageRequiredModal } from '../DriverPackageRequiredModal';
-import { activatePackage, EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { activatePackage, EMPTY_DRIVER_ENTITLEMENT, normalizeEntitlement } from '@/domain/driverRidePackages';
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -43,7 +43,7 @@ describe('driver dashboard ride-credit UX', () => {
     const onViewPackages = jest.fn();
     render(<DriverCreditDashboardCard entitlement={EMPTY_DRIVER_ENTITLEMENT} isLoading={false} onViewPackages={onViewPackages} />);
 
-    expect(screen.getByText('No ride credits')).toBeTruthy();
+    expect(screen.getByText('No rides')).toBeTruthy();
     expect(screen.getByText('Choose a package to start receiving ride requests.')).toBeTruthy();
     fireEvent.press(screen.getByText('View Packages'));
     expect(onViewPackages).toHaveBeenCalledTimes(1);
@@ -52,20 +52,26 @@ describe('driver dashboard ride-credit UX', () => {
   test('shows entitlement loading state instead of zero credits', () => {
     render(<DriverCreditDashboardCard entitlement={EMPTY_DRIVER_ENTITLEMENT} isLoading onViewPackages={jest.fn()} />);
 
-    expect(screen.getByText('Checking ride balance...')).toBeTruthy();
-    expect(screen.queryByText('No ride credits')).toBeNull();
+    expect(screen.getByText('Checking rides...')).toBeTruthy();
+    expect(screen.queryByText('No rides')).toBeNull();
   });
 
-  test('shows active package progress and low-balance guidance', () => {
-    const entitlement = {
-      ...activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'launch_starter').entitlement,
-      remainingRideCredits: 5,
-    };
+  test('shows active package progress and low-rides guidance', () => {
+    const active = activatePackage(EMPTY_DRIVER_ENTITLEMENT, 'launch_starter').entitlement;
+    const [vehicleEntitlement] = active.vehicleEntitlements;
+    const entitlement = normalizeEntitlement({
+      ...active,
+      vehicleEntitlements: [{
+        ...vehicleEntitlement,
+        remainingRideCredits: 5,
+        remainingBonusRides: 0,
+      }],
+    });
     render(<DriverCreditDashboardCard entitlement={entitlement} isLoading={false} onViewPackages={jest.fn()} />);
 
     expect(screen.getByText('Launch Starter Package')).toBeTruthy();
-    expect(screen.getByText('5 of 35 ride credits remaining')).toBeTruthy();
-    expect(screen.getByText('Only 5 ride credits left. Add a package soon to keep receiving requests.')).toBeTruthy();
+    expect(screen.getByText('5 of 35 rides remaining')).toBeTruthy();
+    expect(screen.getByText('Only 5 rides left. Add a package soon to keep receiving requests.')).toBeTruthy();
   });
 
   test('blocked online modal explains credit rules and actions', () => {
@@ -74,7 +80,7 @@ describe('driver dashboard ride-credit UX', () => {
     render(<DriverPackageRequiredModal visible bottomInset={0} onClose={onClose} onViewPackages={onViewPackages} />);
 
     expect(screen.getByText('You need an active ride package to receive ride requests.')).toBeTruthy();
-    expect(screen.getByText('1 completed ride uses 1 ride credit. Cancellations and declined requests do not use credits.')).toBeTruthy();
+    expect(screen.getByText('1 completed trip uses 1 ride. Cancellations and declined requests do not change your rides.')).toBeTruthy();
     fireEvent.press(screen.getByText('View Packages'));
     fireEvent.press(screen.getByText('Not Now'));
     expect(onViewPackages).toHaveBeenCalledTimes(1);

@@ -24,3 +24,22 @@ export function parseDateDdMmYyyy(value: string): Date | null {
 
   return date;
 }
+
+export function getMaximumBirthDate(minAgeYears: number, today = new Date()): Date {
+  const date = new Date(today);
+  date.setFullYear(date.getFullYear() - minAgeYears);
+  return date;
+}
+
+export function isAtLeastAge(value: string, minAgeYears: number, today = new Date()): boolean {
+  const date = parseDateDdMmYyyy(value);
+  if (!date) return false;
+  return date <= getMaximumBirthDate(minAgeYears, today);
+}
+
+export function isOlderThanDays(value: string, days: number, now = new Date()): boolean {
+  if (!Number.isFinite(days) || days < 0) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return now.getTime() - parsed.getTime() >= days * 24 * 60 * 60 * 1000;
+}

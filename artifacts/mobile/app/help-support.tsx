@@ -8,10 +8,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 
 const FAQS = [
@@ -58,10 +59,11 @@ const CONTACT_CHANNELS = [
   },
   {
     id: 'whatsapp',
-    icon: 'message-circle' as const,
+    icon: 'whatsapp' as const,
     label: 'WhatsApp',
     detail: 'Chat with us',
     onPress: () => Linking.openURL('https://wa.me/250788123456'),
+    family: 'mci' as const,
   },
 ];
 
@@ -77,7 +79,7 @@ export default function HelpSupportScreen() {
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}
       >
         {/* Contact */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CONTACT US</Text>
@@ -87,13 +89,17 @@ export default function HelpSupportScreen() {
               {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
               <TouchableOpacity style={styles.contactRow} onPress={ch.onPress} activeOpacity={0.75}>
                 <View style={styles.contactIcon}>
-                  <Feather name={ch.icon} size={18} color="#000" />
+                  {ch.family === 'mci' ? (
+                    <MaterialCommunityIcons name={ch.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+                  ) : (
+                    <Feather name={ch.icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.contactLabel, { color: colors.foreground }]}>{ch.label}</Text>
                   <Text style={[styles.contactDetail, { color: colors.mutedForeground }]}>{ch.detail}</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color="#000" />
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
           ))}
@@ -113,7 +119,7 @@ export default function HelpSupportScreen() {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.faqQuestion, { color: colors.foreground, flex: 1 }]}>{faq.q}</Text>
-                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#000" />
+                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
                 {isOpen && (
                   <View style={[styles.faqAnswer, { borderTopColor: colors.border }]}>

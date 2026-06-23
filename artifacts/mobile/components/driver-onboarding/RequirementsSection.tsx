@@ -23,10 +23,10 @@ export function RequirementsSection({ acceptedTerms, colors, errors, form, setAc
       <Text style={[styles.providerName, { color: colors.foreground }]}>{provider === 'mtn' ? 'MTN MoMo' : 'Airtel Money'}</Text>
       {form.momoProvider === provider && <View style={[styles.providerCheck, { backgroundColor: colors.primary }]}><Feather name="check" size={12} color={colors.primaryForeground} /></View>}
     </TouchableOpacity>)}</View>
-    <AppInput label={form.momoProvider === 'mtn' ? 'MTN MoMo Phone Number' : 'Airtel Money Phone Number'} placeholder="7x xxx xxxx" value={formatSubscriberDigits(rwandaPhoneToSubscriber(form.momoCode))} onChangeText={text => {
+    <AppInput label={form.momoProvider === 'mtn' ? 'MTN MoMo Phone Number' : 'Airtel Money Phone Number'} placeholder="7xxxxxxxx" value={formatSubscriberDigits(rwandaPhoneToSubscriber(form.momoCode))} onChangeText={text => {
       const digits = text.replace(/\D/g, '').slice(0, 9);
       update('momoCode', digits ? `+250${digits}` : '');
-    }} error={errors.momoCode} keyboardType="phone-pad" maxLength={11} leftIcon="smartphone" leftLabel="+250" />
+    }} error={errors.momoCode} keyboardType="phone-pad" maxLength={11} leftIcon="smartphone" leftLabel="+250" leftLabelDivider={false} />
     <AppInput label={form.momoProvider === 'mtn' ? 'MoMo Pay Code' : 'Airtel Merchant Code'} placeholder="e.g. 123456" value={form.merchantCode} onChangeText={text => update('merchantCode', text.toUpperCase().trimStart())} onBlur={() => update('merchantCode', form.merchantCode.trim().toUpperCase())} error={errors.merchantCode} leftIcon="briefcase" autoCapitalize="characters" />
     <TouchableOpacity style={styles.termsRow} onPress={() => { setAcceptedTerms(current => !current); setErrors(current => ({ ...current, acceptedTerms: '' })); }} activeOpacity={0.75}>
       <View style={[styles.termsCheckbox, { backgroundColor: acceptedTerms ? colors.primary : 'transparent', borderColor: acceptedTerms ? colors.primary : errors.acceptedTerms ? colors.destructive : colors.border }]}>{acceptedTerms && <Feather name="check" size={14} color={colors.primaryForeground} />}</View>

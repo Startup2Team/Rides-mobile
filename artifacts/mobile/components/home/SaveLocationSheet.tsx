@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { CloseButton, type CloseButtonHandle } from '@/components/BackButton';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
+import { TAB_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import type { useColors } from '@/hooks/useColors';
 import type { RideLocation } from '@/types';
 import { styles } from './homeStyles';
@@ -22,6 +23,7 @@ import {
 export function SaveLocationSheet({
   animatedOpacity,
   bottomInset,
+  bottomOffset = 0,
   colors,
   customLabel,
   dragAnimation,
@@ -41,6 +43,7 @@ export function SaveLocationSheet({
 }: {
   animatedOpacity: Animated.AnimatedInterpolation<string | number>;
   bottomInset: number;
+  bottomOffset?: number;
   closeButtonRef: RefObject<CloseButtonHandle | null>;
   colors: ReturnType<typeof useColors>;
   customLabel: string;
@@ -71,7 +74,8 @@ export function SaveLocationSheet({
           styles.overlayFormSheetRaised,
           surfaceStyle,
           {
-            paddingBottom: bottomInset + (Platform.OS === 'web' ? 88 : 72),
+            bottom: bottomOffset,
+            paddingBottom: bottomInset + TAB_SCREEN_BOTTOM_PADDING,
             transform: [{
               translateY: Animated.add(dragAnimation, Animated.multiply(keyboardAnimation, -1)),
             }],

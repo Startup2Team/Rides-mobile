@@ -1,32 +1,40 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  activatePackage as activatePackageDomain,
-  createPackagePurchase as createPackagePurchaseDomain,
+  activatePackageOffer as activatePackageOfferDomain,
+  createPackagePurchaseFromOffer as createPackagePurchaseDomain,
+  deductCreditForCompletedRide as deductCreditDomain,
   EMPTY_DRIVER_ENTITLEMENT,
+  getEntitlementVehicleForProfile,
+  getActiveBonusRides,
   getActiveRideCredits,
+  getRideBalance,
   hasUsedLaunchOffer,
+  normalizeEntitlement,
   updatePackagePurchaseStatus as updatePackagePurchaseStatusDomain,
   type DriverEntitlement,
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
-  type DriverRidePackageId,
+  type DriverPackageOfferSnapshot,
   type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
 import { loadStoredDriverEntitlement, saveStoredDriverEntitlement } from '@/persistence/driverEntitlementPersistence';
-import { getDriverCredits } from '@/services/driverRides';
+import { useOptionalAuth } from './AuthContext';
+import { purchaseDriverPackage, getDriverCredits } from '@/services/driverRides';
 
 interface DriverEntitlementContextType {
   entitlement: DriverEntitlement;
   isLoading: boolean;
-  /** Ride credits remaining — authoritative from the backend (GET /driver/credits). */
+  /** Authoritative ride credits — backend ledger total when available. */
   rideCredits: number;
-  /** Re-fetch credits from the backend (after a purchase or a completed ride). */
-  refreshCredits: () => Promise<void>;
+  bonusRides: number;
+  totalAvailableRides: number;
   launchOfferUsed: boolean;
-  activatePackage: (packageId: DriverRidePackageId) => Promise<PackageActivation>;
+  /** Re-fetch the credit balance from the backend ledger. */
+  refreshCredits: () => Promise<void>;
+  activatePackage: (offer: DriverPackageOfferSnapshot) => Promise<PackageActivation>;
   createPackagePurchase: (input: {
-    packageId: DriverRidePackageId;
+    offer: DriverPackageOfferSnapshot;
     provider: MobileMoneyPackageProvider;
     phoneNumber: string;
   }) => Promise<DriverPackagePurchase>;
@@ -40,77 +48,133 @@ interface DriverEntitlementContextType {
 const DriverEntitlementContext = createContext<DriverEntitlementContextType | null>(null);
 
 export function DriverEntitlementProvider({ children }: { children: React.ReactNode }) {
+  const auth = useOptionalAuth();
+  const activeVehicle = getEntitlementVehicleForProfile(auth?.driverProfile);
   const [entitlement, setEntitlement] = useState(EMPTY_DRIVER_ENTITLEMENT);
-  const [serverCredits, setServerCredits] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Backend ledger is the authority for the credit balance. The local
+  // entitlement is still kept for the offer-lock / receipt UI, but the number we
+  // display comes from the server (matches the ride accept-gate + deduction).
+  const [serverCredits, setServerCredits] = useState<number | null>(null);
   const entitlementRef = useRef(entitlement);
   entitlementRef.current = entitlement;
+  const activeVehicleRef = useRef(activeVehicle);
+  activeVehicleRef.current = activeVehicle;
 
   const refreshCredits = useCallback(async () => {
-    setServerCredits(await getDriverCredits());
+    try {
+      setServerCredits(await getDriverCredits());
+    } catch {
+      // leave the previous value on a transient failure
+    }
   }, []);
 
   useEffect(() => {
-    void (async () => {
-      const stored = await loadStoredDriverEntitlement();
+    let active = true;
+    void loadStoredDriverEntitlement().then(stored => {
+      if (!active) return;
       if (stored.data) setEntitlement(stored.data);
-      // Backend is the authority for credits (matches the accept gate).
-      await refreshCredits();
       setIsLoading(false);
-    })();
+    });
+    void refreshCredits();
+    return () => {
+      active = false;
+    };
   }, [refreshCredits]);
 
+  useEffect(() => {
+    if (isLoading || !activeVehicle) return;
+    let active = true;
+    const normalized = normalizeEntitlement(entitlementRef.current, activeVehicle);
+    if (JSON.stringify(normalized) === JSON.stringify(entitlementRef.current)) return;
+    entitlementRef.current = normalized;
+    setEntitlement(normalized);
+    void Promise.resolve().then(() => {
+      if (active) return saveStoredDriverEntitlement(normalized);
+      return undefined;
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeVehicle?.id, activeVehicle?.vehicleType, isLoading]);
+
   const persist = useCallback(async (next: DriverEntitlement) => {
-    entitlementRef.current = next;
-    setEntitlement(next);
-    await saveStoredDriverEntitlement(next);
+    const normalized = normalizeEntitlement(next, activeVehicleRef.current);
+    entitlementRef.current = normalized;
+    setEntitlement(normalized);
+    await saveStoredDriverEntitlement(normalized);
   }, []);
 
-  const activatePackage = useCallback(async (packageId: DriverRidePackageId) => {
-    const result = activatePackageDomain(entitlementRef.current, packageId);
+  const activatePackage = useCallback(async (offer: DriverPackageOfferSnapshot) => {
+    // Free/promotional package: the backend grants it immediately (offer.packageId
+    // is the backend package uuid). Then the local domain records the activation
+    // for the receipt UI; the displayed balance comes from the backend.
+    await purchaseDriverPackage(offer.packageId);
+    void refreshCredits();
+    const result = activatePackageOfferDomain(entitlementRef.current, offer, undefined, activeVehicleRef.current);
     await persist(result.entitlement);
     return result.activation;
-  }, [persist]);
+  }, [persist, refreshCredits]);
 
   const createPackagePurchase = useCallback(async (input: {
-    packageId: DriverRidePackageId;
+    offer: DriverPackageOfferSnapshot;
     provider: MobileMoneyPackageProvider;
     phoneNumber: string;
   }) => {
-    const result = createPackagePurchaseDomain(entitlementRef.current, input);
+    // Charge the package on the backend (MoMo; dev auto-confirms). The ledger
+    // grant happens server-side on confirmation. A failure here propagates so the
+    // payment screen shows it.
+    await purchaseDriverPackage(input.offer.packageId, {
+      momoPhone: input.phoneNumber,
+      momoProvider: input.provider,
+    });
+    void refreshCredits();
+    // Local purchase record drives the screen's receipt / status flow.
+    const result = createPackagePurchaseDomain(entitlementRef.current, input, undefined, activeVehicleRef.current);
     await persist(result.entitlement);
     return result.purchase;
-  }, [persist]);
+  }, [persist, refreshCredits]);
 
   const updatePackagePurchaseStatus = useCallback(async (
     transactionId: string,
     status: Exclude<DriverPackagePurchaseStatus, 'idle'>,
   ) => {
-    const result = updatePackagePurchaseStatusDomain(entitlementRef.current, transactionId, status);
+    const result = updatePackagePurchaseStatusDomain(entitlementRef.current, transactionId, status, undefined, activeVehicleRef.current);
     await persist(result.entitlement);
     return { purchase: result.purchase, activation: result.activation };
   }, [persist]);
 
-  const deductCreditForCompletedRide = useCallback(async (_rideId: string) => {
-    // The backend deducts the credit at fare AGREEMENT (CONFIRMED), not at
-    // completion — so we never deduct locally. We just re-sync the real count.
-    await refreshCredits();
-    return true;
-  }, [refreshCredits]);
+  const deductCreditForCompletedRide = useCallback(async (rideId: string) => {
+    // The backend already deducts one credit at fare AGREEMENT (CONFIRMED) via
+    // the ledger — never at completion. So we never deduct on the backend here;
+    // we just re-sync the authoritative balance. The local domain deduction is
+    // kept so the local entitlement history stays coherent.
+    void refreshCredits();
+    const result = deductCreditDomain(entitlementRef.current, rideId, undefined, activeVehicleRef.current);
+    if (result.deducted) await persist(result.entitlement);
+    return result.deducted;
+  }, [persist, refreshCredits]);
+
+  const activeEntitlement = useMemo(
+    () => normalizeEntitlement(entitlement, activeVehicle),
+    [activeVehicle?.id, activeVehicle?.vehicleType, entitlement],
+  );
 
   const value = useMemo(() => ({
-    entitlement,
+    entitlement: activeEntitlement,
     isLoading,
-    // Backend credits are authoritative; fall back to local only before the
-    // first fetch resolves.
-    rideCredits: serverCredits ?? getActiveRideCredits(entitlement),
+    // Backend ledger total is authoritative; fall back to the local balance only
+    // before the first fetch resolves.
+    rideCredits: serverCredits ?? getRideBalance(activeEntitlement),
+    bonusRides: getActiveBonusRides(activeEntitlement),
+    totalAvailableRides: serverCredits ?? getActiveRideCredits(activeEntitlement),
+    launchOfferUsed: hasUsedLaunchOffer(activeEntitlement),
     refreshCredits,
-    launchOfferUsed: hasUsedLaunchOffer(entitlement),
     activatePackage,
     createPackagePurchase,
     updatePackagePurchaseStatus,
     deductCreditForCompletedRide,
-  }), [activatePackage, createPackagePurchase, deductCreditForCompletedRide, entitlement, isLoading, refreshCredits, serverCredits, updatePackagePurchaseStatus]);
+  }), [activatePackage, activeEntitlement, createPackagePurchase, deductCreditForCompletedRide, isLoading, refreshCredits, serverCredits, updatePackagePurchaseStatus]);
 
   return <DriverEntitlementContext.Provider value={value}>{children}</DriverEntitlementContext.Provider>;
 }

@@ -34,6 +34,7 @@ export interface RideContextType {
   completeRide: (source?: 'customer' | 'driver', driverIdentity?: {
     driverId?: string;
     driverName?: string;
+    vehicleId?: string;
     vehicleType?: VehicleType;
   }) => void;
   markArrived: () => void;

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { useToast } from '@/context/ToastContext';
 import { submitSupportTicket } from '@/services/support';
@@ -100,7 +101,7 @@ export default function ReportRideIssueScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 36,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           flexGrow: 1,
         }}
@@ -125,7 +126,7 @@ export default function ReportRideIssueScreen() {
                   style={styles.row}
                 >
                   <View style={styles.icon}>
-                    <Feather name={report.icon} size={20} color={colors.foreground} />
+                    <Feather name={report.icon} size={20} color={colors.primary} />
                   </View>
                   <View style={styles.copy}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>

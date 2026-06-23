@@ -1,5 +1,6 @@
 import { Dimensions, Platform, StyleSheet } from 'react-native';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { TAB_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -12,7 +13,7 @@ const SUGGESTION_ROW_MIN_HEIGHT = 52;
 /** ~5 rows visible before the list scrolls (Apple Maps-style). */
 const SUGGESTIONS_REST_MAX_HEIGHT = SUGGESTION_ROW_MIN_HEIGHT * 5.5;
 
-export const EDIT_SAVED_FORM_TAB_BAR_PADDING = Platform.OS === 'web' ? 88 : 72;
+export const EDIT_SAVED_FORM_TAB_BAR_PADDING = TAB_SCREEN_BOTTOM_PADDING;
 
 export const styles = StyleSheet.create({
   sheet: {

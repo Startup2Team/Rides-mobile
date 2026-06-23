@@ -40,5 +40,9 @@ export function getDriverFlowNavigationDecision({
     return { method: 'replace', href: DRIVER_HOME_ROUTE };
   }
 
+  if (pathname === '/driver-ride-complete') {
+    return null;
+  }
+
   return null;
 }

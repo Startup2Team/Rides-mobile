@@ -20,8 +20,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { type CloseButtonHandle } from '@/components/BackButton';
 import { EditSavedLocationSheet } from '@/components/EditSavedLocationSheet';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
-import { CUSTOMER_VEHICLE_TYPES } from '@/constants/vehicles';
-import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { useColors } from '@/hooks/useColors';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
 import { useKeyboardHandling } from '@/hooks/home/useKeyboardHandling';
@@ -44,27 +42,24 @@ import {
   KIGALI_CENTER,
   RideLocation,
   SavedLocation,
-  VEHICLE_LABELS,
 } from '@/types';
-import { BookingSheet } from './BookingSheet';
+import { loadStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
+import { CustomerBottomSheet } from './CustomerBottomSheet';
 import { HomeMap } from './HomeMap';
 import { LocationSearchOverlay } from './LocationSearchOverlay';
 import { MapPickerOverlay } from './MapPickerOverlay';
 import { SaveLocationSheet } from './SaveLocationSheet';
 import { styles } from './homeStyles';
 import {
-  COMPACT_PANEL_HEIGHT,
-  EXPANDED_PANEL_HEIGHT,
+  BOOKING_SHEET_BOTTOM_PADDING,
+  DRIVER_OFFSETS,
   HOME_FLOATING_PANEL_FALLBACK_HEIGHT,
   HOME_LOCATION_DELTA,
-  HOME_TAB_BAR_HEIGHT,
   MAP_TYPES,
   type AppMapType,
   type MapPickerTarget,
   SCREEN_HEIGHT,
 } from './homeUtils';
-import { getNearbyDrivers } from '@/services/rides';
-import { LEGACY_TO_API_VEHICLE, type LegacyVehicleType } from '@/services/vehicleTypes';
 
 export default function CustomerHome() {
   const colors = useColors();
@@ -89,7 +84,6 @@ export default function CustomerHome() {
     restoreBookingOnHomeFocus,
     clearCancelledSearchDraft,
     clearRestoreBookingOnHomeFocus,
-    initCustomerSession,
   } = useRide();
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
@@ -97,7 +91,17 @@ export default function CustomerHome() {
   const hasCenteredOnUserRef = useRef(false);
   const cancelledSearchDraftRef = useRef(cancelledSearchDraft);
   cancelledSearchDraftRef.current = cancelledSearchDraft;
-  const [showBooking, setShowBooking] = useState(false);
+
+  // ── V2 card state ─────────────────────────────────────────────────────────
+  // One string replaces showBooking + bookingShellState + bookingContentRevision.
+  // 'home'    → HomeCard is visible, gesture is disabled on the sheet.
+  // 'booking' → BookingCard is visible, swipe-down gesture is active.
+  const [activeCard, setActiveCard] = useState<'home' | 'booking'>('home');
+  // Height reported from CustomerBottomSheet via onSheetHeightChange.
+  // Used to offset map controls and center the map correctly.
+  const [sheetHeight, setSheetHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
+  const showBooking = activeCard === 'booking';
+
   const pickupSetterRef = useRef<React.Dispatch<React.SetStateAction<RideLocation>>>(() => {});
   const openLocationSearchRef = useRef<(target: LocationSearchTarget) => void>(() => {});
   const applyInitialPickup = useCallback((location: RideLocation) => {
@@ -133,7 +137,7 @@ export default function CustomerHome() {
   } = useHomeBooking({
     createRide,
     gpsLocation,
-    onBeforeCreate: useCallback(() => setShowBooking(true), []),
+    onBeforeCreate: useCallback(() => setActiveCard('booking'), []),
     openLocationSearch: requestLocationSearch,
     userLocation,
   });
@@ -196,27 +200,19 @@ export default function CustomerHome() {
     showToast,
     userLocation,
   });
-  const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [homePanelHeight, setHomePanelHeight] = useState(HOME_FLOATING_PANEL_FALLBACK_HEIGHT);
-  const [isMapReady, setIsMapReady] = useState(false);
-  // Synchronous mirror of isMapReady so imperative map commands can be gated even
-  // in the same tick onMapReady fires (the state update hasn't flushed yet).
-  // Prevents Fabric segfaults from dispatching to an uncommitted MapView.
-  const isMapReadyRef = useRef(false);
 
-  // Booking sheet state
+  const [mapType, setMapType] = useState<AppMapType>('standard');
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
+
+  // Overlay state (map picker, location search, saved-place form)
   const [mapPicker, setMapPicker] = useState<MapPickerTarget | null>(null);
   const [pinCoords, setPinCoords] = useState(KIGALI_CENTER);
   const [pickerMapSize, setPickerMapSize] = useState({ width: 0, height: 0 });
   const [isPickerDragging, setIsPickerDragging] = useState(false);
   const [focusedField, setFocusedField] = useState<'pickup' | 'dropoff' | null>(null);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
-  const sheetAnim = useRef(new Animated.Value(EXPANDED_PANEL_HEIGHT)).current;
-  const sheetDragStart = useRef(0);
-  const bookingCloseRef = useRef<CloseButtonHandle>(null);
   const saveFormCloseRef = useRef<CloseButtonHandle>(null);
-  const activePanelHeightRef = useRef(COMPACT_PANEL_HEIGHT);
-  const closeBookingRef = useRef<() => void>(() => {});
   const saveSheetKeyboardAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragAnim = useRef(new Animated.Value(0)).current;
   const formSheetDragStart = useRef(0);
@@ -233,64 +229,48 @@ export default function CustomerHome() {
       }),
     [formSheetDragAnim, formSheetMeasuredHeight],
   );
-  const hasRideActions = destination !== null || destText.trim().length > 0;
-  const activePanelHeight = hasRideActions ? EXPANDED_PANEL_HEIGHT : COMPACT_PANEL_HEIGHT;
-  const bookingPanelMapInset = activePanelHeight;
-  const homePanelNavPadding = Platform.OS === 'web'
-    ? HOME_TAB_BAR_HEIGHT + 20
-    : HOME_TAB_BAR_HEIGHT + insets.bottom;
-  const homePanelBottomInset = 0;
-  const homePanelMapInset = homePanelHeight + homePanelBottomInset;
-  const recenterBottomOffset = showBooking ? bookingPanelMapInset + 16 : homePanelMapInset + 16;
+
+  // ── Derived / layout ──────────────────────────────────────────────────────
+  const recenterBottomOffset = sheetHeight + 16;
   const hasPreciseRouteLocations =
-    showBooking &&
-    destination !== null &&
-    pickup.locationType !== 'generic' &&
-    destination.locationType !== 'generic';
-  const pickupOverlapsUser = gpsLocation
-    ? getCoordDistance(pickup, gpsLocation) < 20
-    : false;
-  const shouldShowPickupMarker =
     showBooking
-    && hasUsablePickup(pickup)
-    && (!pickupOverlapsUser || destination !== null);
+    && destination !== null
+    && pickup.locationType !== 'generic'
+    && destination.locationType !== 'generic';
+  const pickupOverlapsUser = gpsLocation ? getCoordDistance(pickup, gpsLocation) < 20 : false;
+  const shouldShowPickupMarker =
+    showBooking && hasUsablePickup(pickup) && (!pickupOverlapsUser || destination !== null);
+
   const cycleMapType = () => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
   };
 
-  const centerMapOnUser = useCallback((duration = 700, panelHeightOverride?: number) => {
-    if (!isMapReadyRef.current || !gpsLocation) return;
-    const panelHeight = panelHeightOverride ?? (showBooking ? bookingPanelMapInset : homePanelMapInset);
-    const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
-    mapRef.current?.animateToRegion(
-      {
-        latitude: gpsLocation.latitude - latitudeOffset,
-        longitude: gpsLocation.longitude,
-        latitudeDelta: HOME_LOCATION_DELTA,
-        longitudeDelta: HOME_LOCATION_DELTA,
-      },
-      duration,
-    );
-  }, [
-    bookingPanelMapInset,
-    homePanelMapInset,
-    gpsLocation,
-    showBooking,
-  ]);
+  const centerMapOnUser = useCallback(
+    (duration = 700, panelHeightOverride?: number) => {
+      if (!gpsLocation) return;
+      const panelHeight = panelHeightOverride ?? sheetHeight;
+      const latitudeOffset = (panelHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
+      mapRef.current?.animateToRegion(
+        {
+          latitude: gpsLocation.latitude - latitudeOffset,
+          longitude: gpsLocation.longitude,
+          latitudeDelta: HOME_LOCATION_DELTA,
+          longitudeDelta: HOME_LOCATION_DELTA,
+        },
+        duration,
+      );
+    },
+    [gpsLocation, sheetHeight],
+  );
 
   const centerPickerOnUser = () => {
     if (!gpsLocation) return;
     pickerMapRef.current?.animateToRegion(
-      {
-        ...gpsLocation,
-        latitudeDelta: HOME_LOCATION_DELTA,
-        longitudeDelta: HOME_LOCATION_DELTA,
-      },
+      { ...gpsLocation, latitudeDelta: HOME_LOCATION_DELTA, longitudeDelta: HOME_LOCATION_DELTA },
       500,
     );
   };
 
-  /** Map center under the picker pin stem tip (matches LocationMapPin anchor 0.5, 1). */
   const syncPickerCoordsFromMapCenter = useCallback(
     async (regionFallback?: Region) => {
       const map = pickerMapRef.current;
@@ -307,10 +287,7 @@ export default function CustomerHome() {
         }
       }
       if (regionFallback) {
-        setPinCoords({
-          latitude: regionFallback.latitude,
-          longitude: regionFallback.longitude,
-        });
+        setPinCoords({ latitude: regionFallback.latitude, longitude: regionFallback.longitude });
       }
     },
     [pickerMapSize.height, pickerMapSize.width],
@@ -321,6 +298,35 @@ export default function CustomerHome() {
     void syncPickerCoordsFromMapCenter();
   }, [mapPicker, pickerMapSize.height, pickerMapSize.width, syncPickerCoordsFromMapCenter]);
 
+  // ── Open / close booking ─────────────────────────────────────────────────
+  const handleOpenBooking = useCallback(() => {
+    setActiveCard('booking');
+  }, []);
+
+  const handleCloseBooking = useCallback(() => {
+    clearCancelledSearchDraft();
+    setActiveCard('home');
+    setDestText('');
+    setDestination(null);
+    setSuggestions([]);
+    clearRoutePreview();
+    setPickup(
+      gpsLocation
+        ? { ...gpsLocation, address: currentLocationAddress || 'Current Location', locationType: 'precise' }
+        : { ...KIGALI_CENTER, address: '', locationType: 'generic' },
+    );
+    if (gpsLocation) requestAnimationFrame(() => centerMapOnUser(400, sheetHeight));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    clearCancelledSearchDraft,
+    currentLocationAddress,
+    gpsLocation,
+    centerMapOnUser,
+    sheetHeight,
+  ]);
+  // clearRoutePreview and setters are stable references — omitted to avoid
+  // stale-closure churn in a hot callback.
+
   const applyCancelledSearchDraft = useCallback(
     (draft: BookingFormDraft) => {
       setSelectedVehicle(draft.vehicleType);
@@ -328,11 +334,10 @@ export default function CustomerHome() {
       setDestination({ ...draft.destination });
       setDestText(draft.destText);
       setSuggestions([]);
-      setShowBooking(true);
-      sheetAnim.setValue(0);
+      setActiveCard('booking');
       setRouteRecenterRequest(value => value + 1);
     },
-    [sheetAnim],
+    [],
   );
 
   const tryRestoreCancelledSearch = useCallback(() => {
@@ -347,8 +352,7 @@ export default function CustomerHome() {
       setDestination({ ...currentRide.destination });
       setDestText(currentRide.destination.address ?? '');
       setSuggestions([]);
-      setShowBooking(true);
-      sheetAnim.setValue(0);
+      setActiveCard('booking');
       setRouteRecenterRequest(value => value + 1);
     }
 
@@ -359,7 +363,6 @@ export default function CustomerHome() {
     clearRestoreBookingOnHomeFocus,
     currentRide,
     restoreBookingOnHomeFocus,
-    sheetAnim,
   ]);
 
   useLayoutEffect(() => {
@@ -373,15 +376,7 @@ export default function CustomerHome() {
     }, [tryRestoreCancelledSearch]),
   );
 
-  // Home only needs a few recent destinations — fetch 5, not the full 20.
-  useEffect(() => {
-    loadHistory(5);
-  }, [loadHistory]);
-
-  // Recover an in-progress ride (and reconnect its WS) after an app restart.
-  useEffect(() => {
-    void initCustomerSession();
-  }, [initCustomerSession]);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   useEffect(() => {
     if (locationStatus !== 'available' || hasCenteredOnUserRef.current || hasPreciseRouteLocations) return;
@@ -389,10 +384,17 @@ export default function CustomerHome() {
     requestAnimationFrame(() => centerMapOnUser());
   }, [centerMapOnUser, hasPreciseRouteLocations, locationStatus]);
 
+  useFocusEffect(useCallback(() => { void reloadSavedPlaces(); }, [reloadSavedPlaces]));
+
   useFocusEffect(
     useCallback(() => {
-      void reloadSavedPlaces();
-    }, [reloadSavedPlaces]),
+      let active = true;
+      void loadStoredDriverOnboardingDraft().then(stored => {
+        if (!active) return;
+        setDriverApplicationDraftUpdatedAt(stored.data?.updatedAt ?? null);
+      });
+      return () => { active = false; };
+    }, []),
   );
 
   useFocusEffect(
@@ -400,11 +402,7 @@ export default function CustomerHome() {
       if (locationStatus !== 'available') return undefined;
       void startHereLocationWatch();
       return stopHereLocationWatch;
-    }, [
-      locationStatus,
-      startHereLocationWatch,
-      stopHereLocationWatch,
-    ]),
+    }, [locationStatus, startHereLocationWatch, stopHereLocationWatch]),
   );
 
   const {
@@ -419,11 +417,7 @@ export default function CustomerHome() {
   useEffect(() => {
     if (!pendingSaveLocation) return;
     formSheetDragAnim.setValue(formSheetHeightRef.current);
-    Animated.spring(formSheetDragAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      bounciness: 4,
-    }).start();
+    Animated.spring(formSheetDragAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
   }, [pendingSaveLocation, formSheetDragAnim]);
 
   const {
@@ -441,171 +435,31 @@ export default function CustomerHome() {
     showBooking,
     isMapReady,
     mapRef,
-    bookingPanelMapInset,
+    bookingPanelMapInset: sheetHeight,
     topInset: insets.top,
     bottomInset: insets.bottom,
     routeRecenterRequest,
   });
+
   const shouldShowYouAreHere =
-    locationStatus === 'available'
-    && mapPicker === null
-    && (!showBooking || !shouldShowBookingRoute);
+    locationStatus === 'available' && mapPicker === null && (!showBooking || !shouldShowBookingRoute);
 
-  const openBooking = () => {
-    setShowBooking(true);
-    Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-  };
-
-  const doCloseBooking = useCallback(() => {
-    clearCancelledSearchDraft();
-    bookingCloseRef.current?.spinShut();
-    Animated.timing(sheetAnim, { toValue: activePanelHeight, duration: 250, useNativeDriver: true }).start(() => {
-      setShowBooking(false);
-      setDestText('');
-      setDestination(null);
-      setSuggestions([]);
-      clearRoutePreview();
-      setPickup(gpsLocation
-        ? {
-            ...gpsLocation,
-            address: currentLocationAddress || 'Current Location',
-            locationType: 'precise',
-          }
-        : { ...KIGALI_CENTER, address: '', locationType: 'generic' });
-      if (gpsLocation) requestAnimationFrame(() => centerMapOnUser(400, homePanelMapInset));
-    });
-  }, [
-    activePanelHeight,
-    clearCancelledSearchDraft,
-    clearRoutePreview,
-    currentLocationAddress,
-    gpsLocation,
-    homePanelMapInset,
-    sheetAnim,
-  ]);
-
-  const snapBookingSheetOpen = () => {
-    bookingCloseRef.current?.spinOpen();
-    Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-  };
-
-  const closeBooking = () => {
-    sheetAnim.stopAnimation();
-    if (destination !== null || destText.trim().length > 0) {
-      Alert.alert(
-        'Cancel search?',
-        'Why are you closing the booking form?',
-        [
-          { text: 'Changed my plans', onPress: doCloseBooking },
-          { text: 'Wrong location selected', onPress: doCloseBooking },
-          { text: 'Need a different vehicle', onPress: doCloseBooking },
-          { text: 'Keep searching', style: 'cancel', onPress: snapBookingSheetOpen },
-        ],
-      );
-    } else {
-      doCloseBooking();
-    }
-  };
-
-  closeBookingRef.current = closeBooking;
-  activePanelHeightRef.current = activePanelHeight;
-
-  const bookingSheetPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          gestureState.dy > 6 && gestureState.dy > Math.abs(gestureState.dx),
-        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
-          gestureState.dy > 8 && gestureState.dy > Math.abs(gestureState.dx) * 1.2,
-        onPanResponderGrant: () => {
-          Keyboard.dismiss();
-          sheetAnim.stopAnimation(value => {
-            sheetDragStart.current = value;
-          });
-        },
-        onPanResponderMove: (_, gestureState) => {
-          const max = activePanelHeightRef.current;
-          const next = Math.max(0, Math.min(max, sheetDragStart.current + gestureState.dy));
-          sheetAnim.setValue(next);
-          if (max > 0) {
-            bookingCloseRef.current?.setSpinProgress(1 - next / max);
-          }
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          const max = activePanelHeightRef.current;
-          const current = Math.max(0, Math.min(max, sheetDragStart.current + gestureState.dy));
-          const shouldClose = current > max * 0.28 || gestureState.vy > 0.65;
-          const hadVerticalDrag = Math.abs(gestureState.dy) > 8;
-          if (shouldClose) {
-            closeBookingRef.current();
-          } else if (hadVerticalDrag) {
-            snapBookingSheetOpen();
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [sheetAnim],
-  );
-
-  const openLocationSearch = (target: 'pickup' | 'dropoff') => {
-    setFocusedField(target);
-    openLocationSearchState(target, target === 'pickup' ? pickup.address ?? '' : destText);
-  };
-  openLocationSearchRef.current = openLocationSearch;
-
-  const closeLocationSearch = () => {
-    closeLocationSearchState();
-    resetSavedLocationEditor();
-    Keyboard.dismiss();
-  };
-
-  const applyLocation = (target: 'pickup' | 'dropoff', location: RideLocation) => {
-    if (target === 'pickup') {
-      setPickup(location);
-    } else {
-      setDestText(location.address ?? '');
-      setDestination(location);
-    }
-    closeLocationSearch();
-  };
-
-  const openSavedPlaceSelector = () => {
-    Alert.alert('Add saved place', 'Choose the place you want to save.', [
-      { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Home' } }) },
-      { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Work' } }) },
-      { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'School' } }) },
-      { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Other' } }) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  closePendingSaveLocationRef.current = closePendingSaveLocation;
-
+  // ── Overlay: save-form sheet gesture ─────────────────────────────────────
   const snapFormSheetOpen = useCallback((onSnapOpen?: () => void) => {
     onSnapOpen?.();
-    Animated.spring(formSheetDragAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      bounciness: 4,
-    }).start();
+    Animated.spring(formSheetDragAnim, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
   }, [formSheetDragAnim]);
 
   const dismissFormSheetAnimated = useCallback(
     (close: () => void, onAnimateStart?: () => void) => {
       onAnimateStart?.();
       const max = formSheetHeightRef.current;
-      Animated.timing(formSheetDragAnim, {
-        toValue: max,
-        duration: 250,
-        useNativeDriver: true,
-      }).start(() => {
+      Animated.timing(formSheetDragAnim, { toValue: max, duration: 250, useNativeDriver: true }).start(() => {
         close();
       });
     },
     [formSheetDragAnim],
   );
-
   dismissFormSheetAnimatedRef.current = dismissFormSheetAnimated;
 
   const createFormSheetPanResponder = useCallback(
@@ -617,29 +471,23 @@ export default function CustomerHome() {
     ) =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          gestureState.dy > 6 && gestureState.dy > Math.abs(gestureState.dx),
-        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
-          gestureState.dy > 8 && gestureState.dy > Math.abs(gestureState.dx) * 1.2,
+        onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+        onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 8 && g.dy > Math.abs(g.dx) * 1.2,
         onPanResponderGrant: () => {
           Keyboard.dismiss();
-          formSheetDragAnim.stopAnimation(value => {
-            formSheetDragStart.current = value;
-          });
+          formSheetDragAnim.stopAnimation(value => { formSheetDragStart.current = value; });
         },
-        onPanResponderMove: (_, gestureState) => {
+        onPanResponderMove: (_, g) => {
           const max = formSheetHeightRef.current;
-          const next = Math.max(0, Math.min(max, formSheetDragStart.current + gestureState.dy));
+          const next = Math.max(0, Math.min(max, formSheetDragStart.current + g.dy));
           formSheetDragAnim.setValue(next);
-          if (max > 0) {
-            onDragProgress?.(1 - next / max);
-          }
+          if (max > 0) onDragProgress?.(1 - next / max);
         },
-        onPanResponderRelease: (_, gestureState) => {
+        onPanResponderRelease: (_, g) => {
           const max = formSheetHeightRef.current;
-          const current = Math.max(0, Math.min(max, formSheetDragStart.current + gestureState.dy));
-          const shouldClose = current > max * 0.28 || gestureState.vy > 0.65;
-          const hadVerticalDrag = Math.abs(gestureState.dy) > 8;
+          const current = Math.max(0, Math.min(max, formSheetDragStart.current + g.dy));
+          const shouldClose = current > max * 0.28 || g.vy > 0.65;
+          const hadVerticalDrag = Math.abs(g.dy) > 8;
           if (shouldClose) {
             dismissFormSheetAnimatedRef.current(close, onDismissStart);
           } else if (hadVerticalDrag) {
@@ -681,6 +529,40 @@ export default function CustomerHome() {
     confirmDeleteSavedLocation(editingSavedLocation);
   };
 
+  const openLocationSearch = (target: 'pickup' | 'dropoff') => {
+    setFocusedField(target);
+    openLocationSearchState(target, target === 'pickup' ? pickup.address ?? '' : destText);
+  };
+  openLocationSearchRef.current = openLocationSearch;
+
+  const closeLocationSearch = () => {
+    closeLocationSearchState();
+    resetSavedLocationEditor();
+    Keyboard.dismiss();
+  };
+
+  const applyLocation = (target: 'pickup' | 'dropoff', location: RideLocation) => {
+    if (target === 'pickup') {
+      setPickup(location);
+    } else {
+      setDestText(location.address ?? '');
+      setDestination(location);
+    }
+    closeLocationSearch();
+  };
+
+  const openSavedPlaceSelector = () => {
+    Alert.alert('Add saved place', 'Choose the place you want to save.', [
+      { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Home' } }) },
+      { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Work' } }) },
+      { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'School' } }) },
+      { text: 'Church', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Church' } }) },
+      { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { label: 'Other' } }) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+  closePendingSaveLocationRef.current = closePendingSaveLocation;
+
   const handleChooseOnMap = () => {
     if (!locationSearchTarget) return;
     const coords = locationSearchTarget === 'dropoff'
@@ -691,50 +573,11 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
-  // Real nearby drivers from the backend (POST /customer/location), polled
-  // while the customer is on the home screen and not already in a ride.
-  const [nearbyDrivers, setNearbyDrivers] = useState<
-    { id: string; latitude: number; longitude: number }[]
-  >([]);
-
-  useEffect(() => {
-    if (currentRide) return; // hide the ambient pool once a ride is active
-    // Only query with a REAL device GPS fix. userLocation defaults to the
-    // KIGALI_CENTER placeholder before a fix lands; querying with that posts a
-    // fake position to the backend and finds "nearby" drivers around the wrong
-    // point. gpsLocation is null until actual GPS resolves.
-    if (!gpsLocation) return;
-    let active = true;
-    const apiType = LEGACY_TO_API_VEHICLE[selectedVehicle as LegacyVehicleType];
-    const fetchNearby = async () => {
-      try {
-        const pins = await getNearbyDrivers(gpsLocation.latitude, gpsLocation.longitude, apiType);
-        if (!active) return;
-        setNearbyDrivers(
-          // Stable key per slot (NOT based on coords). The backend anonymises
-          // and jitters approx_lat/lng every poll, so a coord-based key would
-          // remount every marker each tick — which crashes AIRMap in Expo Go
-          // (insertReactSubview NSRangeException). With a stable key the marker
-          // stays mounted and just moves.
-          pins.map((p, i) => ({
-            id: `nearby-${p.transport_type}-${i}`,
-            latitude: p.approx_lat,
-            longitude: p.approx_lng,
-          })),
-        );
-      } catch {
-        // Network/offline — keep the last known pins rather than clearing the map.
-      }
-    };
-    void fetchNearby();
-    const interval = setInterval(fetchNearby, 12000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [currentRide, selectedVehicle, gpsLocation?.latitude, gpsLocation?.longitude]);
-
-  const visibleDrivers = nearbyDrivers;
+  const visibleDrivers = useMemo(() => DRIVER_OFFSETS.map((offset, i) => ({
+    id: `nearby-driver-${i}`,
+    latitude: userLocation.latitude + offset.lat,
+    longitude: userLocation.longitude + offset.lng,
+  })), [userLocation.latitude, userLocation.longitude]);
 
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
   const recentLocations = useMemo<RideLocation[]>(() => {
@@ -751,21 +594,19 @@ export default function CustomerHome() {
   }, [rideHistory]);
 
   const homeInitialRegion = useMemo(() => {
-    const latitudeOffset = (homePanelMapInset / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
+    const latitudeOffset = (sheetHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
     return {
       latitude: userLocation.latitude - latitudeOffset,
       longitude: userLocation.longitude,
       latitudeDelta: HOME_LOCATION_DELTA,
       longitudeDelta: HOME_LOCATION_DELTA,
     };
-  }, [homePanelMapInset, userLocation.latitude, userLocation.longitude]);
+  }, [sheetHeight, userLocation.latitude, userLocation.longitude]);
+
   const handleHomeMapReady = useCallback(() => {
-    isMapReadyRef.current = true;
     setIsMapReady(true);
     if (routeFitCoords.length > 1 && showBooking && destination) {
-      requestAnimationFrame(() =>
-        centerRouteInVisibleMap(routeFitCoords, EXPANDED_PANEL_HEIGHT),
-      );
+      requestAnimationFrame(() => centerRouteInVisibleMap(routeFitCoords, sheetHeight));
     } else if (!hasCenteredOnUserRef.current && !hasPreciseRouteLocations) {
       hasCenteredOnUserRef.current = true;
       centerMapOnUser(300);
@@ -777,6 +618,7 @@ export default function CustomerHome() {
     hasPreciseRouteLocations,
     routeFitCoords,
     showBooking,
+    sheetHeight,
   ]);
 
   if (locLoading) {
@@ -818,6 +660,8 @@ export default function CustomerHome() {
           profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
           driverVerificationStatus={getDriverVerificationStatus(driverProfile)}
           canSwitchToDriverMode={canAccessDriverMode(driverProfile)}
+          driverApplicationDraftUpdatedAt={driverApplicationDraftUpdatedAt}
+          driverApprovalAcknowledgedAt={driverProfile?.driverApprovalAcknowledgedAt ?? null}
         />
       ) : null}
 
@@ -837,129 +681,61 @@ export default function CustomerHome() {
       {/* Recenter button */}
       <TouchableOpacity
         style={[styles.recenterBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset }]}
-        onPress={() => {
-          if (gpsLocation) centerMapOnUser(600);
-          else void refreshHereLocation();
-        }}
+        onPress={() => { if (gpsLocation) centerMapOnUser(600); else void refreshHereLocation(); }}
         activeOpacity={0.8}
       >
         <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
       </TouchableOpacity>
 
-      {/* Home bottom panel */}
-      {!showBooking && (
-        <View
-          onLayout={event => {
-            const height = event.nativeEvent.layout.height;
-            if (height > 0) setHomePanelHeight(height);
-          }}
-          style={[
-            styles.bottomPanel,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              paddingBottom: homePanelNavPadding,
-            },
-          ]}
-        >
-          <Text style={[styles.greeting, { color: colors.foreground }]}>
-            Hi {user?.name?.split(' ')[0]} 👋
-          </Text>
-          <Text style={[styles.selectRide, { color: colors.mutedForeground }]}>
-            Select your ride
-          </Text>
-          {locationStatus === 'unavailable' ? (
-            <View style={[styles.locationUnavailable, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.locationUnavailableText, { color: colors.foreground }]}>
-                Unable to determine your location.
-              </Text>
-              <View style={styles.locationUnavailableActions}>
-                <TouchableOpacity onPress={() => void refreshHereLocation()} activeOpacity={0.75}>
-                  <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
-                    Retry location
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    openBooking();
-                    requestLocationSearch('pickup');
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
-                    Select pickup manually
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : null}
-          <View style={styles.vehicleRow}>
-            {CUSTOMER_VEHICLE_TYPES.map(v => (
-              <TouchableOpacity
-                key={v}
-                style={[styles.vehicleChip, { backgroundColor: selectedVehicle === v ? colors.primary : colors.muted, borderWidth: selectedVehicle === v ? 0 : 1, borderColor: colors.border }]}
-                onPress={() => setSelectedVehicle(v)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={VEHICLE_LABELS[v]}
-                accessibilityState={{ selected: selectedVehicle === v }}
-              >
-                <VehicleTypeIcon type={v} selected={selectedVehicle === v} />
-                <Text style={[styles.vehicleLabel, { color: selectedVehicle === v ? colors.primaryForeground : colors.foreground }]}>
-                  {VEHICLE_LABELS[v]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity style={[styles.continueBtn, { backgroundColor: colors.primary }]} onPress={openBooking} activeOpacity={0.85}>
-            <Text style={[styles.continueBtnText, { color: colors.primaryForeground }]}>
-              Continue with {VEHICLE_LABELS[selectedVehicle]}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <BookingSheet
-        visible={showBooking}
-        height={activePanelHeight}
-        bottomPadding={homePanelNavPadding}
+      {/* ── V2 Bottom Sheet ─────────────────────────────────────────────── */}
+      <CustomerBottomSheet
+        activeCard={activeCard}
+        onCloseBooking={handleCloseBooking}
+        onSheetHeightChange={setSheetHeight}
         colors={colors}
-        animation={sheetAnim}
-        panResponder={bookingSheetPanResponder}
-        closeButtonRef={bookingCloseRef}
-        onClose={closeBooking}
-        pickup={pickup}
-        destination={destination}
-        destinationText={destText}
-        focusedField={focusedField}
-        userLocation={{ ...userLocation, address: '', locationType: 'generic' }}
-        gpsLocation={gpsLocation}
-        onOpenLocationSearch={openLocationSearch}
-        onUseMap={(target, location) => {
-          setPinCoords({ latitude: location.latitude, longitude: location.longitude });
-          setMapPicker(target);
+        bottomPadding={BOOKING_SHEET_BOTTOM_PADDING}
+        homeCard={{
+          userName: user?.name?.split(' ')[0] ?? '',
+          locationStatus,
+          selectedVehicle,
+          onSelectVehicle: setSelectedVehicle,
+          onContinue: handleOpenBooking,
+          onRetryLocation: () => void refreshHereLocation(),
+          onSelectPickupManually: () => {
+            handleOpenBooking();
+            requestLocationSearch('pickup');
+          },
         }}
-        onUseGpsPickup={() => gpsLocation && setPickup({
-          ...gpsLocation,
-          address: 'Current Location',
-          locationType: 'precise',
-        })}
-        onUseGpsDestination={() => {
-          if (!gpsLocation) return;
-          setDestText('Current Location');
-          setDestination({
+        bookingCard={{
+          pickup,
+          destination,
+          destinationText: destText,
+          focusedField,
+          userLocation: { ...userLocation, address: '', locationType: 'generic' },
+          gpsLocation,
+          onOpenLocationSearch: openLocationSearch,
+          onUseMap: (target, location) => {
+            setPinCoords({ latitude: location.latitude, longitude: location.longitude });
+            setMapPicker(target);
+          },
+          onUseGpsPickup: () => gpsLocation && setPickup({
             ...gpsLocation,
             address: 'Current Location',
             locationType: 'precise',
-          });
+          }),
+          onUseGpsDestination: () => {
+            if (!gpsLocation) return;
+            setDestText('Current Location');
+            setDestination({ ...gpsLocation, address: 'Current Location', locationType: 'precise' });
+          },
+          route,
+          routeLoading,
+          distance: dist,
+          onBook: handleBook,
+          booking: bookLoading,
         }}
-        route={route}
-        routeLoading={routeLoading}
-        distance={dist}
-        onBook={handleBook}
-        booking={bookLoading}
       />
-      {/* Map picker â€” full screen pin drag */}
+
       {locationSearchTarget && (
         <LocationSearchOverlay
           bottomInset={insets.bottom}
@@ -988,6 +764,7 @@ export default function CustomerHome() {
           <SaveLocationSheet
             animatedOpacity={formSheetBackdropOpacity}
             bottomInset={insets.bottom}
+            bottomOffset={0}
             closeButtonRef={saveFormCloseRef}
             colors={colors}
             customLabel={customSaveLabel}
@@ -1011,6 +788,7 @@ export default function CustomerHome() {
           {editingSavedLocation && (
             <EditSavedLocationSheet
               location={editingSavedLocation}
+              bottomOffset={0}
               label={editingSavedLabel}
               address={editingSavedAddress}
               fieldErrors={editSavedFieldErrors}
@@ -1028,9 +806,7 @@ export default function CustomerHome() {
               onLabelFocus={() => setEditingSavedFocusedField('label')}
               onAddressFocus={() => {
                 setEditingSavedFocusedField('address');
-                if (editingSavedAddress.trim().length >= 2) {
-                  schedulePlaceSearch(editingSavedAddress);
-                }
+                if (editingSavedAddress.trim().length >= 2) schedulePlaceSearch(editingSavedAddress);
               }}
               onClearAddress={() => {
                 cancelPendingSearch();
@@ -1093,7 +869,7 @@ export default function CustomerHome() {
               locationType: 'precise',
             };
             const next = savedPlaces.map(place =>
-              place.id === editingSavedLocation.id ? updated : place
+              place.id === editingSavedLocation.id ? updated : place,
             );
             await persistSavedPlaces(next);
             setEditingSavedLocation(updated);

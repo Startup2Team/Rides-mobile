@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import {
@@ -16,6 +16,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 
@@ -67,7 +68,7 @@ export default function SettingsScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
-          paddingBottom: insets.bottom + 40,
+          paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           gap: 22,
         }}
@@ -75,7 +76,7 @@ export default function SettingsScreen() {
         <Section title="Preferences">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
             <View style={styles.languageRow}>
-              <View style={styles.rowIcon}><Feather name="globe" size={19} color={colors.foreground} /></View>
+              <View style={styles.rowIcon}><Feather name="globe" size={20} color={colors.primary} /></View>
               <View style={styles.rowCopy}>
                 <Text style={[styles.rowLabel, { color: colors.foreground }]}>Language</Text>
                 <Text style={[styles.rowDetail, { color: colors.mutedForeground }]}>Choose your preferred language</Text>
@@ -93,7 +94,7 @@ export default function SettingsScreen() {
             <Divider />
             <SettingsRow icon="briefcase" label="Work Address" detail={savedAddress('Work') ?? 'Add work address'} onPress={() => openSavedPlace('Work')} />
             <Divider />
-            <SettingsRow icon="book-open" label="School Address" detail={savedAddress('School') ?? 'Add school address'} onPress={() => openSavedPlace('School')} />
+            <SettingsRow iconFamily="mci" icon="account-group" label="School Address" detail={savedAddress('School') ?? 'Add school address'} onPress={() => openSavedPlace('School')} />
           </View>
         </Section>
 
@@ -109,7 +110,7 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Danger Zone">
+        <Section title="Danger zone">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
             <SettingsRow icon="trash-2" label="Delete Account" detail="Permanently remove your account" onPress={handleDeleteAccount} destructive />
           </View>
@@ -132,20 +133,26 @@ function Divider() {
   return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
 }
 
-function SettingsRow({ destructive = false, detail, icon, label, onPress }: {
+function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon, label, onPress }: {
   destructive?: boolean;
   detail?: string;
-  icon: keyof typeof Feather.glyphMap;
+  iconFamily?: 'feather' | 'mci';
+  icon: keyof typeof Feather.glyphMap | keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
   onPress: () => void;
 }) {
   const colors = useColors();
-  const color = destructive ? colors.destructive : colors.foreground;
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
-      <View style={styles.rowIcon}><Feather name={icon} size={19} color={color} /></View>
+      <View style={styles.rowIcon}>
+        {iconFamily === 'mci' ? (
+          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+        ) : (
+          <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+        )}
+      </View>
       <View style={styles.rowCopy}>
-        <Text style={[styles.rowLabel, { color }]}>{label}</Text>
+        <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
         {detail ? <Text style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</Text> : null}
       </View>
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />

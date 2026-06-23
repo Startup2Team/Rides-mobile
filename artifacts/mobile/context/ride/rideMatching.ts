@@ -55,7 +55,10 @@ export function buildInitialDriverOffer(
   };
 }
 
-export function buildMockRideRequest(): Ride {
+export function buildMockRideRequest(
+  requestedVehicleType: VehicleType = 'moto',
+  matchedVehicle?: { vehicleId: string; vehicleType: VehicleType },
+): Ride {
   const pickup: RideLocation = {
     address: 'Kimironko Market',
     latitude: -1.9365,
@@ -75,13 +78,19 @@ export function buildMockRideRequest(): Ride {
     customerId: 'mock_customer',
     customerName: 'Amina K.',
     customerPhone: '+250788000000',
-    vehicleType: 'moto',
+    customerRating: 4.7,
+    vehicleType: requestedVehicleType,
+    requestedVehicleType,
+    ...(matchedVehicle ? {
+      matchedVehicleId: matchedVehicle.vehicleId,
+      matchedVehicleType: matchedVehicle.vehicleType,
+    } : {}),
     pickup,
     destination,
     status: 'searching',
     distance: parseFloat(distance.toFixed(2)),
     duration: Math.round(distance * 3 + 5),
-    suggestedFare: calcFare('moto', distance),
+    suggestedFare: calcFare(requestedVehicleType, distance),
     negotiation: [],
     createdAt: new Date().toISOString(),
   };

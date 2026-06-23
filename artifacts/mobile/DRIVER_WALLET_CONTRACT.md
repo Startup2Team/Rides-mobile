@@ -45,9 +45,9 @@ Mobile must not infer payout eligibility from local ride history alone. Local hi
 
 `platform_collected` means the platform collected the customer payment and may owe the driver a payout after fees, holds, and settlement checks.
 
-Wallet payable balances should only include platform-collected net earnings. Cash-collected rides can be shown as activity or income history, but not as an available payout balance.
+Wallet payable Rides should only include platform-collected net earnings. Cash-collected rides can be shown as activity or income history, but not as an available payout Rides.
 
-## Balance States
+## Rides States
 
 `DriverWalletBalance` separates payout-relevant balances:
 
@@ -110,7 +110,7 @@ Future integration needs:
 - idempotent earning creation
 - fare collection method on each completed ride
 - platform fee and net earning calculation
-- wallet balance service
+- wallet Rides service
 - payout method verification
 - payout provider integration
 - payout request lifecycle

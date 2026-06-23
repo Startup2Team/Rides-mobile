@@ -5,12 +5,18 @@ export const STORAGE_KEYS = {
   driverProfile: '@rides_driver_profile',
   driverOnboardingDraft: '@rides_driver_onboarding_draft',
   driverDocuments: '@rides_driver_documents',
+  verificationSubmissions: '@rides_verification_submissions',
   driverEntitlement: '@rides_driver_entitlement',
   driverRatings: '@rides_driver_ratings',
+  referralEvents: '@rides_referral_events',
   rideHistory: '@rides_history',
   profileImage: '@rides_profile_image',
   paymentMethods: '@rides_payment_methods',
   savedLocations: '@rides_saved_locations',
+  packageCatalogCache: '@rides_package_catalog_cache',
+  packageCampaignCache: '@rides_package_campaign_cache',
+  packageOfferSourceCache: '@rides_package_offer_source_cache',
+  lockedPackageOffers: '@rides_locked_package_offers',
 } as const;
 
 /**
@@ -24,15 +30,21 @@ export const STORAGE_CLASSIFICATION = {
     STORAGE_KEYS.driverProfile,
     STORAGE_KEYS.driverOnboardingDraft,
     STORAGE_KEYS.driverDocuments,
+    STORAGE_KEYS.verificationSubmissions,
     STORAGE_KEYS.driverEntitlement,
     STORAGE_KEYS.driverRatings,
     STORAGE_KEYS.rideHistory,
     STORAGE_KEYS.profileImage,
     STORAGE_KEYS.paymentMethods,
     STORAGE_KEYS.savedLocations,
+    STORAGE_KEYS.lockedPackageOffers,
   ],
-  internal: [],
-  cacheable: [],
+  internal: [STORAGE_KEYS.referralEvents],
+  cacheable: [
+    STORAGE_KEYS.packageCatalogCache,
+    STORAGE_KEYS.packageCampaignCache,
+    STORAGE_KEYS.packageOfferSourceCache,
+  ],
 } as const satisfies Record<StorageClassification, readonly string[]>;
 
 export const SENSITIVE_STORAGE_KEYS = STORAGE_CLASSIFICATION.sensitive;

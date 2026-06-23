@@ -18,13 +18,14 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
 import { KIGALI_CENTER, type RideLocation, type SavedLocation } from '@/types';
 import { formatReverseGeocodeAddress } from '@/utils/locationUtils';
 
-type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Other';
+type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Church' | 'Other';
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = typeof MAP_TYPES[number];
 const MAP_LOCATION_DELTA = 0.012;
@@ -72,12 +73,22 @@ export default function SavedPlaceSelectorScreen() {
     router.back();
   };
 
-  const openMap = () => {
-    const initial = existing ?? KIGALI_CENTER;
-    setMapCoords({ latitude: initial.latitude, longitude: initial.longitude });
+  const openMap = async () => {
+    let coords: { latitude: number; longitude: number } = existing ?? KIGALI_CENTER;
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    } catch {}
+    setMapCoords(coords);
     setMapAddress(existing?.address ?? '');
     setMode('map');
     Keyboard.dismiss();
+    requestAnimationFrame(() => {
+      mapRef.current?.animateToRegion(
+        { ...coords, latitudeDelta: MAP_LOCATION_DELTA, longitudeDelta: MAP_LOCATION_DELTA },
+        300,
+      );
+    });
   };
 
   const syncMapAddress = async (coords: typeof KIGALI_CENTER) => {
@@ -183,7 +194,7 @@ export default function SavedPlaceSelectorScreen() {
           indicatorTop={8}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
         >
           {hasQuery ? (
             <TouchableOpacity
@@ -232,7 +243,7 @@ export default function SavedPlaceSelectorScreen() {
 }
 
 function normalizeLabel(value?: string): SavedPlaceLabel {
-  if (value === 'Work' || value === 'School' || value === 'Other') return value;
+  if (value === 'Work' || value === 'School' || value === 'Church' || value === 'Other') return value;
   return 'Home';
 }
 

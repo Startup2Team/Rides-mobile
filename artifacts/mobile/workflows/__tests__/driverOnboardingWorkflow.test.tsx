@@ -8,7 +8,7 @@ jest.mock('react-native', () => {
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
   return {
     KeyboardAvoidingView: host('KeyboardAvoidingView'),
-    Platform: { OS: 'android' },
+    Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
     Pressable: host('Pressable'),
     ScrollView: host('ScrollView'),
     StyleSheet: { create: (styles: object) => styles, flatten: (style: object) => style },
@@ -24,6 +24,18 @@ jest.mock('@/components/driver-onboarding/onboardingStyles', () => ({
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn() },
 }));
+
+jest.mock('expo-image-picker', () => ({
+  requestCameraPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  launchCameraAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
+}));
+
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
+  return { Feather: Icon, MaterialCommunityIcons: Icon };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
@@ -113,6 +125,14 @@ jest.mock('@/components/driver-onboarding/ReviewSubmissionSection', () => ({
     const React = require('react');
     const { Text } = require('react-native');
     return <Text>Review Application</Text>;
+  },
+}));
+
+jest.mock('@/components/ImageGalleryPreview', () => ({
+  ImageGalleryPreview: () => {
+    const React = require('react');
+    const { View } = require('react-native');
+    return <View testID="image-gallery-preview" />;
   },
 }));
 

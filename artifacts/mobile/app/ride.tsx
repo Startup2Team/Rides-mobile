@@ -113,7 +113,7 @@ export default function RideScreen() {
     handleCallDriver,
     handleCancelArrived,
     handleCancelArriving,
-    handleEmergencyEnd,
+    handleEmergency,
     handleSOS,
   } = useRideActions({ cancelRide, currentRide, showToast });
 
@@ -482,7 +482,7 @@ export default function RideScreen() {
           onCall={handleCallDriver}
           onCancelArrived={handleCancelArrived}
           onCancelArriving={handleCancelArriving}
-          onEmergency={handleEmergencyEnd}
+          onEmergency={handleEmergency}
           onSOS={handleSOS}
         />
       </View>

@@ -30,7 +30,7 @@ A comprehensive reference of every skill domain required to ship a world-class m
 - RTL support awareness
 
 ### Huashu Design (华书 Design Aesthetic)
-- Elegant, refined visual language rooted in clarity and balance
+- Elegant, refined visual language rooted in clarity and Rides
 - Calligraphic proportions applied to typography choices
 - Purposeful negative space (ma — 間) — breathing room as design element
 - Layered depth without noise

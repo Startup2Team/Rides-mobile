@@ -30,23 +30,23 @@ export function rwandaPhoneToSubscriber(value: string): string {
 }
 
 /**
- * Formats subscriber digits (7XXXXXXXX) as "7x xxx xxxx" for display.
+ * Returns subscriber digits (7XXXXXXXX) in a compact form for display.
  */
 export function formatSubscriberDigits(digits: string): string {
-  const d = digits.replace(/\D/g, '').slice(0, 9);
-  const p1 = d.slice(0, 2);
-  const p2 = d.slice(2, 5);
-  const p3 = d.slice(5, 9);
-  return [p1, p2, p3].filter(Boolean).join(' ');
+  return digits.replace(/\D/g, '').slice(0, 9);
 }
 
 export function formatRwandaPlateInput(value: string): string {
-  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
-  return [compact.slice(0, 3), compact.slice(3, 6), compact.slice(6, 7)].filter(Boolean).join(' ');
+  const upper = value.toUpperCase().trim();
+  const compact = upper.replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  if (/^R[A-Z]{2}\d{3}[A-Z]$/.test(compact)) {
+    return `${compact.slice(0, 3)} ${compact.slice(3, 6)} ${compact.slice(6, 7)}`;
+  }
+  return upper.replace(/\s+/g, ' ').trim();
 }
 
 export const normalizeRwandaPlateNumber = (value: string) =>
-  value.toUpperCase().trim().replace(/\s+/g, ' ');
+  formatRwandaPlateInput(value);
 
 export const isValidRwandaPlateNumber = (value: string) =>
   RWANDA_PLATE_PATTERN.test(normalizeRwandaPlateNumber(value));

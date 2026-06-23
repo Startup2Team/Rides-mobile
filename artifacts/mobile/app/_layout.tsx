@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
+import { PackageSyncProvider } from '@/context/PackageSyncContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -60,7 +61,11 @@ function RootLayoutNav() {
       <Stack.Screen name="driver-package-payment" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-documents" />
+      <Stack.Screen name="driver-vehicles" />
+      <Stack.Screen name="driver-vehicle-details" />
+      <Stack.Screen name="driver-add-vehicle" />
       <Stack.Screen name="driver-navigate" />
+      <Stack.Screen name="driver-ride-complete" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen
         name="rating"
         options={{
@@ -112,19 +117,21 @@ export default function RootLayout() {
       >
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <DriverEntitlementProvider>
-              <RideProvider>
-                <ToastProvider>
-                  <SavedLocationsProvider>
-                    <GestureHandlerRootView style={{ flex: 1 }}>
-                      <KeyboardProvider>
-                        <RootLayoutNav />
-                      </KeyboardProvider>
-                    </GestureHandlerRootView>
-                  </SavedLocationsProvider>
-                </ToastProvider>
-              </RideProvider>
-            </DriverEntitlementProvider>
+            <PackageSyncProvider>
+              <DriverEntitlementProvider>
+                <RideProvider>
+                  <ToastProvider>
+                    <SavedLocationsProvider>
+                      <GestureHandlerRootView style={{ flex: 1 }}>
+                        <KeyboardProvider>
+                          <RootLayoutNav />
+                        </KeyboardProvider>
+                      </GestureHandlerRootView>
+                    </SavedLocationsProvider>
+                  </ToastProvider>
+                </RideProvider>
+              </DriverEntitlementProvider>
+            </PackageSyncProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>

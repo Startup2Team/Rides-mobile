@@ -91,7 +91,7 @@ export function NegotiationStatusCard({
         {offersSent === 0
           ? `You can send up to ${maxOffers} fare offers`
           : offersSent >= maxOffers
-            ? 'All offers sent â€” call driver to continue'
+            ? 'All offers sent. Call Passenger to continue'
             : `${offersSent} of ${maxOffers} offers sent`}
       </Text>
     </View>

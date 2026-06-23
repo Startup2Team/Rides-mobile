@@ -1,12 +1,18 @@
-import { Dimensions, Platform } from 'react-native';
+import { Dimensions } from 'react-native';
 import { VEHICLE_BASE_FARE, VehicleType } from '@/types';
 import { getCoordDistance } from '@/utils/locationUtils';
+import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 
-export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const windowDimensions =
+  typeof Dimensions?.get === 'function'
+    ? Dimensions.get('window')
+    : { width: 0, height: 0 };
+
+export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = windowDimensions;
 
 // Compact until ride details/actions appear; expanded when stats and Find Driver are visible.
 // ~0.3 cm shorter than prior compact/expanded sizes (~11pt)
-export const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.375, 297);
+export const COMPACT_PANEL_HEIGHT = Math.min(SCREEN_HEIGHT * 0.315, 258);
 export const EXPANDED_PANEL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
 export const ROUTE_DRAW_STEP = 0.055;
 export const ROUTE_DRAW_INTERVAL_MS = 45;
@@ -14,7 +20,8 @@ export const HOME_LOCATION_DELTA = 0.012;
 export const ROUTE_FIT_SIDE_PADDING = 32;
 /** Space below top location card overlay on booking map. */
 export const BOOKING_MAP_TOP_OVERLAY = 88;
-export const HOME_TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 64;
+export const HOME_TAB_BAR_HEIGHT = TAB_BAR_CONTENT_HEIGHT;
+export const HOME_TAB_BAR_BOTTOM_PADDING = TAB_BAR_SCREEN_BOTTOM_PADDING;
 
 /** Lift save-form overlay (translateY) above the software keyboard. */
 export function computeOverlayFormKeyboardLift(keyboardHeight: number, bottomInset: number): number {
@@ -33,11 +40,30 @@ export const HOME_FLOATING_PANEL_FALLBACK_HEIGHT = 236;
 /** ~0.5cm extra inset for floating panel content alignment. */
 export const GREETING_LEFT_INSET = 14;
 export const BOOKING_SHEET_PADDING_H = 22;
+/** Overlay drag handle inset from the top of the booking sheet. */
+export const BOOKING_HANDLE_TOP = 8;
+export const BOOKING_HANDLE_HEIGHT = 4;
+/** Vertical gap from handle to the "Book a Ride" title. */
+export const BOOKING_HANDLE_TO_TITLE_GAP = 14;
+export const BOOKING_TITLE_LINE_HEIGHT = 20;
+/** Vertical gap from title to the pickup card — fixed across compact/expanded states. */
+export const BOOKING_TITLE_TO_CONTENT_GAP = 18;
+/** Fixed booking header band; route preview grows in the scroll body below this. */
+export const BOOKING_SHEET_HEADER_HEIGHT =
+  BOOKING_HANDLE_TOP
+  + BOOKING_HANDLE_HEIGHT
+  + BOOKING_HANDLE_TO_TITLE_GAP
+  + BOOKING_TITLE_LINE_HEIGHT
+  + BOOKING_TITLE_TO_CONTENT_GAP;
+/** Space below the action row before the sheet edge / navbar. */
+export const BOOKING_SHEET_BOTTOM_PADDING = 18;
+/** Initial shell height before BookingSheet reports its first measurement. */
+export const BOOKING_SHEET_PRE_MEASURE_HEIGHT = COMPACT_PANEL_HEIGHT;
 /** Equal inset from top + right form edges for the booking close control. */
 export const BOOKING_CLOSE_EDGE_INSET = 16;
 /** Extra room so the close icon can spin during sheet drag without clipping. */
 export const BOOKING_CLOSE_ROTATION_PAD = 10;
-export const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Market', 'Other'];
+export const SAVE_LOCATION_LABELS = ['Home', 'Work', 'School', 'Church', 'Market', 'Other'];
 export const SAVE_LABEL_GAP = 8;
 export const SAVE_LABEL_SHEET_HORIZONTAL_PADDING = BOOKING_SHEET_PADDING_H;
 export const SAVE_LABEL_CONTENT_INSET = GREETING_LEFT_INSET;
@@ -47,11 +73,12 @@ const SAVE_LABEL_AVAILABLE_WIDTH =
   - SAVE_LABEL_CONTENT_INSET * 2
   - SAVE_LABEL_GAP * (SAVE_LOCATION_LABELS.length - 1);
 export const SAVE_LABEL_WIDTHS: Record<string, number> = {
-  Home: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
-  Work: SAVE_LABEL_AVAILABLE_WIDTH * 0.16,
-  School: SAVE_LABEL_AVAILABLE_WIDTH * 0.22,
-  Market: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
-  Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.23,
+  Home: SAVE_LABEL_AVAILABLE_WIDTH * 0.14,
+  Work: SAVE_LABEL_AVAILABLE_WIDTH * 0.14,
+  School: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
+  Church: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
+  Market: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
+  Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
 };
 
 export const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;

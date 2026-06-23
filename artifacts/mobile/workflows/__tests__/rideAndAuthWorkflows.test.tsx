@@ -136,8 +136,10 @@ function CustomerBookingWorkflow() {
     <View>
       <Text testID="customer-ride-status">{currentRide?.status ?? 'none'}</Text>
       <BookingSheet
+        {...({} as any) /* test scaffold: BookingSheet gained props after the feat/packages merge */}
         visible
         height={500}
+        bottomOffset={0}
         bottomPadding={0}
         colors={colors}
         animation={new Animated.Value(0)}

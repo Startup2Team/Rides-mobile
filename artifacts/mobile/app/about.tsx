@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import {
   APP_NAME,
   OSS_URL,
@@ -42,7 +43,7 @@ export default function AboutScreen() {
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}
       >
         <View style={styles.hero}>
           <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
@@ -88,7 +89,7 @@ export default function AboutScreen() {
                 activeOpacity={0.75}
               >
                 <View style={styles.linkIcon}>
-                  <Feather name={link.icon} size={16} color={colors.foreground} />
+                  <Feather name={link.icon} size={20} color={colors.primary} />
                 </View>
                 <Text style={[styles.linkLabel, { color: colors.foreground, flex: 1 }]}>{link.label}</Text>
                 <Feather name="external-link" size={14} color={colors.mutedForeground} />
