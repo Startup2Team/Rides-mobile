@@ -19,8 +19,8 @@ export function useGlassHeaderMetrics() {
 
   return {
     headerInset,
-    contentTop: headerInset + 90,
-    indicatorTop: headerInset + 88,
+    contentTop: headerInset + 62,
+    indicatorTop: headerInset + 60,
   };
 }
 
@@ -52,7 +52,7 @@ export function GlassHeader({
       style={[
         styles.header,
         {
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 0,
         },
       ]}
     >
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingBottom: 14,
+    paddingBottom: 0,
     overflow: 'hidden',
   },
   headerContent: {
