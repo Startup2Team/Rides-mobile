@@ -13,6 +13,8 @@ import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useColorScheme } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
@@ -84,6 +86,7 @@ function RootLayoutNav() {
       <Stack.Screen name="privacy-security" />
       <Stack.Screen name="about" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="location-search" />
       <Stack.Screen name="saved-place-selector" />
       <Stack.Screen name="ride-detail" />
     </Stack>
@@ -91,6 +94,12 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const scheme = useColorScheme();
+
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? '#0A0A0A' : '#F5F5F5');
+  }, [scheme]);
+
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,

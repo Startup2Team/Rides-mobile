@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  Modal,
   PanResponder,
   Platform,
   Text,
@@ -23,7 +24,7 @@ import { useColors } from '@/hooks/useColors';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
 import { useHomeBooking } from '@/hooks/home/useHomeBooking';
 import { useHomeLocation } from '@/hooks/home/useHomeLocation';
-import { useLocationSearch, type LocationSearchTarget } from '@/hooks/home/useLocationSearch';
+import type { LocationSearchTarget } from '@/hooks/home/useLocationSearch';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
@@ -43,7 +44,7 @@ import {
 import { loadStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
 import { CustomerBottomSheet } from './CustomerBottomSheet';
 import { HomeMap } from './HomeMap';
-import { LocationSearchOverlay } from './LocationSearchOverlay';
+// Search overlay is navigated via /location-search route
 import { MapPickerOverlay } from './MapPickerOverlay';
 import { styles } from './homeStyles';
 import {
@@ -55,6 +56,7 @@ import {
   type AppMapType,
   type MapPickerTarget,
   SCREEN_HEIGHT,
+  SCREEN_WIDTH,
 } from './homeUtils';
 
 export default function CustomerHome() {
@@ -83,7 +85,6 @@ export default function CustomerHome() {
   } = useRide();
   const mapRef = useRef<MapView>(null);
   const pickerMapRef = useRef<MapView>(null);
-  const locationSearchInputRef = useRef<TextInput>(null);
   const hasCenteredOnUserRef = useRef(false);
   const cancelledSearchDraftRef = useRef(cancelledSearchDraft);
   cancelledSearchDraftRef.current = cancelledSearchDraft;
@@ -114,7 +115,6 @@ export default function CustomerHome() {
     stopHereLocationWatch,
     userLocation,
   } = useHomeLocation({ applyInitialPickup, preserveInitialPickup });
-  const locationSearch = useLocationSearch(userLocation);
   const requestLocationSearch = useCallback((target: LocationSearchTarget) => {
     openLocationSearchRef.current(target);
   }, []);
@@ -138,24 +138,20 @@ export default function CustomerHome() {
     userLocation,
   });
   pickupSetterRef.current = setPickup;
-  const {
-    buildTypedLocation,
-    cancelPendingSearch,
-    clearText: clearLocationSearchText,
-    close: closeLocationSearchState,
-    handleTextChange: handleLocationSearchText,
-    listTab: locationListTab,
-    loading: locationSearchLoading,
-    open: openLocationSearchState,
-    resetResults: resetLocationSearchResults,
-    scheduleSearch: schedulePlaceSearch,
-    setListTab: setLocationListTab,
-    setLoading: setLocationSearchLoading,
-    setSuggestions,
-    suggestions,
-    target: locationSearchTarget,
-    text: locationSearchText,
-  } = locationSearch;
+
+  const { triggerMapPicker } = useLocalSearchParams<{ triggerMapPicker?: 'pickup' | 'dropoff' }>();
+
+  useEffect(() => {
+    if (triggerMapPicker) {
+      const target = triggerMapPicker;
+      router.setParams({ triggerMapPicker: undefined });
+      const coords = target === 'dropoff'
+        ? (destination ?? userLocation)
+        : { latitude: pickup.latitude, longitude: pickup.longitude };
+      setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
+      setMapPicker(target);
+    }
+  }, [triggerMapPicker, destination, userLocation, pickup]);
 
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
@@ -168,6 +164,23 @@ export default function CustomerHome() {
   const [isPickerDragging, setIsPickerDragging] = useState(false);
   const [focusedField, setFocusedField] = useState<'pickup' | 'dropoff' | null>(null);
   const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
+
+  // Animation translation refs
+  const pickerTranslateX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+
+  useEffect(() => {
+    if (mapPicker !== null) {
+      pickerTranslateX.setValue(SCREEN_WIDTH);
+      Animated.timing(pickerTranslateX, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [mapPicker, pickerTranslateX]);
+
+
 
   // ── Derived / layout ──────────────────────────────────────────────────────
   const recenterBottomOffset = sheetHeight + 16;
@@ -247,7 +260,6 @@ export default function CustomerHome() {
     setActiveCard('home');
     setDestText('');
     setDestination(null);
-    setSuggestions([]);
     clearRoutePreview();
     setPickup(
       gpsLocation
@@ -272,7 +284,6 @@ export default function CustomerHome() {
       setPickup({ ...draft.pickup });
       setDestination({ ...draft.destination });
       setDestText(draft.destText);
-      setSuggestions([]);
       setActiveCard('booking');
       setRouteRecenterRequest(value => value + 1);
     },
@@ -290,7 +301,6 @@ export default function CustomerHome() {
       setPickup({ ...currentRide.pickup });
       setDestination({ ...currentRide.destination });
       setDestText(currentRide.destination.address ?? '');
-      setSuggestions([]);
       setActiveCard('booking');
       setRouteRecenterRequest(value => value + 1);
     }
@@ -314,6 +324,8 @@ export default function CustomerHome() {
       return undefined;
     }, [tryRestoreCancelledSearch]),
   );
+
+  // Focus effects for reloading database states
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
@@ -370,95 +382,32 @@ export default function CustomerHome() {
 
   const openLocationSearch = (target: 'pickup' | 'dropoff') => {
     setFocusedField(target);
-    openLocationSearchState(target, target === 'pickup' ? pickup.address ?? '' : destText);
+    router.push({
+      pathname: '/location-search',
+      params: {
+        target,
+        userLatitude: userLocation.latitude.toString(),
+        userLongitude: userLocation.longitude.toString(),
+        gpsLatitude: gpsLocation ? gpsLocation.latitude.toString() : '',
+        gpsLongitude: gpsLocation ? gpsLocation.longitude.toString() : '',
+        gpsAddress: gpsLocation ? gpsLocation.address || '' : '',
+      },
+    });
   };
   openLocationSearchRef.current = openLocationSearch;
 
-  const closeLocationSearch = useCallback(() => {
-    closeLocationSearchState();
-    Keyboard.dismiss();
-  }, [closeLocationSearchState]);
-
-  const applyLocation = (target: 'pickup' | 'dropoff', location: RideLocation) => {
-    if (target === 'pickup') {
-      setPickup(location);
-    } else {
-      setDestText(location.address ?? '');
-      setDestination(location);
-    }
-    closeLocationSearch();
-  };
-
-  const openSavedPlaceSelector = () => {
-    Alert.alert('Add saved place', 'Choose the place you want to save.', [
-      { text: 'Home', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Home' } }) },
-      { text: 'Work', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Work' } }) },
-      { text: 'School', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'School' } }) },
-      { text: 'Church', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Church' } }) },
-      { text: 'Other', onPress: () => router.push({ pathname: '/saved-place-selector', params: { mode: 'add', label: 'Other' } }) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const showSavedLocationActions = useCallback((location: SavedLocation) => {
-    Alert.alert(location.label, location.address ?? '', [
-      {
-        text: 'Edit',
-        onPress: () => {
-          router.push({
-            pathname: '/saved-place-selector',
-            params: { mode: 'edit', savedPlaceId: location.id },
-          });
-        },
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(
-            `Delete "${location.label}"?`,
-            'This saved place will be removed from your list. This cannot be undone.',
-            [
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                  const next = savedPlaces.filter(place => place.id !== location.id);
-                  await persistSavedPlaces(next);
-                  showToast('Location removed', 'error');
-                },
-              },
-              { text: 'Cancel', style: 'cancel' },
-            ]
-          );
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [savedPlaces, persistSavedPlaces, showToast]);
-
-  const handleSaveCandidate = useCallback((location: RideLocation) => {
-    router.push({
-      pathname: '/saved-place-selector',
-      params: {
-        mode: 'add',
-        label: 'Other',
-        initialAddress: location.address || '',
-        initialLatitude: location.latitude.toString(),
-        initialLongitude: location.longitude.toString(),
-      },
+  const closeMapPicker = useCallback(() => {
+    Animated.timing(pickerTranslateX, {
+      toValue: SCREEN_WIDTH,
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setMapPicker(null);
+      }
     });
-  }, []);
-
-  const handleChooseOnMap = () => {
-    if (!locationSearchTarget) return;
-    const coords = locationSearchTarget === 'dropoff'
-      ? (destination ?? userLocation)
-      : { latitude: pickup.latitude, longitude: pickup.longitude };
-    setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
-    setMapPicker(locationSearchTarget);
-    closeLocationSearch();
-  };
+  }, [pickerTranslateX]);
 
   const visibleDrivers = useMemo(() => DRIVER_OFFSETS.map((offset, i) => ({
     id: `nearby-driver-${i}`,
@@ -539,7 +488,7 @@ export default function CustomerHome() {
         primaryColor={colors.primary}
       />
 
-      {locationSearchTarget === null && mapPicker === null ? (
+      {mapPicker === null ? (
         <HomeTopHeader
           paddingTop={insets.top + (Platform.OS === 'web' ? 67 : 0) + 12}
           locationText={currentLocationAddress}
@@ -623,67 +572,53 @@ export default function CustomerHome() {
         }}
       />
 
-      {locationSearchTarget && (
-        <LocationSearchOverlay
-          bottomInset={0}
-          buildTypedLocation={buildTypedLocation}
-          colors={colors}
-          inputRef={locationSearchInputRef}
-          listTab={locationListTab}
-          loading={locationSearchLoading}
-          onApplyLocation={applyLocation}
-          onAddSavedLocation={openSavedPlaceSelector}
-          onChooseMap={handleChooseOnMap}
-          onClear={clearLocationSearchText}
-          onClose={closeLocationSearch}
-          onSaveCandidate={handleSaveCandidate}
-          onSetListTab={setLocationListTab}
-          onShowSavedLocationActions={showSavedLocationActions}
-          onTextChange={handleLocationSearchText}
-          recentLocations={recentLocations}
-          savedLocations={savedLocations}
-          suggestions={suggestions}
-          target={locationSearchTarget}
-          text={locationSearchText}
-          userLocation={userLocation}
-          gpsLocation={gpsLocation}
-        />
-      )}
+      {/* Location search is now a separate route page: app/location-search.tsx */}
 
-      <MapPickerOverlay
-        target={mapPicker}
-        mapRef={pickerMapRef}
-        pinCoords={pinCoords}
-        mapType={mapType}
-        colors={colors}
-        topInset={insets.top}
-        bottomInset={insets.bottom}
-        isDragging={isPickerDragging}
-        onLayout={(width, height) => setPickerMapSize({ width, height })}
-        onDragStart={() => setIsPickerDragging(true)}
-        onRegionChangeComplete={region => {
-          setIsPickerDragging(false);
-          void syncPickerCoordsFromMapCenter(region);
-        }}
-        onClose={() => setMapPicker(null)}
-        onCycleMapType={cycleMapType}
-        onCenterUser={centerPickerOnUser}
-        onConfirm={async () => {
-          await syncPickerCoordsFromMapCenter();
-          let address = mapPicker === 'pickup' ? 'Selected Pickup' : 'Selected Drop Off';
-          try {
-            const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
-            if (geo) address = formatReverseGeocodeAddress(geo, address);
-          } catch {}
-          if (mapPicker === 'pickup') {
-            setPickup({ ...pinCoords, address, locationType: 'precise' });
-          } else if (mapPicker === 'dropoff') {
-            setDestText(address);
-            setDestination({ ...pinCoords, address, locationType: 'precise' });
-          }
-          setMapPicker(null);
-        }}
-      />
+      <Modal
+        visible={mapPicker !== null}
+        animationType="none"
+        transparent={true}
+        onRequestClose={closeMapPicker}
+      >
+        {mapPicker && (
+          <Animated.View style={{ flex: 1, transform: [{ translateX: pickerTranslateX }] }}>
+            <MapPickerOverlay
+              target={mapPicker}
+              mapRef={pickerMapRef}
+              pinCoords={pinCoords}
+              mapType={mapType}
+              colors={colors}
+              topInset={insets.top}
+              bottomInset={insets.bottom}
+              isDragging={isPickerDragging}
+              onLayout={(width, height) => setPickerMapSize({ width, height })}
+              onDragStart={() => setIsPickerDragging(true)}
+              onRegionChangeComplete={region => {
+                setIsPickerDragging(false);
+                void syncPickerCoordsFromMapCenter(region);
+              }}
+              onClose={closeMapPicker}
+              onCycleMapType={cycleMapType}
+              onCenterUser={centerPickerOnUser}
+              onConfirm={async () => {
+                await syncPickerCoordsFromMapCenter();
+                let address = mapPicker === 'pickup' ? 'Selected Pickup' : 'Selected Drop Off';
+                try {
+                  const [geo] = await Location.reverseGeocodeAsync(pinCoords).catch(() => [null]);
+                  if (geo) address = formatReverseGeocodeAddress(geo, address);
+                } catch {}
+                if (mapPicker === 'pickup') {
+                  setPickup({ ...pinCoords, address, locationType: 'precise' });
+                } else if (mapPicker === 'dropoff') {
+                  setDestText(address);
+                  setDestination({ ...pinCoords, address, locationType: 'precise' });
+                }
+                closeMapPicker();
+              }}
+            />
+          </Animated.View>
+        )}
+      </Modal>
     </View>
   );
 }

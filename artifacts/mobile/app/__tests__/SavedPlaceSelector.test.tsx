@@ -76,9 +76,14 @@ jest.mock('@expo/vector-icons', () => {
 
 jest.mock('@/components/GlassHeader', () => {
   const React = require('react');
-  const { Text } = require('react-native');
+  const { Text, View } = require('react-native');
   return {
-    GlassHeader: ({ title }: { title: string }) => <Text>{title}</Text>,
+    GlassHeader: ({ title, right }: { title: string; right?: React.ReactNode }) => (
+      <View>
+        <Text>{title}</Text>
+        {right}
+      </View>
+    ),
     useGlassHeaderMetrics: () => ({ contentTop: 0 }),
   };
 });
@@ -271,10 +276,14 @@ describe('SavedPlaceSelectorScreen', () => {
 
     render(<SavedPlaceSelectorScreen />);
 
-    const deleteBtn = screen.getByText('Delete Saved Place');
-    expect(deleteBtn).toBeTruthy();
+    const deleteBtn = screen.queryByText('Delete Saved Place');
+    expect(deleteBtn).toBeNull();
 
-    fireEvent.press(deleteBtn);
+    const headerDeleteBtn = screen.getByTestId('header-delete-button');
+    expect(headerDeleteBtn).toBeTruthy();
+
+    // Verify pressing the header delete button triggers confirmation
+    fireEvent.press(headerDeleteBtn);
 
     expect(mockAlert).toHaveBeenCalledWith(
       'Delete "Home"?',
@@ -291,5 +300,91 @@ describe('SavedPlaceSelectorScreen', () => {
 
     expect(mockPersist).toHaveBeenCalledWith([]);
     expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('does not prefill custom label with "Other" when adding a new place', () => {
+    mockParams = {
+      mode: 'add',
+      label: 'Other',
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    const customLabelInput = screen.getByPlaceholderText('Place name');
+    expect(customLabelInput.props.value).toBe('');
+  });
+
+  test('shows safe error state if place is not found in edit mode', () => {
+    mockParams = {
+      mode: 'edit',
+      savedPlaceId: 'non-existent-id',
+    };
+    mockSavedPlaces = [];
+
+    render(<SavedPlaceSelectorScreen />);
+
+    expect(screen.getByText('Saved place not found or has been deleted.')).toBeTruthy();
+    const backButton = screen.getByText('Go Back');
+    expect(backButton).toBeTruthy();
+    fireEvent.press(backButton);
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('defaults to Other label in add mode if missing', () => {
+    mockParams = {
+      mode: 'add',
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    // Title should contain Add Place (Other)
+    expect(screen.getByText('Add Place')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Place name')).toBeTruthy();
+  });
+
+  test('validates that custom label is not empty on save', async () => {
+    mockParams = {
+      mode: 'add',
+      label: 'Other',
+    };
+    mockSearch = {
+      text: 'Kigali Marriott',
+      loading: false,
+      suggestions: [],
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    // Custom label input is empty. Click use typed address.
+    fireEvent.press(screen.getByText('Use "Kigali Marriott"'));
+
+    expect(mockAlert).toHaveBeenCalledWith(
+      'Name this place',
+      'Enter a label before saving this location.'
+    );
+    expect(mockPersist).not.toHaveBeenCalled();
+  });
+
+  test('cancel on delete confirmation leaves place untouched', () => {
+    mockParams = { mode: 'edit', savedPlaceId: 'place-home' };
+    mockSavedPlaces = [{
+      id: 'place-home',
+      label: 'Home',
+      address: 'KG 10 Street',
+      latitude: -1.94,
+      longitude: 30.06,
+    }];
+
+    render(<SavedPlaceSelectorScreen />);
+
+    const headerDeleteBtn = screen.getByTestId('header-delete-button');
+    fireEvent.press(headerDeleteBtn);
+
+    // Call the cancel handler
+    const cancelHandler = mockAlert.mock.calls[0][2].find((btn: any) => btn.text === 'Cancel').onPress;
+    if (cancelHandler) cancelHandler();
+
+    expect(mockPersist).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });
