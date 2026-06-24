@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -18,12 +19,12 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
+import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
-
-import { loadStoredProfileImage, saveStoredProfileImage } from '@/persistence/profilePersistence';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -36,58 +37,11 @@ export default function EditProfileScreen() {
   const [email, setEmail] = useState(user?.email ?? '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadStoredProfileImage().then(stored => {
-      if (stored.data) setProfileImage(stored.data);
-    });
-  }, []);
-
-  const handleImagePick = async (source: 'camera' | 'gallery') => {
-    let result: ImagePicker.ImagePickerResult;
-    if (source === 'camera') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Camera access is needed to take a photo.');
-        return;
-      }
-      result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Photo library access is needed.');
-        return;
-      }
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-    }
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setProfileImage(asset.uri);
-      await saveStoredProfileImage(asset.uri);
-      if (driverProfile) {
-        await saveDriverProfile({ ...driverProfile, profileImage: asset.uri });
-      }
-      showToast('Photo updated', 'info');
-    }
-  };
+  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
+  const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   const handlePickImage = () => {
-    Alert.alert('Change Profile Photo', '', [
-      { text: 'Take Photo', onPress: () => handleImagePick('camera') },
-      { text: 'Choose from Gallery', onPress: () => handleImagePick('gallery') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setShowPhotoSheet(true);
   };
 
   const validate = () => {
@@ -215,6 +169,24 @@ export default function EditProfileScreen() {
           size="lg"
         />
       </GlassScrollView>
+
+      <ProfilePhotoEditSheet
+        visible={showPhotoSheet}
+        onClose={() => setShowPhotoSheet(false)}
+        profileImage={profileImage}
+        onTakePhoto={async () => {
+          const uri = await handleImagePick('camera');
+          setShowPhotoSheet(false);
+        }}
+        onChoosePhoto={async () => {
+          const uri = await handleImagePick('gallery');
+          setShowPhotoSheet(false);
+        }}
+        onDeletePhoto={profileImage ? async () => {
+          await handleDeletePhoto();
+          setShowPhotoSheet(false);
+        } : undefined}
+      />
     </KeyboardAvoidingView>
   );
 }

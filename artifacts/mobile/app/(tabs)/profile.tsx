@@ -26,6 +26,9 @@ import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverV
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
+
 
 function MenuItem({
   iconFamily = 'feather',
@@ -87,8 +90,9 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile, logout, switchMode } = useAuth();
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   /** iOS grouped inset list — elevated fill, no card outline */
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -106,7 +110,7 @@ export default function ProfileScreen() {
       return () => {
         active = false;
       };
-    }, []),
+    }, [setProfileImage]),
   );
 
   const handleSwitchToDriver = () => {
@@ -156,7 +160,7 @@ export default function ProfileScreen() {
             if (profileImage) {
               setIsPreviewVisible(true);
             } else {
-              router.push('/edit-profile');
+              setShowPhotoSheet(true);
             }
           }}
           activeOpacity={0.7}
@@ -324,12 +328,57 @@ export default function ProfileScreen() {
           visible={isPreviewVisible}
           onClose={() => setIsPreviewVisible(false)}
           rightActionLabel="Edit"
-          onRightActionPress={() => {
-            setIsPreviewVisible(false);
-            router.push('/edit-profile');
+          editMenu={{
+            title: 'Edit profile picture',
+            avatarUri: profileImage,
+            options: [
+              {
+                label: 'Take photo',
+                icon: 'camera',
+                onPress: async () => {
+                  const uri = await handleImagePick('camera');
+                  if (uri) setIsPreviewVisible(false);
+                },
+              },
+              {
+                label: 'Choose photo',
+                icon: 'image',
+                onPress: async () => {
+                  const uri = await handleImagePick('gallery');
+                  if (uri) setIsPreviewVisible(false);
+                },
+              },
+              {
+                label: 'Delete photo',
+                icon: 'trash-2',
+                destructive: true,
+                onPress: async () => {
+                  await handleDeletePhoto();
+                  setIsPreviewVisible(false);
+                },
+              },
+            ],
           }}
         />
       )}
+
+      <ProfilePhotoEditSheet
+        visible={showPhotoSheet}
+        onClose={() => setShowPhotoSheet(false)}
+        profileImage={profileImage}
+        onTakePhoto={async () => {
+          const uri = await handleImagePick('camera');
+          setShowPhotoSheet(false);
+        }}
+        onChoosePhoto={async () => {
+          const uri = await handleImagePick('gallery');
+          setShowPhotoSheet(false);
+        }}
+        onDeletePhoto={profileImage ? async () => {
+          await handleDeletePhoto();
+          setShowPhotoSheet(false);
+        } : undefined}
+      />
     </View>
   );
 }

@@ -10,14 +10,18 @@ import {
   type NativeSyntheticEvent,
   type NativeTouchEvent,
   type ListRenderItemInfo,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useColorScheme,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from './BackButton';
+import { useColors } from '@/hooks/useColors';
+import { SheetBackdrop } from './SheetBackdrop';
 
 export type GalleryImage = {
   id: string;
@@ -27,6 +31,19 @@ export type GalleryImage = {
   subtitle?: string;
   thumbnailUri?: string;
   width?: number;
+};
+
+export type EditOption = {
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  onPress: () => void;
+  destructive?: boolean;
+};
+
+export type EditMenu = {
+  title: string;
+  avatarUri?: string | null;
+  options: EditOption[];
 };
 
 export type ImageGalleryPreviewProps = {
@@ -42,6 +59,7 @@ export type ImageGalleryPreviewProps = {
   visible: boolean;
   rightActionLabel?: string;
   onRightActionPress?: () => void;
+  editMenu?: EditMenu;
 };
 
 type GalleryPageSlot = {
@@ -80,10 +98,32 @@ export function ImageGalleryPreview({
   visible,
   rightActionLabel,
   onRightActionPress,
+  editMenu,
 }: ImageGalleryPreviewProps) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
+  const scheme = useColorScheme();
+  const colors = useColors();
   const [currentIndex, setCurrentIndex] = React.useState(() => clampIndex(initialIndex, images.length));
+  const [showEditSheet, setShowEditSheet] = React.useState(false);
+  const sheetAnim = React.useRef(new Animated.Value(320)).current;
+
+  React.useEffect(() => {
+    if (showEditSheet) {
+      Animated.spring(sheetAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(sheetAnim, {
+        toValue: 320,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showEditSheet, sheetAnim]);
   const [zoom, setZoom] = React.useState(MIN_ZOOM);
   const [imageSize, setImageSize] = React.useState<{ width: number; height: number } | null>(null);
   const [stageSize, setStageSize] = React.useState({ width: window.width, height: window.height });
@@ -194,6 +234,8 @@ export function ImageGalleryPreview({
     setDraggingDown(0);
     dismissOffsetY.setValue(0);
     resetImage(false);
+    setShowEditSheet(false);
+    sheetAnim.setValue(320);
     openingProgress.setValue(0);
     Animated.timing(openingProgress, {
       duration: 220,
@@ -590,13 +632,14 @@ export function ImageGalleryPreview({
       transparent
       visible={visible}
     >
-      <StatusBar style="light" backgroundColor="transparent" translucent />
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} backgroundColor="transparent" translucent />
       <View accessibilityViewIsModal style={styles.root} testID={`${testID}-fullscreen`}>
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
             styles.backdrop,
             {
+              backgroundColor: colors.background,
               opacity: openingProgress.interpolate({
                 inputRange: [0, 1],
                 outputRange: [0, 1 - dismissProgress],
@@ -620,28 +663,34 @@ export function ImageGalleryPreview({
           testID={`${testID}-chrome`}
         >
           <View style={styles.headerContent}>
-            <BackButton exitOnPress={false} onPress={onClose} flat={true} color="#FFFFFF" accessibilityLabel="Back from preview" />
+            <BackButton exitOnPress={false} onPress={onClose} flat={true} color={colors.foreground} accessibilityLabel="Back from preview" />
             <View style={styles.headerCenter}>
-              <Text numberOfLines={1} style={styles.title}>
+              <Text numberOfLines={1} style={[styles.title, { color: colors.foreground }]}>
                 {currentImage?.title ?? 'Image preview'}
               </Text>
               {currentImage?.subtitle ? (
-                <Text numberOfLines={1} style={styles.subtitle}>{currentImage.subtitle}</Text>
+                <Text numberOfLines={1} style={[styles.subtitle, { color: colors.mutedForeground }]}>{currentImage.subtitle}</Text>
               ) : null}
               {showCounter && images.length > 1 ? (
-                <Text accessibilityLabel="Image counter" style={styles.counter}>
+                <Text accessibilityLabel="Image counter" style={[styles.counter, { color: colors.mutedForeground }]}>
                   {currentIndex + 1} of {images.length}
                 </Text>
               ) : null}
             </View>
-            {rightActionLabel && onRightActionPress ? (
+            {rightActionLabel && (onRightActionPress || editMenu) ? (
               <TouchableOpacity
                 accessibilityLabel={rightActionLabel}
                 accessibilityRole="button"
-                onPress={onRightActionPress}
-                style={styles.rightActionButton}
+                onPress={() => {
+                  if (editMenu) {
+                    setShowEditSheet(true);
+                  } else if (onRightActionPress) {
+                    onRightActionPress();
+                  }
+                }}
+                style={[styles.rightActionButton, { backgroundColor: colors.muted }]}
               >
-                <Text style={styles.rightActionText}>{rightActionLabel}</Text>
+                <Text style={[styles.rightActionText, { color: colors.foreground }]}>{rightActionLabel}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.headerSpacer} />
@@ -703,6 +752,83 @@ export function ImageGalleryPreview({
             />
           </Animated.View>
         </View>
+
+        {/* Slide-in Edit Bottom Sheet */}
+        {showEditSheet && (
+          <SheetBackdrop
+            onPress={() => setShowEditSheet(false)}
+            blurIntensity={0}
+            lightScrimOpacity={0.3}
+            darkScrimOpacity={0.45}
+          />
+        )}
+
+        <Animated.View
+          style={[
+            styles.sheetContainer,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              transform: [{ translateY: sheetAnim }],
+              paddingBottom: Math.max(insets.bottom, 20),
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetTitleGroup}>
+              {currentImage?.uri ? (
+                <Image source={{ uri: currentImage.uri }} style={styles.sheetAvatar} />
+              ) : (
+                <View style={[styles.sheetAvatarPlaceholder, { backgroundColor: colors.muted }]}>
+                  <Feather name="user" size={16} color={colors.mutedForeground} />
+                </View>
+              )}
+              <Text style={[styles.sheetTitleText, { color: colors.foreground }]}>Edit profile picture</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.sheetCloseButton, { backgroundColor: colors.muted }]}
+              onPress={() => setShowEditSheet(false)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close edit menu"
+            >
+              <Feather name="x" size={16} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Options Card */}
+          {editMenu?.options && (
+            <View style={[styles.sheetOptionsCard, { backgroundColor: colors.card }]}>
+              {editMenu.options.map((option, index) => {
+                const isLast = index === editMenu.options.length - 1;
+                const iconColor = option.destructive ? colors.destructive : colors.foreground;
+                const textColor = option.destructive ? colors.destructive : colors.foreground;
+
+                return (
+                  <React.Fragment key={option.label}>
+                    <TouchableOpacity
+                      style={styles.sheetOptionRow}
+                      onPress={() => {
+                        setShowEditSheet(false);
+                        option.onPress();
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={option.label}
+                    >
+                      <Text style={[styles.sheetOptionText, { color: textColor }]}>
+                        {option.label}
+                      </Text>
+                      <Feather name={option.icon} size={18} color={iconColor} />
+                    </TouchableOpacity>
+                    {!isLast && <View style={[styles.sheetSeparator, { backgroundColor: colors.border }]} />}
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          )}
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -872,6 +998,7 @@ const GalleryImagePage = React.memo(function GalleryImagePage({
   testID: string;
   zoomScale?: Animated.Value;
 }) {
+  const colors = useColors();
   const [loading, setLoading] = React.useState(Boolean(image) && !initiallyReady);
   const [failed, setFailed] = React.useState(false);
   const readyRef = React.useRef(initiallyReady);
@@ -907,8 +1034,8 @@ const GalleryImagePage = React.memo(function GalleryImagePage({
         testID={`${testID}-page`}
       >
         <View style={styles.errorState} testID={active ? `${testID.replace(/-image$/, '')}-error` : `${testID}-error`}>
-          <Feather color="#A1A1AA" name="image" size={34} />
-          <Text style={styles.errorText}>Image unavailable</Text>
+          <Feather color={colors.mutedForeground} name="image" size={34} />
+          <Text style={[styles.errorText, { color: colors.mutedForeground }]}>Image unavailable</Text>
         </View>
       </Animated.View>
     );
@@ -962,7 +1089,7 @@ const GalleryImagePage = React.memo(function GalleryImagePage({
       />
       {loading ? (
         <View style={styles.loadingState} testID={active ? `${testID.replace(/-image$/, '')}-loading` : `${testID}-loading`}>
-          <ActivityIndicator color="#FFFFFF" size="large" />
+          <ActivityIndicator color={colors.foreground} size="large" />
         </View>
       ) : null}
       <View testID={`${testID}-${position}-sentinel`} style={styles.hiddenSentinel} />
@@ -972,7 +1099,7 @@ const GalleryImagePage = React.memo(function GalleryImagePage({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'transparent' },
-  backdrop: { backgroundColor: '#050505' },
+  backdrop: {},
   header: {
     position: 'absolute',
     left: 0,
@@ -998,9 +1125,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 16, textAlign: 'center' },
-  subtitle: { color: '#D4D4D8', fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
-  counter: { color: '#D4D4D8', fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 16, textAlign: 'center' },
+  subtitle: { fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
+  counter: { fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
   headerSpacer: { width: 44 },
   rightActionButton: {
     minWidth: 44,
@@ -1009,10 +1136,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.32)',
   },
   rightActionText: {
-    color: '#FFFFFF',
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
   },
@@ -1036,5 +1161,76 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { color: '#A1A1AA', fontFamily: 'Inter_500Medium', fontSize: 13 },
+  errorText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+  },
+  sheetContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    zIndex: 90,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sheetTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sheetAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  sheetAvatarPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetTitleText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+  },
+  sheetCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetOptionsCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  sheetOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  sheetOptionText: {
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+  },
+  sheetSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+  },
 });

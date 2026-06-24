@@ -15,8 +15,12 @@ jest.mock('react-native', () => {
   return {
     Alert: { alert: mockAlert },
     Image: host('Image'),
+    Modal: host('Modal'),
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
     Pressable: host('Pressable'),
+    Animated: {
+      View: host('AnimatedView'),
+    },
     StyleSheet: { create: (styles: object) => styles, flatten: (style: object) => style },
     Text: host('Text'),
     TouchableOpacity: host('TouchableOpacity'),
