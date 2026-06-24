@@ -55,22 +55,30 @@ function mapCatalogItem(item: BackendCatalogItem): DriverRidePackageCatalogEntry
   return entry;
 }
 
-/** Real catalog adapter: GET /driver/packages for every vehicle type, mapped to
- *  the strict DriverRidePackageCatalogEntry shape. */
+/** Real catalog adapter: one GET /driver/packages returns the full catalog across
+ *  all vehicle types, mapped to the strict DriverRidePackageCatalogEntry shape. */
 export class ApiPackageCatalogBackendAdapter implements PackageCatalogBackendAdapter {
   async fetchPackages() {
-    const responses = await Promise.all(
-      CATALOG_VEHICLE_CODES.map(async code => {
-        try {
-          const { data } = await api.get(`/driver/packages?vehicle_type=${encodeURIComponent(code)}`);
-          return Array.isArray(data) ? (data as BackendCatalogItem[]) : [];
-        } catch {
-          return [];
-        }
-      }),
-    );
-    const data = responses
-      .flat()
+    let items: BackendCatalogItem[] = [];
+    try {
+      // No vehicle_type → the backend returns every vehicle type in one response.
+      const { data } = await api.get('/driver/packages');
+      items = Array.isArray(data) ? (data as BackendCatalogItem[]) : [];
+    } catch {
+      // Fallback for an older backend that still requires vehicle_type: fan out.
+      const responses = await Promise.all(
+        CATALOG_VEHICLE_CODES.map(async code => {
+          try {
+            const { data } = await api.get(`/driver/packages?vehicle_type=${encodeURIComponent(code)}`);
+            return Array.isArray(data) ? (data as BackendCatalogItem[]) : [];
+          } catch {
+            return [];
+          }
+        }),
+      );
+      items = responses.flat();
+    }
+    const data = items
       .map(mapCatalogItem)
       .filter((e): e is DriverRidePackageCatalogEntry => e !== null);
     return { data, sourceVersion: `api-catalog:${Date.now()}` };
@@ -124,20 +132,27 @@ function mapCampaignItem(item: BackendCampaignItem): DriverRidePackageCampaign |
 /** Real campaign adapter: GET /driver/campaigns/active mapped to the strict shape. */
 export class ApiPackageCampaignBackendAdapter implements PackageCampaignBackendAdapter {
   async fetchCampaigns() {
-    // Campaigns are queried per vehicle type; gather across all and de-dupe.
-    const responses = await Promise.all(
-      CATALOG_VEHICLE_CODES.map(async code => {
-        try {
-          const { data } = await api.get(`/driver/campaigns/active?vehicle_type=${encodeURIComponent(code)}`);
-          return Array.isArray(data) ? (data as BackendCampaignItem[]) : [];
-        } catch {
-          return [];
-        }
-      }),
-    );
+    // One call returns all active campaigns across vehicle types; de-dupe by id.
+    let items: BackendCampaignItem[] = [];
+    try {
+      const { data } = await api.get('/driver/campaigns/active');
+      items = Array.isArray(data) ? (data as BackendCampaignItem[]) : [];
+    } catch {
+      // Fallback for an older backend: query per vehicle type and gather.
+      const responses = await Promise.all(
+        CATALOG_VEHICLE_CODES.map(async code => {
+          try {
+            const { data } = await api.get(`/driver/campaigns/active?vehicle_type=${encodeURIComponent(code)}`);
+            return Array.isArray(data) ? (data as BackendCampaignItem[]) : [];
+          } catch {
+            return [];
+          }
+        }),
+      );
+      items = responses.flat();
+    }
     const seen = new Set<string>();
-    const data = responses
-      .flat()
+    const data = items
       .map(mapCampaignItem)
       .filter((c): c is DriverRidePackageCampaign => c !== null)
       .filter(c => (seen.has(c.campaignId) ? false : (seen.add(c.campaignId), true)));
