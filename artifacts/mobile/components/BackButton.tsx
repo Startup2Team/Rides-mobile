@@ -20,6 +20,7 @@ interface CircleNavButtonProps {
   style?: StyleProp<ViewStyle>;
   accessibilityLabel: string;
   iconSize?: number;
+  flat?: boolean;
 }
 
 function CircleNavButton({
@@ -28,6 +29,7 @@ function CircleNavButton({
   style,
   accessibilityLabel,
   iconSize = 24,
+  flat = false,
 }: CircleNavButtonProps) {
   const colors = useColors();
 
@@ -38,7 +40,7 @@ function CircleNavButton({
       accessibilityLabel={accessibilityLabel}
       style={[
         styles.button,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        flat ? styles.flatButton : { backgroundColor: colors.card, borderColor: colors.border },
         style,
       ]}
       activeOpacity={0.8}
@@ -65,6 +67,7 @@ interface BackButtonProps extends NavButtonProps {
   /** Slide in from the left when mounted. Default true. */
   autoPlayOnMount?: boolean;
   wrapperStyle?: StyleProp<ViewStyle>;
+  flat?: boolean;
 }
 
 export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(function BackButton(
@@ -75,6 +78,7 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
     accessibilityLabel = 'Go back',
     exitOnPress = true,
     autoPlayOnMount = true,
+    flat = true,
   },
   ref,
 ) {
@@ -108,6 +112,7 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
         style={style}
         accessibilityLabel={accessibilityLabel}
         iconSize={24}
+        flat={flat}
       />
     </Animated.View>
   );
@@ -190,5 +195,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  flatButton: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
 });
