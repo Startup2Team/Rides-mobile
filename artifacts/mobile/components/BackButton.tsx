@@ -111,7 +111,7 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
         onPress={handlePress}
         style={style}
         accessibilityLabel={accessibilityLabel}
-        iconSize={28}
+        iconSize={30}
         flat={flat}
       />
     </Animated.View>
