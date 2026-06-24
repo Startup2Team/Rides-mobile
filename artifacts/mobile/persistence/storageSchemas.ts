@@ -38,6 +38,8 @@ export const userSchema = z.object({
   name: z.string(),
   phone: z.string(),
   email: z.string().optional(),
+  emergencyContactName: z.string().optional(),
+  emergencyContactPhone: z.string().optional(),
   mode: appModeSchema,
   isDriver: z.boolean(),
   createdAt: z.string(),

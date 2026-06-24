@@ -25,6 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -35,8 +36,15 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [emergencyContactName, setEmergencyContactName] = useState(user?.emergencyContactName ?? '');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(user?.emergencyContactPhone ?? '');
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+  }>({});
   const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
@@ -51,6 +59,19 @@ export default function EditProfileScreen() {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errs.email = 'Enter a valid email address';
     }
+    if (emergencyContactName.trim() || emergencyContactPhone.trim()) {
+      if (!emergencyContactName.trim()) {
+        errs.emergencyContactName = 'Contact name is required';
+      }
+      if (!emergencyContactPhone.trim()) {
+        errs.emergencyContactPhone = 'Contact phone is required';
+      } else {
+        const normalized = normalizeRwandaPhoneNumber(emergencyContactPhone);
+        if (!normalized) {
+          errs.emergencyContactPhone = 'Enter a valid Rwanda phone number';
+        }
+      }
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -62,7 +83,12 @@ export default function EditProfileScreen() {
     }
     setSaving(true);
     await new Promise(r => setTimeout(r, 500));
-    await updateUser({ name: name.trim(), email: email.trim() || undefined });
+    await updateUser({
+      name: name.trim(),
+      email: email.trim() || undefined,
+      emergencyContactName: emergencyContactName.trim() || undefined,
+      emergencyContactPhone: emergencyContactPhone.trim() ? (normalizeRwandaPhoneNumber(emergencyContactPhone) || undefined) : undefined,
+    });
     setSaving(false);
     showToast('Profile updated', 'info');
     router.back();
@@ -159,6 +185,34 @@ export default function EditProfileScreen() {
           <Text style={[styles.phoneHint, { color: colors.mutedForeground }]}>
             A verification code will be sent before your number is updated.
           </Text>
+
+          <Text style={[styles.sectionHeader, { color: colors.foreground }]}>Emergency Contact</Text>
+
+          <AppInput
+            label="Contact Name (optional)"
+            value={emergencyContactName}
+            onChangeText={text => {
+              setEmergencyContactName(text);
+              if (errors.emergencyContactName) setErrors(prev => ({ ...prev, emergencyContactName: undefined }));
+            }}
+            error={errors.emergencyContactName}
+            autoCapitalize="words"
+            returnKeyType="next"
+          />
+
+          <AppInput
+            label="Contact Phone (optional)"
+            value={emergencyContactPhone}
+            onChangeText={text => {
+              setEmergencyContactPhone(formatRwandaPhoneInput(text));
+              if (errors.emergencyContactPhone) setErrors(prev => ({ ...prev, emergencyContactPhone: undefined }));
+            }}
+            error={errors.emergencyContactPhone}
+            keyboardType="phone-pad"
+            placeholder="e.g. 0788000000"
+            autoCapitalize="none"
+            returnKeyType="done"
+          />
         </View>
 
         <AppButton
@@ -241,4 +295,10 @@ const styles = StyleSheet.create({
   phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  sectionHeader: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 8,
+    marginBottom: -4,
+  },
 });

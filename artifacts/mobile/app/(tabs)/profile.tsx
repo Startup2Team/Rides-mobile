@@ -159,9 +159,23 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Edit profile details"
             >
-              <Text style={[styles.nameFirst, { color: colors.foreground }]}>{firstName}</Text>
+              <Text
+                style={[styles.nameFirst, { color: colors.foreground }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+              >
+                {firstName}
+              </Text>
               {lastName ? (
-                <Text style={[styles.nameLast, { color: colors.foreground }]}>{lastName}</Text>
+                <Text
+                  style={[styles.nameLast, { color: colors.foreground }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
+                  {lastName}
+                </Text>
               ) : null}
             </TouchableOpacity>
 
