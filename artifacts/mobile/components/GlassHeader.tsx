@@ -53,9 +53,12 @@ export function GlassHeader({
         styles.header,
         {
           paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 0,
+<<<<<<< HEAD
           backgroundColor: scheme === 'dark' ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)',
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.border,
+=======
+>>>>>>> f3a0f2b943fc83baa4c527ea226067e110a7eebc
         },
       ]}
     >
