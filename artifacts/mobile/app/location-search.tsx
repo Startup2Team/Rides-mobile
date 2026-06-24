@@ -200,9 +200,13 @@ export default function LocationSearchScreen() {
   const handleChooseOnMap = useCallback(() => {
     router.replace({
       pathname: '/(tabs)',
-      params: { triggerMapPicker: target },
+      params: {
+        triggerMapPicker: target,
+        mapPickerLat: gpsLatitude || userLatitude,
+        mapPickerLng: gpsLongitude || userLongitude,
+      },
     });
-  }, [target]);
+  }, [target, gpsLatitude, userLatitude, gpsLongitude, userLongitude]);
 
   const savedLocations = useMemo(() => savedPlaces, [savedPlaces]);
 

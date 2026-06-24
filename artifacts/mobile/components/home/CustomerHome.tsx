@@ -139,19 +139,44 @@ export default function CustomerHome() {
     userLocation,
   });
   pickupSetterRef.current = setPickup;
-  const { triggerMapPicker } = useLocalSearchParams<{ triggerMapPicker?: 'pickup' | 'dropoff' }>();
+  const {
+    triggerMapPicker,
+    mapPickerLat,
+    mapPickerLng,
+  } = useLocalSearchParams<{
+    triggerMapPicker?: 'pickup' | 'dropoff';
+    mapPickerLat?: string;
+    mapPickerLng?: string;
+  }>();
 
   useEffect(() => {
     if (triggerMapPicker) {
       const target = triggerMapPicker;
-      router.setParams({ triggerMapPicker: undefined });
-      const coords = target === 'dropoff'
-        ? (destination ?? gpsLocation ?? userLocation)
-        : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation));
+      router.setParams({
+        triggerMapPicker: undefined,
+        mapPickerLat: undefined,
+        mapPickerLng: undefined,
+      });
+
+      let coords;
+      if (mapPickerLat && mapPickerLng) {
+        const parsedLat = parseFloat(mapPickerLat);
+        const parsedLng = parseFloat(mapPickerLng);
+        if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+          coords = { latitude: parsedLat, longitude: parsedLng };
+        }
+      }
+
+      if (!coords) {
+        coords = target === 'dropoff'
+          ? (destination ?? gpsLocation ?? userLocation)
+          : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation));
+      }
+
       setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
       setMapPicker(target);
     }
-  }, [triggerMapPicker, destination, gpsLocation, userLocation, pickup]);
+  }, [triggerMapPicker, mapPickerLat, mapPickerLng, destination, gpsLocation, userLocation, pickup]);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
