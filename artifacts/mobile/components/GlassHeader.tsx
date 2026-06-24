@@ -73,11 +73,6 @@ export function GlassHeader({
             </Text>
             {titleAccessory}
           </View>
-          {subtitle && (
-            <Text style={[styles.headerSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          )}
         </View>
         {right ?? <View style={styles.sideSlot} />}
       </View>

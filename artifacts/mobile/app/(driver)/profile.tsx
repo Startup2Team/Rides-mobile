@@ -150,7 +150,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open my vehicles"
           >
-            <MaterialCommunityIcons name="truck" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons name="truck" size={20} color={colors.primary} />
             <View style={styles.vehicleSummaryCopy}>
               <Text style={[styles.vehicleSummaryTitle, { color: colors.foreground }]}>
                 {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} linked
@@ -172,7 +172,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={activePackage ? 'Manage active ride package' : 'Explore ride packages'}
           >
-            <MaterialCommunityIcons name="layers-triple" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons name="layers-triple" size={20} color={colors.primary} />
             <View style={styles.packageCopy}>
               <View style={styles.packageTitleRow}>
                 <Text style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -207,12 +207,12 @@ export default function DriverProfileScreen() {
         <View style={styles.section}>
           <SectionTitle title="Account" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-            <MenuItem colors={colors} icon="account-edit" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="user" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
             <MenuItem colors={colors} iconFamily="feather" icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
-            <MenuItem colors={colors} icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
             <MenuItem colors={colors} iconFamily="feather" icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
-            <MenuItem colors={colors} iconFamily="feather" icon="info" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />
-            <MenuItem colors={colors} icon="cog" label="Settings" onPress={() => router.push('/settings')} last />
+            <MenuItem colors={colors} iconFamily="mci" icon="information-outline" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="settings" label="Settings" onPress={() => router.push('/settings')} last />
           </View>
         </View>
 
@@ -223,7 +223,7 @@ export default function DriverProfileScreen() {
             onPress={handleSwitchToCustomer}
             activeOpacity={0.72}
           >
-            <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.foreground} />
+            <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.primary} />
             <View style={styles.modeCopy}>
               <Text style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</Text>
               <Text style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</Text>
@@ -236,7 +236,7 @@ export default function DriverProfileScreen() {
           <SectionTitle title="Community" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
             <MenuItem colors={colors} iconFamily="feather" icon="star" label={`Rate ${APP_NAME}`} detail="Enjoying the app? Take a moment to rate it and share your feedback." onPress={() => { void rateRides(); }} />
-            <MenuItem colors={colors} iconFamily="feather" icon="message-square" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
+            <MenuItem colors={colors} iconFamily="mci" icon="message-text" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
             <MenuItem colors={colors} iconFamily="symbol" icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => router.push(getShareRouteForMode(user?.mode))} last />
           </View>
         </View>
@@ -244,11 +244,8 @@ export default function DriverProfileScreen() {
         <View style={styles.section}>
           <SectionTitle title="Actions" />
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.65}>
-            <Feather name="log-out" size={18} color={colors.foreground} />
-            <Text style={[styles.logoutText, { color: colors.foreground }]}>Log Out</Text>
-          </TouchableOpacity>
-        </View>
+            <MenuItem colors={colors} iconFamily="feather" icon="log-out" label="Log Out" onPress={handleLogout} last />
+          </View>
         </View>
 
         <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
