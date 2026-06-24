@@ -20,6 +20,7 @@ import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -35,6 +36,7 @@ export default function DriverProfileScreen() {
   const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [profileImage, setProfileImage] = React.useState<string | null>(null);
+  const [isPreviewVisible, setIsPreviewVisible] = React.useState(false);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
 
@@ -103,30 +105,46 @@ export default function DriverProfileScreen() {
           gap: 22,
         }}
       >
-        <TouchableOpacity
-          style={styles.identitySection}
-          onPress={() => router.push('/edit-profile')}
-          activeOpacity={0.72}
-          accessibilityRole="button"
-          accessibilityLabel="Edit profile"
-        >
-          <View style={styles.avatarWrap}>
-            {profileImage ? (
-              <View style={styles.avatarImageShadow}>
-                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-              </View>
-            ) : (
-              <LinearGradient colors={['#69A8F7', '#6674D8']} style={styles.avatar}>
-                <Text style={styles.avatarInitial}>{profileInitial}</Text>
-              </LinearGradient>
-            )}
-          </View>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{user?.name}</Text>
-            {driverProfile?.isVerified === true ? <VerifiedBadge /> : null}
-          </View>
-          <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
-        </TouchableOpacity>
+        <View style={styles.identitySection}>
+          <TouchableOpacity
+            onPress={() => {
+              if (profileImage) {
+                setIsPreviewVisible(true);
+              } else {
+                router.push('/edit-profile');
+              }
+            }}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel={profileImage ? "Preview profile image" : "Upload profile image"}
+          >
+            <View style={styles.avatarWrap}>
+              {profileImage ? (
+                <View style={styles.avatarImageShadow}>
+                  <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+                </View>
+              ) : (
+                <LinearGradient colors={['#69A8F7', '#6674D8']} style={styles.avatar}>
+                  <Text style={styles.avatarInitial}>{profileInitial}</Text>
+                </LinearGradient>
+              )}
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            onPress={() => router.push('/edit-profile')}
+            activeOpacity={0.72}
+            style={{ alignItems: 'center', gap: 5 }}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile details"
+          >
+            <View style={styles.nameRow}>
+              <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{user?.name}</Text>
+              {driverProfile?.isVerified === true ? <VerifiedBadge /> : null}
+            </View>
+            <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={[styles.quickStats, styles.cardShadow, { backgroundColor: cardFill }]}>
           <QuickStat colors={colors} label="Driver Rating" value={formatDriverRatingSummary(ratingSummary)} />
@@ -250,6 +268,20 @@ export default function DriverProfileScreen() {
 
         <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
       </GlassScrollView>
+
+      {profileImage && (
+        <ImageGalleryPreview
+          images={[{ id: 'profile-img', uri: profileImage, title: 'Profile picture' }]}
+          initialIndex={0}
+          visible={isPreviewVisible}
+          onClose={() => setIsPreviewVisible(false)}
+          rightActionLabel="Edit"
+          onRightActionPress={() => {
+            setIsPreviewVisible(false);
+            router.push('/edit-profile');
+          }}
+        />
+      )}
     </View>
   );
 }

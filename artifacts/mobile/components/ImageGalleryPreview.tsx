@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackButton } from './BackButton';
 
 export type GalleryImage = {
   id: string;
@@ -39,6 +40,8 @@ export type ImageGalleryPreviewProps = {
   showCounter?: boolean;
   testID?: string;
   visible: boolean;
+  rightActionLabel?: string;
+  onRightActionPress?: () => void;
 };
 
 type GalleryPageSlot = {
@@ -75,6 +78,8 @@ export function ImageGalleryPreview({
   showCounter = true,
   testID = 'image-gallery',
   visible,
+  rightActionLabel,
+  onRightActionPress,
 }: ImageGalleryPreviewProps) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
@@ -614,29 +619,34 @@ export function ImageGalleryPreview({
           ]}
           testID={`${testID}-chrome`}
         >
-          <TouchableOpacity
-            accessibilityLabel="Back from preview"
-            accessibilityRole="button"
-            hitSlop={12}
-            onPress={onClose}
-            style={styles.backButton}
-          >
-            <Feather color="#FFFFFF" name="arrow-left" size={25} />
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <Text numberOfLines={1} style={styles.title}>
-              {currentImage?.title ?? 'Image preview'}
-            </Text>
-            {currentImage?.subtitle ? (
-              <Text numberOfLines={1} style={styles.subtitle}>{currentImage.subtitle}</Text>
-            ) : null}
-            {showCounter && images.length > 1 ? (
-              <Text accessibilityLabel="Image counter" style={styles.counter}>
-                {currentIndex + 1} of {images.length}
+          <View style={styles.headerContent}>
+            <BackButton exitOnPress={false} onPress={onClose} flat={true} color="#FFFFFF" accessibilityLabel="Back from preview" />
+            <View style={styles.headerCenter}>
+              <Text numberOfLines={1} style={styles.title}>
+                {currentImage?.title ?? 'Image preview'}
               </Text>
-            ) : null}
+              {currentImage?.subtitle ? (
+                <Text numberOfLines={1} style={styles.subtitle}>{currentImage.subtitle}</Text>
+              ) : null}
+              {showCounter && images.length > 1 ? (
+                <Text accessibilityLabel="Image counter" style={styles.counter}>
+                  {currentIndex + 1} of {images.length}
+                </Text>
+              ) : null}
+            </View>
+            {rightActionLabel && onRightActionPress ? (
+              <TouchableOpacity
+                accessibilityLabel={rightActionLabel}
+                accessibilityRole="button"
+                onPress={onRightActionPress}
+                style={styles.rightActionButton}
+              >
+                <Text style={styles.rightActionText}>{rightActionLabel}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.headerSpacer} />
+            )}
           </View>
-          <View style={styles.headerSpacer} />
         </Animated.View>
 
         <View
@@ -974,19 +984,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 2,
   },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  headerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'relative',
+  },
+  headerCenter: {
+    position: 'absolute',
+    left: 60,
+    right: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 16, textAlign: 'center' },
+  subtitle: { color: '#D4D4D8', fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
+  counter: { color: '#D4D4D8', fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
+  headerSpacer: { width: 44 },
+  rightActionButton: {
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: 8,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.32)',
   },
-  titleContainer: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
-  title: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 15 },
-  subtitle: { color: '#D4D4D8', fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2 },
-  counter: { color: '#D4D4D8', fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2 },
-  headerSpacer: { width: 42 },
+  rightActionText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
   imageStage: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   animatedImageStage: { width: '100%', height: '100%' },
   galleryPage: {

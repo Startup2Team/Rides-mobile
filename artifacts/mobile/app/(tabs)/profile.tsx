@@ -25,6 +25,7 @@ import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 
 function MenuItem({
   iconFamily = 'feather',
@@ -87,6 +88,7 @@ export default function ProfileScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile, logout, switchMode } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
   /** iOS grouped inset list — elevated fill, no card outline */
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -148,28 +150,44 @@ export default function ProfileScreen() {
           paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
         }}
       >
-      <TouchableOpacity
-        style={styles.avatarSection}
-        onPress={() => router.push('/edit-profile')}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Edit profile"
-      >
-        {profileImage ? (
-          <View style={styles.avatarImageShadow}>
-            <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-          </View>
-        ) : (
-          <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatar}>
-            <Text style={styles.avatarInitial}>{profileInitial}</Text>
-          </LinearGradient>
-        )}
-        <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
-        <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
-        {user?.email ? (
-          <Text style={[styles.email, { color: colors.mutedForeground }]}>{user.email}</Text>
-        ) : null}
-      </TouchableOpacity>
+      <View style={styles.avatarSection}>
+        <TouchableOpacity
+          onPress={() => {
+            if (profileImage) {
+              setIsPreviewVisible(true);
+            } else {
+              router.push('/edit-profile');
+            }
+          }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={profileImage ? "Preview profile image" : "Upload profile image"}
+        >
+          {profileImage ? (
+            <View style={styles.avatarImageShadow}>
+              <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+            </View>
+          ) : (
+            <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatar}>
+              <Text style={styles.avatarInitial}>{profileInitial}</Text>
+            </LinearGradient>
+          )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          onPress={() => router.push('/edit-profile')}
+          activeOpacity={0.7}
+          style={{ alignItems: 'center', gap: 6 }}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile details"
+        >
+          <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
+          <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
+          {user?.email ? (
+            <Text style={[styles.email, { color: colors.mutedForeground }]}>{user.email}</Text>
+          ) : null}
+        </TouchableOpacity>
+      </View>
 
       {!canAccessDriverMode(driverProfile) && (
         <TouchableOpacity
@@ -298,6 +316,20 @@ export default function ProfileScreen() {
 
       <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
       </GlassScrollView>
+
+      {profileImage && (
+        <ImageGalleryPreview
+          images={[{ id: 'profile-img', uri: profileImage, title: 'Profile picture' }]}
+          initialIndex={0}
+          visible={isPreviewVisible}
+          onClose={() => setIsPreviewVisible(false)}
+          rightActionLabel="Edit"
+          onRightActionPress={() => {
+            setIsPreviewVisible(false);
+            router.push('/edit-profile');
+          }}
+        />
+      )}
     </View>
   );
 }

@@ -98,6 +98,9 @@ jest.mock('react-native', () => {
     TouchableOpacity: host('TouchableOpacity'),
     useWindowDimensions: () => ({ width: 400, height: 800 }),
     View: host('View'),
+    Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios ?? options.default },
+    PlatformColor: (name: string) => name,
+    useColorScheme: () => 'light',
   };
 });
 
@@ -109,9 +112,30 @@ jest.mock('expo-status-bar', () => ({
   StatusBar: () => null,
 }));
 
+jest.mock('expo-haptics', () => ({
+  selectionAsync: jest.fn(),
+  notificationAsync: jest.fn(),
+  impactAsync: jest.fn(),
+  ImpactFeedbackStyle: { Light: 'light' },
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 16, left: 0 }),
 }));
+
+jest.mock('../BackButton', () => {
+  const React = require('react');
+  const { TouchableOpacity } = require('react-native');
+  return {
+    BackButton: React.forwardRef((props: any, ref: any) => {
+      return React.createElement(TouchableOpacity, {
+        accessibilityLabel: props.accessibilityLabel,
+        onPress: props.onPress,
+        testID: "back-button-mock",
+      });
+    }),
+  };
+});
 
 function renderGallery(props: Partial<React.ComponentProps<typeof ImageGalleryPreview>> = {}) {
   const result = render(

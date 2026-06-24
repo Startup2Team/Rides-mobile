@@ -123,6 +123,10 @@ jest.mock('expo-symbols', () => ({
   SymbolView: () => null,
 }));
 
+jest.mock('@/components/ImageGalleryPreview', () => ({
+  ImageGalleryPreview: () => null,
+}));
+
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     user,

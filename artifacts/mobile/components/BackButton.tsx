@@ -21,6 +21,7 @@ interface CircleNavButtonProps {
   accessibilityLabel: string;
   iconSize?: number;
   flat?: boolean;
+  color?: string;
 }
 
 function CircleNavButton({
@@ -30,6 +31,7 @@ function CircleNavButton({
   accessibilityLabel,
   iconSize = 24,
   flat = false,
+  color,
 }: CircleNavButtonProps) {
   const colors = useColors();
 
@@ -45,7 +47,7 @@ function CircleNavButton({
       ]}
       activeOpacity={0.8}
     >
-      <Feather name={icon} size={iconSize} color={colors.foreground} />
+      <Feather name={icon} size={iconSize} color={color ?? colors.foreground} />
     </TouchableOpacity>
   );
 }
@@ -68,6 +70,7 @@ interface BackButtonProps extends NavButtonProps {
   autoPlayOnMount?: boolean;
   wrapperStyle?: StyleProp<ViewStyle>;
   flat?: boolean;
+  color?: string;
 }
 
 export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(function BackButton(
@@ -79,6 +82,7 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
     exitOnPress = true,
     autoPlayOnMount = true,
     flat = true,
+    color,
   },
   ref,
 ) {
@@ -113,6 +117,7 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
         accessibilityLabel={accessibilityLabel}
         iconSize={30}
         flat={flat}
+        color={color}
       />
     </Animated.View>
   );

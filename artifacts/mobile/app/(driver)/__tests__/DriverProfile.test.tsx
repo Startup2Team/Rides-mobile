@@ -79,6 +79,10 @@ jest.mock('@/components/OfflineBanner', () => ({
   OfflineBanner: () => null,
 }));
 
+jest.mock('@/components/ImageGalleryPreview', () => ({
+  ImageGalleryPreview: () => null,
+}));
+
 jest.mock('@/hooks/useColors', () => ({
   useColors: () => ({
     foreground: '#111',
