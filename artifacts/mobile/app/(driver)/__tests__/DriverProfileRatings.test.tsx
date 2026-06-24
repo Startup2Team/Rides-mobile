@@ -128,7 +128,7 @@ jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
   const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
-  return { Feather: Icon, MaterialCommunityIcons: Icon };
+  return { Feather: Icon, MaterialCommunityIcons: Icon, FontAwesome: Icon };
 });
 
 jest.mock('expo-symbols', () => ({
@@ -158,6 +158,13 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+jest.mock('@/context/RideContext', () => ({
+  useRide: () => ({
+    rideHistory: [],
+    loadHistory: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
 jest.mock('@/persistence/driverRatingPersistence', () => ({
   loadStoredDriverRatings: jest.fn(() => Promise.resolve({ data: mockRatings, source: 'current' })),
 }));
@@ -179,10 +186,10 @@ describe('DriverProfileScreen rating summary', () => {
     jest.restoreAllMocks();
   });
 
-  test('profile displays no rating when none exists', async () => {
+  test('profile displays default rating when none exists', async () => {
     render(<DriverProfileScreen />);
 
-    await waitFor(() => expect(screen.getAllByText('No ratings yet')[0]).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('5.0')[0]).toBeTruthy());
     expect(screen.getByText('Notifications')).toBeTruthy();
     expect(screen.getByText('My Vehicles')).toBeTruthy();
     expect(screen.queryByText('Driver Documents')).toBeNull();
@@ -199,6 +206,6 @@ describe('DriverProfileScreen rating summary', () => {
 
     render(<DriverProfileScreen />);
 
-    await waitFor(() => expect(screen.getAllByText('4.5 (2)')[0]).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('4.5')[0]).toBeTruthy());
   });
 });

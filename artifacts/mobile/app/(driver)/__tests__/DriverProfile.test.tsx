@@ -63,6 +63,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
   MaterialCommunityIcons: () => null,
+  FontAwesome: () => null,
 }));
 
 jest.mock('expo-symbols', () => ({
@@ -120,6 +121,13 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
     entitlement: null,
     isLoading: false,
     rideCredits: 0,
+  }),
+}));
+
+jest.mock('@/context/RideContext', () => ({
+  useRide: () => ({
+    rideHistory: [],
+    loadHistory: jest.fn(() => Promise.resolve()),
   }),
 }));
 
