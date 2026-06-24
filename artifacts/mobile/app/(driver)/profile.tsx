@@ -145,7 +145,6 @@ export default function DriverProfileScreen() {
               <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{user?.name}</Text>
               {driverProfile?.isVerified === true ? <VerifiedBadge /> : null}
             </View>
-            <Text style={[styles.phone, { color: colors.mutedForeground }]}>{user?.phone}</Text>
           </TouchableOpacity>
         </View>
 
