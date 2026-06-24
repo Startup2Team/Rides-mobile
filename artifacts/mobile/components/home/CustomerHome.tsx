@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { useColors } from '@/hooks/useColors';
+import { computeTabBarHeight } from '@/constants/tabBar';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
 import { useHomeBooking } from '@/hooks/home/useHomeBooking';
 import { useHomeLocation } from '@/hooks/home/useHomeLocation';
@@ -526,7 +527,7 @@ export default function CustomerHome() {
         onCloseBooking={handleCloseBooking}
         onSheetHeightChange={setSheetHeight}
         colors={colors}
-        bottomPadding={BOOKING_SHEET_BOTTOM_PADDING}
+        bottomPadding={BOOKING_SHEET_BOTTOM_PADDING + computeTabBarHeight(insets.bottom)}
         homeCard={{
           userName: user?.name?.split(' ')[0] ?? '',
           locationStatus,
