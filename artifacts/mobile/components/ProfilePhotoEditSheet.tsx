@@ -1,6 +1,8 @@
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
+  Animated,
   Image,
   Modal,
   StyleSheet,
@@ -11,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SheetBackdrop } from './SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProfilePhotoEditSheetProps {
   visible: boolean;
@@ -31,26 +34,86 @@ export function ProfilePhotoEditSheet({
 }: ProfilePhotoEditSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  const name = user?.name ?? '';
+  const initials = name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?';
+  const isDriver = user?.mode === 'driver';
+  const gradientColors = isDriver ? (['#69A8F7', '#6674D8'] as const) : (['#9DBBE0', '#7984C3'] as const);
+
+  const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = React.useRef(new Animated.Value(500)).current;
+  const [shouldRender, setShouldRender] = React.useState(visible);
+
+  React.useEffect(() => {
+    if (visible) {
+      setShouldRender(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      backdropOpacity.setValue(0);
+      sheetTranslateY.setValue(500);
+      setShouldRender(false);
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: 500,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShouldRender(false);
+      onClose();
+    });
+  };
+
+  if (!shouldRender) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible={shouldRender}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={handleClose}
     >
       <SheetBackdrop
-        onPress={onClose}
+        onPress={handleClose}
+        animatedOpacity={backdropOpacity}
         blurIntensity={0}
         lightScrimOpacity={0.3}
         darkScrimOpacity={0.45}
       />
-      <View
+      <Animated.View
         style={[
           styles.sheetContainer,
           {
             backgroundColor: colors.background,
             borderColor: colors.border,
+            transform: [{ translateY: sheetTranslateY }],
             paddingBottom: Math.max(insets.bottom, 20),
           },
         ]}
@@ -61,15 +124,15 @@ export function ProfilePhotoEditSheet({
             {profileImage ? (
               <Image source={{ uri: profileImage }} style={styles.sheetAvatar} />
             ) : (
-              <View style={[styles.sheetAvatarPlaceholder, { backgroundColor: colors.muted }]}>
-                <Feather name="user" size={16} color={colors.mutedForeground} />
-              </View>
+              <LinearGradient colors={gradientColors} style={styles.sheetAvatar}>
+                <Text style={styles.sheetAvatarInitial}>{initials}</Text>
+              </LinearGradient>
             )}
             <Text style={[styles.sheetTitleText, { color: colors.foreground }]}>Edit profile picture</Text>
           </View>
           <TouchableOpacity
             style={[styles.sheetCloseButton, { backgroundColor: colors.muted }]}
-            onPress={onClose}
+            onPress={handleClose}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Close edit menu"
@@ -126,7 +189,7 @@ export function ProfilePhotoEditSheet({
             </>
           )}
         </View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -139,7 +202,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    borderTopWidth: 1,
     paddingTop: 16,
     paddingHorizontal: 20,
     zIndex: 90,
@@ -159,13 +221,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-  },
-  sheetAvatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sheetAvatarInitial: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
   },
   sheetTitleText: {
     fontFamily: 'Inter_600SemiBold',

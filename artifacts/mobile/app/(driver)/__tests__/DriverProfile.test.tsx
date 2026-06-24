@@ -20,6 +20,13 @@ jest.mock('react-native', () => {
     Pressable: host('Pressable'),
     Animated: {
       View: host('AnimatedView'),
+      Value: class {
+        setValue = jest.fn();
+        interpolate = jest.fn(() => 0);
+      },
+      timing: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+      spring: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+      parallel: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
     },
     StyleSheet: { create: (styles: object) => styles, flatten: (style: object) => style },
     Text: host('Text'),
