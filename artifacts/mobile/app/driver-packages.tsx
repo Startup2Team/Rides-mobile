@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
@@ -123,7 +124,7 @@ export default function DriverPackagesScreen() {
       subtitle={`Choose a package for your ${vehicleLabel}`}
       onBackPress={() => router.back()}
     />
-    <ScrollView
+    <GlassScrollView
       style={styles.root}
       contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
       scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
@@ -215,7 +216,7 @@ export default function DriverPackagesScreen() {
         size="lg"
       />
     </View> : null}
-   </ScrollView>
+    </GlassScrollView>
   </View>;
 }
 
