@@ -80,4 +80,3 @@ jest.mock('expo-blur', () => {
     BlurView: (props: any) => React.createElement(View, props),
   };
 });
-
