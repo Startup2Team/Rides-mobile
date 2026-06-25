@@ -150,7 +150,7 @@ export default function EditProfileScreen() {
           />
 
           <AppInput
-            label="Email (optional)"
+            label="Email"
             value={email}
             onChangeText={text => {
               setEmail(text);
@@ -163,33 +163,33 @@ export default function EditProfileScreen() {
           />
 
           {/* Phone — read-only */}
-          <TouchableOpacity
-            accessibilityLabel="Change Phone Number"
-            accessibilityRole="button"
-            activeOpacity={0.7}
-            onPress={() => router.push('/change-phone-number')}
-            style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}
-          >
-            <View style={styles.readOnlyLabelRow}>
-              <Text style={[styles.readOnlyLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
-              <View style={[styles.lockedBadge, { backgroundColor: colors.border }]}>
-                <Feather name="check-circle" size={10} color={colors.mutedForeground} />
-                <Text style={[styles.lockedText, { color: colors.mutedForeground }]}>Verified</Text>
+          <View style={styles.phoneFieldContainer}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
+            <TouchableOpacity
+              accessibilityLabel="Change Phone Number"
+              accessibilityRole="button"
+              activeOpacity={0.7}
+              onPress={() => router.push('/change-phone-number')}
+              style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}
+            >
+              <View style={styles.phoneValueRow}>
+                <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
+                <Text style={[styles.changePhoneText, { color: colors.primary }]}>Change</Text>
               </View>
-            </View>
-            <View style={styles.phoneValueRow}>
-              <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
-              <Text style={[styles.changePhoneText, { color: colors.primary }]}>Change</Text>
-            </View>
-          </TouchableOpacity>
-          <Text style={[styles.phoneHint, { color: colors.mutedForeground }]}>
-            A verification code will be sent before your number is updated.
-          </Text>
+            </TouchableOpacity>
+          </View>
 
-          <Text style={[styles.sectionHeader, { color: colors.foreground }]}>Emergency Contact</Text>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.emergencyHeaderGroup}>
+            <Text style={[styles.sectionHeader, { color: colors.foreground }]}>Emergency Contact</Text>
+            <Text style={[styles.emergencyHint, { color: colors.mutedForeground }]}>
+              Add a contact person we can reach out to in case of an emergency or safety incident during a ride.
+            </Text>
+          </View>
 
           <AppInput
-            label="Contact Name (optional)"
+            label="Contact Name"
             value={emergencyContactName}
             onChangeText={text => {
               setEmergencyContactName(text);
@@ -201,7 +201,7 @@ export default function EditProfileScreen() {
           />
 
           <AppInput
-            label="Contact Phone (optional)"
+            label="Contact Phone"
             value={emergencyContactPhone}
             onChangeText={text => {
               setEmergencyContactPhone(formatRwandaPhoneInput(text));
@@ -276,29 +276,35 @@ const styles = StyleSheet.create({
   readOnlyField: {
     borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 4,
+    height: 52,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
   },
-  readOnlyLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  readOnlyLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', flex: 1 },
-  lockedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  lockedText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
-  readOnlyValue: { fontSize: 16, fontFamily: 'Inter_400Regular' },
+  readOnlyValue: { fontSize: 15, fontFamily: 'Inter_400Regular' },
   phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  phoneFieldContainer: { gap: 6 },
+  fieldLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    marginLeft: 2,
+  },
+  emergencyHeaderGroup: {
+    gap: 6,
+    marginTop: 8,
+  },
   sectionHeader: {
     fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
-    marginTop: 8,
-    marginBottom: -4,
+  },
+  emergencyHint: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 18,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
   },
 });
