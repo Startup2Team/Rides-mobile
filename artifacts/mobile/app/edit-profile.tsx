@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -18,12 +19,13 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
+import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
-
-import { loadStoredProfileImage, saveStoredProfileImage } from '@/persistence/profilePersistence';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -34,60 +36,20 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [emergencyContactName, setEmergencyContactName] = useState(user?.emergencyContactName ?? '');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(user?.emergencyContactPhone ?? '');
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadStoredProfileImage().then(stored => {
-      if (stored.data) setProfileImage(stored.data);
-    });
-  }, []);
-
-  const handleImagePick = async (source: 'camera' | 'gallery') => {
-    let result: ImagePicker.ImagePickerResult;
-    if (source === 'camera') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Camera access is needed to take a photo.');
-        return;
-      }
-      result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Photo library access is needed.');
-        return;
-      }
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-    }
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setProfileImage(asset.uri);
-      await saveStoredProfileImage(asset.uri);
-      if (driverProfile) {
-        await saveDriverProfile({ ...driverProfile, profileImage: asset.uri });
-      }
-      showToast('Photo updated', 'info');
-    }
-  };
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+  }>({});
+  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
+  const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   const handlePickImage = () => {
-    Alert.alert('Change Profile Photo', '', [
-      { text: 'Take Photo', onPress: () => handleImagePick('camera') },
-      { text: 'Choose from Gallery', onPress: () => handleImagePick('gallery') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setShowPhotoSheet(true);
   };
 
   const validate = () => {
@@ -96,6 +58,19 @@ export default function EditProfileScreen() {
     if (name.trim().length < 2) errs.name = 'Name must be at least 2 characters';
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errs.email = 'Enter a valid email address';
+    }
+    if (emergencyContactName.trim() || emergencyContactPhone.trim()) {
+      if (!emergencyContactName.trim()) {
+        errs.emergencyContactName = 'Contact name is required';
+      }
+      if (!emergencyContactPhone.trim()) {
+        errs.emergencyContactPhone = 'Contact phone is required';
+      } else {
+        const normalized = normalizeRwandaPhoneNumber(emergencyContactPhone);
+        if (!normalized) {
+          errs.emergencyContactPhone = 'Enter a valid Rwanda phone number';
+        }
+      }
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -108,7 +83,12 @@ export default function EditProfileScreen() {
     }
     setSaving(true);
     await new Promise(r => setTimeout(r, 500));
-    await updateUser({ name: name.trim(), email: email.trim() || undefined });
+    await updateUser({
+      name: name.trim(),
+      email: email.trim() || undefined,
+      emergencyContactName: emergencyContactName.trim() || undefined,
+      emergencyContactPhone: emergencyContactPhone.trim() ? (normalizeRwandaPhoneNumber(emergencyContactPhone) || undefined) : undefined,
+    });
     setSaving(false);
     showToast('Profile updated', 'info');
     router.back();
@@ -170,7 +150,7 @@ export default function EditProfileScreen() {
           />
 
           <AppInput
-            label="Email (optional)"
+            label="Email"
             value={email}
             onChangeText={text => {
               setEmail(text);
@@ -183,28 +163,56 @@ export default function EditProfileScreen() {
           />
 
           {/* Phone — read-only */}
-          <TouchableOpacity
-            accessibilityLabel="Change Phone Number"
-            accessibilityRole="button"
-            activeOpacity={0.7}
-            onPress={() => router.push('/change-phone-number')}
-            style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}
-          >
-            <View style={styles.readOnlyLabelRow}>
-              <Text style={[styles.readOnlyLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
-              <View style={[styles.lockedBadge, { backgroundColor: colors.border }]}>
-                <Feather name="check-circle" size={10} color={colors.mutedForeground} />
-                <Text style={[styles.lockedText, { color: colors.mutedForeground }]}>Verified</Text>
+          <View style={styles.phoneFieldContainer}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Phone Number</Text>
+            <TouchableOpacity
+              accessibilityLabel="Change Phone Number"
+              accessibilityRole="button"
+              activeOpacity={0.7}
+              onPress={() => router.push('/change-phone-number')}
+              style={[styles.readOnlyField, { backgroundColor: colors.muted, borderColor: colors.border }]}
+            >
+              <View style={styles.phoneValueRow}>
+                <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
+                <Text style={[styles.changePhoneText, { color: colors.primary }]}>Change</Text>
               </View>
-            </View>
-            <View style={styles.phoneValueRow}>
-              <Text style={[styles.readOnlyValue, { color: colors.foreground }]}>{user?.phone}</Text>
-              <Text style={[styles.changePhoneText, { color: colors.primary }]}>Change</Text>
-            </View>
-          </TouchableOpacity>
-          <Text style={[styles.phoneHint, { color: colors.mutedForeground }]}>
-            A verification code will be sent before your number is updated.
-          </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.emergencyHeaderGroup}>
+            <Text style={[styles.sectionHeader, { color: colors.foreground }]}>Emergency Contact</Text>
+            <Text style={[styles.emergencyHint, { color: colors.mutedForeground }]}>
+              Add a contact person we can reach out to in case of an emergency or safety incident during a ride.
+            </Text>
+          </View>
+
+          <AppInput
+            label="Contact Name"
+            value={emergencyContactName}
+            onChangeText={text => {
+              setEmergencyContactName(text);
+              if (errors.emergencyContactName) setErrors(prev => ({ ...prev, emergencyContactName: undefined }));
+            }}
+            error={errors.emergencyContactName}
+            autoCapitalize="words"
+            returnKeyType="next"
+          />
+
+          <AppInput
+            label="Contact Phone"
+            value={emergencyContactPhone}
+            onChangeText={text => {
+              setEmergencyContactPhone(formatRwandaPhoneInput(text));
+              if (errors.emergencyContactPhone) setErrors(prev => ({ ...prev, emergencyContactPhone: undefined }));
+            }}
+            error={errors.emergencyContactPhone}
+            keyboardType="phone-pad"
+            placeholder="e.g. 0788000000"
+            autoCapitalize="none"
+            returnKeyType="done"
+          />
         </View>
 
         <AppButton
@@ -215,6 +223,24 @@ export default function EditProfileScreen() {
           size="lg"
         />
       </GlassScrollView>
+
+      <ProfilePhotoEditSheet
+        visible={showPhotoSheet}
+        onClose={() => setShowPhotoSheet(false)}
+        profileImage={profileImage}
+        onTakePhoto={async () => {
+          const uri = await handleImagePick('camera');
+          setShowPhotoSheet(false);
+        }}
+        onChoosePhoto={async () => {
+          const uri = await handleImagePick('gallery');
+          setShowPhotoSheet(false);
+        }}
+        onDeletePhoto={profileImage ? async () => {
+          await handleDeletePhoto();
+          setShowPhotoSheet(false);
+        } : undefined}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -250,23 +276,35 @@ const styles = StyleSheet.create({
   readOnlyField: {
     borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 4,
+    height: 52,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
   },
-  readOnlyLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  readOnlyLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', flex: 1 },
-  lockedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  lockedText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
-  readOnlyValue: { fontSize: 16, fontFamily: 'Inter_400Regular' },
+  readOnlyValue: { fontSize: 15, fontFamily: 'Inter_400Regular' },
   phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  phoneFieldContainer: { gap: 6 },
+  fieldLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    marginLeft: 2,
+  },
+  emergencyHeaderGroup: {
+    gap: 6,
+    marginTop: 8,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  emergencyHint: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 18,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
+  },
 });

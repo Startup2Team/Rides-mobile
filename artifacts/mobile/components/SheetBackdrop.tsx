@@ -36,7 +36,9 @@ export function SheetBackdrop({
 
   const content = (
     <>
-      <BlurView intensity={blurIntensity} tint={glassTint} style={StyleSheet.absoluteFill} />
+      {blurIntensity > 0 && (
+        <BlurView intensity={blurIntensity} tint={glassTint} style={StyleSheet.absoluteFill} />
+      )}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }]} />
     </>
   );

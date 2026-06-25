@@ -70,7 +70,6 @@ export default function DriverStats() {
         title="Statistics"
         subtitle="Track your driver performance"
         showBack={false}
-        titleAccessory={<View style={[styles.todayChip, { backgroundColor: colors.primaryHex + '14' }]}><Text style={[styles.todayChipText, { color: colors.primary }]}>Today</Text></View>}
       />
       <ScrollView
         style={styles.container}

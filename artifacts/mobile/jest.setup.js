@@ -59,3 +59,24 @@ jest.mock('expo-secure-store', () => {
     __clear: () => storage.clear(),
   };
 });
+
+jest.mock('expo-image-picker', () => ({
+  requestCameraPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  requestMediaLibraryPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  launchCameraAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
+  launchImageLibraryAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
+}));
+
+jest.mock('@/context/ToastContext', () => ({
+  useToast: () => ({
+    showToast: jest.fn(),
+  }),
+}));
+
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    BlurView: (props: any) => React.createElement(View, props),
+  };
+});

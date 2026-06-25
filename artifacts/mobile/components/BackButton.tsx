@@ -20,6 +20,8 @@ interface CircleNavButtonProps {
   style?: StyleProp<ViewStyle>;
   accessibilityLabel: string;
   iconSize?: number;
+  flat?: boolean;
+  color?: string;
 }
 
 function CircleNavButton({
@@ -28,6 +30,8 @@ function CircleNavButton({
   style,
   accessibilityLabel,
   iconSize = 24,
+  flat = false,
+  color,
 }: CircleNavButtonProps) {
   const colors = useColors();
 
@@ -38,12 +42,12 @@ function CircleNavButton({
       accessibilityLabel={accessibilityLabel}
       style={[
         styles.button,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        flat ? styles.flatButton : { backgroundColor: colors.card, borderColor: colors.border },
         style,
       ]}
       activeOpacity={0.8}
     >
-      <Feather name={icon} size={iconSize} color={colors.foreground} />
+      <Feather name={icon} size={iconSize} color={color ?? colors.foreground} />
     </TouchableOpacity>
   );
 }
@@ -65,6 +69,8 @@ interface BackButtonProps extends NavButtonProps {
   /** Slide in from the left when mounted. Default true. */
   autoPlayOnMount?: boolean;
   wrapperStyle?: StyleProp<ViewStyle>;
+  flat?: boolean;
+  color?: string;
 }
 
 export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(function BackButton(
@@ -75,6 +81,8 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
     accessibilityLabel = 'Go back',
     exitOnPress = true,
     autoPlayOnMount = true,
+    flat = true,
+    color,
   },
   ref,
 ) {
@@ -107,7 +115,9 @@ export const BackButton = React.forwardRef<BackButtonHandle, BackButtonProps>(fu
         onPress={handlePress}
         style={style}
         accessibilityLabel={accessibilityLabel}
-        iconSize={24}
+        iconSize={30}
+        flat={flat}
+        color={color}
       />
     </Animated.View>
   );
@@ -190,5 +200,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  flatButton: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
 });

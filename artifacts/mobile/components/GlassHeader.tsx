@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import React from 'react';
+import { router, usePathname } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -19,8 +19,8 @@ export function useGlassHeaderMetrics() {
 
   return {
     headerInset,
-    contentTop: headerInset + 90,
-    indicatorTop: headerInset + 88,
+    contentTop: headerInset + 62,
+    indicatorTop: headerInset + 60,
   };
 }
 
@@ -33,6 +33,37 @@ interface GlassHeaderProps {
   titleAccessory?: React.ReactNode;
 }
 
+// Global store to track scroll states per route pathname
+const listeners = new Map<string, Set<(isScrolled: boolean) => void>>();
+const states = new Map<string, boolean>();
+
+export const headerScrollStore = {
+  set(pathname: string, isScrolled: boolean) {
+    if (states.get(pathname) === isScrolled) return;
+    states.set(pathname, isScrolled);
+    const pathListeners = listeners.get(pathname);
+    if (pathListeners) {
+      pathListeners.forEach(listener => listener(isScrolled));
+    }
+  },
+  get(pathname: string) {
+    return states.get(pathname) ?? false;
+  },
+  subscribe(pathname: string, listener: (isScrolled: boolean) => void) {
+    if (!listeners.has(pathname)) {
+      listeners.set(pathname, new Set());
+    }
+    listeners.get(pathname)!.add(listener);
+    return () => {
+      listeners.get(pathname)?.delete(listener);
+      if (listeners.get(pathname)?.size === 0) {
+        listeners.delete(pathname);
+        states.delete(pathname);
+      }
+    };
+  },
+};
+
 export function GlassHeader({
   title,
   subtitle,
@@ -44,29 +75,30 @@ export function GlassHeader({
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  const materialRgb = scheme === 'dark' ? '0,0,0' : '245,245,245';
   const glassTint = scheme === 'dark' ? 'dark' : 'light';
+  const pathname = typeof usePathname === 'function' ? usePathname() : '/mock-path';
+  const [isScrolled, setIsScrolled] = useState(() => headerScrollStore.get(pathname));
+
+  useEffect(() => {
+    setIsScrolled(headerScrollStore.get(pathname));
+    return headerScrollStore.subscribe(pathname, setIsScrolled);
+  }, [pathname]);
 
   return (
     <View
       style={[
         styles.header,
         {
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 0,
+          backgroundColor: isScrolled
+            ? (scheme === 'dark' ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)')
+            : 'transparent',
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: isScrolled ? colors.border : 'transparent',
         },
       ]}
     >
-      <BlurView intensity={60} tint={glassTint} style={StyleSheet.absoluteFill} />
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          `rgba(${materialRgb},0.52)`,
-          `rgba(${materialRgb},0.22)`,
-          `rgba(${materialRgb},0)`,
-        ]}
-        locations={[0, 0.48, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      <BlurView intensity={isScrolled ? 90 : 0} tint={glassTint} style={StyleSheet.absoluteFill} />
       <View style={styles.headerContent}>
         {showBack ? (
           <BackButton exitOnPress={false} onPress={onBackPress ?? (() => router.back())} />
@@ -80,11 +112,6 @@ export function GlassHeader({
             </Text>
             {titleAccessory}
           </View>
-          {subtitle && (
-            <Text style={[styles.headerSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          )}
         </View>
         {right ?? <View style={styles.sideSlot} />}
       </View>
@@ -99,7 +126,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingBottom: 14,
+    paddingBottom: 0,
     overflow: 'hidden',
   },
   headerContent: {

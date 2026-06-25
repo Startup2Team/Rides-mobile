@@ -67,6 +67,8 @@ export interface User {
   mode: AppMode;
   isDriver: boolean;
   createdAt: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 }
 
 export type PaymentProvider = 'mtn' | 'airtel' | 'cash';

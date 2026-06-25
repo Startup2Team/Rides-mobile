@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { useColors } from '@/hooks/useColors';
+import { computeTabBarHeight } from '@/constants/tabBar';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
 import { useHomeBooking } from '@/hooks/home/useHomeBooking';
 import { useHomeLocation } from '@/hooks/home/useHomeLocation';
@@ -138,19 +139,44 @@ export default function CustomerHome() {
     userLocation,
   });
   pickupSetterRef.current = setPickup;
-  const { triggerMapPicker } = useLocalSearchParams<{ triggerMapPicker?: 'pickup' | 'dropoff' }>();
+  const {
+    triggerMapPicker,
+    mapPickerLat,
+    mapPickerLng,
+  } = useLocalSearchParams<{
+    triggerMapPicker?: 'pickup' | 'dropoff';
+    mapPickerLat?: string;
+    mapPickerLng?: string;
+  }>();
 
   useEffect(() => {
     if (triggerMapPicker) {
       const target = triggerMapPicker;
-      router.setParams({ triggerMapPicker: undefined });
-      const coords = target === 'dropoff'
-        ? (destination ?? userLocation)
-        : { latitude: pickup.latitude, longitude: pickup.longitude };
+      router.setParams({
+        triggerMapPicker: undefined,
+        mapPickerLat: undefined,
+        mapPickerLng: undefined,
+      });
+
+      let coords;
+      if (mapPickerLat && mapPickerLng) {
+        const parsedLat = parseFloat(mapPickerLat);
+        const parsedLng = parseFloat(mapPickerLng);
+        if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+          coords = { latitude: parsedLat, longitude: parsedLng };
+        }
+      }
+
+      if (!coords) {
+        coords = target === 'dropoff'
+          ? (destination ?? gpsLocation ?? userLocation)
+          : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation));
+      }
+
       setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
       setMapPicker(target);
     }
-  }, [triggerMapPicker, destination, userLocation, pickup]);
+  }, [triggerMapPicker, mapPickerLat, mapPickerLng, destination, gpsLocation, userLocation, pickup]);
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
@@ -526,7 +552,7 @@ export default function CustomerHome() {
         onCloseBooking={handleCloseBooking}
         onSheetHeightChange={setSheetHeight}
         colors={colors}
-        bottomPadding={BOOKING_SHEET_BOTTOM_PADDING}
+        bottomPadding={BOOKING_SHEET_BOTTOM_PADDING + computeTabBarHeight(insets.bottom)}
         homeCard={{
           userName: user?.name?.split(' ')[0] ?? '',
           locationStatus,
@@ -548,7 +574,10 @@ export default function CustomerHome() {
           gpsLocation,
           onOpenLocationSearch: openLocationSearch,
           onUseMap: (target, location) => {
-            setPinCoords({ latitude: location.latitude, longitude: location.longitude });
+            const coords = target === 'dropoff'
+              ? (destination ?? gpsLocation ?? userLocation ?? location)
+              : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation ?? location));
+            setPinCoords({ latitude: coords.latitude, longitude: coords.longitude });
             setMapPicker(target);
           },
           onUseGpsPickup: () => gpsLocation && setPickup({

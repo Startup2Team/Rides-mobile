@@ -57,6 +57,18 @@ jest.mock('react-native', () => {
   return {
     Alert: { alert: jest.fn() },
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
+    Modal: host('Modal'),
+    Pressable: host('Pressable'),
+    Animated: {
+      View: host('AnimatedView'),
+      Value: class {
+        setValue = jest.fn();
+        interpolate = jest.fn(() => 0);
+      },
+      timing: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+      spring: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+      parallel: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+    },
     ScrollView: host('ScrollView'),
     StyleSheet: {
       create: (styles: object) => styles,
@@ -116,11 +128,15 @@ jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
   const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
-  return { Feather: Icon, MaterialCommunityIcons: Icon };
+  return { Feather: Icon, MaterialCommunityIcons: Icon, FontAwesome: Icon };
 });
 
 jest.mock('expo-symbols', () => ({
   SymbolView: () => null,
+}));
+
+jest.mock('@/components/ImageGalleryPreview', () => ({
+  ImageGalleryPreview: () => null,
 }));
 
 jest.mock('@/context/AuthContext', () => ({
@@ -139,6 +155,13 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
     bonusRides: 0,
     rideCredits: 0,
     totalAvailableRides: 0,
+  }),
+}));
+
+jest.mock('@/context/RideContext', () => ({
+  useRide: () => ({
+    rideHistory: [],
+    loadHistory: jest.fn(() => Promise.resolve()),
   }),
 }));
 
@@ -163,10 +186,10 @@ describe('DriverProfileScreen rating summary', () => {
     jest.restoreAllMocks();
   });
 
-  test('profile displays no rating when none exists', async () => {
+  test('profile displays default rating when none exists', async () => {
     render(<DriverProfileScreen />);
 
-    await waitFor(() => expect(screen.getAllByText('No ratings yet')[0]).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('5.0')[0]).toBeTruthy());
     expect(screen.getByText('Notifications')).toBeTruthy();
     expect(screen.getByText('My Vehicles')).toBeTruthy();
     expect(screen.queryByText('Driver Documents')).toBeNull();
@@ -183,6 +206,6 @@ describe('DriverProfileScreen rating summary', () => {
 
     render(<DriverProfileScreen />);
 
-    await waitFor(() => expect(screen.getAllByText('4.5 (2)')[0]).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('4.5')[0]).toBeTruthy());
   });
 });

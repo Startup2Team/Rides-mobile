@@ -9,7 +9,9 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { headerScrollStore } from '@/components/GlassHeader';
 
 interface GlassScrollViewProps extends ScrollViewProps {
   indicatorTop?: number;
@@ -32,6 +34,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
   ) => {
     const colors = useColors();
     const insets = useSafeAreaInsets();
+    const pathname = typeof usePathname === 'function' ? usePathname() : '/mock-path';
     const scrollY = React.useRef(new Animated.Value(0)).current;
     const indicatorOpacity = React.useRef(new Animated.Value(0)).current;
     const hideIndicatorTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,6 +63,10 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       const offsetY = event.nativeEvent.contentOffset.y;
       scrollY.setValue(offsetY);
       indicatorOpacity.setValue(1);
+
+      // Update header scroll store
+      headerScrollStore?.set(pathname, offsetY > 2);
+
       if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
       hideIndicatorTimeout.current = setTimeout(() => {
         Animated.timing(indicatorOpacity, {

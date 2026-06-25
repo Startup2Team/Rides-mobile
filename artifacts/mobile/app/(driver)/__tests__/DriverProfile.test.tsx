@@ -15,8 +15,19 @@ jest.mock('react-native', () => {
   return {
     Alert: { alert: mockAlert },
     Image: host('Image'),
+    Modal: host('Modal'),
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
     Pressable: host('Pressable'),
+    Animated: {
+      View: host('AnimatedView'),
+      Value: class {
+        setValue = jest.fn();
+        interpolate = jest.fn(() => 0);
+      },
+      timing: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+      spring: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+      parallel: jest.fn(() => ({ start: (cb?: any) => cb?.() })),
+    },
     StyleSheet: { create: (styles: object) => styles, flatten: (style: object) => style },
     Text: host('Text'),
     TouchableOpacity: host('TouchableOpacity'),
@@ -52,6 +63,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
   MaterialCommunityIcons: () => null,
+  FontAwesome: () => null,
 }));
 
 jest.mock('expo-symbols', () => ({
@@ -77,6 +89,10 @@ jest.mock('@/components/VerifiedBadge', () => ({
 
 jest.mock('@/components/OfflineBanner', () => ({
   OfflineBanner: () => null,
+}));
+
+jest.mock('@/components/ImageGalleryPreview', () => ({
+  ImageGalleryPreview: () => null,
 }));
 
 jest.mock('@/hooks/useColors', () => ({
@@ -105,6 +121,13 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
     entitlement: null,
     isLoading: false,
     rideCredits: 0,
+  }),
+}));
+
+jest.mock('@/context/RideContext', () => ({
+  useRide: () => ({
+    rideHistory: [],
+    loadHistory: jest.fn(() => Promise.resolve()),
   }),
 }));
 

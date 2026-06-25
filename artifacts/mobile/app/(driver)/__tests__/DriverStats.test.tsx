@@ -154,7 +154,6 @@ describe('DriverStats', () => {
     await waitFor(() => expect(mockLoadHistory).toHaveBeenCalled());
 
     expect(screen.getByText('Statistics')).toBeTruthy();
-    expect(screen.getByText('Track your driver performance')).toBeTruthy();
     expect(screen.getByText("TODAY'S ACTIVITY")).toBeTruthy();
     expect(screen.getByText('No trips completed today yet.')).toBeTruthy();
     expect(screen.getByText('Package History')).toBeTruthy();

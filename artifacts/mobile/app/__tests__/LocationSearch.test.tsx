@@ -222,12 +222,16 @@ describe('LocationSearchScreen Route-Based Tests', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  test('tapping choose on map redirects to index with triggerMapPicker', () => {
+  test('tapping choose on map redirects to index with triggerMapPicker and coordinates', () => {
     render(<LocationSearchScreen />);
     fireEvent.press(screen.getByText('Choose on map'));
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: '/(tabs)',
-      params: { triggerMapPicker: 'pickup' },
+      params: {
+        triggerMapPicker: 'pickup',
+        mapPickerLat: '-1.95',
+        mapPickerLng: '30.07',
+      },
     });
   });
 

@@ -79,6 +79,7 @@ export function MapPickerOverlay({
       </View>
 
       <BackButton
+        flat={false}
         style={[styles.mapPickerBack, { top: topInset + (Platform.OS === 'web' ? 67 : 0) + 12 }]}
         onPress={onClose}
       />
