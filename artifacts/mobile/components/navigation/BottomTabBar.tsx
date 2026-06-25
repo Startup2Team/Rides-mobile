@@ -147,13 +147,6 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
   const paddingBottomVal = Math.max(insets.bottom, TAB_BAR_SAFE_BOTTOM);
   const totalHeight = computeTabBarHeight(insets.bottom);
 
-  const focusedRoute = state.routes[state.index];
-  const focusedOptions = descriptors[focusedRoute.key].options;
-  const isHidden = focusedOptions.tabBarStyle?.display === 'none';
-
-  const paddingBottomVal = Math.max(insets.bottom, TAB_BAR_SAFE_BOTTOM);
-  const totalHeight = computeTabBarHeight(insets.bottom);
-
   return (
     <View
       style={[
