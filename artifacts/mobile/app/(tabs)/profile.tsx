@@ -100,7 +100,7 @@ export default function ProfileScreen() {
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
   const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
   const nameParts = user?.name ? user.name.trim().split(/\s+/) : [];
-  const firstName = nameParts[0] || '';
+  const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase() : '';
   const lastName = nameParts.slice(1).join(' ').toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
 
@@ -463,12 +463,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     lineHeight: 38,
     letterSpacing: -0.8,
+    flexShrink: 1,
   },
   nameLast: {
     fontSize: 34,
     fontFamily: 'Inter_700Bold',
     lineHeight: 38,
     letterSpacing: -0.8,
+    flexShrink: 1,
   },
   ratingBadge: {
     flexDirection: 'row',
