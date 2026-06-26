@@ -137,10 +137,21 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, alignItems: 'center', minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    textShadowColor: 'rgba(0,0,0,0.16)',
-    textShadowRadius: 8,
+    ...Platform.select({
+      ios: {
+        fontSize: 17,
+        fontWeight: '600',
+      },
+      android: {
+        fontSize: 20,
+        fontFamily: 'sans-serif-medium',
+        fontWeight: 'normal',
+      },
+      default: {
+        fontSize: 18,
+        fontWeight: '600',
+      },
+    }),
   },
   headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   sideSlot: { width: 44, height: 44 },
