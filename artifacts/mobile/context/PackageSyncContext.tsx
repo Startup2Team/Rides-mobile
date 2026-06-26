@@ -51,9 +51,19 @@ export function PackageSyncProvider({
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
     const operation = (async () => {
       if (mountedRef.current) setIsRefreshing(true);
+      
+      const startTime = Date.now();
       const result = await offerSourceRepository.refreshOfferSource()
         .then(value => ({ status: 'fulfilled' as const, value }))
         .catch(reason => ({ status: 'rejected' as const, reason }));
+
+      // Enforce a minimum spinner spin duration of 800ms for smooth transitions (disabled in tests)
+      const elapsedTime = Date.now() - startTime;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      if (elapsedTime < minDuration) {
+        await new Promise(resolve => setTimeout(resolve, minDuration - elapsedTime));
+      }
+
       if (!mountedRef.current) return;
 
       if (result.status === 'fulfilled') {

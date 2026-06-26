@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { headerScrollStore } from '@/components/GlassHeader';
+import * as Haptics from 'expo-haptics';
+
 
 interface GlassScrollViewProps extends ScrollViewProps {
   indicatorTop?: number;
@@ -53,6 +55,8 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     });
 
     const snapAnim = React.useRef(new Animated.Value(0)).current;
+    const hapticTriggered = React.useRef(false);
+    const pullProgress = React.useRef(new Animated.Value(0)).current;
 
     React.useEffect(() => {
       Animated.spring(snapAnim, {
@@ -61,29 +65,53 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
         friction: 8,
         useNativeDriver: false,
       }).start();
+
+      if (refreshing) {
+        Animated.timing(pullProgress, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      } else {
+        hapticTriggered.current = false;
+        Animated.timing(pullProgress, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
     }, [refreshing]);
 
     const insetTop = props.contentInset?.top ?? 0;
     const restingY = Platform.OS === 'ios' ? -insetTop : 0;
     const pullThreshold = restingY - 55;
 
-    const refreshOpacity = refreshing ? 1 : scrollY.interpolate({
-      inputRange: [pullThreshold, restingY],
-      outputRange: [1, 0],
+    const refreshOpacity = pullProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
       extrapolate: 'clamp',
     });
 
-    const refreshScale = refreshing ? 1 : scrollY.interpolate({
-      inputRange: [pullThreshold, restingY],
-      outputRange: [1.1, 0.5],
+    const refreshScale = pullProgress.interpolate({
+      inputRange: [0, 0.8, 1],
+      outputRange: [0.6, 1.2, 1.35],
       extrapolate: 'clamp',
     });
 
-    const refreshTranslateY = refreshing ? 18 : scrollY.interpolate({
-      inputRange: [pullThreshold, restingY],
-      outputRange: [18, 0],
+    const refreshTranslateY = pullProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 18],
       extrapolate: 'clamp',
     });
+
+    const rotate = scrollY.interpolate({
+      inputRange: [pullThreshold, restingY],
+      outputRange: ['360deg', '0deg'],
+      extrapolate: 'clamp',
+    });
+
+
+
 
 
     const canScroll = scrollMetrics.contentHeight > scrollMetrics.viewportHeight + 12;
@@ -106,6 +134,22 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       scrollY.setValue(offsetY);
       indicatorOpacity.setValue(1);
 
+      if (onRefresh && !refreshing) {
+        const dragDistance = restingY - offsetY;
+        const progress = Math.min(1, Math.max(0, dragDistance / 55));
+        pullProgress.setValue(progress);
+
+        // Trigger a light tactile haptic impact when pulling past the refresh threshold
+        if (offsetY <= pullThreshold) {
+          if (!hapticTriggered.current) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            hapticTriggered.current = true;
+          }
+        } else if (offsetY > pullThreshold + 10) {
+          hapticTriggered.current = false;
+        }
+      }
+
       // Update header scroll store
       headerScrollStore?.set(pathname, offsetY > 2);
 
@@ -119,6 +163,8 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       }, 700);
       onScroll?.(event);
     };
+
+
 
     const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
@@ -146,11 +192,17 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
                 transform: [
                   { translateY: refreshTranslateY },
                   { scale: refreshScale },
+                  { rotate: refreshing ? '0deg' : rotate },
                 ],
               },
             ]}
           >
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator
+              size="small"
+              color={colors.primary}
+              animating={refreshing}
+              hidesWhenStopped={false}
+            />
           </Animated.View>
         )}
         <ScrollView
