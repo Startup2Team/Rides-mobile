@@ -70,7 +70,10 @@ jest.mock('react-native', () => {
       out: jest.fn((value: unknown) => value),
     },
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
-    ScrollView: host('ScrollView'),
+    RefreshControl: host('RefreshControl'),
+    ScrollView: React.forwardRef(({ children, refreshControl, ...props }: any, ref: any) =>
+      React.createElement('ScrollView', { ...props, ref }, refreshControl, children)
+    ),
     StyleSheet: {
       create: (styles: object) => styles,
       flatten: (style: object) => style,
@@ -111,6 +114,25 @@ jest.mock('expo-linear-gradient', () => {
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+jest.mock('@/components/GlassScrollView', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    GlassScrollView: React.forwardRef(({ children, onRefresh, refreshing, ...props }: any, ref: any) => (
+      <View
+        ref={ref}
+        testID="packages-refresh-control"
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        {...props}
+      >
+        {children}
+      </View>
+    )),
+  };
+});
+
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -432,7 +454,7 @@ describe('DriverPackagesScreen', () => {
     render(<DriverPackagesScreen />);
 
     expect(screen.getByText('Using cached package data')).toBeTruthy();
-    fireEvent.press(screen.getByText('Refresh'));
+    fireEvent(screen.getByTestId('packages-refresh-control'), 'refresh');
     expect(mockRefreshPackages).toHaveBeenCalled();
   });
 });

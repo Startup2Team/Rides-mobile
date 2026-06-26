@@ -1,8 +1,11 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   ScrollView,
   ScrollViewProps,
   StyleSheet,
@@ -12,10 +15,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { headerScrollStore } from '@/components/GlassHeader';
+import * as Haptics from 'expo-haptics';
+
 
 interface GlassScrollViewProps extends ScrollViewProps {
   indicatorTop?: number;
   indicatorBottom?: number;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  refreshIndicatorTop?: number;
 }
 
 export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps>(
@@ -28,6 +36,9 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       onContentSizeChange,
       onLayout,
       scrollEventThrottle = 16,
+      onRefresh,
+      refreshing = false,
+      refreshIndicatorTop,
       ...props
     },
     ref,
@@ -43,6 +54,67 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       viewportHeight: 1,
       indicatorTrackHeight: 1,
     });
+
+    const snapAnim = React.useRef(new Animated.Value(0)).current;
+    const hapticTriggered = React.useRef(false);
+    const pullProgress = React.useRef(new Animated.Value(0)).current;
+    const isDragging = React.useRef(false);
+
+    React.useEffect(() => {
+      Animated.timing(snapAnim, {
+        toValue: refreshing ? 48 : 0,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }).start();
+
+      if (refreshing) {
+        Animated.timing(pullProgress, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      } else {
+        hapticTriggered.current = false;
+        Animated.timing(pullProgress, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    }, [refreshing]);
+
+    const insetTop = props.contentInset?.top ?? 0;
+    const restingY = Platform.OS === 'ios' ? -insetTop : 0;
+    const pullThreshold = restingY - 55;
+
+    const refreshOpacity = pullProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    });
+
+    const refreshScale = pullProgress.interpolate({
+      inputRange: [0, 0.8, 1],
+      outputRange: [0.6, 1.2, 1.35],
+      extrapolate: 'clamp',
+    });
+
+    const refreshTranslateY = pullProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 18],
+      extrapolate: 'clamp',
+    });
+
+    const rotate = scrollY.interpolate({
+      inputRange: [pullThreshold, restingY],
+      outputRange: ['360deg', '0deg'],
+      extrapolate: 'clamp',
+    });
+
+
+
+
 
     const canScroll = scrollMetrics.contentHeight > scrollMetrics.viewportHeight + 12;
     const indicatorHeight = Math.max(
@@ -64,6 +136,22 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       scrollY.setValue(offsetY);
       indicatorOpacity.setValue(1);
 
+      if (onRefresh && !refreshing && isDragging.current) {
+        const dragDistance = restingY - offsetY;
+        const progress = Math.min(1, Math.max(0, dragDistance / 55));
+        pullProgress.setValue(progress);
+
+        // Trigger a light tactile haptic impact when pulling past the refresh threshold
+        if (offsetY <= pullThreshold) {
+          if (!hapticTriggered.current) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            hapticTriggered.current = true;
+          }
+        } else if (offsetY > pullThreshold + 10) {
+          hapticTriggered.current = false;
+        }
+      }
+
       // Update header scroll store
       headerScrollStore?.set(pathname, offsetY > 2);
 
@@ -78,6 +166,30 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       onScroll?.(event);
     };
 
+
+
+    const handleScrollBeginDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isDragging.current = true;
+      props.onScrollBeginDrag?.(event);
+    };
+
+    const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isDragging.current = false;
+      const offsetY = event.nativeEvent.contentOffset.y;
+      if (onRefresh && !refreshing) {
+        if (offsetY < pullThreshold) {
+          onRefresh();
+        } else {
+          Animated.timing(pullProgress, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+          }).start();
+        }
+      }
+      props.onScrollEndDrag?.(event);
+    };
+
     React.useEffect(() => {
       return () => {
         if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
@@ -86,12 +198,37 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
 
     return (
       <View style={styles.wrap}>
+        {onRefresh && (
+          <Animated.View
+            style={[
+              styles.refreshContainer,
+              {
+                top: refreshIndicatorTop ?? (indicatorTop - 44),
+                opacity: refreshOpacity,
+                transform: [
+                  { translateY: refreshTranslateY },
+                  { scale: refreshScale },
+                  { rotate: refreshing ? '0deg' : rotate },
+                ],
+              },
+            ]}
+          >
+            <ActivityIndicator
+              size="small"
+              color={colors.primary}
+              animating={refreshing}
+              hidesWhenStopped={false}
+            />
+          </Animated.View>
+        )}
         <ScrollView
           {...props}
           ref={ref}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={scrollEventThrottle}
           onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
           onContentSizeChange={(contentWidth, contentHeight) => {
             setScrollMetrics(prev => ({ ...prev, contentHeight }));
             onContentSizeChange?.(contentWidth, contentHeight);
@@ -102,6 +239,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
             onLayout?.(event);
           }}
         >
+          {onRefresh && <Animated.View style={{ height: snapAnim }} />}
           {children}
         </ScrollView>
         {canScroll && (
@@ -149,5 +287,13 @@ const styles = StyleSheet.create({
   scrollIndicatorThumb: {
     width: 2,
     borderRadius: 2,
+  },
+  refreshContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

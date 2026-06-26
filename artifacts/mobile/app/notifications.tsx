@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Alert,
   Dimensions,
@@ -239,14 +239,31 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
-  const { currentRide, pendingRequest, rideHistory } = useRide();
+  const { currentRide, pendingRequest, rideHistory, loadHistory } = useRide();
   const { entitlement, isLoading: isEntitlementLoading, totalAvailableRides } = useDriverEntitlement();
   const { showToast } = useToast();
   const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const readStateRef = useRef<NotificationReadState>({ read: new Set(), unread: new Set() });
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await loadHistory();
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [loadHistory]);
   const [swipeResetKey, setSwipeResetKey] = useState(0);
   const swipeRefs = useRef<Record<string, Swipeable | null>>({});
   const openRowId = useRef<string | null>(null);
@@ -535,6 +552,9 @@ export default function NotificationsScreen() {
           { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
           notifications.length === 0 && { flex: 1 },
         ]}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         {notifications.length === 0 ? (
           <EmptyState color={colors.primaryHex} driverMode={driverMode} mutedColor={colors.mutedForeground} />

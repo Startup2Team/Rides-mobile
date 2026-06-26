@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, Image, Modal, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
@@ -41,6 +42,23 @@ export default function DriverVehicleDetailsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { driverProfile, user, saveDriverProfile } = useAuth();
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      // Simulate status check/reload delay
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, []);
   const params = useLocalSearchParams<{ vehicleId?: string; updateDocument?: string }>();
   const vehicleId = typeof params.vehicleId === 'string' ? params.vehicleId : null;
   const requestedUpdateDocument = typeof params.updateDocument === 'string' ? params.updateDocument : null;
@@ -251,13 +269,17 @@ export default function DriverVehicleDetailsScreen() {
         subtitle="Review vehicle information and documents"
         onBackPress={() => router.back()}
       />
-      <ScrollView
+      <GlassScrollView
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
           paddingHorizontal: 16,
           gap: 16,
         }}
+        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</Text>
@@ -418,7 +440,7 @@ export default function DriverVehicleDetailsScreen() {
           </View>
         ) : null}
 
-      </ScrollView>
+      </GlassScrollView>
 
       <ImageGalleryPreview
         images={galleryItems}

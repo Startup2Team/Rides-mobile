@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardingData';
 import { useAuth } from '@/context/AuthContext';
@@ -186,7 +187,7 @@ export default function DriverPackagePaymentScreen() {
 
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
-    <ScrollView
+    <GlassScrollView
       style={styles.root}
       contentContainerStyle={[
         styles.paymentScrollContent,
@@ -297,7 +298,7 @@ export default function DriverPackagePaymentScreen() {
           ) : null}
         </View>
       )}
-    </ScrollView>
+    </GlassScrollView>
   </View>;
 }
 

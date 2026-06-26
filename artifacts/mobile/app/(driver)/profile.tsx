@@ -40,7 +40,6 @@ export default function DriverProfileScreen() {
   const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
-
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
@@ -210,7 +209,7 @@ export default function DriverProfileScreen() {
       </View>
 
       <GlassScrollView
-        indicatorTop={0}
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: 8,
           paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,

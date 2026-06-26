@@ -36,7 +36,31 @@ export default function DriverDocumentsScreen() {
   const isDark = useColorScheme() === 'dark';
   const { driverProfile } = useAuth();
   const [documents, setDocuments] = React.useState<DriverDocuments | null>(null);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeKey, setActiveKey] = React.useState<DocumentKey | null>(null);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      const stored = await loadStoredDriverDocuments();
+      if (stored.data) {
+        const reconciled = driverProfile ? reconcileDriverDocumentsWithProfile(stored.data, driverProfile) : stored.data;
+        setDocuments(reconciled);
+        if (reconciled !== stored.data) await saveStoredDriverDocuments(reconciled);
+      } else if (driverProfile) {
+        setDocuments(buildDriverDocumentsFromProfile(driverProfile));
+      }
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [driverProfile]);
   const [documentNumber, setDocumentNumber] = React.useState('');
   const [expiryDate, setExpiryDate] = React.useState('');
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -116,6 +140,9 @@ export default function DriverDocumentsScreen() {
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING, paddingHorizontal: 16, gap: 18 }}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={[styles.notice, { backgroundColor: colors.primaryHex + '10' }]}>
           <Feather name="shield" size={18} color={colors.primary} />
