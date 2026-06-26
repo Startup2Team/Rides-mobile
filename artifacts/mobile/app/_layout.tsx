@@ -17,21 +17,35 @@ import { useColorScheme, Text, TextInput } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 
 // Configure global default font family for standard Text and TextInput components
-if (!(Text as any).defaultProps) {
-  (Text as any).defaultProps = {};
-}
-(Text as any).defaultProps.style = {
-  fontFamily: 'Inter_400Regular',
-  ...(Text as any).defaultProps.style,
+const patchComponentFont = (Component: any, defaultFamily: string) => {
+  if (!Component) return;
+
+  if (Component.render) {
+    const originalRender = Component.render;
+    Component.render = function render(props: any, ref: any) {
+      const newProps = {
+        ...props,
+        style: [{ fontFamily: defaultFamily }, props.style],
+      };
+      return originalRender.call(this, newProps, ref);
+    };
+  }
+
+  try {
+    if (!Component.defaultProps) {
+      Component.defaultProps = {};
+    }
+    Component.defaultProps.style = {
+      fontFamily: defaultFamily,
+      ...Component.defaultProps.style,
+    };
+  } catch (e) {
+    // Ignore
+  }
 };
 
-if (!(TextInput as any).defaultProps) {
-  (TextInput as any).defaultProps = {};
-}
-(TextInput as any).defaultProps.style = {
-  fontFamily: 'Inter_400Regular',
-  ...(TextInput as any).defaultProps.style,
-};
+patchComponentFont(Text, 'Inter_400Regular');
+patchComponentFont(TextInput, 'Inter_400Regular');
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
