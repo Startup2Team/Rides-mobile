@@ -40,30 +40,6 @@ export default function DriverProfileScreen() {
   const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-
-  const handleRefresh = React.useCallback(async () => {
-    setIsRefreshing(true);
-    const start = Date.now();
-    try {
-      await loadHistory();
-      const storedProfile = await loadStoredProfileImage();
-      setProfileImage(storedProfile.data ?? driverProfile?.profileImage ?? null);
-      
-      const storedRatings = await loadStoredDriverRatings();
-      const summary = user?.id ? getDriverRatingSummary(storedRatings.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
-      setRatingSummary(summary);
-    } finally {
-      const elapsed = Date.now() - start;
-      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
-      const remaining = minDuration - elapsed;
-      if (remaining > 0) {
-        await new Promise((resolve) => setTimeout(resolve, remaining));
-      }
-      setIsRefreshing(false);
-    }
-  }, [loadHistory, driverProfile?.profileImage, setProfileImage, user?.id]);
-
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
@@ -240,9 +216,6 @@ export default function DriverProfileScreen() {
           paddingHorizontal: 16,
           gap: 22,
         }}
-        onRefresh={handleRefresh}
-        refreshing={isRefreshing}
-        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={styles.section}>
           <SectionTitle title="My Vehicles" />
