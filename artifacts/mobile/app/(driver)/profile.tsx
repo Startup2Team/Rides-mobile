@@ -390,15 +390,17 @@ function MenuItem({ colors, detail, iconFamily = 'mci', icon, label, last = fals
 }) {
   return <>
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
-      {iconFamily === 'symbol' ? (
-        <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={20} />
-      ) : iconFamily === 'feather' ? (
-        <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
-      ) : (
-        <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
-      )}
+      <View style={styles.menuIcon}>
+        {iconFamily === 'symbol' ? (
+          <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={20} />
+        ) : iconFamily === 'feather' ? (
+          <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+        ) : (
+          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+        )}
+      </View>
       <View style={styles.menuCopy}>
-        <Text style={[styles.menuText, { color: colors.foreground }]}>{label}</Text>
+        <Text style={[styles.menuLabel, { color: colors.foreground }]}>{label}</Text>
         {detail ? <Text style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</Text> : null}
       </View>
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -523,16 +525,15 @@ const styles = StyleSheet.create({
   vehicleSummaryDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   groupedSection: { borderRadius: 20, overflow: 'hidden' },
 
-  separator: { height: StyleSheet.hairlineWidth, marginLeft: 44 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 54, paddingHorizontal: 16, paddingVertical: 14 },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 66 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 52, paddingHorizontal: 20, paddingVertical: 16 },
+  menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
   menuCopy: { flex: 1, gap: 2 },
-  menuText: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  menuDetail: { fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 15 },
+  menuLabel: { fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 22 },
+  menuDetail: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: 20, padding: 16 },
   modeCopy: { flex: 1, gap: 3 },
   modeTitle: { fontSize: 15, fontFamily: 'Inter_500Medium' },
   modeDescription: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14, paddingHorizontal: 16 },
-  logoutText: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   version: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', paddingVertical: 8 },
 });
