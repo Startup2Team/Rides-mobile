@@ -105,7 +105,7 @@ export function GlassHeader({
         ) : (
           <View style={styles.sideSlot} />
         )}
-        <View style={styles.headerCenter}>
+        <View style={styles.headerCenter} pointerEvents="box-none">
           <View style={styles.titleRow}>
             <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
               {title}
@@ -134,7 +134,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
   },
-  headerCenter: { flex: 1, alignItems: 'center', minWidth: 0 },
+  headerCenter: {
+    position: 'absolute',
+    left: 80,
+    right: 80,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
   headerTitle: {
     ...Platform.select({
