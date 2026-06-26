@@ -14,6 +14,7 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 const FAQS = [
   {
@@ -146,8 +147,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { padding: 20 },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.tiny,
+    fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
     marginBottom: 10,
     marginTop: 24,
@@ -162,12 +163,12 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
   contactRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  contactLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  contactDetail: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  contactLabel: { ...typography.bodySmall, fontFamily: typography.title.fontFamily},
+  contactDetail: { ...typography.caption, fontFamily: typography.body.fontFamily, marginTop: 2 },
   faqRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  faqQuestion: { fontSize: 14, fontFamily: 'Inter_500Medium', lineHeight: 20 },
+  faqQuestion: { ...typography.bodySmall, fontFamily: typography.label.fontFamily, lineHeight: 20 },
   faqAnswer: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: StyleSheet.hairlineWidth },
-  faqAnswerText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, marginTop: 10 },
+  faqAnswerText: { ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 20, marginTop: 10 },
   infoBox: {
     flexDirection: 'row',
     gap: 8,
@@ -179,5 +180,5 @@ const styles = StyleSheet.create({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  infoText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  infoText: { flex: 1, ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 18 },
 });

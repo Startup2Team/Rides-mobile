@@ -14,6 +14,7 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, PRIVACY_EMAIL, PRIVACY_URL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 const SECTIONS = [
   {
@@ -132,12 +133,12 @@ const styles = StyleSheet.create({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  bannerTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
-  bannerDesc: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  bannerTitle: { ...typography.body, fontFamily: typography.title.fontFamily, marginBottom: 2 },
+  bannerDesc: { ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 18 },
   section: { marginTop: 24 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  sectionTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  sectionTitle: { ...typography.body, fontFamily: typography.badge.fontFamily},
   card: {
     borderRadius: 14,
     padding: 14,
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
   },
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
-  itemText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20 },
+  itemText: { flex: 1, ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 20 },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -158,6 +159,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  linkText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  lastUpdated: { textAlign: 'center', fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 16 },
+  linkText: { ...typography.bodySmall, fontFamily: typography.label.fontFamily},
+  lastUpdated: { textAlign: 'center', ...typography.tiny, fontFamily: typography.body.fontFamily, marginTop: 16 },
 });

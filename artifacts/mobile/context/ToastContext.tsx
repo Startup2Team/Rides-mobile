@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 type ToastVariant = 'success' | 'error' | 'info';
 
@@ -252,8 +253,8 @@ const styles = StyleSheet.create({
   },
   message: {
     flexShrink: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.bodySmall,
+    fontFamily: typography.title.fontFamily,
     lineHeight: 19,
     color: '#FFFFFF',
   },

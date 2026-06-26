@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Line, Polygon, Rect } from 'react-native-svg';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 const LANGUAGE_FLAGS = ['rw', 'uk', 'fr', 'ug'] as const;
 type LanguageFlag = typeof LANGUAGE_FLAGS[number];
@@ -189,8 +190,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   languageBtnText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
+    fontFamily: typography.badge.fontFamily,
   },
   languageBtnFlag: {
     width: 34,
@@ -227,8 +228,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   sheetTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    ...typography.h3,
+    fontFamily: typography.badge.fontFamily,
   },
   languageOptions: {
     gap: 10,
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
   },
   languageOptionText: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
 });

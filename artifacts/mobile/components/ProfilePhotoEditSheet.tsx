@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SheetBackdrop } from './SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { typography } from '@/constants/typography';
 
 interface ProfilePhotoEditSheetProps {
   visible: boolean;
@@ -226,12 +227,12 @@ const styles = StyleSheet.create({
   },
   sheetAvatarInitial: {
     color: '#FFFFFF',
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
+    ...typography.caption,
+    fontFamily: typography.title.fontFamily,
   },
   sheetTitleText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
   sheetCloseButton: {
     width: 30,
@@ -254,8 +255,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sheetOptionText: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    ...typography.title,
+    fontFamily: typography.label.fontFamily,
   },
   sheetSeparator: {
     height: StyleSheet.hairlineWidth,

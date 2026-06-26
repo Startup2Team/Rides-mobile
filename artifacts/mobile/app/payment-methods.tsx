@@ -23,6 +23,7 @@ import { BRAND_GREEN_HEX } from '@/constants/systemColors';
 
 import { loadStoredPaymentMethods, saveStoredPaymentMethods } from '@/persistence/paymentPersistence';
 import type { PaymentMethod, PaymentProvider } from '@/types';
+import { typography } from '@/constants/typography';
 
 const PROVIDER_META: Record<PaymentProvider, { name: string; color: string; icon: string }> = {
   mtn: { name: 'MTN Mobile Money', color: '#FFCC00', icon: 'smartphone' },
@@ -301,8 +302,8 @@ const styles = StyleSheet.create({
   keyboardAvoiding: { flex: 1 },
   scroll: { padding: 20, gap: 0 },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.tiny,
+    fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
     marginBottom: 10,
     marginTop: 24,
@@ -325,9 +326,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  methodLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  methodPhone: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  defaultBadge: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  methodLabel: { ...typography.bodySmall, fontFamily: typography.label.fontFamily},
+  methodPhone: { ...typography.label, fontFamily: typography.body.fontFamily, marginTop: 2 },
+  defaultBadge: { ...typography.tiny, fontFamily: typography.title.fontFamily, marginTop: 2 },
   methodActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   radioOuter: {
     width: 20,
@@ -351,7 +352,7 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  addCardLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
+  addCardLabel: { flex: 1, ...typography.bodySmall, fontFamily: typography.label.fontFamily},
   addCardBody: { paddingHorizontal: 14, paddingBottom: 14 },
   phoneInputRow: {
     flexDirection: 'row',
@@ -361,9 +362,9 @@ const styles = StyleSheet.create({
     height: 48,
     overflow: 'hidden',
   },
-  countryCode: { paddingHorizontal: 14, fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  countryCode: { paddingHorizontal: 14, ...typography.body, fontFamily: typography.title.fontFamily},
   inputDivider: { width: 1, height: '60%' },
-  phoneInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, fontFamily: 'Inter_400Regular', height: '100%' },
+  phoneInput: { flex: 1, paddingHorizontal: 12, ...typography.body, fontFamily: typography.body.fontFamily, height: '100%' },
   infoBox: {
     position: 'absolute',
     left: 0,
@@ -375,5 +376,5 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     alignItems: 'flex-start',
   },
-  infoText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  infoText: { flex: 1, ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 18 },
 });

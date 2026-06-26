@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 export function OfflineBanner() {
   const colors = useColors();
@@ -50,5 +51,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  text: { fontSize: 13, fontFamily: 'Inter_500Medium', color: '#fff' },
+  text: { ...typography.label, fontFamily: typography.label.fontFamily, color: '#fff' },
 });

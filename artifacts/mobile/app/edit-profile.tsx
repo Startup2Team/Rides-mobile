@@ -26,6 +26,7 @@ import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { typography } from '@/constants/typography';
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -278,8 +279,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
-  avatarText: { fontSize: 28, fontFamily: 'Inter_700Bold' },
-  avatarHint: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  avatarText: { ...typography.h1, fontFamily: typography.badge.fontFamily},
+  avatarHint: { ...typography.caption, fontFamily: typography.body.fontFamily},
   form: { gap: 16, marginBottom: 28 },
   readOnlyField: {
     borderRadius: 12,
@@ -288,14 +289,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
-  readOnlyValue: { fontSize: 15, fontFamily: 'Inter_400Regular' },
+  readOnlyValue: { ...typography.body, fontFamily: typography.body.fontFamily},
   phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  changePhoneText: { ...typography.label, fontFamily: typography.title.fontFamily},
+  phoneHint: { ...typography.tiny, fontFamily: typography.body.fontFamily, marginTop: -8 },
   phoneFieldContainer: { gap: 6 },
   fieldLabel: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    ...typography.label,
+    fontFamily: typography.label.fontFamily,
     marginLeft: 2,
   },
   emergencyHeaderGroup: {
@@ -303,12 +304,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionHeader: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
   emergencyHint: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     lineHeight: 18,
   },
   divider: {

@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/BackButton';
+import { AppText } from '@/components/AppText';
 import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
+import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 
@@ -84,10 +86,10 @@ export default function OTPScreen() {
 
       <View style={styles.centerContent}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Verify number</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+          <AppText variant="h1" style={[styles.title, { color: colors.foreground }]}>Verify number</AppText>
+          <AppText variant="body" style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Code sent to {phone}
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.otpRow}>
@@ -113,15 +115,15 @@ export default function OTPScreen() {
           ))}
         </View>
 
-        {error ? <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+        {error ? <AppText variant="label" style={[styles.error, { color: colors.destructive }]}>{error}</AppText> : null}
         {expiryTimer > 0 ? (
-          <Text style={[styles.expiryText, { color: colors.mutedForeground }]}>
+          <AppText variant="caption" style={[styles.expiryText, { color: colors.mutedForeground }]}>
             Code expires in {formatOtpTime(expiryTimer)}
-          </Text>
+          </AppText>
         ) : null}
 
         {verifying ? (
-          <Text style={[styles.verifyingText, { color: colors.primary }]}>Verifying...</Text>
+          <AppText variant="bodySmall" style={[styles.verifyingText, { color: colors.primary }]}>Verifying...</AppText>
         ) : null}
       </View>
 
@@ -134,7 +136,7 @@ export default function OTPScreen() {
           }}
           style={styles.resend}
         >
-          <Text style={[styles.resendText, { color: colors.primary }]}>Resend code</Text>
+          <AppText variant="label" style={[styles.resendText, { color: colors.primary }]}>Resend code</AppText>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -150,20 +152,19 @@ const styles = StyleSheet.create({
     paddingBottom: 82,
   },
   header: { gap: 10, alignItems: 'flex-start' },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold' },
-  subtitle: { fontSize: 15, fontFamily: 'Inter_400Regular' },
+  title: {},
+  subtitle: {},
   otpRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', alignSelf: 'center' },
   otpBox: {
     width: 48,
     height: 56,
     borderRadius: 12,
     borderWidth: 1.5,
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
+    ...typography.h1,
   },
-  error: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' },
-  expiryText: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center' },
-  verifyingText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
+  error: { textAlign: 'center' },
+  expiryText: { textAlign: 'center' },
+  verifyingText: { textAlign: 'center' },
   resend: { alignItems: 'center' },
-  resendText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  resendText: {},
 });

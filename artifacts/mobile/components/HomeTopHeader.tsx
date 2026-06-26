@@ -37,6 +37,7 @@ import { loadNotificationReadState } from '@/persistence/notificationPersistence
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 import { getDriverApplicationAction } from '@/utils/driverVerification';
 import type { DriverVerificationStatus } from '@/types';
+import { typography } from '@/constants/typography';
 
 const AVATAR_SIZE = 44;
 const CTA_AVATAR_SIZE = 34;
@@ -73,8 +74,8 @@ export type HomeTopHeaderProps = {
 
 /** Shared caption size for CTA label and compact location line. */
 const HEADER_CAPTION_TEXT = {
-  fontSize: 12.5,
-  fontFamily: 'Inter_600SemiBold' as const,
+  ...typography.caption,
+    fontFamily: typography.title.fontFamily,
   lineHeight: 16,
 };
 
@@ -592,7 +593,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: typography.title.fontFamily,
     color: '#FFFFFF',
   },
   locationCard: {

@@ -12,6 +12,7 @@ import {
   VEHICLE_SEARCHING_IMAGE_SIZE,
 } from '@/constants/vehicles';
 import { VEHICLE_LABELS } from '@/types';
+import { typography } from '@/constants/typography';
 
 export default function SearchingScreen() {
   const colors = useColors();
@@ -200,13 +201,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    ...typography.h1,
+    fontFamily: typography.badge.fontFamily,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
     textAlign: 'center',
   },
   routeCard: {
@@ -234,8 +234,7 @@ const styles = StyleSheet.create({
   },
   routeText: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    ...typography.bodySmall,
   },
   footer: {
     width: '100%',

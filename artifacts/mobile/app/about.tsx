@@ -19,6 +19,7 @@ import {
   TERMS_URL,
 } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 const LINKS = [
   { label: 'Terms of Service', icon: 'file-text' as const, url: TERMS_URL },
@@ -118,8 +119,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
-  appName: { fontSize: 26, fontFamily: 'Inter_700Bold' },
-  tagline: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+  appName: { ...typography.h1, fontFamily: typography.badge.fontFamily},
+  tagline: { ...typography.bodySmall, fontFamily: typography.body.fontFamily},
   versionBadge: {
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -127,7 +128,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 4,
   },
-  versionText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  versionText: { ...typography.caption, fontFamily: typography.label.fontFamily},
   statsRow: {
     flexDirection: 'row',
     borderRadius: 14,
@@ -138,9 +139,9 @@ const styles = StyleSheet.create({
     }),
   },
   statItem: { flex: 1, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 24, fontFamily: 'Inter_700Bold' },
-  statLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  statSub: { fontSize: 10, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  statValue: { ...typography.h1, fontFamily: typography.badge.fontFamily},
+  statLabel: { ...typography.caption, fontFamily: typography.title.fontFamily},
+  statSub: { ...typography.tiny, fontFamily: typography.body.fontFamily, textAlign: 'center' },
   statDivider: { width: 1, marginVertical: 4 },
   missionCard: {
     borderRadius: 14,
@@ -151,11 +152,11 @@ const styles = StyleSheet.create({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  missionTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  missionText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 21 },
+  missionTitle: { ...typography.body, fontFamily: typography.badge.fontFamily},
+  missionText: { ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 21 },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.tiny,
+    fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
     marginBottom: 10,
   },
@@ -170,6 +171,6 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
   linkRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   linkIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  linkLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  copyright: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 20, paddingBottom: 8 },
+  linkLabel: { ...typography.bodySmall, fontFamily: typography.body.fontFamily},
+  copyright: { textAlign: 'center', ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 20, paddingBottom: 8 },
 });

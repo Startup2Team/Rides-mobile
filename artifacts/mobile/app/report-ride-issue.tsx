@@ -7,6 +7,7 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 const REPORT_TYPES = [
   {
@@ -118,7 +119,7 @@ export default function ReportRideIssueScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   introWrap: { alignItems: 'center', paddingHorizontal: 20, marginBottom: 18 },
-  intro: { maxWidth: 320, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19, textAlign: 'center' },
+  intro: { maxWidth: 320, ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 19, textAlign: 'center' },
   centeredContent: { flex: 1, justifyContent: 'center' },
   card: {
     borderRadius: 14,
@@ -128,9 +129,9 @@ const styles = StyleSheet.create({
   row: { minHeight: 76, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 13 },
   icon: { width: 28, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, gap: 3 },
-  label: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  detail: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  label: { ...typography.body, fontFamily: typography.title.fontFamily},
+  detail: { ...typography.tiny, fontFamily: typography.body.fontFamily, lineHeight: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 57 },
   safetyNoteWrap: { alignItems: 'center', paddingHorizontal: 28, paddingTop: 16 },
-  safetyNote: { maxWidth: 300, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, textAlign: 'center' },
+  safetyNote: { maxWidth: 300, ...typography.tiny, fontFamily: typography.body.fontFamily, lineHeight: 16, textAlign: 'center' },
 });

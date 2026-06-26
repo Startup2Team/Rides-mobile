@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from './BackButton';
 import { useColors } from '@/hooks/useColors';
 import { SheetBackdrop } from './SheetBackdrop';
+import { typography } from '@/constants/typography';
 
 export type GalleryImage = {
   id: string;
@@ -1125,9 +1126,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 16, textAlign: 'center' },
-  subtitle: { fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
-  counter: { fontFamily: 'Inter_500Medium', fontSize: 12, marginTop: 2, textAlign: 'center' },
+  title: { ...typography.title, fontFamily: typography.badge.fontFamily, textAlign: 'center' },
+  subtitle: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: 2, textAlign: 'center' },
+  counter: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: 2, textAlign: 'center' },
   headerSpacer: { width: 44 },
   rightActionButton: {
     minWidth: 44,
@@ -1138,8 +1139,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rightActionText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
+    ...typography.bodySmall,
+    fontFamily: typography.title.fontFamily,
   },
   imageStage: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   animatedImageStage: { width: '100%', height: '100%' },
@@ -1161,7 +1162,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
+  errorText: { ...typography.label, fontFamily: typography.label.fontFamily },
   sheetBackdrop: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 10,
@@ -1201,8 +1202,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetTitleText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
   sheetCloseButton: {
     width: 30,
@@ -1225,8 +1226,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sheetOptionText: {
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    ...typography.title,
+    fontFamily: typography.label.fontFamily,
   },
   sheetSeparator: {
     height: StyleSheet.hairlineWidth,

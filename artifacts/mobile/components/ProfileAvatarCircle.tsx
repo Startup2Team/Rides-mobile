@@ -13,6 +13,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { typography } from '@/constants/typography';
 
 export type ProfileAvatarCircleProps = {
   size?: number;
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   initial: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: typography.title.fontFamily,
     color: '#FFFFFF',
   },
   pressed: {

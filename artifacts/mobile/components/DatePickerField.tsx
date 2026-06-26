@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { formatDateDdMmYyyy, parseDateDdMmYyyy } from '@/utils/dateUtils';
+import { typography } from '@/constants/typography';
 
 export { formatDateDdMmYyyy, parseDateDdMmYyyy } from '@/utils/dateUtils';
 
@@ -142,8 +143,8 @@ export function DatePickerField({
 const styles = StyleSheet.create({
   wrapper: { gap: 6 },
   label: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    ...typography.label,
+    fontFamily: typography.label.fontFamily,
     marginLeft: 2,
   },
   field: {
@@ -157,8 +158,7 @@ const styles = StyleSheet.create({
   leadingIcon: { marginRight: 10 },
   value: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
   },
   pickerCard: {
     marginTop: 2,
@@ -175,15 +175,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   toolbarAction: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
   picker: {
     height: 216,
   },
   error: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     marginLeft: 2,
   },
 });

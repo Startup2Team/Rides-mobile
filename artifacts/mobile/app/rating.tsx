@@ -25,6 +25,7 @@ import { useRide } from '@/context/RideContext';
 import { type DriverRatingStars } from '@/domain/driverWallet';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { buildLocalDriverRating, saveDriverRatingOnce } from '@/persistence/driverRatingPersistence';
+import { typography } from '@/constants/typography';
 import {
   isUploadedProfileImageUri,
   resolveDriverProfileImage,
@@ -451,14 +452,13 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   title: {
-    fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
     textAlign: 'center',
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    ...typography.label,
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 6,
@@ -475,11 +475,11 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   starLarge: {
-    fontSize: 40,
+    ...typography.displayXL,
     lineHeight: 44,
   },
   starMedium: {
-    fontSize: 32,
+    ...typography.display,
     lineHeight: 36,
   },
   reviewInput: {
@@ -490,8 +490,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 10,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    ...typography.bodySmall,
     lineHeight: 20,
     marginBottom: 16,
   },
@@ -517,10 +516,9 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   actionText: {
-    fontSize: 17,
-    fontFamily: 'Inter_400Regular',
+    ...typography.title,
   },
   actionTextBold: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: typography.title.fontFamily,
   },
 });
