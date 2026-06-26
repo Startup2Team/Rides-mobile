@@ -83,7 +83,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
-  const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
+  const Icon = ({ name, ...props }: { name: string }) => <Text {...props}>{name}</Text>;
   return { Feather: Icon, MaterialCommunityIcons: Icon };
 });
 
