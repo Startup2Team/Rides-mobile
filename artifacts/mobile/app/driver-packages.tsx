@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -26,13 +26,7 @@ function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
 
-function formatLastUpdated(value: string | null) {
-  if (!value) return 'Never';
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
-  if (minutes < 1) return 'just now';
-  if (minutes === 1) return '1 minute ago';
-  return `${minutes} minutes ago`;
-}
+
 
 export default function DriverPackagesScreen() {
   const colors = useColors();
@@ -43,7 +37,6 @@ export default function DriverPackagesScreen() {
   const {
     isLoading: isEntitlementLoading,
     entitlement,
-    rideCredits,
   } = useDriverEntitlement();
   const {
     campaigns,
@@ -124,45 +117,33 @@ export default function DriverPackagesScreen() {
       subtitle={`Choose a package for your ${vehicleLabel}`}
       onBackPress={() => router.back()}
     />
+
     <GlassScrollView
       style={styles.root}
-      contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
+      contentContainerStyle={{
+        paddingTop: Platform.OS === 'ios' ? 0 : headerMetrics.contentTop,
+        paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
+      }}
+      contentInset={Platform.OS === 'ios' ? { top: headerMetrics.contentTop } : undefined}
+      contentOffset={Platform.OS === 'ios' ? { x: 0, y: -headerMetrics.contentTop } : undefined}
       scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+      onRefresh={refresh}
+      refreshing={isRefreshing}
+      refreshIndicatorTop={headerMetrics.headerInset + 44}
     >
 
-    <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
-      <View>
-        <Text style={styles.balanceLabel}>AVAILABLE RIDES</Text>
-        <Text style={styles.balanceValue}>{isEntitlementLoading ? '...' : rideCredits}</Text>
+    {((syncWarning && offerSourceReady) || selectionNotice) ? (
+      <View style={styles.syncRow}>
+        <View style={styles.syncCopy}>
+          {syncWarning && offerSourceReady ? (
+            <Text style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</Text>
+          ) : null}
+          {selectionNotice ? (
+            <Text style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</Text>
+          ) : null}
+        </View>
       </View>
-      <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
-    </View>
-
-    <View style={styles.syncRow}>
-      <View style={styles.syncCopy}>
-        <Text style={[styles.syncText, { color: colors.mutedForeground }]}>
-          Last updated: {formatLastUpdated(lastSyncedAt)}
-        </Text>
-        {syncWarning && offerSourceReady ? (
-          <Text style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</Text>
-        ) : null}
-        {selectionNotice ? (
-          <Text style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</Text>
-        ) : null}
-      </View>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Refresh packages"
-        disabled={isRefreshing}
-        onPress={() => void refresh()}
-        style={[styles.refreshButton, { borderColor: colors.border, opacity: isRefreshing ? 0.55 : 1 }]}
-      >
-        <Feather name="refresh-cw" size={14} color={colors.primary} />
-        <Text style={[styles.refreshText, { color: colors.primary }]}>
-          {isRefreshing ? 'Refreshing...' : 'Refresh'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+    ) : null}
 
     {isCatalogLoading && !hasCatalogSnapshot ? (
       <PackageState
@@ -297,17 +278,10 @@ function PackageState({ colors, detail, icon, title }: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  balanceCard: { marginHorizontal: 16, marginBottom: 14, borderRadius: 18, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  balanceLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8 },
-  balanceValue: { color: '#fff', fontSize: 40, fontFamily: 'Inter_700Bold', marginTop: 3 },
-  approvedBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
-  approvedText: { color: '#fff', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   syncRow: { marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   syncCopy: { flex: 1, gap: 3 },
-  syncText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   syncWarning: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  refreshButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 17, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  refreshText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+
   stateCard: { marginHorizontal: 16, borderRadius: 18, borderWidth: 1, padding: 22, alignItems: 'center', gap: 8 },
   stateTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   stateDetail: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18, textAlign: 'center' },

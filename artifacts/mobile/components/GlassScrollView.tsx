@@ -1,8 +1,10 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Animated,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   ScrollView,
   ScrollViewProps,
   StyleSheet,
@@ -16,6 +18,9 @@ import { headerScrollStore } from '@/components/GlassHeader';
 interface GlassScrollViewProps extends ScrollViewProps {
   indicatorTop?: number;
   indicatorBottom?: number;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  refreshIndicatorTop?: number;
 }
 
 export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps>(
@@ -28,6 +33,9 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       onContentSizeChange,
       onLayout,
       scrollEventThrottle = 16,
+      onRefresh,
+      refreshing = false,
+      refreshIndicatorTop,
       ...props
     },
     ref,
@@ -43,6 +51,40 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       viewportHeight: 1,
       indicatorTrackHeight: 1,
     });
+
+    const snapAnim = React.useRef(new Animated.Value(0)).current;
+
+    React.useEffect(() => {
+      Animated.spring(snapAnim, {
+        toValue: refreshing ? 48 : 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: false,
+      }).start();
+    }, [refreshing]);
+
+    const insetTop = props.contentInset?.top ?? 0;
+    const restingY = Platform.OS === 'ios' ? -insetTop : 0;
+    const pullThreshold = restingY - 55;
+
+    const refreshOpacity = refreshing ? 1 : scrollY.interpolate({
+      inputRange: [pullThreshold, restingY],
+      outputRange: [1, 0],
+      extrapolate: 'clamp',
+    });
+
+    const refreshScale = refreshing ? 1 : scrollY.interpolate({
+      inputRange: [pullThreshold, restingY],
+      outputRange: [1.1, 0.5],
+      extrapolate: 'clamp',
+    });
+
+    const refreshTranslateY = refreshing ? 18 : scrollY.interpolate({
+      inputRange: [pullThreshold, restingY],
+      outputRange: [18, 0],
+      extrapolate: 'clamp',
+    });
+
 
     const canScroll = scrollMetrics.contentHeight > scrollMetrics.viewportHeight + 12;
     const indicatorHeight = Math.max(
@@ -78,6 +120,14 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       onScroll?.(event);
     };
 
+    const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetY = event.nativeEvent.contentOffset.y;
+      if (offsetY < pullThreshold && onRefresh && !refreshing) {
+        onRefresh();
+      }
+      props.onScrollEndDrag?.(event);
+    };
+
     React.useEffect(() => {
       return () => {
         if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
@@ -86,12 +136,30 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
 
     return (
       <View style={styles.wrap}>
+        {onRefresh && (
+          <Animated.View
+            style={[
+              styles.refreshContainer,
+              {
+                top: refreshIndicatorTop ?? (indicatorTop - 44),
+                opacity: refreshOpacity,
+                transform: [
+                  { translateY: refreshTranslateY },
+                  { scale: refreshScale },
+                ],
+              },
+            ]}
+          >
+            <ActivityIndicator size="small" color={colors.primary} />
+          </Animated.View>
+        )}
         <ScrollView
           {...props}
           ref={ref}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={scrollEventThrottle}
           onScroll={handleScroll}
+          onScrollEndDrag={handleScrollEndDrag}
           onContentSizeChange={(contentWidth, contentHeight) => {
             setScrollMetrics(prev => ({ ...prev, contentHeight }));
             onContentSizeChange?.(contentWidth, contentHeight);
@@ -102,6 +170,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
             onLayout?.(event);
           }}
         >
+          {onRefresh && <Animated.View style={{ height: snapAnim }} />}
           {children}
         </ScrollView>
         {canScroll && (
@@ -149,5 +218,13 @@ const styles = StyleSheet.create({
   scrollIndicatorThumb: {
     width: 2,
     borderRadius: 2,
+  },
+  refreshContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
