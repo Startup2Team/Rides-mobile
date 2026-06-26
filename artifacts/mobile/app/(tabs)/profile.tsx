@@ -197,15 +197,15 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={profileImage ? "Preview profile image" : "Upload profile image"}
           >
-            {profileImage ? (
-              <View style={styles.avatarImageShadow}>
-                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-              </View>
-            ) : (
-              <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatar}>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatarInner}>
+                <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatarGradient} />
                 <Text style={styles.avatarInitial}>{profileInitial}</Text>
-              </LinearGradient>
-            )}
+                {profileImage ? (
+                  <Image source={{ uri: profileImage }} style={styles.avatarImageAbsolute} />
+                ) : null}
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -418,29 +418,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 24,
   },
-  avatar: {
+  avatarContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#8FA8D4',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-    ...Platform.select({
-      web: { boxShadow: '0 6px 16px rgba(0,0,0,0.12)' },
-    }),
-  },
-  avatarInitial: { fontSize: 36, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 42 },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  avatarImageShadow: {
     borderRadius: 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -450,6 +430,30 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: { boxShadow: '0 6px 16px rgba(0,0,0,0.16)' },
     }),
+  },
+  avatarInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { fontSize: 36, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 42 },
+  avatarImageAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  avatarGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   profileInfoContainer: {
     flex: 1,

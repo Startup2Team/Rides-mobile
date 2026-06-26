@@ -219,20 +219,19 @@ export function HomeTopHeader({
     return (
       <View style={frameStyle}>
         <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: radius }]}>
+          <LinearGradient
+            colors={['#9DBBE0', '#7984C3']}
+            style={[styles.avatarFallback, { width: size, height: size, borderRadius: radius }]}
+          >
+            <Text style={[styles.avatarInitial, { fontSize: size * 0.4 }]}>{profileInitial}</Text>
+          </LinearGradient>
           {profileImage ? (
             <Image
               key={profileImage}
               source={{ uri: profileImage }}
-              style={{ width: size, height: size }}
+              style={[StyleSheet.absoluteFill, { width: size, height: size }]}
             />
-          ) : (
-            <LinearGradient
-              colors={['#9DBBE0', '#7984C3']}
-              style={[styles.avatarFallback, { width: size, height: size, borderRadius: radius }]}
-            >
-              <Text style={[styles.avatarInitial, { fontSize: size * 0.4 }]}>{profileInitial}</Text>
-            </LinearGradient>
-          )}
+          ) : null}
         </View>
       </View>
     );

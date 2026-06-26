@@ -65,20 +65,19 @@ export function ProfileAvatarCircle({
       ]}
     >
       <View style={[styles.circle, { width: size, height: size, borderRadius: radius }]}>
+        <LinearGradient
+          colors={['#9DBBE0', '#7984C3']}
+          style={[styles.fallback, { width: size, height: size, borderRadius: radius }]}
+        >
+          <Text style={[styles.initial, { fontSize: size * 0.4 }]}>{initial}</Text>
+        </LinearGradient>
         {displayUri ? (
           <Image
             key={displayUri}
             source={{ uri: displayUri }}
-            style={{ width: size, height: size }}
+            style={[StyleSheet.absoluteFill, { width: size, height: size }]}
           />
-        ) : (
-          <LinearGradient
-            colors={['#9DBBE0', '#7984C3']}
-            style={[styles.fallback, { width: size, height: size, borderRadius: radius }]}
-          >
-            <Text style={[styles.initial, { fontSize: size * 0.4 }]}>{initial}</Text>
-          </LinearGradient>
-        )}
+        ) : null}
       </View>
     </View>
   );

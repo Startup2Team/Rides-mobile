@@ -119,13 +119,14 @@ export default function EditProfileScreen() {
         {/* Avatar preview */}
         <View style={styles.avatarSection}>
           <TouchableOpacity onPress={handlePickImage} activeOpacity={0.85} style={styles.avatarContainer}>
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-            ) : (
+            <View style={styles.avatarInner}>
               <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
                 <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>{initials}</Text>
               </View>
-            )}
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImageAbsolute} />
+              ) : null}
+            </View>
             <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary }]}>
               <Feather name="camera" size={12} color={colors.primaryForeground} />
             </View>
@@ -250,6 +251,13 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20 },
   avatarSection: { alignItems: 'center', marginBottom: 32, gap: 8 },
   avatarContainer: { position: 'relative', marginBottom: 4 },
+  avatarInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+    position: 'relative',
+  },
   avatar: {
     width: 80,
     height: 80,
@@ -257,7 +265,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarImageAbsolute: { width: 80, height: 80, position: 'absolute', top: 0, left: 0 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,

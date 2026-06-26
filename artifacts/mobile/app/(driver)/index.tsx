@@ -685,15 +685,14 @@ export default function DriverDashboard() {
                     { transform: [{ translateX: switchModeAvatarSlide }] },
                   ]}
                 >
+                  <Text style={styles.switchModeAvatarText}>{driverInitial}</Text>
                   {profileImage ? (
                     <Image
                       key={profileImage}
                       source={{ uri: profileImage }}
-                      style={styles.switchModeAvatarImage}
+                      style={styles.switchModeAvatarImageAbsolute}
                     />
-                  ) : (
-                    <Text style={styles.switchModeAvatarText}>{driverInitial}</Text>
-                  )}
+                  ) : null}
                 </Animated.View>
               </View>
               <Animated.View
@@ -1145,9 +1144,12 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  switchModeAvatarImage: {
+  switchModeAvatarImageAbsolute: {
     width: CTA_AVATAR_SIZE,
     height: CTA_AVATAR_SIZE,
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   switchModeAvatarText: {
     fontSize: 14,
