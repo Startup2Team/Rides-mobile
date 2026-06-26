@@ -5,7 +5,6 @@ import {
   Image,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -28,6 +27,8 @@ import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
+import { AppText } from '@/components/AppText';
+import { typography } from '@/constants/typography';
 
 
 function MenuItem({
@@ -73,8 +74,8 @@ function MenuItem({
           )}
         </View>
         <View style={styles.menuCopy}>
-          <Text style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</Text>
-          {detail ? <Text style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</Text> : null}
+          <AppText variant="body" style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</AppText>
+          {detail ? <AppText variant="tiny" style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</AppText> : null}
         </View>
         {!destructive && <Feather name="chevron-right" size={18} color={colors.mutedForeground} />}
       </TouchableOpacity>
@@ -159,29 +160,31 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Edit profile details"
             >
-              <Text
+              <AppText
+                variant="displayXL"
                 style={[styles.nameFirst, { color: colors.foreground }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.5}
               >
                 {firstName}
-              </Text>
+              </AppText>
               {lastName ? (
-                <Text
+                <AppText
+                  variant="displayXL"
                   style={[styles.nameLast, { color: colors.foreground }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.5}
                 >
                   {lastName}
-                </Text>
+                </AppText>
               ) : null}
             </TouchableOpacity>
 
             <View style={styles.ratingBadge}>
               <FontAwesome name="star" size={12} color={colors.primary} />
-              <Text style={[styles.ratingText, { color: colors.foreground }]}>5.0</Text>
+              <AppText variant="label" style={[styles.ratingText, { color: colors.foreground }]}>5.0</AppText>
             </View>
           </View>
 
@@ -200,7 +203,7 @@ export default function ProfileScreen() {
             <View style={styles.avatarContainer}>
               <View style={styles.avatarInner}>
                 <LinearGradient colors={['#9DBBE0', '#7984C3']} style={styles.avatarGradient} />
-                <Text style={styles.avatarInitial}>{profileInitial}</Text>
+                <AppText variant="displayXL" style={styles.avatarInitial}>{profileInitial}</AppText>
                 {profileImage ? (
                   <Image source={{ uri: profileImage }} style={styles.avatarImageAbsolute} />
                 ) : null}
@@ -228,10 +231,10 @@ export default function ProfileScreen() {
             <MaterialCommunityIcons name="steering" size={25} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.bannerTitle, { color: colors.foreground }]}>{driverAction.label}</Text>
-            <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
+            <AppText variant="title" style={[styles.bannerTitle, { color: colors.foreground }]}>{driverAction.label}</AppText>
+            <AppText variant="label" style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
               {driverAction.label === 'In Review' ? 'Review usually takes not too long' : `Earn money driving on ${APP_NAME}`}
-            </Text>
+            </AppText>
           </View>
           <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
         </TouchableOpacity>
@@ -251,7 +254,7 @@ export default function ProfileScreen() {
       )}
 
       <View style={styles.sectionGroup}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Account</Text>
+        <AppText variant="h3" style={[styles.sectionTitle, { color: colors.foreground }]}>Account</AppText>
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
           <MenuItem
             iconFamily="feather"
@@ -300,7 +303,7 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.sectionGroup}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Community</Text>
+        <AppText variant="h3" style={[styles.sectionTitle, { color: colors.foreground }]}>Community</AppText>
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
           <MenuItem
             iconFamily="feather"
@@ -331,7 +334,7 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.sectionGroup}>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Actions</Text>
+        <AppText variant="h3" style={[styles.sectionTitle, { color: colors.foreground }]}>Actions</AppText>
         <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
         <MenuItem
           iconFamily="feather"
@@ -344,7 +347,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
+      <AppText variant="caption" style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</AppText>
       </GlassScrollView>
 
       {profileImage && (
@@ -440,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: { fontSize: 36, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', lineHeight: 42 },
+  avatarInitial: { ...typography.displayXL, fontFamily: typography.title.fontFamily, color: '#FFFFFF', lineHeight: 42 },
   avatarImageAbsolute: {
     position: 'absolute',
     top: 0,
@@ -463,15 +466,13 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   nameFirst: {
-    fontSize: 34,
-    fontFamily: 'Inter_700Bold',
+    ...typography.displayXL,
     lineHeight: 38,
     letterSpacing: -0.8,
     flexShrink: 1,
   },
   nameLast: {
-    fontSize: 34,
-    fontFamily: 'Inter_700Bold',
+    ...typography.displayXL,
     lineHeight: 38,
     letterSpacing: -0.8,
     flexShrink: 1,
@@ -483,15 +484,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingText: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
   },
   contactDetails: {
     marginTop: 4,
     gap: 2,
   },
-  phone: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  email: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  phone: { ...typography.bodySmall },
+  email: { ...typography.label, fontFamily: typography.caption.fontFamily },
   driverBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -511,10 +512,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bannerTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
-  bannerDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  bannerTitle: { ...typography.title },
+  bannerDesc: { ...typography.label, fontFamily: typography.caption.fontFamily, marginTop: 2 },
   sectionGroup: { gap: 10, marginHorizontal: 16, marginBottom: 20 },
-  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
+  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: 2 },
   menuSection: {
     borderRadius: 14,
     overflow: 'hidden',
@@ -536,7 +537,7 @@ const styles = StyleSheet.create({
   },
   menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
   menuCopy: { flex: 1, gap: 2 },
-  menuLabel: { fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 22 },
-  menuDetail: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
-  version: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', paddingVertical: 8 },
+  menuLabel: { ...typography.body },
+  menuDetail: { ...typography.tiny, fontFamily: typography.caption.fontFamily, lineHeight: 16 },
+  version: { ...typography.caption, textAlign: 'center', paddingVertical: 8 },
 });

@@ -5,7 +5,6 @@ import {
   Alert,
   Dimensions,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,6 +23,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
 import type { Ride } from '@/types';
+import { AppText } from '@/components/AppText';
+import { typography } from '@/constants/typography';
 
 type NotifType = 'ride' | 'promo' | 'system' | 'safety';
 
@@ -217,12 +218,12 @@ function EmptyState({ color, driverMode, mutedColor }: { color: string; driverMo
       <View style={emptyStyles.iconCircle}>
         <Feather name="bell-off" size={32} color={color} />
       </View>
-      <Text style={[emptyStyles.title, { color }]}>No notifications yet</Text>
-      <Text style={[emptyStyles.desc, { color: mutedColor }]}>
+      <AppText variant="h3" style={[emptyStyles.title, { color }]}>No notifications yet</AppText>
+      <AppText variant="bodySmall" style={[emptyStyles.desc, { color: mutedColor }]}>
         {driverMode
           ? "We'll notify you about ride requests, completed trips, and ride package updates."
           : "We'll notify you when your driver is confirmed, on the way, or has arrived."}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -230,8 +231,8 @@ function EmptyState({ color, driverMode, mutedColor }: { color: string; driverMo
 const emptyStyles = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingVertical: 60 },
   iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  title: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 8 },
-  desc: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 22 },
+  title: { ...typography.h3, fontFamily: typography.badge.fontFamily, marginBottom: 8 },
+  desc: { ...typography.bodySmall, textAlign: 'center', lineHeight: 22 },
 });
 
 export default function NotificationsScreen() {
@@ -486,7 +487,8 @@ export default function NotificationsScreen() {
           </View>
           <View style={styles.textWrap}>
             <View style={styles.titleRow}>
-              <Text
+              <AppText
+                variant="bodySmall"
                 style={[
                   styles.title,
                   { color: item.read ? colors.foreground : colors.primary },
@@ -494,14 +496,14 @@ export default function NotificationsScreen() {
                 numberOfLines={1}
               >
                 {item.title}
-              </Text>
-              <Text style={[styles.time, { color: colors.mutedForeground }]}>
+              </AppText>
+              <AppText variant="tiny" style={[styles.time, { color: colors.mutedForeground }]}>
                 {timeAgo(item.time)}
-              </Text>
+              </AppText>
             </View>
-            <Text style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
+            <AppText variant="label" style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
               {item.message}
-            </Text>
+            </AppText>
           </View>
           {!item.read && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
@@ -511,11 +513,11 @@ export default function NotificationsScreen() {
 
   const renderSection = (title: string, items: AppNotification[]) => (
     <>
-      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</Text>
+      <AppText variant="label" style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</AppText>
       {items.length === 0 ? (
-        <Text style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
+        <AppText variant="label" style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
           No notifications
-        </Text>
+        </AppText>
       ) : (
         items.map((item, index) => (
           <React.Fragment key={item.id}>
@@ -533,12 +535,12 @@ export default function NotificationsScreen() {
         title="Notifications"
         titleAccessory={unreadCount > 0 && (
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
+            <AppText variant="badge" style={styles.badgeText}>{unreadCount}</AppText>
           </View>
         )}
         right={unreadCount > 0 ? (
           <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
-            <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
+            <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 80 }} />
@@ -573,21 +575,21 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   badge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
-  badgeText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#000' },
+  badgeText: { ...typography.badge, color: '#000' },
   markAllBtn: { width: 80, alignItems: 'flex-end' },
-  markAllText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  markAllText: { ...typography.label },
   list: { padding: 14 },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
     marginTop: 16,
     marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   emptySectionText: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    ...typography.label,
+    fontFamily: typography.caption.fontFamily,
     marginBottom: 8,
   },
   row: {
@@ -620,8 +622,8 @@ const styles = StyleSheet.create({
   iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   textWrap: { flex: 1, gap: 4, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  time: { fontSize: 11, fontFamily: 'Inter_500Medium', flexShrink: 0 },
-  message: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  title: { flex: 1, ...typography.bodySmall, fontFamily: typography.badge.fontFamily },
+  time: { ...typography.tiny, flexShrink: 0 },
+  message: { ...typography.label, fontFamily: typography.caption.fontFamily },
   dot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
 });

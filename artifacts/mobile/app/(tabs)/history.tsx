@@ -3,7 +3,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -18,6 +17,8 @@ import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+import { AppText } from '@/components/AppText';
+import { typography } from '@/constants/typography';
 
 /** Matches card horizontal padding — space before calendar / after RWF. */
 const CARD_CONTENT_INSET = 16;
@@ -50,25 +51,26 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
     >
       <View style={styles.cardBody}>
         <View style={styles.cardTop}>
-          <Text
+          <AppText
+            variant="title"
             style={[styles.vehicleLabel, { color: colors.foreground }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
             {VEHICLE_LABELS[ride.vehicleType]}
-          </Text>
+          </AppText>
           <StatusChip status={ride.status} variant="history" />
         </View>
 
         <View style={styles.routeRow}>
           <RouteTimeline compact />
           <View style={styles.routeLabels}>
-            <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
+            <AppText variant="bodySmall" style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
               {ride.pickup.address ?? 'Pickup location'}
-            </Text>
-            <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
+            </AppText>
+            <AppText variant="bodySmall" style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>
               {ride.destination.address ?? 'Destination'}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -83,26 +85,27 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
           >
             <View style={[styles.metaItem, styles.metaItemDate]}>
               <Feather name="calendar" size={13} color={colors.mutedForeground} />
-              <Text
+              <AppText
+                variant="caption"
                 style={[styles.metaText, { color: colors.mutedForeground }]}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
                 {dateStr} · {timeStr}
-              </Text>
+              </AppText>
             </View>
             <View style={styles.metaItem}>
               <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-              <Text style={[styles.metaText, { color: colors.mutedForeground }]} numberOfLines={1}>
+              <AppText variant="caption" style={[styles.metaText, { color: colors.mutedForeground }]} numberOfLines={1}>
                 {ride.distance} km
-              </Text>
+              </AppText>
             </View>
           </View>
           {fareLabel != null && (
             <View style={styles.fareColumn} pointerEvents="none">
-              <Text style={[styles.fare, { color: colors.foreground }]} numberOfLines={1}>
+              <AppText variant="bodySmall" style={[styles.fare, { color: colors.foreground }]} numberOfLines={1}>
                 {fareLabel}
-              </Text>
+              </AppText>
             </View>
           )}
         </View>
@@ -167,10 +170,10 @@ export default function HistoryScreen() {
         {rideHistory.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="map" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No trips yet</Text>
-            <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
+            <AppText variant="h2" style={[styles.emptyTitle, { color: colors.foreground }]}>No trips yet</AppText>
+            <AppText variant="bodySmall" style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
               Your completed trips will appear here
-            </Text>
+            </AppText>
           </View>
         ) : (
           <View style={styles.cardList}>
@@ -232,13 +235,12 @@ const styles = StyleSheet.create({
   },
   vehicleLabel: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
     minWidth: 0,
   },
   routeRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   routeLabels: { flex: 1, gap: 10 },
-  routeText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+  routeText: { ...typography.bodySmall },
   cardBottom: {
     position: 'relative',
     flexDirection: 'row',
@@ -265,8 +267,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   metaText: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     flexShrink: 1,
   },
   fareColumn: {
@@ -279,8 +280,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   fare: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    ...typography.bodySmall,
+    fontFamily: typography.badge.fontFamily,
     textAlign: 'right',
     ...Platform.select({
       ios: { fontVariant: ['tabular-nums'] },
@@ -288,6 +289,6 @@ const styles = StyleSheet.create({
     }),
   },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
-  emptyTitle: { fontSize: 20, fontFamily: 'Inter_600SemiBold' },
-  emptyDesc: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  emptyTitle: { ...typography.h2 },
+  emptyDesc: { ...typography.bodySmall, textAlign: 'center' },
 });

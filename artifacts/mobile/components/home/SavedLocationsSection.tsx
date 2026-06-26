@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
+import { AppText } from '@/components/AppText';
 import type { useColors } from '@/hooks/useColors';
 import type { RideLocation, SavedLocation } from '@/types';
 import { styles } from './homeStyles';
@@ -28,9 +29,9 @@ export function SavedLocationsSection({
     return (
       <>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: hasSearchResults ? 18 : 4, marginBottom: 6 }}>
-          <Text style={[styles.locationSectionTitle, { color: colors.mutedForeground, marginTop: 0, marginBottom: 0 }]}>
+          <AppText variant="tiny" style={[styles.locationSectionTitle, { color: colors.mutedForeground, marginTop: 0, marginBottom: 0 }]}>
             Saved locations
-          </Text>
+          </AppText>
           {savedLocations.length > 0 && (
             <TouchableOpacity
               onPress={onAddSavedLocation}
@@ -53,9 +54,9 @@ export function SavedLocationsSection({
         {savedLocations.length === 0 && (
           <View style={styles.locationEmptyState}>
             <Feather name="bookmark" size={18} color={colors.mutedForeground} />
-            <Text style={[styles.locationEmptyText, { color: colors.mutedForeground }]}>
+            <AppText variant="label" style={[styles.locationEmptyText, { color: colors.mutedForeground }]}>
               Save places you use often for quicker ride requests.
-            </Text>
+            </AppText>
             <TouchableOpacity
               style={[styles.locationEmptyAction, { backgroundColor: colors.primary }]}
               onPress={onAddSavedLocation}
@@ -65,7 +66,7 @@ export function SavedLocationsSection({
             >
               <Feather name="plus" size={20} color={colors.primaryForeground} />
             </TouchableOpacity>
-            <Text style={[styles.locationEmptyActionText, { color: colors.foreground }]}>Add place</Text>
+            <AppText variant="label" style={[styles.locationEmptyActionText, { color: colors.foreground }]}>Add place</AppText>
           </View>
         )}
         {savedLocations.map((location, index) => (
@@ -83,8 +84,8 @@ export function SavedLocationsSection({
                 <Feather name="bookmark" size={16} color={colors.primary} />
               </View>
               <View style={styles.locationOptionText}>
-                <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>{location.label}</Text>
-                <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={1}>{location.address}</Text>
+                <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>{location.label}</AppText>
+                <AppText variant="caption" style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={1}>{location.address}</AppText>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -105,15 +106,15 @@ export function SavedLocationsSection({
 
   return (
     <>
-      <Text style={[styles.locationSectionTitle, { color: colors.mutedForeground }, hasSearchResults && styles.locationSectionTitleAfterSearch]}>
+      <AppText variant="tiny" style={[styles.locationSectionTitle, { color: colors.mutedForeground }, hasSearchResults && styles.locationSectionTitleAfterSearch]}>
         Previous rides
-      </Text>
+      </AppText>
       {recentLocations.length === 0 && (
         <View style={[styles.locationEmptyState, { backgroundColor: colors.card }]}>
           <Feather name="clock" size={18} color={colors.mutedForeground} />
-          <Text style={[styles.locationEmptyText, { color: colors.mutedForeground }]}>
+          <AppText variant="label" style={[styles.locationEmptyText, { color: colors.mutedForeground }]}>
             Previous ride locations will appear here.
-          </Text>
+          </AppText>
         </View>
       )}
       {recentLocations.map((location, index) => (
@@ -123,10 +124,10 @@ export function SavedLocationsSection({
           onPress={() => onSelect(location)}
         >
           <View style={styles.locationOptionText}>
-            <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
+            <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
               {location.address ?? 'Recent location'}
-            </Text>
-            <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Previous ride</Text>
+            </AppText>
+            <AppText variant="caption" style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Previous ride</AppText>
           </View>
         </TouchableOpacity>
       ))}

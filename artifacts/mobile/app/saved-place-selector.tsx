@@ -7,7 +7,6 @@ import {
   Alert,
   Keyboard,
   StyleSheet,
-  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
@@ -17,9 +16,11 @@ import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { AppText } from '@/components/AppText';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { buttonCornerRadius } from '@/constants/buttons';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { typography } from '@/constants/typography';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
@@ -162,14 +163,14 @@ export default function SavedPlaceSelectorScreen() {
           ]}
         >
           <Feather name="alert-triangle" size={48} color={colors.destructive} />
-          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.foreground, textAlign: 'center' }}>
+          <AppText variant="title" style={{ color: colors.foreground, textAlign: 'center' }}>
             Saved place not found or has been deleted.
-          </Text>
+          </AppText>
           <TouchableOpacity
             style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.primary }}
             onPress={() => router.back()}
           >
-            <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Go Back</Text>
+            <AppText variant="button" style={{ color: colors.primaryForeground }}>Go Back</AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -360,7 +361,7 @@ export default function SavedPlaceSelectorScreen() {
           <View style={[styles.mapOptionIcon, { backgroundColor: colors.muted }]}>
             <MaterialCommunityIcons name="map-marker-radius-outline" size={22} color={colors.foreground} />
           </View>
-          <Text style={[styles.mapOptionText, { color: colors.foreground }]}>Set location on map</Text>
+          <AppText variant="h3" style={[styles.mapOptionText, { color: colors.foreground }]}>Set location on map</AppText>
         </TouchableOpacity>
 
         <GlassScrollView
@@ -377,10 +378,10 @@ export default function SavedPlaceSelectorScreen() {
             >
               <Feather name="edit-2" size={17} color={colors.foreground} />
               <View style={styles.resultCopy}>
-                <Text style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>
+                <AppText variant="bodySmall" style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>
                   Use "{searchText.trim()}"
-                </Text>
-                <Text style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>Save the typed address</Text>
+                </AppText>
+                <AppText variant="tiny" style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>Save the typed address</AppText>
               </View>
             </TouchableOpacity>
           ) : null}
@@ -397,18 +398,18 @@ export default function SavedPlaceSelectorScreen() {
             >
               <MaterialCommunityIcons name="map-marker-outline" size={19} color={colors.foreground} />
               <View style={styles.resultCopy}>
-                <Text style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>{suggestion.title}</Text>
-                <Text style={[styles.resultSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
+                <AppText variant="bodySmall" style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>{suggestion.title}</AppText>
+                <AppText variant="tiny" style={[styles.resultSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
                   {suggestion.subtitle ?? suggestion.place_name}
-                </Text>
+                </AppText>
               </View>
             </TouchableOpacity>
           ))}
 
           {hasQuery && !searchLoading && searchSuggestions.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            <AppText variant="caption" style={[styles.emptyText, { color: colors.mutedForeground }]}>
               No matches yet. Try a full place name, street address, or set the location on the map.
-            </Text>
+            </AppText>
           ) : null}
 
 
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 10,
   },
-  searchInput: { flex: 1, fontSize: 16, fontFamily: 'Inter_500Medium' },
+  searchInput: { flex: 1, ...typography.title, fontFamily: typography.label.fontFamily },
   searchClear: {
     width: 28,
     height: 28,
@@ -457,12 +458,12 @@ const styles = StyleSheet.create({
   },
   mapOption: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 18 },
   mapOptionIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  mapOptionText: { flex: 1, fontSize: 17, fontFamily: 'Inter_600SemiBold' },
+  mapOptionText: { flex: 1, ...typography.h3 },
   results: { flex: 1 },
   resultRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   resultCopy: { flex: 1, gap: 3 },
-  resultTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  resultSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
-  emptyText: { paddingVertical: 22, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  resultTitle: { ...typography.bodySmall, fontFamily: typography.title.fontFamily },
+  resultSubtitle: { ...typography.tiny, fontFamily: typography.caption.fontFamily },
+  emptyText: { paddingVertical: 22, ...typography.caption },
 
 });

@@ -6,7 +6,6 @@ import {
   Linking,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -19,6 +18,8 @@ import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
+import { AppText } from '@/components/AppText';
+import { typography } from '@/constants/typography';
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -83,8 +84,8 @@ export default function SettingsScreen() {
             <View style={styles.languageRow}>
               <View style={styles.rowIcon}><Feather name="globe" size={20} color={colors.primary} /></View>
               <View style={styles.rowCopy}>
-                <Text style={[styles.rowLabel, { color: colors.foreground }]}>Language</Text>
-                <Text style={[styles.rowDetail, { color: colors.mutedForeground }]}>Choose your preferred language</Text>
+                <AppText variant="body" style={[styles.rowLabel, { color: colors.foreground }]}>Language</AppText>
+                <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]}>Choose your preferred language</AppText>
               </View>
               <LanguageSelector />
             </View>
@@ -128,7 +129,7 @@ export default function SettingsScreen() {
 function Section({ children, title }: { children: React.ReactNode; title: string }) {
   const colors = useColors();
   return <View style={styles.section}>
-    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>
+    <AppText variant="h3" style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>
     {children}
   </View>;
 }
@@ -157,8 +158,8 @@ function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon
         )}
       </View>
       <View style={styles.rowCopy}>
-        <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
-        {detail ? <Text style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</Text> : null}
+        <AppText variant="body" style={[styles.rowLabel, { color: colors.foreground }]}>{label}</AppText>
+        {detail ? <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</AppText> : null}
       </View>
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
     </TouchableOpacity>
@@ -168,7 +169,7 @@ function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon
 const styles = StyleSheet.create({
   root: { flex: 1 },
   section: { gap: 10 },
-  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
+  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: 2 },
   card: {
     borderRadius: 14,
     overflow: 'hidden',
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
   languageRow: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 66, paddingHorizontal: 16, paddingVertical: 10 },
   rowIcon: { width: 24, alignItems: 'center', justifyContent: 'center' },
   rowCopy: { flex: 1, minWidth: 0, gap: 2 },
-  rowLabel: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  rowDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  rowLabel: { ...typography.body, fontFamily: typography.label.fontFamily },
+  rowDetail: { ...typography.tiny, fontFamily: typography.caption.fontFamily },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 53 },
 });

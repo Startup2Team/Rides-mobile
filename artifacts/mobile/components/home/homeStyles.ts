@@ -200,7 +200,7 @@ export const styles = StyleSheet.create({
   rideInfoLabel: { ...typography.tiny, fontFamily: typography.title.fontFamily, textTransform: 'uppercase' },
   suggestionsBox: { borderRadius: 10, marginTop: 4, overflow: 'hidden' },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  suggestionText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
+  suggestionText: { flex: 1, ...typography.label, fontFamily: typography.bodySmall.fontFamily },
   vehicleMarkerShadow: {
     position: 'absolute',
     width: 52,
@@ -256,9 +256,9 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   motoTankMark: {
-    fontSize: 12,
+    ...typography.caption,
     lineHeight: 13,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: typography.badge.fontFamily,
     color: '#FFFFFF',
   },
   motoFrontFork: {
@@ -368,7 +368,7 @@ export const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
   },
-  locationSearchInput: { flex: 1, fontSize: 16, fontFamily: 'Inter_500Medium' },
+  locationSearchInput: { flex: 1, ...typography.title, fontFamily: typography.label.fontFamily },
   locationSearchClear: {
     width: 28,
     height: 28,
@@ -403,12 +403,12 @@ export const styles = StyleSheet.create({
     gap: 1,
   },
   locationQuickTitle: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.caption,
+    fontFamily: typography.title.fontFamily,
   },
   locationQuickSub: {
-    fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    ...typography.tiny,
+    fontFamily: typography.caption.fontFamily,
   },
   locationTabs: {
     flexDirection: 'row',
@@ -427,19 +427,17 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   locationTabText: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
   },
   locationSearchEmpty: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 20,
+    ...typography.bodySmall,
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
   locationSectionTitle: {
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    ...typography.tiny,
+    fontFamily: typography.badge.fontFamily,
     textTransform: 'uppercase',
     marginTop: 4,
     marginBottom: 6,
@@ -469,8 +467,8 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   locationOptionText: { flex: 1, gap: 2 },
-  locationOptionTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  locationOptionSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  locationOptionTitle: { ...typography.bodySmall, fontFamily: typography.title.fontFamily },
+  locationOptionSub: { ...typography.caption },
   savedLocationMenuButton: {
     width: 44,
     height: 44,
@@ -489,8 +487,8 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   saveLocationButtonText: {
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
+    ...typography.caption,
+    fontFamily: typography.badge.fontFamily,
   },
   locationEmptyState: {
     minHeight: 118,
@@ -501,8 +499,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   locationEmptyText: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    ...typography.label,
     textAlign: 'center',
   },
   locationEmptyAction: {
@@ -513,8 +510,8 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   locationEmptyActionText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
+    fontFamily: typography.badge.fontFamily,
   },
   // Adaptive pill chips for "Save location as" — wrap naturally, width by content.
   saveAsLocationLabels: {
@@ -531,8 +528,8 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveAsLocationLabelText: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
   },
   saveAsCustomLabelSection: {
     gap: 12,
@@ -548,8 +545,8 @@ export const styles = StyleSheet.create({
   },
   saveAsLocationInput: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
+    ...typography.title,
+    fontFamily: typography.label.fontFamily,
   },
   saveAsCustomLabelButton: {
     minHeight: 52,
@@ -560,8 +557,8 @@ export const styles = StyleSheet.create({
     gap: 8,
   },
   saveAsCustomLabelButtonText: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    ...typography.body,
+    fontFamily: typography.badge.fontFamily,
   },
   saveLocationLabels: {
     flexDirection: 'row',
@@ -576,8 +573,8 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveLocationLabelText: {
-    fontSize: 9,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.tiny,
+    fontFamily: typography.title.fontFamily,
   },
   customSaveLabelSection: {
     gap: 10,
@@ -591,8 +588,8 @@ export const styles = StyleSheet.create({
     gap: 8,
   },
   customSaveLabelButtonText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
+    fontFamily: typography.badge.fontFamily,
   },
   // Map picker
   mapPickerContainer: { ...StyleSheet.absoluteFillObject, zIndex: 120 },
@@ -674,8 +671,8 @@ export const styles = StyleSheet.create({
     elevation: 6,
   },
   mapPickerHint: { position: 'absolute', top: '18%', alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
-  mapPickerHintText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
+  mapPickerHintText: { ...typography.label, textAlign: 'center' },
   mapPickerFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20 },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
-  loaderText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  loaderText: { ...typography.title },
 });

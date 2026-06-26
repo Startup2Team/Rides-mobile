@@ -3,11 +3,11 @@ import React, { type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppText } from '@/components/AppText';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import type { useColors } from '@/hooks/useColors';
@@ -135,8 +135,8 @@ export function LocationSearchOverlay({
                 <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
               </View>
               <View style={styles.locationQuickText}>
-                <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Use current location</Text>
-                <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>GPS precise</Text>
+                <AppText variant="caption" style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Use current location</AppText>
+                <AppText variant="tiny" style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>GPS precise</AppText>
               </View>
             </TouchableOpacity> : null}
 
@@ -149,8 +149,8 @@ export function LocationSearchOverlay({
                 <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
               </View>
               <View style={styles.locationQuickText}>
-                <Text style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Choose on map</Text>
-                <Text style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>Drag map</Text>
+                <AppText variant="caption" style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Choose on map</AppText>
+                <AppText variant="tiny" style={[styles.locationQuickSub, { color: colors.mutedForeground }]} numberOfLines={1}>Drag map</AppText>
               </View>
             </TouchableOpacity>
           </View>
@@ -166,12 +166,12 @@ export function LocationSearchOverlay({
                 onPress={() => onSetListTab(tab)}
                 activeOpacity={0.85}
               >
-                <Text style={[
+                <AppText variant="label" style={[
                   styles.locationTabText,
                   { color: listTab === tab ? colors.primaryForeground : colors.mutedForeground },
                 ]}>
                   {tab === 'saved' ? 'Saved locations' : 'Previous rides'}
-                </Text>
+                </AppText>
               </TouchableOpacity>
             ))}
           </View>
@@ -191,7 +191,7 @@ export function LocationSearchOverlay({
         >
           {hasSearchResults && (
             <>
-              <Text style={[styles.locationSectionTitle, { color: colors.mutedForeground }]}>Search results</Text>
+              <AppText variant="tiny" style={[styles.locationSectionTitle, { color: colors.mutedForeground }]}>Search results</AppText>
               {text.trim().length >= 2 && (
                 <TouchableOpacity
                   style={[styles.locationOption, { borderBottomColor: colors.border }]}
@@ -201,18 +201,18 @@ export function LocationSearchOverlay({
                     <Feather name="edit-2" size={16} color={colors.foreground} />
                   </View>
                   <View style={styles.locationOptionText}>
-                    <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
+                    <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
                       Use "{text.trim()}"
-                    </Text>
-                    <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Confirm exact details in chat</Text>
+                    </AppText>
+                    <AppText variant="caption" style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Confirm exact details in chat</AppText>
                   </View>
                 </TouchableOpacity>
               )}
 
               {text.trim().length >= 2 && !loading && suggestions.length === 0 && (
-                <Text style={[styles.locationSearchEmpty, { color: colors.mutedForeground }]}>
+                <AppText variant="bodySmall" style={[styles.locationSearchEmpty, { color: colors.mutedForeground }]}>
                   No matches yet. Try the full name (e.g. Serena Hotel) or a grid address with ST/AV, or pin on the map.
-                </Text>
+                </AppText>
               )}
 
               {suggestions.map(suggestion => {
@@ -231,12 +231,12 @@ export function LocationSearchOverlay({
                       <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.foreground} />
                     </View>
                     <View style={styles.locationOptionText}>
-                      <Text style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
+                      <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
                         {suggestion.title}
-                      </Text>
-                      <Text style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      </AppText>
+                      <AppText variant="caption" style={[styles.locationOptionSub, { color: colors.mutedForeground }]} numberOfLines={2}>
                         {suggestion.subtitle ?? suggestion.place_name}
-                      </Text>
+                      </AppText>
                     </View>
                   </TouchableOpacity>
                 );

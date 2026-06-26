@@ -10,7 +10,6 @@ import {
   Modal,
   PanResponder,
   Platform,
-  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
@@ -19,6 +18,7 @@ import {
 import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { AppText } from '@/components/AppText';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
 import { useColors } from '@/hooks/useColors';
 import { computeTabBarHeight } from '@/constants/tabBar';
@@ -484,9 +484,9 @@ export default function CustomerHome() {
     return (
       <View style={[styles.loaderContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loaderText, { color: colors.foreground }]}>
+        <AppText variant="title" style={[styles.loaderText, { color: colors.foreground }]}>
           Finding your pickup point
-        </Text>
+        </AppText>
       </View>
     );
   }

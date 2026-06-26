@@ -6,11 +6,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { AppButton } from '@/components/AppButton';
+import { AppText } from '@/components/AppText';
 import type { RideLocation } from '@/types';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
 import { hasUsablePickup } from '@/utils/locationUtils';
@@ -107,12 +107,13 @@ export function BookingSheet({
             <View style={styles.bookingSheetHandleSlot} testID="booking-sheet-handle">
               <View style={styles.bookingSheetHandle} />
             </View>
-            <Text
+            <AppText
+              variant="h2"
               style={[styles.bookingSheetTitle, { color: colors.foreground }]}
               {...(Platform.OS === 'android' ? { includeFontPadding: false } : {})}
             >
               Book a Ride
-            </Text>
+            </AppText>
           </View>
 
           <ScrollView
@@ -139,10 +140,10 @@ export function BookingSheet({
                   <TouchableOpacity style={styles.locRow} onPress={() => onOpenLocationSearch('pickup')} activeOpacity={0.75}>
                     <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
                     <View style={styles.locTextBlock}>
-                      <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                      <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                      <AppText variant="tiny" style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                      <AppText variant="body" style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                         {pickup.address || 'Enter pickup location'}
-                      </Text>
+                      </AppText>
                     </View>
                     <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
@@ -150,10 +151,10 @@ export function BookingSheet({
                   <TouchableOpacity style={styles.locRow} onPress={() => onOpenLocationSearch('dropoff')} activeOpacity={0.75}>
                     <View style={[styles.locDot, { backgroundColor: colors.destructive, borderRadius: 3 }]} />
                     <View style={styles.locTextBlock}>
-                      <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Drop off</Text>
-                      <Text style={[styles.locValue, { color: destination ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>
+                      <AppText variant="tiny" style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Drop off</AppText>
+                      <AppText variant="body" style={[styles.locValue, { color: destination ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>
                         {destination?.address?.trim() || destinationText.trim() || 'Where to?'}
-                      </Text>
+                      </AppText>
                     </View>
                     <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
@@ -169,7 +170,7 @@ export function BookingSheet({
                     activeOpacity={0.7}
                   >
                     <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
-                    <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>Use Map</Text>
+                    <AppText variant="caption" style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>Use Map</AppText>
                   </TouchableOpacity>
                   {gpsLocation ? (
                     <TouchableOpacity
@@ -178,9 +179,9 @@ export function BookingSheet({
                       activeOpacity={0.7}
                     >
                       <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
-                      <Text style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
+                      <AppText variant="caption" style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
                         {focusedField === 'dropoff' ? 'Use GPS as destination' : 'Use GPS as pickup'}
-                      </Text>
+                      </AppText>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -190,19 +191,19 @@ export function BookingSheet({
                     <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
                       <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
                       <View style={styles.rideInfoText}>
-                        <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Est. Time</Text>
-                        <Text style={[styles.rideInfoValue, { color: colors.foreground }]}>
+                        <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Est. Time</AppText>
+                        <AppText variant="label" style={[styles.rideInfoValue, { color: colors.foreground }]}>
                           {routeLoading ? '...' : route ? formatDuration(route.durationSeconds) : `~${Math.round(distance * 3 + 5)} min`}
-                        </Text>
+                        </AppText>
                       </View>
                     </View>
                     <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
                       <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
                       <View style={styles.rideInfoText}>
-                        <Text style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Distance</Text>
-                        <Text style={[styles.rideInfoValue, { color: colors.foreground }]}>
+                        <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>Distance</AppText>
+                        <AppText variant="label" style={[styles.rideInfoValue, { color: colors.foreground }]}>
                           {routeLoading ? '...' : route ? formatDistance(route.distanceMeters) : `${distance.toFixed(1)} km`}
-                        </Text>
+                        </AppText>
                       </View>
                     </View>
                   </View>
