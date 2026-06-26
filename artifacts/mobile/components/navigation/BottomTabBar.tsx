@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
+import { typography } from '@/constants/typography';
 
 const ACTIVE_LIGHT = '#007AFF';
 const ACTIVE_DARK = '#0A84FF';
@@ -121,7 +122,7 @@ function TabBarItem({
           {
             color: focused ? activeColor : inactiveColor,
             opacity: labelOpacity,
-            fontWeight: focused ? '700' : '500',
+            fontFamily: focused ? typography.badge.fontFamily : typography.tab.fontFamily,
           },
         ]}
       >
@@ -252,8 +253,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   label: {
-    fontSize: 10,
-    lineHeight: 12,
+    ...typography.tab,
     letterSpacing: 0,
   },
 });

@@ -20,7 +20,9 @@
  *   </Animated.View>
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { AppText } from '@/components/AppText';
+import { typography } from '@/constants/typography';
 import type { useColors } from '@/hooks/useColors';
 
 export const SHEET_PADDING_H = 22;
@@ -72,29 +74,31 @@ export function BottomActionSheet({
 
         {/* Title row — symmetric horizontal padding (no close button slot). */}
         <View style={sheetStyles.titleRow}>
-          <Text
+          <AppText
+            variant="title"
             style={[sheetStyles.title, { color: colors.foreground }]}
             numberOfLines={1}
           >
             {title}
-          </Text>
+          </AppText>
         </View>
 
         {/* Optional subheader */}
         {(subtitle !== undefined || hint !== undefined) ? (
           <View style={sheetStyles.subheader}>
             {subtitle !== undefined ? (
-              <Text
+              <AppText
+                variant="label"
                 style={[sheetStyles.subtitle, { color: colors.mutedForeground }]}
                 numberOfLines={2}
               >
                 {subtitle}
-              </Text>
+              </AppText>
             ) : null}
             {hint !== undefined ? (
-              <Text style={[sheetStyles.hint, { color: colors.mutedForeground }]}>
+              <AppText variant="label" style={[sheetStyles.hint, { color: colors.mutedForeground }]}>
                 {hint}
-              </Text>
+              </AppText>
             ) : null}
           </View>
         ) : null}
@@ -144,8 +148,7 @@ const sheetStyles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
   },
   subheader: {
     paddingLeft: SHEET_PADDING_H,
@@ -154,12 +157,10 @@ const sheetStyles = StyleSheet.create({
     gap: 4,
   },
   subtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 18,
+    ...typography.label,
+    fontFamily: typography.bodySmall.fontFamily,
   },
   hint: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    ...typography.label,
   },
 });

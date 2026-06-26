@@ -5,16 +5,16 @@ import {
   ActivityIndicator,
   StyleProp,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   ViewStyle,
 } from 'react-native';
 import {
-  BUTTON_FONT_SIZE,
   BUTTON_HEIGHT,
   buttonCornerRadius,
 } from '@/constants/buttons';
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { useColors } from '@/hooks/useColors';
 
 type FeatherIcon = React.ComponentProps<typeof Feather>['name'];
@@ -94,7 +94,7 @@ export function AppButton({
 
   const height = BUTTON_HEIGHT[size];
   const cornerRadius = buttonCornerRadius(height);
-  const fontSize = labelFontSize ?? (compact && size === 'sm' ? 12 : BUTTON_FONT_SIZE[size]);
+  const fontSize = labelFontSize ?? typography.button.fontSize;
   const iconSize = compact ? 16 : size === 'sm' ? 18 : 20;
 
   return (
@@ -132,14 +132,15 @@ export function AppButton({
             </View>
           )}
           {!iconOnly && (
-            <Text
+            <AppText
+              variant="button"
               style={[styles.label, { color: textColor, fontSize }]}
               numberOfLines={1}
               adjustsFontSizeToFit={compact}
               minimumFontScale={compact ? 0.85 : 1}
             >
               {title}
-            </Text>
+            </AppText>
           )}
         </>
       )}
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   label: {
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.button,
     letterSpacing: -0.2,
     flexShrink: 1,
     textAlign: 'center',

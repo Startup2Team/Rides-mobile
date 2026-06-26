@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 
 interface AppInputProps extends TextInputProps {
@@ -120,8 +121,7 @@ export function AppInput({
 const styles = StyleSheet.create({
   wrapper: { gap: 6, flex: 1 },
   label: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    ...typography.label,
     marginLeft: 2,
   },
   container: {
@@ -135,22 +135,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -8,
     paddingHorizontal: 3,
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.tiny,
     zIndex: 2,
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
   },
   leftIcon: { marginRight: 10 },
   leftLabel: {
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
+    ...typography.body,
+    fontFamily: typography.label.fontFamily,
     marginRight: 4,
     paddingRight: 8,
-    lineHeight: 20,
   },
   leftLabelDivider: {
     borderRightWidth: 1,
@@ -163,8 +160,7 @@ const styles = StyleSheet.create({
   },
   rightIcon: { padding: 4 },
   error: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     marginLeft: 2,
   },
 });

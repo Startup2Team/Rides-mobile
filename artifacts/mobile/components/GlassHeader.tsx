@@ -3,14 +3,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, usePathname } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Platform,
   StyleSheet,
-  Text,
+  Platform,
   useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/BackButton';
+import { AppText } from '@/components/AppText';
+import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 
 export function useGlassHeaderMetrics() {
@@ -107,9 +108,9 @@ export function GlassHeader({
         )}
         <View style={styles.headerCenter} pointerEvents="box-none">
           <View style={styles.titleRow}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
+            <AppText variant="h3" style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
               {title}
-            </Text>
+            </AppText>
             {titleAccessory}
           </View>
         </View>
@@ -145,22 +146,8 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
   headerTitle: {
-    ...Platform.select({
-      ios: {
-        fontSize: 17,
-        fontWeight: '600',
-      },
-      android: {
-        fontSize: 20,
-        fontFamily: 'sans-serif-medium',
-        fontWeight: 'normal',
-      },
-      default: {
-        fontSize: 18,
-        fontWeight: '600',
-      },
-    }),
+    ...typography.h3,
   },
-  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  headerSub: { ...typography.caption, marginTop: 2 },
   sideSlot: { width: 44, height: 44 },
 });
