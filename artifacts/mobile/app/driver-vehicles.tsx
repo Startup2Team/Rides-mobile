@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
@@ -31,6 +32,23 @@ export default function DriverVehiclesScreen() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const online = driverProfile?.isOnline === true;
   const sourceVehicleId = typeof params.sourceVehicleId === 'string' ? params.sourceVehicleId : null;
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      // Simulate status check/reload delay
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, []);
 
   const handleSelectVehicle = async (vehicleId: string) => {
     if (online) return;
@@ -52,13 +70,16 @@ export default function DriverVehiclesScreen() {
         subtitle="Manage your linked vehicles"
         onBackPress={() => router.back()}
       />
-      <ScrollView
+      <GlassScrollView
         style={styles.root}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
         }}
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={styles.headerBand}>
           <View style={styles.headerBandTop}>
@@ -152,7 +173,7 @@ export default function DriverVehiclesScreen() {
             );
           })}
         </View>
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }

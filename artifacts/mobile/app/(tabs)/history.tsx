@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Platform,
   Pressable,
@@ -126,6 +126,23 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { rideHistory, loadHistory } = useRide();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await loadHistory();
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [loadHistory]);
 
   useEffect(() => { loadHistory(); }, []);
 
@@ -143,7 +160,9 @@ export default function HistoryScreen() {
             paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
           },
         ]}
-        scrollEnabled={rideHistory.length > 0}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         {rideHistory.length === 0 ? (
           <View style={styles.empty}>

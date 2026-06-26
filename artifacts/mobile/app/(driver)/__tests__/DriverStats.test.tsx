@@ -99,6 +99,14 @@ jest.mock('@expo/vector-icons', () => {
   return { Feather: Icon, FontAwesome: Icon };
 });
 
+jest.mock('@/components/GlassScrollView', () => ({
+  GlassScrollView: ({ children }: { children?: React.ReactNode }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+    return <View>{children}</View>;
+  },
+}));
+
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'driver-1' },

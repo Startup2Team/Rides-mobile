@@ -1,5 +1,6 @@
 import React from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -29,6 +30,26 @@ export default function DriverStats() {
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { rideHistory, loadHistory } = useRide();
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await loadHistory();
+      const storedRatings = await loadStoredDriverRatings();
+      const summary = user?.id ? getDriverRatingSummary(storedRatings.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
+      setRatingSummary(summary);
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [loadHistory, user?.id]);
 
   React.useEffect(() => {
     void loadHistory();
@@ -71,7 +92,7 @@ export default function DriverStats() {
         subtitle="Track your driver performance"
         showBack={false}
       />
-      <ScrollView
+      <GlassScrollView
         style={styles.container}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
@@ -81,6 +102,9 @@ export default function DriverStats() {
         }}
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
         showsVerticalScrollIndicator={false}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <LinearGradient
           colors={[colors.primaryHex, colors.primaryHex + 'D9']}
@@ -192,7 +216,7 @@ export default function DriverStats() {
         </View>
 
         <PurchaseHistoryCard purchases={entitlement.purchaseHistory} />
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }

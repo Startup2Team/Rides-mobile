@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -57,12 +58,13 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     const snapAnim = React.useRef(new Animated.Value(0)).current;
     const hapticTriggered = React.useRef(false);
     const pullProgress = React.useRef(new Animated.Value(0)).current;
+    const isDragging = React.useRef(false);
 
     React.useEffect(() => {
-      Animated.spring(snapAnim, {
+      Animated.timing(snapAnim, {
         toValue: refreshing ? 48 : 0,
-        tension: 50,
-        friction: 8,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: false,
       }).start();
 
@@ -134,7 +136,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       scrollY.setValue(offsetY);
       indicatorOpacity.setValue(1);
 
-      if (onRefresh && !refreshing) {
+      if (onRefresh && !refreshing && isDragging.current) {
         const dragDistance = restingY - offsetY;
         const progress = Math.min(1, Math.max(0, dragDistance / 55));
         pullProgress.setValue(progress);
@@ -166,10 +168,24 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
 
 
 
+    const handleScrollBeginDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isDragging.current = true;
+      props.onScrollBeginDrag?.(event);
+    };
+
     const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isDragging.current = false;
       const offsetY = event.nativeEvent.contentOffset.y;
-      if (offsetY < pullThreshold && onRefresh && !refreshing) {
-        onRefresh();
+      if (onRefresh && !refreshing) {
+        if (offsetY < pullThreshold) {
+          onRefresh();
+        } else {
+          Animated.timing(pullProgress, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+          }).start();
+        }
       }
       props.onScrollEndDrag?.(event);
     };
@@ -211,6 +227,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={scrollEventThrottle}
           onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
           onScrollEndDrag={handleScrollEndDrag}
           onContentSizeChange={(contentWidth, contentHeight) => {
             setScrollMetrics(prev => ({ ...prev, contentHeight }));
