@@ -322,7 +322,7 @@ describe('DriverDashboard online state', () => {
 
     render(<DashboardProviders />);
 
-    await waitFor(() => expect(screen.getByText('Hi, Test')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Test')).toBeTruthy());
     expect(screen.getByTestId('driver-verified-badge')).toBeTruthy();
     expect(screen.queryByText('Compact vehicle marker')).toBeNull();
     expect(screen.getByText('0.0')).toBeTruthy();
@@ -643,7 +643,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Hi, Test')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Test')).toBeTruthy());
 
     expect(screen.getByTestId('driver-status-card').props.style).toEqual(
       expect.arrayContaining([

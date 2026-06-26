@@ -633,7 +633,7 @@ export default function DriverDashboard() {
             <View style={styles.statusIdentity} testID="driver-identity-block">
               <View style={styles.greetingRow}>
                 <Text style={[styles.statusGreeting, { color: colors.foreground }]} numberOfLines={1}>
-                  Hi, {driverName}
+                  {driverName}
                 </Text>
                 {isVerified && (
                   <VerifiedBadge
