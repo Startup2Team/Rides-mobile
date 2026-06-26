@@ -51,7 +51,7 @@ export function PackageSyncProvider({
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
     const operation = (async () => {
       if (mountedRef.current) setIsRefreshing(true);
-      
+
       const startTime = Date.now();
       const result = await offerSourceRepository.refreshOfferSource()
         .then(value => ({ status: 'fulfilled' as const, value }))
