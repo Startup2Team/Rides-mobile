@@ -1,9 +1,10 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -118,14 +119,14 @@ export default function DriverSubmissionConfirmation() {
       {/* ── Hero ── */}
       <View style={styles.hero}>
         <Animated.View style={[styles.heroText, { opacity: contentOpacity, transform: [{ translateY: contentSlide }] }]}>
-          <Text style={[styles.heroTitle, { color: titleColor }]}>
+          <AppText style={[styles.heroTitle, { color: titleColor }]}>
             {isApproved ? 'Application Approved!' : 'Application Submitted!'}
-          </Text>
-          <Text style={[styles.heroSub, { color: bodyColor }]}>
+          </AppText>
+          <AppText style={[styles.heroSub, { color: bodyColor }]}>
             {isApproved
               ? 'Your application is approved. Continue to driver mode to start driving.'
               : 'Your application has been received successfully.'}
-          </Text>
+          </AppText>
         </Animated.View>
       </View>
 
@@ -135,14 +136,14 @@ export default function DriverSubmissionConfirmation() {
         {/* Status chip */}
         <View style={[styles.statusChip, { backgroundColor: accentSoftStrong, borderColor: accentBorder }]}>
           <View style={[styles.statusDot, { backgroundColor: accent }]} />
-          <Text style={[styles.statusText, { color: accent }]}>
+          <AppText style={[styles.statusText, { color: accent }]}>
             {isApproved ? 'Application approved' : 'Application under review'}
-          </Text>
+          </AppText>
         </View>
 
         {/* Timeline card */}
         <View style={[styles.card, { backgroundColor: cardFill }]}>
-          <Text style={[styles.cardHeading, { color: titleColor }]}>What happens next</Text>
+          <AppText style={[styles.cardHeading, { color: titleColor }]}>What happens next</AppText>
           <View style={[styles.divider, { backgroundColor: separatorColor }]} />
           {timelineSteps.map((step, i) => (
             <View key={step.label}>
@@ -167,10 +168,10 @@ export default function DriverSubmissionConfirmation() {
                   )}
                 </View>
                 <View style={styles.timelineContent}>
-                  <Text style={[styles.timelineLabel, { color: step.done || step.active ? titleColor : mutedColor }]}>
+                  <AppText style={[styles.timelineLabel, { color: step.done || step.active ? titleColor : mutedColor }]}>
                     {step.label}
-                  </Text>
-                  <Text style={[styles.timelineDesc, { color: bodyColor }]}>{step.desc}</Text>
+                  </AppText>
+                  <AppText style={[styles.timelineDesc, { color: bodyColor }]}>{step.desc}</AppText>
                 </View>
                 <Feather name={step.icon} size={17} color={step.done || step.active ? accent : mutedColor} />
               </View>
@@ -209,12 +210,12 @@ export default function DriverSubmissionConfirmation() {
         />
         <TouchableOpacity style={styles.supportBtn} onPress={() => router.push('/help-support')} activeOpacity={0.6}>
           <Feather name="help-circle" size={16} color={colors.primary} />
-          <Text style={[styles.supportText, { color: colors.primary }]}>Contact Support</Text>
+          <AppText style={[styles.supportText, { color: colors.primary }]}>Contact Support</AppText>
         </TouchableOpacity>
         {showApprovalDevtool && (
           <TouchableOpacity style={[styles.devBtn, { borderColor: colors.border }]} onPress={handleDevApprove} activeOpacity={0.6}>
             <Feather name="zap" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.devText, { color: colors.mutedForeground }]}>DEV — Approve & Enter Dashboard</Text>
+            <AppText style={[styles.devText, { color: colors.mutedForeground }]}>DEV — Approve & Enter Dashboard</AppText>
           </TouchableOpacity>
         )}
       </Animated.View>
@@ -232,8 +233,8 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   heroText: { alignItems: 'center', gap: 8 },
-  heroTitle: { fontSize: 24, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  heroSub: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 21, textAlign: 'center', maxWidth: 300 },
+  heroTitle: { ...typography.h1, textAlign: 'center' },
+  heroSub: { ...typography.bodySmall, lineHeight: 21, textAlign: 'center', maxWidth: 300 },
   body: { paddingHorizontal: 16, gap: 12 },
   statusChip: {
     flexDirection: 'row',
@@ -246,13 +247,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  statusText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  statusText: { ...typography.label,  },
   card: {
     borderRadius: 14,
     overflow: 'hidden',
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  cardHeading: { fontSize: 14, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 16, paddingVertical: 13 },
+  cardHeading: { ...typography.bodySmall, paddingHorizontal: 16, paddingVertical: 13 },
   divider: { height: StyleSheet.hairlineWidth },
   timelineRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
   timelineLeft: { alignItems: 'center', width: 24 },
@@ -260,10 +261,10 @@ const styles = StyleSheet.create({
   activePulse: { width: 8, height: 8, borderRadius: 4 },
   timelineLine: { width: 2, flex: 1, minHeight: 16, marginTop: 4, borderRadius: 1 },
   timelineContent: { flex: 1, gap: 2 },
-  timelineLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  timelineDesc: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
+  timelineLabel: { ...typography.bodySmall,  },
+  timelineDesc: { ...typography.caption, lineHeight: 17 },
   rejectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 13, paddingBottom: 0 },
-  rejectionText: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20, padding: 16, paddingTop: 10 },
+  rejectionText: { ...typography.bodySmall, lineHeight: 20, padding: 16, paddingTop: 10 },
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -273,10 +274,10 @@ const styles = StyleSheet.create({
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
   noticeIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  noticeText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  noticeText: { flex: 1, ...typography.label, lineHeight: 18 },
   actions: { paddingHorizontal: 16, gap: 10, paddingTop: 34 },
   supportBtn: { height: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  supportText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  supportText: { ...typography.button },
   devBtn: { height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, borderStyle: 'dashed' },
-  devText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  devText: { ...typography.button },
 });

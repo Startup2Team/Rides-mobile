@@ -1,3 +1,5 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
@@ -5,7 +7,6 @@ import {
   Image,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useColorScheme,
@@ -246,7 +247,7 @@ export default function DriverAddVehicleScreen() {
         }}
       >
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle type</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle type</AppText>
           <View style={styles.vehicleGrid}>
             {(['moto', 'rifani', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(type => (
               <TouchableOpacity
@@ -261,14 +262,14 @@ export default function DriverAddVehicleScreen() {
                 onPress={() => update('vehicleType', type)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.vehicleTypeText, { color: form.vehicleType === type ? colors.primary : colors.foreground }]}>{VEHICLE_LABELS[type]}</Text>
+                <AppText style={[styles.vehicleTypeText, { color: form.vehicleType === type ? colors.primary : colors.foreground }]}>{VEHICLE_LABELS[type]}</AppText>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle details</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle details</AppText>
           <AppInput label="Brand" value={brand} onChangeText={setBrand} placeholder={vehiclePlaceholders.brand} />
           <AppInput label="Model" value={model} onChangeText={setModel} placeholder={vehiclePlaceholders.model} />
           <AppInput label="Manufacture Year" value={manufactureYear} onChangeText={text => setManufactureYear(text.replace(/\D/g, '').slice(0, 4))} keyboardType="numeric" placeholder="2020" />
@@ -295,7 +296,7 @@ export default function DriverAddVehicleScreen() {
 
         {getRequiredVehiclePhotoKeys(form.vehicleType).length > 0 ? (
           <View style={styles.sectionLast}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</Text>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</AppText>
             <PhotoRow
               colors={colors}
               label="Outside photo"
@@ -327,7 +328,7 @@ function PhotoRow({ colors, label, onCamera, uri }: {
 }) {
   return (
     <View style={styles.photoRow}>
-      <Text style={[styles.photoLabel, { color: colors.foreground }]}>{label}</Text>
+      <AppText style={[styles.photoLabel, { color: colors.foreground }]}>{label}</AppText>
       {uri ? (
         <View style={styles.photoPreviewCard}>
           <Image source={{ uri }} style={styles.photoPreview} />
@@ -337,12 +338,12 @@ function PhotoRow({ colors, label, onCamera, uri }: {
                 <Feather name="check" size={14} color={colors.success} />
               </View>
               <View style={styles.photoCapturedCopy}>
-                <Text style={[styles.photoCapturedTitle, { color: colors.foreground }]}>Photo captured</Text>
+                <AppText style={[styles.photoCapturedTitle, { color: colors.foreground }]}>Photo captured</AppText>
               </View>
             </View>
             <TouchableOpacity style={[styles.photoButton, { borderColor: colors.border }]} onPress={onCamera}>
               <Feather name="camera" size={13} color={colors.foreground} />
-              <Text style={[styles.photoButtonText, { color: colors.foreground }]}>Retake Photo</Text>
+              <AppText style={[styles.photoButtonText, { color: colors.foreground }]}>Retake Photo</AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -352,7 +353,7 @@ function PhotoRow({ colors, label, onCamera, uri }: {
           onPress={onCamera}
         >
           <Feather name="camera" size={20} color={colors.primary} />
-          <Text style={[styles.photoCaptureText, { color: colors.primary }]}>Take Photo</Text>
+          <AppText style={[styles.photoCaptureText, { color: colors.primary }]}>Take Photo</AppText>
         </TouchableOpacity>
       )}
     </View>
@@ -370,19 +371,19 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 4,
   },
-  sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  sectionTitle: { ...typography.title,  },
   vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   vehicleTypeChip: { borderWidth: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-  vehicleTypeText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  vehicleTypeText: { ...typography.label,  },
   photoRow: { gap: 8 },
-  photoLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  photoLabel: { ...typography.label,  },
   photoPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   photoPreview: { width: 76, height: 76, borderRadius: 10 },
   photoPreviewContent: { flex: 1, gap: 10 },
   photoCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   photoCapturedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   photoCapturedCopy: { flex: 1, gap: 1 },
-  photoCapturedTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  photoCapturedTitle: { ...typography.label,  },
   photoCaptureButton: {
     height: 80,
     borderWidth: 1.5,
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  photoCaptureText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  photoCaptureText: { ...typography.button },
   photoButton: { alignSelf: 'flex-start', minHeight: 34, paddingHorizontal: 12, borderWidth: 1, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  photoButtonText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  photoButtonText: { ...typography.button },
 });

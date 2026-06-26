@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -113,11 +115,11 @@ export default function DriverStats() {
           style={[styles.heroCard, styles.heroShadow]}
         >
           <View style={styles.heroHeading}>
-            <Text style={styles.heroEyebrow}>TODAY'S ACTIVITY</Text>
+            <AppText style={styles.heroEyebrow}>TODAY'S ACTIVITY</AppText>
           </View>
           <View>
-            <Text style={styles.heroValue}>{formatRwf(activitySummary.todayEarningsRwf)}</Text>
-            <Text style={styles.heroCaption}>Activity Earnings</Text>
+            <AppText style={styles.heroValue}>{formatRwf(activitySummary.todayEarningsRwf)}</AppText>
+            <AppText style={styles.heroCaption}>Activity Earnings</AppText>
           </View>
           <View style={styles.heroMetrics}>
             <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
@@ -126,7 +128,7 @@ export default function DriverStats() {
             <View style={styles.heroDivider} />
             <HeroMetric label="Driver Rating" value={ratingSummary.ratingCount > 0 ? ratingValue : 'No ratings yet'} compact />
           </View>
-          {!hasTripsToday ? <Text style={styles.heroEmptyText}>No trips completed today yet.</Text> : null}
+          {!hasTripsToday ? <AppText style={styles.heroEmptyText}>No trips completed today yet.</AppText> : null}
         </LinearGradient>
 
         <View style={styles.section}>
@@ -180,16 +182,16 @@ export default function DriverStats() {
             <Feather name="layers" size={20} color={colors.primary} />
             <View style={styles.packageHeader}>
               <View style={styles.packageTitleGroup}>
-                <Text style={[styles.packageName, { color: colors.foreground }]}>
+                <AppText style={[styles.packageName, { color: colors.foreground }]}>
                   Ride Packages
-                </Text>
-                <Text style={[styles.packageMeta, { color: colors.mutedForeground }]}>
+                </AppText>
+                <AppText style={[styles.packageMeta, { color: colors.mutedForeground }]}>
                   Explore package options for your driving needs
-                </Text>
+                </AppText>
               </View>
             </View>
             <View style={[styles.packageAction, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.packageActionText, { color: colors.primaryForeground }]}>View Packages</Text>
+              <AppText style={[styles.packageActionText, { color: colors.primaryForeground }]}>View Packages</AppText>
             </View>
           </TouchableOpacity>
         </View>
@@ -223,8 +225,8 @@ export default function DriverStats() {
 
 function HeroMetric({ compact = false, label, value }: { compact?: boolean; label: string; value: string }) {
   return <View style={styles.heroMetric}>
-    <Text style={[styles.heroMetricValue, compact && styles.heroMetricValueCompact]} numberOfLines={1}>{value}</Text>
-    <Text style={styles.heroMetricLabel} numberOfLines={1}>{label}</Text>
+    <AppText style={[styles.heroMetricValue, compact && styles.heroMetricValueCompact]} numberOfLines={1}>{value}</AppText>
+    <AppText style={styles.heroMetricLabel} numberOfLines={1}>{label}</AppText>
   </View>;
 }
 
@@ -234,17 +236,17 @@ function MetricTile({ colors, icon, iconColor, label, note, tone, value }: {
   return <View style={[styles.metricTile, styles.cardShadow, { backgroundColor: colors.card }]}>
     <View style={styles.metricTopRow}>
       {icon === 'star' && iconColor
-        ? <Text style={{ fontSize: 18, lineHeight: 22, color: iconColor }}>★</Text>
+        ? <AppText style={{ ...typography.h3, lineHeight: 22, color: iconColor }}>★</AppText>
         : <Feather name={icon} size={18} color={iconColor ?? colors.foreground} />}
-      <Text style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text>
+      <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</AppText>
     </View>
-    <Text style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    <AppText style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</AppText>
   </View>;
 }
 
 function SectionHeader({ title }: { title: string }) {
   const colors = useColors();
-  return <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>;
+  return <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>;
 }
 
 function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
@@ -253,22 +255,22 @@ function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
   return <View style={styles.performanceStatus}>
     <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={20} color={priorityReduced ? colors.destructive : colors.primary} />
     <View style={styles.performanceStatusCopy}>
-      <Text style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
+      <AppText style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
         {priorityReduced ? 'Lower Priority' : 'High Priority'}
-      </Text>
-      <Text style={[styles.performanceStatusNote, { color: colors.mutedForeground }]}>
+      </AppText>
+      <AppText style={[styles.performanceStatusNote, { color: colors.mutedForeground }]}>
         {priorityReduced
           ? 'Priority was reduced after 10 or more declines today.'
           : `${10 - declinesToday} more declines before priority is reduced.`}
-      </Text>
+      </AppText>
     </View>
   </View>;
 }
 
 function CompactStat({ colors, label, value }: { colors: ReturnType<typeof useColors>; label: string; value: string }) {
   return <View style={styles.compactStat}>
-    <Text style={[styles.compactStatValue, { color: colors.foreground }]}>{value}</Text>
-    <Text style={[styles.compactStatLabel, { color: colors.mutedForeground }]}>{label}</Text>
+    <AppText style={[styles.compactStatValue, { color: colors.foreground }]}>{value}</AppText>
+    <AppText style={[styles.compactStatLabel, { color: colors.mutedForeground }]}>{label}</AppText>
   </View>;
 }
 
@@ -278,10 +280,10 @@ function DetailRow({ colors, icon, label, last = false, note, value }: {
   return <View style={[styles.detailRow, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
     <Feather name={icon} size={18} color={colors.primary} />
     <View style={styles.detailLabelGroup}>
-      <Text style={[styles.detailLabel, { color: colors.foreground }]}>{label}</Text>
-      {note ? <Text style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</Text> : null}
+      <AppText style={[styles.detailLabel, { color: colors.foreground }]}>{label}</AppText>
+      {note ? <AppText style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</AppText> : null}
     </View>
-    <Text style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={1}>{value}</Text>
+    <AppText style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={1}>{value}</AppText>
   </View>;
 }
 
@@ -295,7 +297,7 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
       {recentPurchases.length === 0 ? (
         <View style={styles.emptyHistory}>
           <Feather name="clock" size={21} color={colors.mutedForeground} />
-          <Text style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</Text>
+          <AppText style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</AppText>
         </View>
       ) : recentPurchases.map((purchase, index) => {
         const purchaseSnapshot = getPackagePurchaseSnapshot(purchase);
@@ -306,18 +308,18 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
         >
           <Feather name="package" size={18} color={colors.primary} />
           <View style={styles.historyLabelGroup}>
-            <Text style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</Text>
-            <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</AppText>
+            <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
               {purchaseSnapshot ? `${purchaseSnapshot.ridesGranted} Rides + ${purchaseSnapshot.bonusRidesGranted} Bonus Rides` : 'Package snapshot unavailable'}
-            </Text>
-            <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+            </AppText>
+            <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
               {formatHistoryDate(purchaseSnapshot?.purchasedAt ?? purchase.purchasedAt ?? purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.historyTotals}>
-            <Text style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchaseSnapshot?.pricePaid ?? purchase.pricePaid ?? purchase.amount)}</Text>
+            <AppText style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchaseSnapshot?.pricePaid ?? purchase.pricePaid ?? purchase.amount)}</AppText>
             <View style={[styles.statusPill, { backgroundColor: statusColor + '12' }]}>
-              <Text style={[styles.historyStatus, { color: statusColor }]}>{formatPurchaseStatus(purchase.status)}</Text>
+              <AppText style={[styles.historyStatus, { color: statusColor }]}>{formatPurchaseStatus(purchase.status)}</AppText>
             </View>
           </View>
         </View>;
@@ -358,60 +360,60 @@ function formatHistoryDate(value: string) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   todayChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
-  todayChipText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  todayChipText: { ...typography.tiny,  },
   heroCard: { borderRadius: 26, padding: 20, gap: 18, overflow: 'hidden' },
   heroShadow: { shadowColor: '#007AFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 18, elevation: 7 },
   heroHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroEyebrow: { color: 'rgba(255,255,255,0.76)', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.9 },
-  heroValue: { color: '#fff', fontSize: 34, lineHeight: 40, fontFamily: 'Inter_700Bold', letterSpacing: -1 },
-  heroCaption: { color: 'rgba(255,255,255,0.72)', fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  heroEyebrow: { color: 'rgba(255,255,255,0.76)', ...typography.tiny, letterSpacing: 0.9 },
+  heroValue: { color: '#fff', ...typography.displayXL, lineHeight: 40, letterSpacing: -1 },
+  heroCaption: { color: 'rgba(255,255,255,0.72)', ...typography.caption, marginTop: 2 },
   heroMetrics: { flexDirection: 'row', alignItems: 'center' },
   heroMetric: { flex: 1, minWidth: 0, gap: 3 },
-  heroMetricValue: { color: '#fff', fontSize: 17, fontFamily: 'Inter_700Bold' },
-  heroMetricValueCompact: { fontSize: 12 },
-  heroMetricLabel: { color: 'rgba(255,255,255,0.68)', fontSize: 9, fontFamily: 'Inter_500Medium' },
+  heroMetricValue: { color: '#fff', ...typography.title,  },
+  heroMetricValueCompact: { ...typography.caption },
+  heroMetricLabel: { color: 'rgba(255,255,255,0.68)', ...typography.tiny,  },
   heroDivider: { width: StyleSheet.hairlineWidth, height: 30, marginHorizontal: 9, backgroundColor: 'rgba(255,255,255,0.26)' },
-  heroEmptyText: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  heroEmptyText: { color: 'rgba(255,255,255,0.72)', ...typography.tiny, marginTop: -8 },
   section: { gap: 11 },
-  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
+  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: 2 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: 14, padding: 10, gap: 3 },
   metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metricValue: { fontSize: 19, lineHeight: 23, fontFamily: 'Inter_700Bold', letterSpacing: -0.5, marginTop: 2 },
-  metricLabel: { flex: 1, fontSize: 9, fontFamily: 'Inter_600SemiBold' },
-  metricNote: { fontSize: 9, fontFamily: 'Inter_400Regular', lineHeight: 13 },
+  metricValue: { ...typography.h3, lineHeight: 23, letterSpacing: -0.5, marginTop: 2 },
+  metricLabel: { flex: 1, ...typography.tiny,  },
+  metricNote: { ...typography.tiny, lineHeight: 13 },
   cardShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
   surface: { borderRadius: 20, overflow: 'hidden' },
   packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
   packageHeader: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   packageTitleGroup: { flex: 1, gap: 3 },
-  packageName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  packageMeta: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  packageName: { ...typography.body,  },
+  packageMeta: { ...typography.tiny,  },
   packageAction: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 100 },
-  packageActionText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
+  packageActionText: { ...typography.button },
   performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16 },
   performanceStatusCopy: { flex: 1, gap: 4 },
-  performanceStatusTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  performanceStatusNote: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 17 },
+  performanceStatusTitle: { ...typography.body,  },
+  performanceStatusNote: { ...typography.tiny, lineHeight: 17 },
   softDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   performanceStats: { flexDirection: 'row', alignItems: 'center', padding: 15 },
   compactStat: { flex: 1, alignItems: 'center', gap: 3 },
-  compactStatValue: { fontSize: 22, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
-  compactStatLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  compactStatValue: { ...typography.h2, letterSpacing: -0.4 },
+  compactStatLabel: { ...typography.tiny,  },
   verticalDivider: { width: StyleSheet.hairlineWidth, height: 30 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 15 },
   detailLabelGroup: { flex: 1, gap: 2 },
-  detailLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  detailNote: { fontSize: 10, fontFamily: 'Inter_400Regular' },
-  detailValue: { maxWidth: '44%', textAlign: 'right', fontSize: 13, fontFamily: 'Inter_700Bold' },
+  detailLabel: { ...typography.label,  },
+  detailNote: { ...typography.tiny,  },
+  detailValue: { maxWidth: '44%', textAlign: 'right', ...typography.label,  },
   emptyHistory: { alignItems: 'center', gap: 9, padding: 24 },
-  emptyHistoryText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  emptyHistoryText: { ...typography.caption,  },
   historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
   historyLabelGroup: { flex: 1, minWidth: 0 },
-  historyName: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  historyMeta: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  historyName: { ...typography.label,  },
+  historyMeta: { ...typography.tiny, marginTop: 3 },
   historyTotals: { alignItems: 'flex-end', gap: 5 },
-  historyPrice: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  historyPrice: { ...typography.caption,  },
   statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
-  historyStatus: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  historyStatus: { ...typography.tiny,  },
 });

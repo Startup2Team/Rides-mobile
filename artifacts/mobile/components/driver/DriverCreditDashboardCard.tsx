@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { getActivePackageActivation, getRideCreditBalanceMessage, getRideCreditProgress, type DriverEntitlement } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
@@ -22,7 +24,7 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
     return (
       <View style={[styles.loadingCard, { backgroundColor: cardFill }]}>
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Checking rides...</Text>
+        <AppText style={[styles.loadingText, { color: colors.mutedForeground }]}>Checking rides...</AppText>
       </View>
     );
   }
@@ -34,11 +36,11 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
           <Feather name="layers" size={17} color={colors.success} />
         </View>
         <View style={styles.content}>
-          <Text style={[styles.title, { color: colors.foreground }]}>No rides</Text>
-          <Text style={[styles.description, { color: colors.mutedForeground }]}>{message}</Text>
+          <AppText style={[styles.title, { color: colors.foreground }]}>No rides</AppText>
+          <AppText style={[styles.description, { color: colors.mutedForeground }]}>{message}</AppText>
         </View>
         <TouchableOpacity style={[styles.action, { backgroundColor: colors.primary }]} onPress={onViewPackages} activeOpacity={0.8}>
-          <Text style={[styles.actionText, { color: colors.primaryForeground }]}>View Packages</Text>
+          <AppText style={[styles.actionText, { color: colors.primaryForeground }]}>View Packages</AppText>
         </TouchableOpacity>
       </View>
     );
@@ -52,16 +54,16 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
     <TouchableOpacity style={[styles.progressCard, { backgroundColor: cardFill }]} onPress={onViewPackages} activeOpacity={0.85}>
       <View style={styles.progressHeader}>
         <View style={styles.content}>
-          <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>ACTIVE RIDE PACKAGE</Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>{activePackage?.packageName ?? 'Combined package rides'}</Text>
-          <Text style={[styles.description, { color: colors.mutedForeground }]}>{balanceLabel}</Text>
+          <AppText style={[styles.eyebrow, { color: colors.mutedForeground }]}>ACTIVE RIDE PACKAGE</AppText>
+          <AppText style={[styles.title, { color: colors.foreground }]}>{activePackage?.packageName ?? 'Combined package rides'}</AppText>
+          <AppText style={[styles.description, { color: colors.mutedForeground }]}>{balanceLabel}</AppText>
         </View>
         <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
       </View>
       <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
         <View style={[styles.progressFill, { backgroundColor: message ? colors.destructive : colors.primary, width: `${progress.ratio * 100}%` }]} />
       </View>
-      {message ? <Text style={[styles.warningText, { color: colors.destructive }]}>{message}</Text> : null}
+      {message ? <AppText style={[styles.warningText, { color: colors.destructive }]}>{message}</AppText> : null}
     </TouchableOpacity>
   );
 }
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
   },
-  loadingText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  loadingText: { ...typography.caption,  },
   zeroCard: {
     marginTop: 8,
     borderRadius: 16,
@@ -90,14 +92,14 @@ const styles = StyleSheet.create({
   },
   zeroIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
-  title: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  description: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, marginTop: 2 },
+  title: { ...typography.bodySmall,  },
+  description: { ...typography.tiny, lineHeight: 16, marginTop: 2 },
   action: { paddingHorizontal: 10, height: 30, borderRadius: 15, justifyContent: 'center' },
-  actionText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  actionText: { ...typography.button },
   progressCard: { marginTop: 8, borderRadius: 16, padding: 12, gap: 9 },
   progressHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  eyebrow: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.6 },
+  eyebrow: { ...typography.tiny, letterSpacing: 0.6 },
   progressTrack: { height: 5, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
-  warningText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
+  warningText: { ...typography.tiny, lineHeight: 16 },
 });

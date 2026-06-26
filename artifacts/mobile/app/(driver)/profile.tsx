@@ -1,6 +1,8 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, Image, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, Image, Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -121,36 +123,36 @@ export default function DriverProfileScreen() {
             >
               {lastName ? (
                 <>
-                  <Text
+                  <AppText
                     style={[styles.nameFirst, { color: colors.foreground }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.5}
                   >
                     {firstName}
-                  </Text>
+                  </AppText>
                   <View style={styles.nameRow}>
-                    <Text
+                    <AppText
                       style={[styles.nameLast, { color: colors.foreground }]}
                       numberOfLines={1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.5}
                     >
                       {lastName}
-                    </Text>
+                    </AppText>
                     {driverProfile?.isVerified === true ? <VerifiedBadge size={24} /> : null}
                   </View>
                 </>
               ) : (
                 <View style={styles.nameRow}>
-                  <Text
+                  <AppText
                     style={[styles.nameFirst, { color: colors.foreground }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.5}
                   >
                     {firstName}
-                  </Text>
+                  </AppText>
                   {driverProfile?.isVerified === true ? <VerifiedBadge size={24} /> : null}
                 </View>
               )}
@@ -160,25 +162,25 @@ export default function DriverProfileScreen() {
               <View style={styles.statColumn}>
                 <View style={styles.ratingGroup}>
                   <FontAwesome name="star" size={10} color={colors.primary} style={{ marginRight: 3 }} />
-                  <Text style={[styles.statHeaderVal, { color: colors.foreground }]}>
+                  <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
                     {ratingSummary.averageRating?.toFixed(1) ?? '5.0'}
-                  </Text>
+                  </AppText>
                 </View>
-                <Text style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Rating</Text>
+                <AppText style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Rating</AppText>
               </View>
 
               <View style={styles.statColumn}>
-                <Text style={[styles.statHeaderVal, { color: colors.foreground }]}>
+                <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
                   {driverProfile?.completedRides ?? 0}
-                </Text>
-                <Text style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Trips</Text>
+                </AppText>
+                <AppText style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Trips</AppText>
               </View>
 
               <View style={styles.statColumn}>
-                <Text style={[styles.statHeaderVal, { color: colors.foreground }]}>
+                <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
                   {totalDistance.toFixed(1)} km
-                </Text>
-                <Text style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Distance</Text>
+                </AppText>
+                <AppText style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Distance</AppText>
               </View>
             </View>
           </View>
@@ -198,7 +200,7 @@ export default function DriverProfileScreen() {
             <View style={styles.avatarContainer}>
               <View style={styles.avatarInner}>
                 <LinearGradient colors={['#69A8F7', '#6674D8']} style={styles.avatarGradient} />
-                <Text style={styles.avatarInitial}>{profileInitial}</Text>
+                <AppText style={styles.avatarInitial}>{profileInitial}</AppText>
                 {profileImage ? (
                   <Image source={{ uri: profileImage }} style={styles.avatarImageAbsolute} />
                 ) : null}
@@ -228,12 +230,12 @@ export default function DriverProfileScreen() {
           >
             <Feather name="truck" size={20} color={colors.primary} />
             <View style={styles.vehicleSummaryCopy}>
-              <Text style={[styles.vehicleSummaryTitle, { color: colors.foreground }]}>
+              <AppText style={[styles.vehicleSummaryTitle, { color: colors.foreground }]}>
                 {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} linked
-              </Text>
-              <Text style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
+              </AppText>
+              <AppText style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
                 Approved {vehicleCounts.approved} • Pending {vehicleCounts.pendingReview} • Rejected {vehicleCounts.rejected}
-              </Text>
+              </AppText>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -251,18 +253,18 @@ export default function DriverProfileScreen() {
             <Feather name="layers" size={20} color={colors.primary} />
             <View style={styles.packageCopy}>
               <View style={styles.packageTitleRow}>
-                <Text style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
+                <AppText style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
                   {isEntitlementLoading ? 'Checking ride package...' : activePackage?.packageName ?? 'No active package'}
-                </Text>
+                </AppText>
                 {!isEntitlementLoading && activePackage ? (
                   <View style={[styles.packageStatus, { backgroundColor: colors.successHex + '16' }]}>
-                    <Text style={[styles.packageStatusText, { color: colors.successHex }]}>Active</Text>
+                    <AppText style={[styles.packageStatusText, { color: colors.successHex }]}>Active</AppText>
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.packageSubtext, { color: colors.mutedForeground }]}>
+              <AppText style={[styles.packageSubtext, { color: colors.mutedForeground }]}>
                 {isEntitlementLoading ? 'Loading package details...' : activePackage ? 'Manage package' : 'Explore available packages'}
-              </Text>
+              </AppText>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -289,8 +291,8 @@ export default function DriverProfileScreen() {
           >
             <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.primary} />
             <View style={styles.modeCopy}>
-              <Text style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</Text>
-              <Text style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</Text>
+              <AppText style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</AppText>
+              <AppText style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</AppText>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -312,7 +314,7 @@ export default function DriverProfileScreen() {
           </View>
         </View>
 
-        <Text style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</Text>
+        <AppText style={[styles.version, { color: colors.mutedForeground }]}>{APP_NAME} v1.0.0</AppText>
       </GlassScrollView>
 
       {profileImage && (
@@ -379,7 +381,7 @@ export default function DriverProfileScreen() {
 
 function SectionTitle({ title }: { title: string }) {
   const colors = useColors();
-  return <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>;
+  return <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>;
 }
 
 // QuickStat deleted
@@ -400,8 +402,8 @@ function MenuItem({ colors, detail, iconFamily = 'mci', icon, label, last = fals
         )}
       </View>
       <View style={styles.menuCopy}>
-        <Text style={[styles.menuLabel, { color: colors.foreground }]}>{label}</Text>
-        {detail ? <Text style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</Text> : null}
+        <AppText style={[styles.menuLabel, { color: colors.foreground }]}>{label}</AppText>
+        {detail ? <AppText style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</AppText> : null}
       </View>
       <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
     </TouchableOpacity>
@@ -426,15 +428,13 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   nameFirst: {
-    fontSize: 34,
-    fontFamily: 'Inter_700Bold',
+    ...typography.displayXL,
     lineHeight: 38,
     letterSpacing: -0.8,
     flexShrink: 1,
   },
   nameLast: {
-    fontSize: 34,
-    fontFamily: 'Inter_700Bold',
+    ...typography.displayXL,
     lineHeight: 38,
     letterSpacing: -0.8,
     flexShrink: 1,
@@ -455,12 +455,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statHeaderVal: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
   },
   statHeaderLabel: {
-    fontSize: 9,
-    fontFamily: 'Inter_500Medium',
+    ...typography.tiny,
   },
   avatarContainer: {
     width: 80,
@@ -485,8 +483,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 36,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.displayXL,
     color: '#FFFFFF',
     lineHeight: 42,
   },
@@ -505,9 +502,9 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%', minWidth: 0, flexShrink: 1 },
-  phone: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  phone: { ...typography.label,  },
   section: { gap: 10 },
-  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
+  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: 2 },
   cardShadow: {
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3,
     ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }),
@@ -515,25 +512,25 @@ const styles = StyleSheet.create({
   packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
   packageCopy: { flex: 1, gap: 3 },
   packageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  packageTitle: { flexShrink: 1, fontSize: 15, fontFamily: 'Inter_500Medium' },
-  packageSubtext: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  packageTitle: { flexShrink: 1, ...typography.body,  },
+  packageSubtext: { ...typography.tiny,  },
   packageStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
-  packageStatusText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  packageStatusText: { ...typography.tiny,  },
   vehicleSummaryCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
   vehicleSummaryCopy: { flex: 1, gap: 3 },
-  vehicleSummaryTitle: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  vehicleSummaryDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  vehicleSummaryTitle: { ...typography.body,  },
+  vehicleSummaryDetail: { ...typography.tiny,  },
   groupedSection: { borderRadius: 20, overflow: 'hidden' },
 
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 66 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 52, paddingHorizontal: 20, paddingVertical: 16 },
   menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
   menuCopy: { flex: 1, gap: 2 },
-  menuLabel: { fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 22 },
-  menuDetail: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  menuLabel: { ...typography.title, lineHeight: 22 },
+  menuDetail: { ...typography.tiny, lineHeight: 16 },
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: 20, padding: 16 },
   modeCopy: { flex: 1, gap: 3 },
-  modeTitle: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  modeDescription: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  version: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', paddingVertical: 8 },
+  modeTitle: { ...typography.body,  },
+  modeDescription: { ...typography.tiny,  },
+  version: { textAlign: 'center', ...typography.caption, paddingVertical: 8 },
 });

@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Modal, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
@@ -28,18 +30,18 @@ export function DriverPackageRequiredModal({
           <View style={[styles.icon, { backgroundColor: colors.primaryHex + '18' }]}>
             <Feather name="layers" size={24} color={colors.primary} />
           </View>
-          <Text style={[styles.title, { color: colors.foreground }]}>Ride package required</Text>
-          <Text style={[styles.lead, { color: colors.foreground }]}>
+          <AppText style={[styles.title, { color: colors.foreground }]}>Ride package required</AppText>
+          <AppText style={[styles.lead, { color: colors.foreground }]}>
             You need an active ride package to receive ride requests.
-          </Text>
-          <Text style={[styles.text, { color: colors.mutedForeground }]}>
+          </AppText>
+          <AppText style={[styles.text, { color: colors.mutedForeground }]}>
             1 completed trip uses 1 ride. Cancellations and declined requests do not change your rides.
-          </Text>
+          </AppText>
           <TouchableOpacity style={styles.secondary} onPress={onClose} activeOpacity={0.7}>
-            <Text style={[styles.secondaryText, { color: colors.primary }]}>Not Now</Text>
+            <AppText style={[styles.secondaryText, { color: colors.primary }]}>Not Now</AppText>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.primary, { backgroundColor: colors.primary }]} onPress={onViewPackages} activeOpacity={0.85}>
-            <Text style={styles.primaryText}>View Packages</Text>
+            <AppText style={styles.primaryText}>View Packages</AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -59,11 +61,11 @@ const styles = StyleSheet.create({
   },
   handle: { width: 36, height: 4, borderRadius: 2 },
   icon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
-  title: { fontSize: 21, fontFamily: 'Inter_700Bold', marginTop: 14 },
-  lead: { fontSize: 15, fontFamily: 'Inter_600SemiBold', lineHeight: 21, textAlign: 'center', marginTop: 10 },
-  text: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 20 },
+  title: { ...typography.h2, marginTop: 14 },
+  lead: { ...typography.body, lineHeight: 21, textAlign: 'center', marginTop: 10 },
+  text: { ...typography.label, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 20 },
   primary: { width: '100%', height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { color: '#fff', fontSize: 16, fontFamily: 'Inter_700Bold' },
+  primaryText: { color: '#fff', ...typography.button },
   secondary: { height: 48, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  secondaryText: { ...typography.button },
 });

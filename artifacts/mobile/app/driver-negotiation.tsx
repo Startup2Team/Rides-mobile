@@ -1,7 +1,8 @@
+import { AppText } from '@/components/AppText';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { AppButton } from '@/components/AppButton';
@@ -61,19 +62,19 @@ export default function DriverNegotiationScreen() {
                 imageUri={currentRide.customerImage ?? null}
               />
               <View style={styles.identityText}>
-                <Text style={[styles.title, { color: colors.foreground }]}>
+                <AppText style={[styles.title, { color: colors.foreground }]}>
                   {currentRide.customerName ?? 'Customer'}
-                </Text>
+                </AppText>
                 <View style={styles.subtitleRow}>
-                  <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+                  <AppText style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
                     {VEHICLE_LABELS[currentRide.vehicleType]}
-                  </Text>
+                  </AppText>
                   {currentRide.customerRating != null && (
                     <View style={styles.ratingRow}>
                       <MaterialCommunityIcons name="star" size={13} color={colors.star} />
-                      <Text style={[styles.ratingText, { color: colors.star }]}>
+                      <AppText style={[styles.ratingText, { color: colors.star }]}>
                         {currentRide.customerRating.toFixed(1)}
-                      </Text>
+                      </AppText>
                     </View>
                   )}
                 </View>
@@ -91,39 +92,39 @@ export default function DriverNegotiationScreen() {
               </View>
               <View style={styles.tripStops}>
                 <View style={styles.tripStop}>
-                  <Text style={[styles.tripStopLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                  <Text style={[styles.tripStopValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.tripStopLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                  <AppText style={[styles.tripStopValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.pickup.address ?? 'Pickup location'}
-                  </Text>
+                  </AppText>
                 </View>
                 <View style={styles.tripStop}>
-                  <Text style={[styles.tripStopLabel, { color: colors.mutedForeground }]}>Drop off</Text>
-                  <Text style={[styles.tripStopValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.tripStopLabel, { color: colors.mutedForeground }]}>Drop off</AppText>
+                  <AppText style={[styles.tripStopValue, { color: colors.foreground }]} numberOfLines={1}>
                     {destinationIsGeneric
                       ? (currentRide.destination.address?.trim() || 'To be confirmed in chat')
                       : (currentRide.destination.address ?? 'Destination')}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
             {destinationIsGeneric && (
               <View style={[styles.tripGenericNote, { backgroundColor: WARNING + '14' }]}>
                 <Feather name="info" size={12} color={WARNING} />
-                <Text style={[styles.tripGenericText, { color: WARNING }]} numberOfLines={1}>
+                <AppText style={[styles.tripGenericText, { color: WARNING }]} numberOfLines={1}>
                   Confirm exact drop off with customer before locking fare
-                </Text>
+                </AppText>
               </View>
             )}
             <View style={[styles.tripStatsRow, { borderTopColor: colors.border }]}>
               <View style={styles.tripStatInline}>
                 <Feather name="navigation" size={12} color={colors.primary} />
-                <Text style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>Distance</Text>
-                <Text style={[styles.tripStatValue, { color: colors.foreground }]}>{currentRide.distance.toFixed(1)} km</Text>
+                <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>Distance</AppText>
+                <AppText style={[styles.tripStatValue, { color: colors.foreground }]}>{currentRide.distance.toFixed(1)} km</AppText>
               </View>
               <View style={styles.tripStatInline}>
                 <Feather name="clock" size={12} color={colors.primary} />
-                <Text style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>ETA</Text>
-                <Text style={[styles.tripStatValue, { color: colors.foreground }]}>~{currentRide.duration} min</Text>
+                <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>ETA</AppText>
+                <AppText style={[styles.tripStatValue, { color: colors.foreground }]}>~{currentRide.duration} min</AppText>
               </View>
             </View>
           </View>
@@ -157,7 +158,7 @@ export default function DriverNegotiationScreen() {
           >
             <View style={styles.inputRow}>
               <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.currencyText, { color: colors.foreground }]}>RWF</Text>
+                <AppText style={[styles.currencyText, { color: colors.foreground }]}>RWF</AppText>
               </View>
               <TextInput
                 style={[
@@ -191,9 +192,9 @@ export default function DriverNegotiationScreen() {
           {state.driverLimitReached && (
             <View style={[styles.limitBanner, { backgroundColor: colors.primaryHex + '14' }]}>
               <Feather name="phone-call" size={15} color={colors.primary} />
-              <Text style={[styles.limitText, { color: colors.foreground }]}>
+              <AppText style={[styles.limitText, { color: colors.foreground }]}>
                 Offer limit reached. Call the customer to continue.
-              </Text>
+              </AppText>
             </View>
           )}
           <View style={[styles.mainActions, { paddingBottom: footerBottomInset }]}>
@@ -222,12 +223,12 @@ export default function DriverNegotiationScreen() {
         <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
           <Feather name="shield" size={24} color={colors.primary} />
         </View>
-        <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+        <AppText style={[styles.modalTitle, { color: colors.foreground }]}>
           Accept {formatFare(state.lastCustomerOffer?.amount)}?
-        </Text>
-        <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
+        </AppText>
+        <AppText style={[styles.modalSub, { color: colors.mutedForeground }]}>
           This fare will be locked for the ride and visible to both you and the customer.
-        </Text>
+        </AppText>
         <View style={[styles.acceptSummary, { backgroundColor: colors.muted }]}>
           {[
             ['Customer', currentRide.customerName ?? 'Customer'],
@@ -235,13 +236,13 @@ export default function DriverNegotiationScreen() {
             ['Drop off', currentRide.destination.address ?? 'Destination'],
           ].map(([label, value]) => (
             <View key={label} style={styles.acceptSummaryRow}>
-              <Text style={[styles.acceptSummaryLabel, { color: colors.mutedForeground }]}>{label}</Text>
-              <Text style={[styles.acceptSummaryValue, { color: colors.foreground }]} numberOfLines={1}>{value}</Text>
+              <AppText style={[styles.acceptSummaryLabel, { color: colors.mutedForeground }]}>{label}</AppText>
+              <AppText style={[styles.acceptSummaryValue, { color: colors.foreground }]} numberOfLines={1}>{value}</AppText>
             </View>
           ))}
           <View style={[styles.acceptSummaryRow, styles.acceptSummaryTotal, { borderTopColor: colors.border }]}>
-            <Text style={[styles.acceptSummaryLabel, { color: colors.mutedForeground }]}>Final fare</Text>
-            <Text style={[styles.acceptSummaryAmount, { color: colors.primary }]}>{formatFare(state.lastCustomerOffer?.amount)}</Text>
+            <AppText style={[styles.acceptSummaryLabel, { color: colors.mutedForeground }]}>Final fare</AppText>
+            <AppText style={[styles.acceptSummaryAmount, { color: colors.primary }]}>{formatFare(state.lastCustomerOffer?.amount)}</AppText>
           </View>
         </View>
         <View style={styles.modalActions}>

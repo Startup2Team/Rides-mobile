@@ -1,6 +1,8 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -447,9 +449,9 @@ export default function DriverNavigateScreen() {
         <View style={styles.topBarInner}>
           <View style={styles.topLeft} />
           <View style={styles.topCenter}>
-            <Text style={[styles.topStatus, { color: colors.foreground }]} numberOfLines={1}>
+            <AppText style={[styles.topStatus, { color: colors.foreground }]} numberOfLines={1}>
               {statusMessage}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.topRight} />
         </View>
@@ -471,15 +473,15 @@ export default function DriverNavigateScreen() {
             imageUri={currentRide.customerImage ?? null}
           />
           <View style={styles.customerInfo}>
-            <Text style={[styles.customerName, { color: colors.foreground }]}>
+            <AppText style={[styles.customerName, { color: colors.foreground }]}>
               {currentRide.customerName ?? 'Customer'}
-            </Text>
+            </AppText>
             {currentRide.customerRating != null && (
               <View style={styles.ratingRow}>
                 <MaterialCommunityIcons name="star" size={12} color={colors.star} />
-                <Text style={[styles.ratingText, { color: colors.star }]}>
+                <AppText style={[styles.ratingText, { color: colors.star }]}>
                   {currentRide.customerRating.toFixed(1)}
-                </Text>
+                </AppText>
               </View>
             )}
           </View>
@@ -490,7 +492,7 @@ export default function DriverNavigateScreen() {
               accessibilityRole="button"
               accessibilityLabel="Emergency SOS"
             >
-              <Text style={styles.sosActionText}>SOS</Text>
+              <AppText style={styles.sosActionText}>SOS</AppText>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -500,7 +502,7 @@ export default function DriverNavigateScreen() {
               accessibilityLabel="Call customer"
             >
               <Feather name="phone" size={18} color="#FFFFFF" />
-              <Text style={styles.callActionText}>Call</Text>
+              <AppText style={styles.callActionText}>Call</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -511,31 +513,31 @@ export default function DriverNavigateScreen() {
               <View style={styles.locRow}>
                 <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
                 <View style={styles.locTextBlock}>
-                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                  <AppText style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.pickup.address || 'Pickup unavailable'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
               <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
               <View style={styles.locRow}>
                 <View style={[styles.locDot, styles.locDotSquare, { backgroundColor: colors.destructive }]} />
                 <View style={styles.locTextBlock}>
-                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
-                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</AppText>
+                  <AppText style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.destination.address || 'Destination unavailable'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
             <View style={styles.metricGrid}>
               <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>Distance to Pickup</Text>
-                <Text style={[styles.metricValue, { color: colors.foreground }]}>{distanceText}</Text>
+                <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]}>Distance to Pickup</AppText>
+                <AppText style={[styles.metricValue, { color: colors.foreground }]}>{distanceText}</AppText>
               </View>
               <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA to Pickup</Text>
-                <Text style={[styles.metricValue, { color: colors.foreground }]}>{etaText}</Text>
+                <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA to Pickup</AppText>
+                <AppText style={[styles.metricValue, { color: colors.foreground }]}>{etaText}</AppText>
               </View>
             </View>
           </View>
@@ -547,30 +549,30 @@ export default function DriverNavigateScreen() {
             <View style={[styles.waitingPanel, { backgroundColor: colors.primaryHex + '12', borderColor: colors.primaryHex + '30' }]}>
               <Feather name="user-check" size={20} color={colors.primary} />
               <View style={styles.waitingCopy}>
-                <Text style={[styles.waitingTitle, { color: colors.foreground }]}>Customer waiting for pickup</Text>
-                <Text style={[styles.waitingMeta, { color: colors.mutedForeground }]}>
+                <AppText style={[styles.waitingTitle, { color: colors.foreground }]}>Customer waiting for pickup</AppText>
+                <AppText style={[styles.waitingMeta, { color: colors.mutedForeground }]}>
                   Arrived at {formatArrivalTime(currentRide.arrivedAt)}
-                </Text>
+                </AppText>
               </View>
             </View>
             <View style={[styles.locationCard, { backgroundColor: colors.muted }]}>
               <View style={styles.locRow}>
                 <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
                 <View style={styles.locTextBlock}>
-                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                  <AppText style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.pickup.address || 'Pickup unavailable'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
               <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
               <View style={styles.locRow}>
                 <View style={[styles.locDot, styles.locDotSquare, { backgroundColor: colors.destructive }]} />
                 <View style={styles.locTextBlock}>
-                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
-                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</AppText>
+                  <AppText style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.destination.address || 'Destination unavailable'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
@@ -583,12 +585,12 @@ export default function DriverNavigateScreen() {
                 size={18}
                 color={pickupWait.isLate ? colors.destructive : colors.primary}
               />
-              <Text style={[styles.timerLabel, { color: pickupWait.isLate ? colors.destructive : colors.mutedForeground }]}>
+              <AppText style={[styles.timerLabel, { color: pickupWait.isLate ? colors.destructive : colors.mutedForeground }]}>
                 {pickupWait.isLate ? `Customer ${formatWaitTime(pickupWait.lateSeconds)} late` : 'Pickup wait time remaining'}
-              </Text>
-              <Text style={[styles.timerValue, { color: pickupWait.isLate ? colors.destructive : colors.primary }]}>
+              </AppText>
+              <AppText style={[styles.timerValue, { color: pickupWait.isLate ? colors.destructive : colors.primary }]}>
                 {pickupWait.isLate ? '' : formatWaitTime(pickupWait.remainingSeconds)}
-              </Text>
+              </AppText>
             </View>
           </View>
         )}
@@ -599,31 +601,31 @@ export default function DriverNavigateScreen() {
               <View style={styles.locRow}>
                 <View style={[styles.locDot, { backgroundColor: colors.primary }]} />
                 <View style={styles.locTextBlock}>
-                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                  <AppText style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.pickup.address || 'Pickup unavailable'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
               <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
               <View style={styles.locRow}>
                 <View style={[styles.locDot, styles.locDotSquare, { backgroundColor: colors.destructive }]} />
                 <View style={styles.locTextBlock}>
-                  <Text style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
-                  <Text style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
+                  <AppText style={[styles.locInlineLabel, { color: colors.mutedForeground }]}>Destination</AppText>
+                  <AppText style={[styles.locValue, { color: colors.foreground }]} numberOfLines={1}>
                     {currentRide.destination.address || 'Destination unavailable'}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
             <View style={styles.metricGrid}>
               <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>Distance Remaining</Text>
-                <Text style={[styles.metricValue, { color: colors.foreground }]}>{distanceText}</Text>
+                <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]}>Distance Remaining</AppText>
+                <AppText style={[styles.metricValue, { color: colors.foreground }]}>{distanceText}</AppText>
               </View>
               <View style={[styles.metricBox, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA Remaining</Text>
-                <Text style={[styles.metricValue, { color: colors.foreground }]}>{etaText}</Text>
+                <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]}>ETA Remaining</AppText>
+                <AppText style={[styles.metricValue, { color: colors.foreground }]}>{etaText}</AppText>
               </View>
             </View>
           </View>
@@ -694,7 +696,7 @@ const styles = StyleSheet.create({
   topLeft: { flex: 1, minWidth: 0, zIndex: 1 },
   topCenter: { flex: 2, alignItems: 'center', zIndex: 1 },
   topRight: { flex: 1, alignItems: 'flex-end', zIndex: 1 },
-  topStatus: { fontSize: 13, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
+  topStatus: { ...typography.label, textAlign: 'center' },
 
   bottomCard: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -707,9 +709,9 @@ const styles = StyleSheet.create({
 
   customerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   customerInfo: { flex: 1 },
-  customerName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  customerName: { ...typography.body,  },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  ratingText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  ratingText: { ...typography.caption,  },
   callAction: {
     height: 42,
     borderRadius: 21,
@@ -721,8 +723,7 @@ const styles = StyleSheet.create({
   },
   callActionText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
   },
   sosAction: {
     width: 42,
@@ -733,8 +734,7 @@ const styles = StyleSheet.create({
   },
   sosActionText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
     letterSpacing: 0.5,
   },
 
@@ -759,18 +759,17 @@ const styles = StyleSheet.create({
   locDotSquare: { borderRadius: 3 },
   locTextBlock: { flex: 1, minWidth: 0 },
   locInlineLabel: {
-    fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    ...typography.tiny,
     textTransform: 'uppercase',
     letterSpacing: 0.35,
     marginBottom: 2,
   },
-  locValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 19 },
+  locValue: { ...typography.bodySmall, lineHeight: 19 },
   locDivider: { height: StyleSheet.hairlineWidth, marginLeft: 32 },
   metricGrid: { flexDirection: 'row', gap: 8 },
   metricBox: { flex: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 9, gap: 3 },
-  metricLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
-  metricValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  metricLabel: { ...typography.tiny,  },
+  metricValue: { ...typography.body,  },
   waitingPanel: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -780,15 +779,15 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   waitingCopy: { flex: 1, minWidth: 0 },
-  waitingTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  waitingMeta: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  waitingTitle: { ...typography.body,  },
+  waitingMeta: { ...typography.caption, marginTop: 2 },
 
   timerBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     padding: 12, borderRadius: 14, borderWidth: 1,
   },
-  timerLabel: { flex: 1, fontSize: 13, fontFamily: 'Inter_500Medium' },
-  timerValue: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  timerLabel: { flex: 1, ...typography.label,  },
+  timerValue: { ...typography.h3,  },
 
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   actionButton: { flex: 1 },

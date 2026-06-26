@@ -1,5 +1,6 @@
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Image, Text, TouchableOpacity, View } from 'react-native';
+import { Image, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { DatePickerField } from '@/components/DatePickerField';
 import { AppInput } from '@/components/AppInput';
@@ -19,22 +20,22 @@ export function PersonalInformationSection({ colors, errors, form, maxDobDate, s
   const sectors = getSectors(form.province, form.district);
   const cells = getCells(form.province, form.district, form.sector);
   const villages = getVillages(form.province, form.district, form.sector, form.cell);
-  const error = (field: string) => errors[field] ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors[field]}</Text> : null;
+  const error = (field: string) => errors[field] ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors[field]}</AppText> : null;
 
   return <View style={styles.section}>
-    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Personal Information</Text>
-    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Details pre-filled from your account</Text>
-    <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Full Name</Text><Text style={[styles.infoValue, { color: colors.foreground }]}>{user?.name}</Text></View>
-    <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Phone</Text><Text style={[styles.infoValue, { color: colors.foreground }]}>{user?.phone}</Text></View>
+    <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Personal Information</AppText>
+    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Details pre-filled from your account</AppText>
+    <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><AppText style={[styles.infoLabel, { color: colors.mutedForeground }]}>Full Name</AppText><AppText style={[styles.infoValue, { color: colors.foreground }]}>{user?.name}</AppText></View>
+    <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><AppText style={[styles.infoLabel, { color: colors.mutedForeground }]}>Phone</AppText><AppText style={[styles.infoValue, { color: colors.foreground }]}>{user?.phone}</AppText></View>
     <DatePickerField label="Date of Birth" value={form.dob} onChange={dob => update('dob', dob)} error={errors.dob} placeholder="DD/MM/YYYY" maximumDate={maxDobDate} />
     <AppInput label="National ID Number" placeholder="16-digit National ID" value={form.nationalId} onChangeText={text => update('nationalId', text.replace(/\D/g, '').slice(0, 16))} error={errors.nationalId} leftIcon="credit-card" keyboardType="numeric" maxLength={16} />
-    <Text style={[styles.sectionSubtitle, { color: colors.foreground }]}>Identity Verification</Text>
-    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Take a clear selfie so we can verify your identity.</Text>
-    {selfieUri ? <View style={styles.selfiePreviewRow}><Image source={{ uri: selfieUri }} style={styles.selfieImage} resizeMode="cover" /><View style={{ flex: 1, gap: 8 }}><View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}><Feather name="check-circle" size={14} color={colors.primary} /><Text style={[styles.docUploadedText, { color: colors.primary }]}>Photo taken</Text></View><TouchableOpacity style={[styles.selfieRetakeBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={takeSelfie}><Feather name="camera" size={14} color={colors.mutedForeground} /><Text style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake selfie</Text></TouchableOpacity></View></View>
-      : <TouchableOpacity style={[styles.selfieBtn, { borderColor: errors.selfie ? colors.destructive : colors.primary, backgroundColor: colors.primaryHex + '08' }]} onPress={takeSelfie} activeOpacity={0.75}><View style={[styles.selfieIconCircle, { backgroundColor: colors.primaryHex + '20' }]}><Feather name="camera" size={24} color={colors.primary} /></View><Text style={[styles.selfieLabel, { color: colors.primary }]}>Take Selfie</Text></TouchableOpacity>}
+    <AppText style={[styles.sectionSubtitle, { color: colors.foreground }]}>Identity Verification</AppText>
+    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Take a clear selfie so we can verify your identity.</AppText>
+    {selfieUri ? <View style={styles.selfiePreviewRow}><Image source={{ uri: selfieUri }} style={styles.selfieImage} resizeMode="cover" /><View style={{ flex: 1, gap: 8 }}><View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}><Feather name="check-circle" size={14} color={colors.primary} /><AppText style={[styles.docUploadedText, { color: colors.primary }]}>Photo taken</AppText></View><TouchableOpacity style={[styles.selfieRetakeBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={takeSelfie}><Feather name="camera" size={14} color={colors.mutedForeground} /><AppText style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake selfie</AppText></TouchableOpacity></View></View>
+      : <TouchableOpacity style={[styles.selfieBtn, { borderColor: errors.selfie ? colors.destructive : colors.primary, backgroundColor: colors.primaryHex + '08' }]} onPress={takeSelfie} activeOpacity={0.75}><View style={[styles.selfieIconCircle, { backgroundColor: colors.primaryHex + '20' }]}><Feather name="camera" size={24} color={colors.primary} /></View><AppText style={[styles.selfieLabel, { color: colors.primary }]}>Take Selfie</AppText></TouchableOpacity>}
     {error('selfie')}
-    <Text style={[styles.sectionSubtitle, { color: colors.foreground }]}>Location</Text>
-    <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Select your operating area using Rwanda's official administrative hierarchy</Text>
+    <AppText style={[styles.sectionSubtitle, { color: colors.foreground }]}>Location</AppText>
+    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Select your operating area using Rwanda's official administrative hierarchy</AppText>
     <CascadeDropdown label="Province / City" value={form.province} options={RWANDA_PROVINCES.map(province => province.name)} onSelect={value => updateCascade('province', value)} />{error('province')}
     {form.province ? <><CascadeDropdown label="District" value={form.district} options={districts.map(district => district.name)} onSelect={value => updateCascade('district', value)} />{error('district')}</> : null}
     {form.district ? <><CascadeDropdown label="Sector" value={form.sector} options={sectors.map(sector => sector.name)} onSelect={value => updateCascade('sector', value)} />{error('sector')}</> : null}

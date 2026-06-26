@@ -1,3 +1,4 @@
+import { typography } from '@/constants/typography';
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
@@ -8,18 +9,18 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
-  headerTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold' },
-  stepIndicator: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  headerTitle: { ...typography.h3,  },
+  stepIndicator: { ...typography.bodySmall,  },
   vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   stepItem: { alignItems: 'center', gap: 4 },
   stepsRow: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
   stepDot: { width: 8, height: 8, borderRadius: 4 },
-  stepLabel: { fontSize: 9, fontFamily: 'Inter_500Medium' },
+  stepLabel: { ...typography.tiny,  },
   content: { padding: 20, gap: 16, paddingBottom: 40 },
   section: { gap: 14 },
-  sectionTitle: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  sectionSubtitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
-  sectionDesc: { fontSize: 14, fontFamily: 'Inter_400Regular', lineHeight: 20 },
+  sectionTitle: { ...typography.h2,  },
+  sectionSubtitle: { ...typography.title, marginTop: 4 },
+  sectionDesc: { ...typography.bodySmall, lineHeight: 20 },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -27,9 +28,9 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  infoLabel: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  infoValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  inputLabel: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  infoLabel: { ...typography.bodySmall,  },
+  infoValue: { ...typography.bodySmall,  },
+  inputLabel: { ...typography.label,  },
   dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -39,7 +40,7 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  dropdownText: { fontSize: 15, fontFamily: 'Inter_400Regular', flex: 1 },
+  dropdownText: { ...typography.body, flex: 1 },
   dropdownList: {
     borderWidth: 1,
     borderRadius: 12,
@@ -54,8 +55,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 0.5,
   },
-  dropdownItemText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  errorText: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  dropdownItemText: { ...typography.bodySmall,  },
+  errorText: { ...typography.caption, marginTop: -8 },
   plateGuide: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -63,7 +64,7 @@ export const styles = StyleSheet.create({
     marginTop: 6,
     paddingHorizontal: 2,
   },
-  plateGuideText: { flex: 1, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  plateGuideText: { flex: 1, ...typography.tiny, lineHeight: 16 },
   plateWarning: {
     flexDirection: 'row',
     gap: 6,
@@ -73,7 +74,7 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 4,
   },
-  plateWarningText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  plateWarningText: { flex: 1, ...typography.caption, lineHeight: 16 },
   // Selfie
   selfieBtn: {
     alignItems: 'center',
@@ -84,7 +85,7 @@ export const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   selfieIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  selfieLabel: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  selfieLabel: { ...typography.title,  },
   selfiePreviewRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   selfieImage: { width: 80, height: 80, borderRadius: 40 },
   selfieRetakeBtn: {
@@ -100,9 +101,9 @@ export const styles = StyleSheet.create({
   // Documents
   docRow: { gap: 8 },
   docHeader: { gap: 2 },
-  docLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  docHint: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  docFaceLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  docLabel: { ...typography.bodySmall,  },
+  docHint: { ...typography.tiny,  },
+  docFaceLabel: { ...typography.tiny, textTransform: 'uppercase', letterSpacing: 0.5 },
   docUploadBtn: {
     flex: 1,
     height: 80,
@@ -113,7 +114,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  docUploadText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  docUploadText: { ...typography.button },
   docPreviewCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -133,7 +134,7 @@ export const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  docUploadedText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  docUploadedText: { ...typography.label,  },
   docActionRow: { flexDirection: 'row', gap: 10 },
   docChangeBtn: {
     alignSelf: 'flex-start',
@@ -146,7 +147,7 @@ export const styles = StyleSheet.create({
     borderRadius: 17,
     borderWidth: 1,
   },
-  docChangeBtnText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  docChangeBtnText: { ...typography.button },
   // Payment
   providerRow: { flexDirection: 'row', gap: 12 },
   providerCard: {
@@ -158,7 +159,7 @@ export const styles = StyleSheet.create({
     borderWidth: 1.5,
     position: 'relative',
   },
-  providerName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  providerName: { ...typography.bodySmall,  },
   providerLogo: {
     width: '100%',
     height: 48,
@@ -191,8 +192,8 @@ export const styles = StyleSheet.create({
     marginTop: 1,
     flexShrink: 0,
   },
-  termsText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', lineHeight: 22 },
-  termsLink: { fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' },
+  termsText: { flex: 1, ...typography.bodySmall, lineHeight: 22 },
+  termsLink: { textDecorationLine: 'underline' },
   notice: {
     flexDirection: 'row',
     gap: 8,
@@ -201,5 +202,5 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'flex-start',
   },
-  noticeText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  noticeText: { flex: 1, ...typography.caption, lineHeight: 18 },
 });

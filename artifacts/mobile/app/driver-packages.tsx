@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -136,10 +138,10 @@ export default function DriverPackagesScreen() {
       <View style={styles.syncRow}>
         <View style={styles.syncCopy}>
           {syncWarning && offerSourceReady ? (
-            <Text style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</Text>
+            <AppText style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</AppText>
           ) : null}
           {selectionNotice ? (
-            <Text style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</Text>
+            <AppText style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</AppText>
           ) : null}
         </View>
       </View>
@@ -223,36 +225,36 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
     ]}
   >
     <View style={styles.packageContent}>
-      <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</Text>
+      <AppText style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</AppText>
       <View
         accessibilityLabel={`${ridePackage.ridesGranted} Rides + ${ridePackage.bonusRidesGranted} Bonus Rides`}
         style={styles.creditRow}
       >
-        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.ridesGranted} Rides</Text>
-        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRidesGranted} Bonus Rides</Text>
+        <AppText style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.ridesGranted} Rides</AppText>
+        <AppText style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRidesGranted} Bonus Rides</AppText>
       </View>
       {ridePackage.campaignName ? (
         <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
           <Feather name="tag" size={11} color={colors.primary} />
-          <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</Text>
+          <AppText style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</AppText>
         </View>
       ) : null}
-      <Text style={[styles.planLabel, { color: colors.mutedForeground }]}>
+      <AppText style={[styles.planLabel, { color: colors.mutedForeground }]}>
         {ridePackage.isPromotional
           ? 'Promotional Offer'
           : ridePackage.priceRwf === 0
             ? 'Launch Offer'
             : 'Ride Package'}
-      </Text>
+      </AppText>
       <View style={styles.priceRow}>
-        <Text style={[styles.price, { color: ridePackage.priceRwf === 0 ? colors.primary : colors.foreground }]}>
+        <AppText style={[styles.price, { color: ridePackage.priceRwf === 0 ? colors.primary : colors.foreground }]}>
           {ridePackage.priceRwf === 0 ? 'FREE NOW' : formatRwf(ridePackage.priceRwf)}
-        </Text>
+        </AppText>
         {ridePackage.basePriceRwf !== ridePackage.priceRwf ? (
-          <Text style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.basePriceRwf)}</Text>
+          <AppText style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.basePriceRwf)}</AppText>
         ) : null}
       </View>
-      {disabled ? <Text style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</Text> : null}
+      {disabled ? <AppText style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</AppText> : null}
     </View>
     <View style={[
       styles.selectionControl,
@@ -271,8 +273,8 @@ function PackageState({ colors, detail, icon, title }: {
 }) {
   return <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <Feather name={icon} size={22} color={colors.mutedForeground} />
-    <Text style={[styles.stateTitle, { color: colors.foreground }]}>{title}</Text>
-    <Text style={[styles.stateDetail, { color: colors.mutedForeground }]}>{detail}</Text>
+    <AppText style={[styles.stateTitle, { color: colors.foreground }]}>{title}</AppText>
+    <AppText style={[styles.stateDetail, { color: colors.mutedForeground }]}>{detail}</AppText>
   </View>;
 }
 
@@ -280,24 +282,24 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   syncRow: { marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   syncCopy: { flex: 1, gap: 3 },
-  syncWarning: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  syncWarning: { ...typography.tiny,  },
 
   stateCard: { marginHorizontal: 16, borderRadius: 18, borderWidth: 1, padding: 22, alignItems: 'center', gap: 8 },
-  stateTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  stateDetail: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18, textAlign: 'center' },
+  stateTitle: { ...typography.title, textAlign: 'center' },
+  stateDetail: { ...typography.caption, lineHeight: 18, textAlign: 'center' },
   packageCard: { minHeight: 132, marginHorizontal: 16, marginBottom: 14, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 20, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   packageContent: { flex: 1, gap: 9 },
-  packageName: { fontSize: 23, fontFamily: 'Inter_700Bold', lineHeight: 29 },
+  packageName: { ...typography.h2, lineHeight: 29 },
   creditRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 },
-  creditTotal: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 19 },
-  bonusCredits: { fontSize: 13, fontFamily: 'Inter_700Bold', lineHeight: 18 },
+  creditTotal: { ...typography.bodySmall, lineHeight: 19 },
+  bonusCredits: { ...typography.label, lineHeight: 18 },
   campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
-  campaignBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  planLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 },
+  campaignBadgeText: { ...typography.tiny,  },
+  planLabel: { ...typography.caption, textTransform: 'uppercase', letterSpacing: 0.5 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  price: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  normalPrice: { fontSize: 11, fontFamily: 'Inter_500Medium', textDecorationLine: 'line-through' },
-  unavailableText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  price: { ...typography.body,  },
+  normalPrice: { ...typography.tiny, textDecorationLine: 'line-through' },
+  unavailableText: { ...typography.tiny, marginTop: 2 },
   selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   buyButtonContainer: { marginHorizontal: 16, marginTop: 4 },
 });
