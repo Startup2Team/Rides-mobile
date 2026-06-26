@@ -266,14 +266,14 @@ export default function ProfileScreen() {
           <MenuItem
           iconFamily="feather"
           icon="shield"
-          label="Privacy & Security"
+          label="Privacy and Security"
           onPress={() => router.push('/privacy-security')}
           separatorColor={separatorColor}
         />
         <MenuItem
           iconFamily="feather"
           icon="help-circle"
-          label="Help & Support"
+          label="Help and Support"
           onPress={() => router.push('/help-support')}
           separatorColor={separatorColor}
         />

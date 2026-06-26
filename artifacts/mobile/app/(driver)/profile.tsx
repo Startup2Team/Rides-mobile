@@ -275,8 +275,8 @@ export default function DriverProfileScreen() {
           <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
             <MenuItem colors={colors} iconFamily="feather" icon="user" label="Edit Profile" onPress={() => router.push('/edit-profile')} />
             <MenuItem colors={colors} iconFamily="feather" icon="bell" label="Notifications" onPress={() => router.push('/notifications')} />
-            <MenuItem colors={colors} iconFamily="feather" icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
-            <MenuItem colors={colors} iconFamily="feather" icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="shield" label="Privacy and Security" onPress={() => router.push('/privacy-security')} />
+            <MenuItem colors={colors} iconFamily="feather" icon="help-circle" label="Help and Support" onPress={() => router.push('/help-support')} />
             <MenuItem colors={colors} iconFamily="mci" icon="information-outline" label={`About ${APP_NAME}`} onPress={() => router.push('/about')} />
             <MenuItem colors={colors} iconFamily="feather" icon="settings" label="Settings" onPress={() => router.push('/settings')} last />
           </View>

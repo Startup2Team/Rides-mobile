@@ -76,7 +76,7 @@ export default function HelpSupportScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Help & Support" subtitle="We're here for you" />
+      <GlassHeader title="Help and Support" subtitle="We're here for you" />
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}

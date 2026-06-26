@@ -65,7 +65,7 @@ export default function PrivacySecurityScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Privacy & Security" />
+      <GlassHeader title="Privacy and Security" />
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}

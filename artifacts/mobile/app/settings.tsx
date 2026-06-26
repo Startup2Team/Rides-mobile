@@ -106,9 +106,9 @@ export default function SettingsScreen() {
 
         <Section title="Account & Support">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
-            <SettingsRow icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
+            <SettingsRow icon="shield" label="Privacy and Security" onPress={() => router.push('/privacy-security')} />
             <Divider />
-            <SettingsRow icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
+            <SettingsRow icon="help-circle" label="Help and Support" onPress={() => router.push('/help-support')} />
             <Divider />
             <SettingsRow icon="external-link" label="Visit Our Website" detail="rides.rw" onPress={() => void Linking.openURL(WEBSITE_URL)} />
             <Divider />
