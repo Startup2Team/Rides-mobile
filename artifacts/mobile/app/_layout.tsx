@@ -13,8 +13,25 @@ import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Text, TextInput } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
+
+// Configure global default font family for standard Text and TextInput components
+if (!(Text as any).defaultProps) {
+  (Text as any).defaultProps = {};
+}
+(Text as any).defaultProps.style = {
+  fontFamily: 'Inter_400Regular',
+  ...(Text as any).defaultProps.style,
+};
+
+if (!(TextInput as any).defaultProps) {
+  (TextInput as any).defaultProps = {};
+}
+(TextInput as any).defaultProps.style = {
+  fontFamily: 'Inter_400Regular',
+  ...(TextInput as any).defaultProps.style,
+};
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
