@@ -191,7 +191,7 @@ describe('DriverProfileScreen rating summary', () => {
 
     await waitFor(() => expect(screen.getAllByText('5.0')[0]).toBeTruthy());
     expect(screen.getByText('Notifications')).toBeTruthy();
-    expect(screen.getByText('My Vehicles')).toBeTruthy();
+    expect(screen.getByText('My vehicles')).toBeTruthy();
     expect(screen.queryByText('Driver Documents')).toBeNull();
     expect(screen.queryByText('Plate Number')).toBeNull();
     expect(screen.queryByText('License')).toBeNull();

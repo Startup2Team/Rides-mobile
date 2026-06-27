@@ -226,7 +226,7 @@ describe('HomeTopHeader driver CTA', () => {
   });
 
   test.each([
-    ['draft' as const, 'Resume form', null],
+    ['draft' as const, 'Resume Form', null],
     ['draft' as const, 'Join as Driver', new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()],
     ['rejected' as const, 'Update application', null],
   ])('%s still opens driver onboarding', (status, label, updatedAt) => {

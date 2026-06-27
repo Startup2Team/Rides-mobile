@@ -31,7 +31,7 @@ export function getDriverApplicationAction(
     return {
       label: isOlderThanDays(draftUpdatedAt ?? '', DRIVER_APPLICATION_DRAFT_REPROMPT_DAYS)
         ? 'Join as Driver'
-        : 'Resume form',
+        : 'Resume Form',
       route: '/driver-onboarding' as const,
     };
   }

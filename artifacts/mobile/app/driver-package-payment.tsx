@@ -29,6 +29,7 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { closeTemporaryScreen, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -183,7 +184,7 @@ export default function DriverPackagePaymentScreen() {
           ? 'This package offer expired. Please refresh packages.'
           : 'This package offer is missing or invalid. Please choose the package again.'}
       </AppText>
-      <AppButton title="Return to Packages" onPress={() => router.replace('/driver-packages')} />
+      <AppButton title="Return to Packages" onPress={() => closeTemporaryScreen(router, '/driver-packages')} />
     </View>;
   }
 
@@ -370,7 +371,7 @@ function ReceiptCard({ activation, colors }: {
     <AppText style={[styles.receiptCredits, { color: colors.foreground }]}>Rides Added: {activation.ridesGranted ?? 0}</AppText>
     <AppText style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Rides Added: {activation.bonusRidesGranted ?? 0}</AppText>
     <View style={styles.receiptAction}>
-      <AppButton title="Go to Dashboard" onPress={() => router.replace('/(driver)')} fullWidth size="lg" />
+      <AppButton title="Go to Dashboard" onPress={() => navigateToDriverHomeAfterCompletion(router)} fullWidth size="lg" />
     </View>
   </View>;
 }

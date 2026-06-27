@@ -112,7 +112,11 @@ jest.mock('@/components/GlassHeader', () => ({
 }));
 
 jest.mock('@/components/GlassScrollView', () => ({
-  GlassScrollView: ({ children }: { children?: React.ReactNode }) => React.createElement('View', null, children),
+  GlassScrollView: ({ children }: { children?: React.ReactNode }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+    return React.createElement(View, null, children);
+  },
 }));
 
 jest.mock('@expo/vector-icons', () => {

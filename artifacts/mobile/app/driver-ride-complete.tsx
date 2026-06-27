@@ -11,6 +11,7 @@ import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
 import { radius } from '@/constants/radius';
 import { spacing } from '@/constants/spacing';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 const SCREEN_DURATION_MS = 3000;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -128,7 +129,7 @@ export default function DriverRideCompleteScreen() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace('/(driver)');
+      navigateToDriverHomeAfterCompletion(router);
     }, SCREEN_DURATION_MS);
     return () => clearTimeout(timer);
   }, []);

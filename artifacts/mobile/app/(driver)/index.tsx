@@ -49,6 +49,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
@@ -532,7 +533,7 @@ export default function DriverDashboard() {
     }).start(() => {
       void (async () => {
         await switchMode('customer');
-        router.replace('/(tabs)');
+        navigateToCustomerHomeAfterCompletion(router);
         switchModeAvatarSlide.setValue(0);
         setIsSwitchingMode(false);
       })();

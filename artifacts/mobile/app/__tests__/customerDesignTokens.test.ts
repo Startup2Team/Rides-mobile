@@ -6,17 +6,18 @@ function readSource(relativePath: string) {
 }
 
 describe('customer design token migration', () => {
-  test('customer home chrome uses design tokens', () => {
+  test('customer home chrome uses design tokens and no longer owns picker animation', () => {
     const source = readFileSync(
       path.join(__dirname, '..', '..', 'components', 'home', 'CustomerHome.tsx'),
       'utf8',
     );
 
-    expect(source).toContain("@/constants/motion");
     expect(source).toContain("@/constants/sizes");
     expect(source).toContain("@/constants/spacing");
-    expect(source).toContain('duration.modal');
     expect(source).toContain('spacing[');
+    expect(source).not.toContain('MapPickerOverlay');
+    expect(source).not.toContain('triggerMapPicker');
+    expect(source).not.toContain('duration.modal');
   });
 
   test.each([

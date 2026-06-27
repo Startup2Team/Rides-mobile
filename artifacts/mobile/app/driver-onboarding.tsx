@@ -34,6 +34,7 @@ import { DOCUMENTS } from '@/components/driver-onboarding/onboardingData';
 import type { DocFaces, DocumentKey, VehiclePhotoKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardingTypes';
 import { isValidImageAsset } from '@/utils/documentValidation';
+import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -138,7 +139,7 @@ export default function DriverOnboarding() {
     await saveDriverProfile(buildDraftDriverProfile(form, selfieUri));
     if (selfieUri) await saveStoredProfileImage(selfieUri);
     setLoading(false);
-    router.replace('/(tabs)');
+    navigateToCustomerHomeAfterCompletion(router);
   };
 
   const saveAndContinue = async () => {
@@ -162,7 +163,7 @@ export default function DriverOnboarding() {
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
     setLoading(false);
-    router.replace('/driver-submission-confirmation');
+    replaceFlowScreen(router, '/driver-submission-confirmation');
   };
 
   const handleNext = () => {
@@ -273,7 +274,7 @@ export default function DriverOnboarding() {
           disabled={step === 3 && !acceptedTerms}
         />
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <AppButton title="Save & exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
+          <AppButton title="Save and exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
         <AppButton title="Contact Support" onPress={() => router.push('/help-support')} size="sm" compact variant="plain" style={{ flex: 1 }} />
       </View>
       </ScrollView>

@@ -51,11 +51,13 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
 import { PackageSyncProvider } from '@/context/PackageSyncContext';
+import { MapPickerProvider } from '@/context/MapPickerContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
+import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
@@ -73,7 +75,7 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isProtectedDriverPath(pathname) && !canAccessDriverMode(driverProfile)) {
-      router.replace('/driver-submission-confirmation');
+      replaceFlowScreen(router, '/driver-submission-confirmation');
     }
   }, [driverProfile, pathname]);
 
@@ -118,6 +120,7 @@ function RootLayoutNav() {
       <Stack.Screen name="about" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="location-search" />
+      <Stack.Screen name="map-picker" />
       <Stack.Screen name="saved-place-selector" />
       <Stack.Screen name="ride-detail" />
     </Stack>
@@ -162,11 +165,13 @@ export default function RootLayout() {
                 <RideProvider>
                   <ToastProvider>
                     <SavedLocationsProvider>
-                      <GestureHandlerRootView style={{ flex: 1 }}>
-                        <KeyboardProvider>
-                          <RootLayoutNav />
-                        </KeyboardProvider>
-                      </GestureHandlerRootView>
+                      <MapPickerProvider>
+                        <GestureHandlerRootView style={{ flex: 1 }}>
+                          <KeyboardProvider>
+                            <RootLayoutNav />
+                          </KeyboardProvider>
+                        </GestureHandlerRootView>
+                      </MapPickerProvider>
                     </SavedLocationsProvider>
                   </ToastProvider>
                 </RideProvider>

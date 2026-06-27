@@ -10,6 +10,7 @@ import { duration } from '@/constants/motion';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { showCancelSearchAlert } from '@/utils/cancelSearchAlert';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import {
   VEHICLE_MAP_MARKER_IMAGES,
   VEHICLE_SEARCHING_IMAGE_SIZE,
@@ -57,7 +58,7 @@ export default function SearchingScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)');
+      navigateToCustomerHomeAfterCompletion(router);
     }
   };
 

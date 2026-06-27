@@ -24,6 +24,7 @@ import { spring } from '@/constants/motion';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { navigateToCustomerHomeAfterCompletion, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 const STEPS = [
   {
@@ -105,7 +106,7 @@ export default function DriverSubmissionConfirmation() {
         await saveDriverProfile({ ...driverProfile, driverApprovalAcknowledgedAt: new Date().toISOString() });
       }
       await switchMode('driver');
-      router.replace('/(driver)');
+      navigateToDriverHomeAfterCompletion(router);
       return;
     }
     router.push('/driver-onboarding');
@@ -115,7 +116,7 @@ export default function DriverSubmissionConfirmation() {
     if (!driverProfile) return;
     await saveDriverProfile({ ...driverProfile, verificationStatus: 'approved', isVerified: true, driverApprovalAcknowledgedAt: new Date().toISOString() });
     await switchMode('driver');
-    router.replace('/(driver)');
+    navigateToDriverHomeAfterCompletion(router);
   };
 
   return (
@@ -208,7 +209,7 @@ export default function DriverSubmissionConfirmation() {
         )}
         <AppButton
           title="Return to Home"
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => navigateToCustomerHomeAfterCompletion(router)}
           fullWidth
           size="lg"
           variant="secondary"

@@ -51,6 +51,7 @@ jest.mock('react-native', () => {
     Pressable: host('Pressable'),
     StyleSheet: {
       create: (styles: object) => styles,
+      flatten: (style: object) => style,
       hairlineWidth: 1,
     },
     Text: host('Text'),
@@ -62,6 +63,20 @@ jest.mock('react-native', () => {
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
 }));
+
+jest.mock('react-native-svg', () => {
+  const React = require('react');
+  const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
+  return {
+    __esModule: true,
+    default: host('Svg'),
+    Circle: host('Circle'),
+    G: host('G'),
+    Line: host('Line'),
+    Polygon: host('Polygon'),
+    Rect: host('Rect'),
+  };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 24, left: 0, right: 0 }),
@@ -80,8 +95,10 @@ jest.mock('@/hooks/useColors', () => ({
 }));
 
 jest.mock('../SheetBackdrop', () => ({
-  SheetBackdrop: ({ onPress }: { onPress: () => void }) =>
-    React.createElement('SheetBackdrop', { onPress }),
+  SheetBackdrop: ({ onPress }: { onPress: () => void }) => {
+    const React = require('react');
+    return React.createElement('SheetBackdrop', { onPress });
+  },
 }));
 
 describe('LanguageSelector', () => {

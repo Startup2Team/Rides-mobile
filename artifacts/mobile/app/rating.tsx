@@ -30,6 +30,7 @@ import { elevation } from '@/constants/elevation';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import {
   isUploadedProfileImageUri,
   resolveDriverProfileImage,
@@ -134,7 +135,7 @@ export default function RatingScreen() {
   };
 
   const returnToHome = () => {
-    router.replace('/(tabs)');
+    navigateToCustomerHomeAfterCompletion(router);
     queueMicrotask(finalizeRide);
   };
 

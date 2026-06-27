@@ -1,40 +1,33 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppText } from '@/components/AppText';
-import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
-import { buttonCornerRadius } from '@/constants/buttons';
+
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { typography } from '@/constants/typography';
+import { createMapPickerSessionId, useMapPicker } from '@/context/MapPickerContext';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
 import { KIGALI_CENTER, type RideLocation, type SavedLocation } from '@/types';
-import { formatReverseGeocodeAddress } from '@/utils/locationUtils';
 
 type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Church' | 'Other';
-const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
-type AppMapType = typeof MAP_TYPES[number];
-const MAP_LOCATION_DELTA = 0.012;
 
 export default function SavedPlaceSelectorScreen() {
   const colors = useColors();
@@ -59,6 +52,8 @@ export default function SavedPlaceSelectorScreen() {
   }>();
 
   const { savedPlaces, persistSavedPlaces } = useSavedLocations();
+  const { consumeResult, clearResult } = useMapPicker();
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
   const existing = useMemo(() => {
     if (mode === 'edit' && savedPlaceId) {
@@ -105,12 +100,6 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   }, [initialAddress, existing]);
 
-  const [uiMode, setUiMode] = useState<'search' | 'map'>('search');
-  const [mapCoords, setMapCoords] = useState(initialCoords);
-  const [mapAddress, setMapAddress] = useState(initialAddressStr);
-  const [isDragging, setIsDragging] = useState(false);
-  const [mapType, setMapType] = useState<AppMapType>('standard');
-
   const [customLabel, setCustomLabel] = useState(() => {
     if (displayLabel === 'Other') {
       if (mode === 'add' && label === 'Other') {
@@ -121,7 +110,6 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   });
 
-  const mapRef = useRef<MapView>(null);
   const inputRef = useRef<TextInput>(null);
   const {
     text: searchText,
@@ -134,14 +122,7 @@ export default function SavedPlaceSelectorScreen() {
   } = useLocationSearch(initialCoords);
 
   useEffect(() => {
-    if (initialCoords && (initialCoords.latitude !== KIGALI_CENTER.latitude || initialCoords.longitude !== KIGALI_CENTER.longitude)) {
-      setMapCoords(initialCoords);
-    }
-  }, [initialCoords]);
-
-  useEffect(() => {
     if (initialAddressStr) {
-      setMapAddress(initialAddressStr);
       setSearchText(initialAddressStr);
     }
   }, [initialAddressStr, setSearchText]);
@@ -181,7 +162,15 @@ export default function SavedPlaceSelectorScreen() {
     );
   }
 
-  const savePlace = async (place: RideLocation) => {
+  useEffect(() => {
+    return () => {
+      if (pendingSessionId) {
+        clearResult(pendingSessionId);
+      }
+    };
+  }, [clearResult, pendingSessionId]);
+
+  const savePlace = useCallback(async (place: RideLocation) => {
     const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
     if (!finalLabel) {
       Alert.alert('Name this place', 'Enter a label before saving this location.');
@@ -203,7 +192,63 @@ export default function SavedPlaceSelectorScreen() {
     ];
     await persistSavedPlaces(next);
     router.back();
-  };
+  }, [customLabel, displayLabel, existing, label, mode, persistSavedPlaces, savedPlaces]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!pendingSessionId) return undefined;
+      const result = consumeResult(pendingSessionId);
+      if (!result) return undefined;
+      setPendingSessionId(null);
+
+      const expectedResultMode = mode === 'edit' ? 'saved-place-edit' : 'saved-place-add';
+      const expectedSavedPlaceId = mode === 'edit' ? existing?.id ?? savedPlaceId : undefined;
+
+      if (result.mode !== expectedResultMode) return undefined;
+      if (expectedSavedPlaceId && result.savedPlaceId !== expectedSavedPlaceId) return undefined;
+      if (!expectedSavedPlaceId && result.savedPlaceId && result.savedPlaceId.length > 0) {
+        return undefined;
+      }
+
+      void savePlace({
+        latitude: result.latitude,
+        longitude: result.longitude,
+        address: result.address,
+        locationType: 'precise',
+      });
+      return undefined;
+    }, [consumeResult, existing?.id, mode, pendingSessionId, savePlace, savedPlaceId]),
+  );
+
+  if (mode === 'edit' && !existing) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <GlassHeader title="Edit Place" />
+        <View
+          style={[
+            styles.searchBody,
+            {
+              paddingTop: headerMetrics.contentTop + spacing[24],
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: semanticSpacing.cardPadding,
+            },
+          ]}
+        >
+          <Feather name="alert-triangle" size={icons.size.hero} color={colors.destructive} />
+          <AppText variant="title" style={{ color: colors.foreground, textAlign: 'center' }}>
+            Saved place not found or has been deleted.
+          </AppText>
+          <TouchableOpacity
+            style={{ paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: spacing[10], borderRadius: radius['3xl'], backgroundColor: colors.primary }}
+            onPress={() => router.back()}
+          >
+            <AppText variant="button" style={{ color: colors.primaryForeground }}>Go Back</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   const deletePlace = () => {
     if (!existing) return;
@@ -225,65 +270,25 @@ export default function SavedPlaceSelectorScreen() {
     );
   };
 
-  const openMap = async () => {
-    let coords: { latitude: number; longitude: number } = initialCoords;
-    try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-    } catch {}
-    setMapCoords(coords);
-    setMapAddress(initialAddressStr);
-    setUiMode('map');
-    Keyboard.dismiss();
-    requestAnimationFrame(() => {
-      mapRef.current?.animateToRegion(
-        { ...coords, latitudeDelta: MAP_LOCATION_DELTA, longitudeDelta: MAP_LOCATION_DELTA },
-        300,
-      );
+  const openMap = () => {
+    const routeLabel = displayLabel === 'Other' ? (customLabel.trim() || label) : label;
+    const sessionId = createMapPickerSessionId();
+    clearResult();
+    setPendingSessionId(sessionId);
+    router.push({
+      pathname: '/map-picker',
+      params: {
+        target: 'saved-place',
+        mode: mode === 'edit' ? 'saved-place-edit' : 'saved-place-add',
+        sessionId,
+        savedPlaceId: mode === 'edit' && existing ? existing.id : undefined,
+        label: routeLabel,
+        initialLatitude: initialCoords.latitude.toString(),
+        initialLongitude: initialCoords.longitude.toString(),
+        initialAddress: searchText.trim() || initialAddressStr,
+      },
     });
   };
-
-  const syncMapAddress = async (coords: typeof KIGALI_CENTER) => {
-    const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
-    setMapAddress(formatReverseGeocodeAddress(geo, 'Selected location'));
-  };
-
-  if (uiMode === 'map') {
-    return (
-      <MapPickerOverlay
-          target="savedLocation"
-          mapRef={mapRef}
-          pinCoords={mapCoords}
-          mapType={mapType}
-          colors={colors}
-          topInset={insets.top}
-          bottomInset={insets.bottom}
-          isDragging={isDragging}
-          onLayout={() => {}}
-          onDragStart={() => setIsDragging(true)}
-          onRegionChangeComplete={(region: Region) => {
-            const coords = { latitude: region.latitude, longitude: region.longitude };
-            setIsDragging(false);
-            setMapCoords(coords);
-            void syncMapAddress(coords);
-          }}
-          onClose={() => setUiMode('search')}
-          onCycleMapType={() => setMapType(previous => MAP_TYPES[(MAP_TYPES.indexOf(previous) + 1) % MAP_TYPES.length])}
-          onCenterUser={() => mapRef.current?.animateToRegion({
-            ...mapCoords,
-            latitudeDelta: MAP_LOCATION_DELTA,
-            longitudeDelta: MAP_LOCATION_DELTA,
-          }, 600)}
-          onConfirm={() => savePlace({
-            ...mapCoords,
-            address: mapAddress || 'Selected location',
-            locationType: 'precise',
-          })}
-          savedLocationHint={`Drag the map to set your ${label.toLowerCase()} location`}
-          savedLocationConfirmTitle={`Confirm ${label} Location`}
-        />
-    );
-  }
 
   const hasQuery = searchText.trim().length >= 2;
   return (
@@ -434,7 +439,7 @@ const styles = StyleSheet.create({
   searchBody: { flex: 1, paddingHorizontal: semanticSpacing.cardPadding },
   searchInputWrap: {
     height: sizes.input.lg,
-    borderRadius: buttonCornerRadius(sizes.input.lg),
+    borderRadius: radius.input,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -443,7 +448,7 @@ const styles = StyleSheet.create({
   },
   labelInputWrap: {
     height: sizes.input.lg,
-    borderRadius: buttonCornerRadius(sizes.input.lg),
+    borderRadius: radius.input,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
