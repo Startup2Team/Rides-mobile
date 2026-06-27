@@ -3,10 +3,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   ActivityIndicator,
   Alert,
-  PanResponder,
   Platform,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from 'react-native';
 import MapView from 'react-native-maps';
@@ -21,11 +19,9 @@ import { computeTabBarHeight } from '@/constants/tabBar';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
 import { useHomeBooking } from '@/hooks/home/useHomeBooking';
 import { useHomeLocation } from '@/hooks/home/useHomeLocation';
-import type { LocationSearchTarget } from '@/hooks/home/useLocationSearch';
 import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
-import { useToast } from '@/context/ToastContext';
 import { canAccessDriverMode, getDriverVerificationStatus } from '@/utils/driverVerification';
 import {
   getCoordDistance,
@@ -35,7 +31,6 @@ import {
   BookingFormDraft,
   KIGALI_CENTER,
   RideLocation,
-  SavedLocation,
 } from '@/types';
 import { loadStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
 import { CustomerBottomSheet } from './CustomerBottomSheet';
@@ -54,22 +49,12 @@ import {
 
 export default function CustomerHome() {
   const colors = useColors();
-  const isDark = useColorScheme() === 'dark';
-  const { savedPlaces, saveLocation, persistSavedPlaces, reload: reloadSavedPlaces } = useSavedLocations();
-  const { showToast } = useToast();
-  const formSheetSurface = useMemo(
-    () => ({
-      backgroundColor: colors.card,
-      shadowOpacity: isDark ? 0.55 : 0.25,
-    }),
-    [colors.card, isDark],
-  );
+  const { reload: reloadSavedPlaces } = useSavedLocations();
   const insets = useSafeAreaInsets();
   const { user, driverProfile } = useAuth();
   const {
     currentRide,
     createRide,
-    rideHistory,
     loadHistory,
     cancelledSearchDraft,
     restoreBookingOnHomeFocus,
@@ -92,7 +77,6 @@ export default function CustomerHome() {
   const showBooking = activeCard === 'booking';
 
   const pickupSetterRef = useRef<React.Dispatch<React.SetStateAction<RideLocation>>>(() => {});
-  const openLocationSearchRef = useRef<(target: LocationSearchTarget) => void>(() => {});
   const applyInitialPickup = useCallback((location: RideLocation) => {
     pickupSetterRef.current(previous => ({ ...previous, ...location }));
   }, []);
@@ -107,9 +91,23 @@ export default function CustomerHome() {
     stopHereLocationWatch,
     userLocation,
   } = useHomeLocation({ applyInitialPickup, preserveInitialPickup });
-  const requestLocationSearch = useCallback((target: LocationSearchTarget) => {
-    openLocationSearchRef.current(target);
-  }, []);
+  const [focusedField, setFocusedField] = useState<'pickup' | 'dropoff' | null>(null);
+  const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
+  const openLocationSearch = useCallback((target: 'pickup' | 'dropoff') => {
+    setFocusedField(target);
+    router.push({
+      pathname: '/location-search',
+      params: {
+        target,
+        source: 'booking',
+        userLatitude: userLocation.latitude.toString(),
+        userLongitude: userLocation.longitude.toString(),
+        gpsLatitude: gpsLocation ? gpsLocation.latitude.toString() : '',
+        gpsLongitude: gpsLocation ? gpsLocation.longitude.toString() : '',
+        gpsAddress: gpsLocation ? gpsLocation.address || '' : '',
+      },
+    });
+  }, [gpsLocation, userLocation.latitude, userLocation.longitude]);
   const {
     bookLoading,
     destText,
@@ -126,15 +124,13 @@ export default function CustomerHome() {
     createRide,
     gpsLocation,
     onBeforeCreate: useCallback(() => setActiveCard('booking'), []),
-    openLocationSearch: requestLocationSearch,
+    openLocationSearch,
     userLocation,
   });
   pickupSetterRef.current = setPickup;
   const [mapType, setMapType] = useState<AppMapType>('standard');
   const [isMapReady, setIsMapReady] = useState(false);
   const [driverApplicationDraftUpdatedAt, setDriverApplicationDraftUpdatedAt] = useState<string | null>(null);
-  const [focusedField, setFocusedField] = useState<'pickup' | 'dropoff' | null>(null);
-  const [routeRecenterRequest, setRouteRecenterRequest] = useState(0);
   // ── Derived / layout ──────────────────────────────────────────────────────
   const recenterBottomOffset = sheetHeight + spacing[16];
   const hasPreciseRouteLocations =
@@ -300,41 +296,11 @@ export default function CustomerHome() {
   const shouldShowYouAreHere =
     locationStatus === 'available' && (!showBooking || !shouldShowBookingRoute);
 
-  const openLocationSearch = (target: 'pickup' | 'dropoff') => {
-    setFocusedField(target);
-    router.push({
-      pathname: '/location-search',
-      params: {
-        target,
-        userLatitude: userLocation.latitude.toString(),
-        userLongitude: userLocation.longitude.toString(),
-        gpsLatitude: gpsLocation ? gpsLocation.latitude.toString() : '',
-        gpsLongitude: gpsLocation ? gpsLocation.longitude.toString() : '',
-        gpsAddress: gpsLocation ? gpsLocation.address || '' : '',
-      },
-    });
-  };
-  openLocationSearchRef.current = openLocationSearch;
-
   const visibleDrivers = useMemo(() => DRIVER_OFFSETS.map((offset, i) => ({
     id: `nearby-driver-${i}`,
     latitude: userLocation.latitude + offset.lat,
     longitude: userLocation.longitude + offset.lng,
   })), [userLocation.latitude, userLocation.longitude]);
-
-  const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
-  const recentLocations = useMemo<RideLocation[]>(() => {
-    const seen = new Set<string>();
-    return rideHistory
-      .flatMap(ride => [ride.pickup, ride.destination])
-      .filter(location => {
-        const key = location.address ?? `${location.latitude},${location.longitude}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .slice(0, 5);
-  }, [rideHistory]);
 
   const homeInitialRegion = useMemo(() => {
     const latitudeOffset = (sheetHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
@@ -444,7 +410,7 @@ export default function CustomerHome() {
           onRetryLocation: () => void refreshHereLocation(),
           onSelectPickupManually: () => {
             handleOpenBooking();
-            requestLocationSearch('pickup');
+            openLocationSearch('pickup');
           },
         }}
         bookingCard={{

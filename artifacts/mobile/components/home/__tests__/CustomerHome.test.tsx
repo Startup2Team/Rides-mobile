@@ -6,6 +6,9 @@ declare const __dirname: string;
 
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
+const mockClearRoutePreview = jest.fn();
+let mockDestination: any = null;
+let mockHomeMapProps: any = null;
 
 // Mock React Native Easing / Animated timings to run immediately
 jest.mock('react-native', () => {
@@ -123,7 +126,6 @@ jest.mock('@/hooks/useColors', () => ({
 
 const mockRideHistory: any[] = [];
 const mockPickup = { latitude: -1.9441, longitude: 30.0619, address: 'Initial Pickup', locationType: 'generic' };
-const mockDestination = null;
 const mockDestText = '';
 
 const mockSetPickup = jest.fn();
@@ -145,6 +147,24 @@ jest.mock('@/context/RideContext', () => ({
     clearCancelledSearchDraft: jest.fn(),
     clearRestoreBookingOnHomeFocus: jest.fn(),
     loadHistory: jest.fn(),
+  }),
+}));
+
+jest.mock('@/hooks/home/useRoutePreview', () => ({
+  useRoutePreview: (args: any) => ({
+    route: mockDestination
+      ? { durationSeconds: 600, distanceMeters: 1200 }
+      : null,
+    routeLoading: false,
+    routeFitCoords: mockDestination ? [args.pickup, mockDestination] : [],
+    routeLineCoords: mockDestination ? [args.pickup, mockDestination] : [],
+    shouldShowBookingRoute: Boolean(mockDestination),
+    routePinPositions: {
+      pickup: args.pickup,
+      destination: mockDestination,
+    },
+    centerRouteInVisibleMap: jest.fn(),
+    clearRoutePreview: mockClearRoutePreview,
   }),
 }));
 
@@ -187,8 +207,14 @@ jest.mock('../CustomerBottomSheet', () => {
   const React = require('react');
   const { View, TouchableOpacity, Text } = require('react-native');
   return {
-    CustomerBottomSheet: ({ bookingCard }: any) => (
+    CustomerBottomSheet: ({ homeCard, bookingCard, onCloseBooking }: any) => (
       <View>
+        <TouchableOpacity onPress={() => homeCard.onContinue()}>
+          <Text>Open Booking</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => onCloseBooking()}>
+          <Text>Close Booking</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => bookingCard.onOpenLocationSearch('pickup')}>
           <Text>Open Pickup Search</Text>
         </TouchableOpacity>
@@ -208,12 +234,19 @@ jest.mock('../CustomerBottomSheet', () => {
 jest.mock('../HomeMap', () => {
   const React = require('react');
   const { View } = require('react-native');
-  return { HomeMap: () => React.createElement(View, { testID: 'home-map' }) };
+  return {
+    HomeMap: (props: any) => {
+      mockHomeMapProps = props;
+      return React.createElement(View, { testID: 'home-map' });
+    },
+  };
 });
 
 describe('CustomerHome Navigation Refactoring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDestination = null;
+    mockHomeMapProps = null;
   });
 
   test('obsolete bottom sheets are not rendered or imported by CustomerHome', () => {
@@ -238,6 +271,12 @@ describe('CustomerHome Navigation Refactoring', () => {
     expect(fileContent).not.toContain('triggerMapPicker');
   });
 
+  test('CustomerHome does not render any visible modal overlay', () => {
+    render(<CustomerHome />);
+
+    expect(screen.queryByTestId('modal')).toBeNull();
+  });
+
   test('tapping pickup navigates to route-based search screen with target pickup', () => {
     render(<CustomerHome />);
 
@@ -247,6 +286,7 @@ describe('CustomerHome Navigation Refactoring', () => {
       pathname: '/location-search',
       params: expect.objectContaining({
         target: 'pickup',
+        source: 'booking',
         userLatitude: expect.any(String),
         userLongitude: expect.any(String),
       }),
@@ -262,6 +302,7 @@ describe('CustomerHome Navigation Refactoring', () => {
       pathname: '/location-search',
       params: expect.objectContaining({
         target: 'dropoff',
+        source: 'booking',
         userLatitude: expect.any(String),
         userLongitude: expect.any(String),
       }),
@@ -282,5 +323,37 @@ describe('CustomerHome Navigation Refactoring', () => {
         initialLongitude: expect.any(String),
       }),
     });
+  });
+
+  test('closing booking clears booking draft state and route preview state', () => {
+    render(<CustomerHome />);
+
+    fireEvent.press(screen.getByText('Close Booking'));
+
+    expect(mockSetDestText).toHaveBeenCalledWith('');
+    expect(mockSetDestination).toHaveBeenCalledWith(null);
+    expect(mockSetPickup).toHaveBeenCalledWith(expect.objectContaining({
+      address: 'Initial Pickup',
+      locationType: 'precise',
+    }));
+    expect(mockClearRoutePreview).toHaveBeenCalled();
+  });
+
+  test('route preview remains connected to home map when destination is set', () => {
+    mockDestination = {
+      latitude: -1.95,
+      longitude: 30.06,
+      address: 'Downtown',
+      locationType: 'precise',
+    };
+
+    render(<CustomerHome />);
+
+    fireEvent.press(screen.getByText('Open Booking'));
+
+    expect(screen.getByTestId('home-map')).toBeTruthy();
+    expect(mockHomeMapProps.routeCoordinates).toHaveLength(2);
+    expect(mockHomeMapProps.showDestination).toBe(true);
+    expect(mockHomeMapProps.pickup).toEqual(expect.any(Object));
   });
 });
