@@ -45,6 +45,7 @@ import { getDriverApplicationAction } from '@/utils/driverVerification';
 import type { DriverVerificationStatus } from '@/types';
 import { typography } from '@/constants/typography';
 import { zIndex } from '@/constants/zIndex';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 const AVATAR_SIZE = sizes.iconButton.md;
 const CTA_AVATAR_SIZE = sizes.iconButton.sm;
@@ -284,7 +285,7 @@ export function HomeTopHeader({
       void (async () => {
         try {
           await switchMode('driver');
-          router.replace('/(driver)');
+          navigateToDriverHomeAfterCompletion(router);
         } catch {
           switchModeAvatarSlide.setValue(0);
           setIsSwitchingMode(false);

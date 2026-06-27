@@ -25,6 +25,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
+import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -77,7 +78,7 @@ export default function SettingsScreen() {
         text: 'Log Out',
         onPress: async () => {
           await logout();
-          router.replace('/(auth)/welcome');
+          replaceAuthBoundary(router, '/(auth)/welcome');
         },
       },
     ]);

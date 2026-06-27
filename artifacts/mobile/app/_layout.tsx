@@ -57,6 +57,7 @@ import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
+import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
@@ -74,7 +75,7 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isProtectedDriverPath(pathname) && !canAccessDriverMode(driverProfile)) {
-      router.replace('/driver-submission-confirmation');
+      replaceFlowScreen(router, '/driver-submission-confirmation');
     }
   }, [driverProfile, pathname]);
 

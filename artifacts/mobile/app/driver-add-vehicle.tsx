@@ -36,6 +36,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 
 type VehiclePhotoKey = 'outside' | 'inside';
 
@@ -229,7 +230,7 @@ export default function DriverAddVehicleScreen() {
     });
     setSaving(false);
     Alert.alert('Submitted for review', 'Your vehicle has been submitted for review.');
-    router.replace('/driver-vehicles');
+    replaceFlowScreen(router, '/driver-vehicles');
   };
 
   const canShowPassengerSeats = form.vehicleType === 'cab' || form.vehicleType === 'hilux';

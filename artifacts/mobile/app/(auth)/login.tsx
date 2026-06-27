@@ -21,6 +21,7 @@ import { AppButton } from '@/components/AppButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
+import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: 'ðŸ‡·ðŸ‡¼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -157,7 +158,7 @@ export default function LoginScreen() {
       >
         <View style={styles.row}>
           <AppText variant="bodySmall" style={[styles.hint, { color: colors.mutedForeground }]}>No account? </AppText>
-          <TouchableOpacity onPress={() => router.replace('/(auth)/register')}>
+          <TouchableOpacity onPress={() => replaceAuthBoundary(router, '/(auth)/register')}>
             <AppText variant="bodySmall" style={[styles.hint, { color: colors.primary }]}>Register</AppText>
           </TouchableOpacity>
         </View>

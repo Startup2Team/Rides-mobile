@@ -33,6 +33,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 const WAIT_LIMIT_SECONDS = 180;
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
@@ -311,7 +312,7 @@ export default function DriverNavigateScreen() {
                   onPress: () => {
                     cancelRide();
                     showToast(`Ride cancelled: ${reason}`, 'info');
-                    router.replace('/(driver)');
+                    navigateToDriverHomeAfterCompletion(router);
                   },
                 })),
               ],
@@ -344,7 +345,7 @@ export default function DriverNavigateScreen() {
           onPress: () => {
             cancelRide();
             showToast(`Ride cancelled: ${reason}`, 'info');
-            router.replace('/(driver)');
+            navigateToDriverHomeAfterCompletion(router);
           },
         })),
       ],

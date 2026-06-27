@@ -34,6 +34,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 
 function MenuItem({
@@ -130,7 +131,7 @@ export default function ProfileScreen() {
           text: 'Switch',
           onPress: async () => {
             await switchMode('driver');
-            router.replace('/(driver)');
+            navigateToDriverHomeAfterCompletion(router);
           },
         },
       ]);

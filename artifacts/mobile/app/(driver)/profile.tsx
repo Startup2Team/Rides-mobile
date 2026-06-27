@@ -31,6 +31,7 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -88,12 +89,12 @@ export default function DriverProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Switch',
-        onPress: async () => {
-          await switchMode('customer');
-          router.replace('/(tabs)');
+          onPress: async () => {
+            await switchMode('customer');
+            navigateToCustomerHomeAfterCompletion(router);
+          },
         },
-      },
-    ]);
+      ]);
   };
 
   const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';

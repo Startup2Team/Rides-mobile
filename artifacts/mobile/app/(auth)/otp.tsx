@@ -15,6 +15,7 @@ import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
 import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 export default function OTPScreen() {
   const colors = useColors();
@@ -68,7 +69,7 @@ export default function OTPScreen() {
       isDriver: false,
       createdAt: new Date().toISOString(),
     });
-    router.replace({ pathname: '/(tabs)' });
+    navigateToCustomerHomeAfterCompletion(router);
   };
 
   return (

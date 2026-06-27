@@ -3,6 +3,7 @@ import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import type { Ride } from '@/types';
 import { showCancelArrivedRideAlert, showCancelArrivingRideAlert } from '@/utils/cancelArrivingRideAlert';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 export function useRideActions({
   cancelRide,
@@ -16,7 +17,7 @@ export function useRideActions({
   const doCancelRide = useCallback(() => {
     cancelRide();
     showToast('Ride cancelled', 'info');
-    router.replace('/(tabs)');
+    navigateToCustomerHomeAfterCompletion(router);
   }, [cancelRide, showToast]);
 
   const handleCallDriver = useCallback(() => {
