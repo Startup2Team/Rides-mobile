@@ -30,4 +30,3 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
 });
-
