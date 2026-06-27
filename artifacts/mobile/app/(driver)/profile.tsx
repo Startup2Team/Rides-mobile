@@ -296,8 +296,8 @@ export default function DriverProfileScreen() {
           >
             <MaterialCommunityIcons name="swap-horizontal" size={icons.size.lg} color={colors.primary} />
             <View style={styles.modeCopy}>
-              <AppText style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</AppText>
-              <AppText style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</AppText>
+              <AppText variant="title" style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</AppText>
+              <AppText variant="label" style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</AppText>
             </View>
             <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6], maxWidth: '100%', minWidth: spacing[0], flexShrink: 1 },
   phone: { ...typography.label,  },
   section: { gap: spacing[10] },
-  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: spacing[2] },
+  sectionTitle: { ...typography.h3, letterSpacing: -0.2, marginLeft: spacing[2] },
   cardShadow: {
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3,
     ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }),
@@ -530,11 +530,11 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[14], minHeight: sizes.avatar.lg, paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: semanticSpacing.cardPadding },
   menuIcon: { width: sizes.avatar.sm, alignItems: 'center', justifyContent: 'center' },
   menuCopy: { flex: 1, gap: spacing[2] },
-  menuLabel: { ...typography.title, lineHeight: 22 },
+  menuLabel: { ...typography.body },
   menuDetail: { ...typography.tiny, lineHeight: 16 },
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
   modeCopy: { flex: 1, gap: 3 },
-  modeTitle: { ...typography.body,  },
-  modeDescription: { ...typography.tiny,  },
+  modeTitle: { ...typography.title },
+  modeDescription: { ...typography.label, fontFamily: typography.caption.fontFamily, marginTop: spacing[2] },
   version: { textAlign: 'center', ...typography.caption, paddingVertical: semanticSpacing.inlineGap },
 });

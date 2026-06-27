@@ -1177,7 +1177,7 @@ const styles = StyleSheet.create({
     width: CTA_LABEL_SLOT_WIDTH,
     zIndex: zIndex.sticky - 1,
   },
-  switchModeQuickActionText: { ...typography.button, lineHeight: 16, zIndex: zIndex.raised },
+  switchModeQuickActionText: { ...typography.caption, fontFamily: typography.title.fontFamily, lineHeight: 16, zIndex: zIndex.raised },
   statusDivider: { height: StyleSheet.hairlineWidth, marginVertical: semanticSpacing.rowGap },
   activityTitle: { ...typography.caption, marginTop: spacing[14], marginBottom: 7 },
   activityGrid: {

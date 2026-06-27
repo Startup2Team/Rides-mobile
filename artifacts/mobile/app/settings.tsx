@@ -108,7 +108,7 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Account & Support">
+        <Section title="Account and Support">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
             <SettingsRow icon="shield" label="Privacy and Security" onPress={() => router.push('/privacy-security')} />
             <Divider />
