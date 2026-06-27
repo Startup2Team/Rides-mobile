@@ -2,7 +2,6 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
-const mockLogout = jest.fn(() => Promise.resolve());
 const mockReplace = jest.fn();
 let mockAlert: jest.Mock;
 
@@ -111,7 +110,6 @@ jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     user: { name: 'Driver User', phone: '250788000000', mode: 'driver' },
     driverProfile: { isVerified: true },
-    logout: mockLogout,
     switchMode: jest.fn(),
   }),
 }));
@@ -148,18 +146,17 @@ jest.mock('@/utils/communityActions', () => ({
   rateRides: jest.fn(),
 }));
 
-describe('DriverProfileScreen logout', () => {
+describe('DriverProfileScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('redirects to welcome after logout', async () => {
+  test('does not show a logout action', async () => {
     const DriverProfileScreen = require('../profile').default;
     render(<DriverProfileScreen />);
 
-    fireEvent.press(screen.getByText('Log Out'));
-    await waitFor(() => expect(mockAlert).toHaveBeenCalled());
-    await waitFor(() => expect(mockLogout).toHaveBeenCalled());
-    expect(mockReplace).toHaveBeenCalledWith('/(auth)/welcome');
+    expect(screen.queryByText('Log Out')).toBeNull();
+    expect(mockAlert).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });
