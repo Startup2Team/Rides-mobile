@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppText } from '@/components/AppText';
+
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
@@ -131,6 +132,35 @@ export default function SavedPlaceSelectorScreen() {
       setCustomLabel(label);
     }
   }, [displayLabel, label]);
+  if (mode === 'edit' && !existing) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <GlassHeader title="Edit Place" />
+        <View
+          style={[
+            styles.searchBody,
+            {
+              paddingTop: headerMetrics.contentTop + spacing[24],
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: semanticSpacing.cardPadding,
+            },
+          ]}
+        >
+          <Feather name="alert-triangle" size={icons.size.hero} color={colors.destructive} />
+          <AppText variant="title" style={{ color: colors.foreground, textAlign: 'center' }}>
+            Saved place not found or has been deleted.
+          </AppText>
+          <TouchableOpacity
+            style={{ paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: spacing[10], borderRadius: radius['3xl'], backgroundColor: colors.primary }}
+            onPress={() => router.back()}
+          >
+            <AppText variant="button" style={{ color: colors.primaryForeground }}>Go Back</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   useEffect(() => {
     return () => {
@@ -409,7 +439,7 @@ const styles = StyleSheet.create({
   searchBody: { flex: 1, paddingHorizontal: semanticSpacing.cardPadding },
   searchInputWrap: {
     height: sizes.input.lg,
-    borderRadius: radius.md,
+    borderRadius: radius.input,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -418,7 +448,7 @@ const styles = StyleSheet.create({
   },
   labelInputWrap: {
     height: sizes.input.lg,
-    borderRadius: radius.md,
+    borderRadius: radius.input,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',

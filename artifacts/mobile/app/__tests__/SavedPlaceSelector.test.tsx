@@ -230,6 +230,16 @@ describe('SavedPlaceSelectorScreen', () => {
     expect(mapOptionStyle.fontFamily).toBe(typography.h3.fontFamily);
   });
 
+  test('uses typography tokens for the map selection label', () => {
+    render(<SavedPlaceSelectorScreen />);
+
+    const mapOptionStyle = flattenStyle(screen.getByText('Set location on map').props.style);
+
+    expect(mapOptionStyle.fontSize).toBe(typography.h3.fontSize);
+    expect(mapOptionStyle.lineHeight).toBe(typography.h3.lineHeight);
+    expect(mapOptionStyle.fontFamily).toBe(typography.h3.fontFamily);
+  });
+
   test('saves a selected search suggestion in add mode (creates new place)', async () => {
     mockSearch = {
       text: 'Kigali',
