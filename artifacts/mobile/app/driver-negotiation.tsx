@@ -18,6 +18,8 @@ import { useColors } from '@/hooks/useColors';
 import { useDriverNegotiationState } from '@/hooks/negotiation/useDriverNegotiationState';
 import { useDriverNegotiationActions } from '@/hooks/negotiation/useDriverNegotiationActions';
 import { VEHICLE_LABELS } from '@/types';
+import { icons } from '@/constants/icons';
+import { spacing } from '@/constants/spacing';
 
 export default function DriverNegotiationScreen() {
   const colors = useColors();
@@ -49,7 +51,7 @@ export default function DriverNegotiationScreen() {
       <View
         style={[
           styles.page,
-          { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 14 },
+          { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : spacing[0]) + spacing[14] },
         ]}
       >
         {/* Header */}
@@ -109,7 +111,7 @@ export default function DriverNegotiationScreen() {
             </View>
             {destinationIsGeneric && (
               <View style={[styles.tripGenericNote, { backgroundColor: WARNING + '14' }]}>
-                <Feather name="info" size={12} color={WARNING} />
+                <Feather name="info" size={icons.size.xxs} color={WARNING} />
                 <AppText style={[styles.tripGenericText, { color: WARNING }]} numberOfLines={1}>
                   Confirm exact drop off with customer before locking fare
                 </AppText>
@@ -117,12 +119,12 @@ export default function DriverNegotiationScreen() {
             )}
             <View style={[styles.tripStatsRow, { borderTopColor: colors.border }]}>
               <View style={styles.tripStatInline}>
-                <Feather name="navigation" size={12} color={colors.primary} />
+                <Feather name="navigation" size={icons.size.xxs} color={colors.primary} />
                 <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>Distance</AppText>
                 <AppText style={[styles.tripStatValue, { color: colors.foreground }]}>{currentRide.distance.toFixed(1)} km</AppText>
               </View>
               <View style={styles.tripStatInline}>
-                <Feather name="clock" size={12} color={colors.primary} />
+                <Feather name="clock" size={icons.size.xxs} color={colors.primary} />
                 <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>ETA</AppText>
                 <AppText style={[styles.tripStatValue, { color: colors.foreground }]}>~{currentRide.duration} min</AppText>
               </View>
@@ -179,7 +181,7 @@ export default function DriverNegotiationScreen() {
                 accessibilityLabel="Send offer"
                 accessibilityRole="button"
               >
-                <Feather name="send" size={18} color={state.offerText ? colors.primaryForeground : colors.mutedForeground} />
+                <Feather name="send" size={icons.semantic.row} color={state.offerText ? colors.primaryForeground : colors.mutedForeground} />
               </TouchableOpacity>
             </View>
           </KeyboardStickyView>
@@ -221,7 +223,7 @@ export default function DriverNegotiationScreen() {
         cardStyle={styles.acceptFareDialogCard}
       >
         <View style={[styles.modalIcon, { backgroundColor: colors.primaryHex + '20' }]}>
-          <Feather name="shield" size={24} color={colors.primary} />
+          <Feather name="shield" size={icons.size.xl} color={colors.primary} />
         </View>
         <AppText style={[styles.modalTitle, { color: colors.foreground }]}>
           Accept {formatFare(state.lastCustomerOffer?.amount)}?

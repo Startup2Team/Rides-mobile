@@ -31,6 +31,9 @@ import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDocumentSet } from '@/types';
 import { parseDateDdMmYyyy } from '@/utils/dateUtils';
 import { isValidImageAsset } from '@/utils/documentValidation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 type PreviewTarget = { index: number } | null;
 type UpdateTarget =
@@ -275,8 +278,8 @@ export default function DriverVehicleDetailsScreen() {
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 16,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: semanticSpacing.cardPadding,
         }}
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
         onRefresh={handleRefresh}
@@ -684,7 +687,7 @@ function PreviewThumbnail({
       {uri ? (
         <Image source={{ uri }} style={styles.thumbnailImage} testID={imageTestID} resizeMode="cover" />
       ) : (
-        <Feather name="image" size={18} color={placeholderColor} />
+        <Feather name="image" size={icons.semantic.row} color={placeholderColor} />
       )}
     </TouchableOpacity>
   );
@@ -824,36 +827,36 @@ function getDocumentExpiryWarning(label: string, expiryDate?: string) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  sectionCard: { borderRadius: 18, padding: 14, gap: 12 },
+  sectionCard: { borderRadius: 18, padding: spacing[14], gap: semanticSpacing.rowGap },
   sectionTitle: { ...typography.title,  },
   sectionSubtitle: { ...typography.caption, lineHeight: 17 },
-  complianceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  complianceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   complianceLabel: { ...typography.label,  },
-  complianceMessage: { ...typography.tiny, lineHeight: 15, marginTop: 2 },
-  compliancePill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
+  complianceMessage: { ...typography.tiny, lineHeight: 15, marginTop: spacing[2] },
+  compliancePill: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing[10], paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
   compliancePillText: { ...typography.tiny,  },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   infoLabel: { flex: 1, ...typography.caption,  },
   infoValue: { ...typography.caption, flexShrink: 1, textAlign: 'right' },
   divider: { height: StyleSheet.hairlineWidth },
-  statusBox: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
+  statusBox: { borderWidth: 1, borderRadius: radius.card, padding: semanticSpacing.rowGap, gap: spacing[4] },
   statusBoxTitle: { ...typography.bodySmall,  },
   statusBoxText: { ...typography.caption, lineHeight: 17 },
-  block: { gap: 8, paddingTop: 4 },
-  blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  block: { gap: semanticSpacing.inlineGap, paddingTop: spacing[4] },
+  blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.inlineGap },
   blockTitle: { ...typography.label,  },
   blockStatus: { ...typography.tiny, marginTop: 2 },
-  thumbnailRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  thumbnailRow: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
   thumbnail: { width: 66, height: 66, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailLarge: { width: 106, height: 84, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailImage: { width: '100%', height: '100%' },
-  documentFaces: { gap: 10 },
-  documentFaceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  documentFaces: { gap: spacing[10] },
+  documentFaceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   documentFaceLabel: { flex: 1, ...typography.caption,  },
   replaceFaceButton: {
     minHeight: 42,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    paddingHorizontal: spacing[14],
+    borderRadius: radius.input,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -862,23 +865,23 @@ const styles = StyleSheet.create({
   },
   replaceFaceButtonText: { ...typography.button },
   warningText: { ...typography.tiny, lineHeight: 16 },
-  timeline: { gap: 14 },
-  timelineRow: { flexDirection: 'row', gap: 12 },
-  timelineMarkerColumn: { width: 16, alignItems: 'center' },
-  timelineDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  timeline: { gap: spacing[14] },
+  timelineRow: { flexDirection: 'row', gap: semanticSpacing.rowGap },
+  timelineMarkerColumn: { width: spacing[16], alignItems: 'center' },
+  timelineDot: { width: spacing[10], height: spacing[10], borderRadius: 5, marginTop: spacing[4] },
   timelineLine: { flex: 1, width: 2, minHeight: 22, marginTop: 4, borderRadius: 1 },
   timelineCopy: { flex: 1, gap: 2 },
   timelineTitle: { ...typography.label,  },
   timelineMeta: { ...typography.tiny, lineHeight: 16 },
   rejectionReason: { ...typography.label, lineHeight: 18 },
   updateBanner: { ...typography.label,  },
-  updateActions: { gap: 10 },
-  buttonRow: { gap: 10 },
-  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: 18 },
-  previewSheet: { borderRadius: 20, padding: 14, gap: 14, maxHeight: '88%' },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  updateActions: { gap: spacing[10] },
+  buttonRow: { gap: spacing[10] },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: icons.semantic.row },
+  previewSheet: { borderRadius: radius['3xl'], padding: spacing[14], gap: spacing[14], maxHeight: '88%' },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   previewTitle: { flex: 1, ...typography.title,  },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: semanticSpacing.inlineGap, padding: semanticSpacing.sectionGap },
   emptyStateTitle: { ...typography.h3,  },
   emptyStateText: { ...typography.label, textAlign: 'center', lineHeight: 18 },
 });

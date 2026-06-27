@@ -15,6 +15,8 @@ import { getActiveBonusRides, getActivePackageActivation, getActiveRideCredits, 
 import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS } from '@/types';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -207,26 +209,26 @@ function StatusChip({ colors, label, status }: { colors: ReturnType<typeof useCo
 const styles = StyleSheet.create({
   root: { flex: 1 },
   headerBand: {
-    marginHorizontal: 16,
-    marginBottom: 14,
-    paddingVertical: 14,
+    marginHorizontal: semanticSpacing.cardPadding,
+    marginBottom: spacing[14],
+    paddingVertical: spacing[14],
     borderRadius: 18,
-    gap: 8,
+    gap: semanticSpacing.inlineGap,
   },
-  headerBandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  headerBandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.rowGap },
   headerBandTitle: { ...typography.title,  },
   headerBandDetail: { ...typography.caption,  },
-  list: { gap: 12, paddingHorizontal: 16 },
-  card: { borderRadius: 18, padding: 15, gap: 12 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  list: { gap: semanticSpacing.rowGap, paddingHorizontal: semanticSpacing.cardPadding },
+  card: { borderRadius: 18, padding: 15, gap: semanticSpacing.rowGap },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap },
   cardCopy: { flex: 1, minWidth: 0, gap: 5 },
-  titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: semanticSpacing.inlineGap },
   vehicleType: { ...typography.title,  },
   vehicleMeta: { ...typography.tiny, lineHeight: 16 },
   rejectionReason: { ...typography.tiny, lineHeight: 16 },
   vehicleState: { ...typography.tiny,  },
   detailLink: { ...typography.tiny, marginTop: 2 },
-  statusChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
+  statusChip: { paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: spacing[4], borderRadius: radius.pill },
   statusChipText: { ...typography.tiny,  },
   actionStack: { alignItems: 'flex-end', gap: 6 },
   subtleNote: { ...typography.tiny,  },

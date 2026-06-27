@@ -25,6 +25,10 @@ import {
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
 import { loadLockedPackageOffer, type LockedOfferLoadFailure } from '@/persistence/lockedPackageOfferPersistence';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -169,7 +173,7 @@ export default function DriverPackagePaymentScreen() {
     const expired = offerFailure === 'expired';
     return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <View style={[styles.invalidIconHalo, { backgroundColor: colors.destructiveHex + '14' }]}>
-        <Feather name="package" size={28} color={colors.destructive} />
+        <Feather name="package" size={sizes.avatar.xs} color={colors.destructive} />
       </View>
       <AppText style={[styles.invalidTitle, { color: colors.foreground }]}>
         {expired ? 'Package offer expired' : 'Package offer unavailable'}
@@ -204,7 +208,7 @@ export default function DriverPackagePaymentScreen() {
           <View style={styles.summaryPanel}>
             <View style={styles.summaryHeader}>
               <View style={[styles.summaryIcon, { backgroundColor: colors.primary }]}>
-                <Feather name="navigation" size={18} color="#fff" />
+                <Feather name="navigation" size={icons.semantic.row} color="#fff" />
               </View>
               <View style={styles.summaryTitleBlock}>
                 <AppText style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</AppText>
@@ -373,53 +377,53 @@ function ReceiptCard({ activation, colors }: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  centered: { alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
-  invalidIconHalo: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  centered: { alignItems: 'center', justifyContent: 'center', gap: icons.semantic.row, padding: semanticSpacing.sectionGap },
+  invalidIconHalo: { width: sizes.thumbnail.md, height: sizes.thumbnail.md, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[2] },
   invalidTitle: { ...typography.h2, letterSpacing: -0.3 },
   invalidText: { maxWidth: 300, textAlign: 'center', ...typography.label, lineHeight: 19 },
   paymentScrollContent: { flexGrow: 1, justifyContent: 'center' },
-  paymentContent: { marginHorizontal: 20, gap: 20 },
-  summaryPanel: { gap: 10 },
-  summaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  paymentContent: { marginHorizontal: semanticSpacing.screenPadding, gap: semanticSpacing.screenPadding },
+  summaryPanel: { gap: spacing[10] },
+  summaryHeader: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   summaryIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   summaryTitleBlock: { flex: 1, gap: 2 },
   summaryEyebrow: { ...typography.tiny, letterSpacing: 0.8 },
   packageName: { ...typography.h2,  },
-  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
+  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing[4], alignSelf: 'flex-start', paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 5, borderRadius: radius.pill },
   campaignBadgeText: { ...typography.tiny,  },
   summaryDivider: { height: StyleSheet.hairlineWidth },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.cardPadding },
   summaryLabel: { ...typography.label,  },
   summaryValue: { ...typography.bodySmall,  },
   totalLabel: { ...typography.bodySmall,  },
   credits: { ...typography.title,  },
   price: { ...typography.h2,  },
-  sectionHeading: { gap: 4 },
+  sectionHeading: { gap: spacing[4] },
   sectionTitle: { ...typography.title,  },
   sectionDescription: { ...typography.caption, lineHeight: 17 },
   providerChoiceRow: { gap: 9 },
-  providerOption: { minHeight: 62, borderRadius: 15, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  providerOption: { minHeight: 62, borderRadius: 15, borderWidth: 1, paddingHorizontal: semanticSpacing.rowGap, paddingVertical: spacing[10], flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   providerIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   providerLogo: { width: 27, height: 27 },
   providerTextBlock: { flex: 1, gap: 1 },
   providerOptionText: { ...typography.bodySmall,  },
   providerOptionSubtext: { ...typography.tiny,  },
-  radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  radioInner: { width: 10, height: 10, borderRadius: 5 },
-  notice: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, borderRadius: 14, borderWidth: 1 },
+  radioOuter: { width: spacing[20], height: spacing[20], borderRadius: radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioInner: { width: spacing[10], height: spacing[10], borderRadius: 5 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: 11, borderRadius: radius.card, borderWidth: 1 },
   noticeIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   noticeText: { flex: 1, ...typography.caption, lineHeight: 18 },
   inlineError: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
   errorText: { flex: 1, ...typography.caption, lineHeight: 18 },
-  actions: { flexDirection: 'row', gap: 10 },
+  actions: { flexDirection: 'row', gap: spacing[10] },
   actionButton: { flex: 1 },
-  secureNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  secureNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[6] },
   secureNoteText: { ...typography.tiny,  },
-  receiptCard: { alignItems: 'center', gap: 12 },
+  receiptCard: { alignItems: 'center', gap: semanticSpacing.rowGap },
   receiptIconHalo: { width: 86, height: 86, borderRadius: 43, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   receiptIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   receiptTitle: { ...typography.h1, letterSpacing: -0.4 },
   receiptText: { maxWidth: 290, textAlign: 'center', ...typography.bodySmall, lineHeight: 21 },
-  receiptCredits: { ...typography.title, marginTop: 4 },
-  receiptAction: { width: '100%', marginTop: 12 },
+  receiptCredits: { ...typography.title, marginTop: spacing[4] },
+  receiptAction: { width: '100%', marginTop: semanticSpacing.rowGap },
 });

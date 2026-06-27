@@ -9,6 +9,8 @@ import { useColors } from '@/hooks/useColors';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
+import { radius } from '@/constants/radius';
+import { spacing } from '@/constants/spacing';
 
 const SCREEN_DURATION_MS = 3000;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -139,7 +141,7 @@ export default function DriverRideCompleteScreen() {
         ))}
       </View>
 
-      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}>
+      <View style={[styles.content, { paddingTop: insets.top + spacing[64] - spacing[4], paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}>
         <AppText style={styles.emoji}>🎉</AppText>
         <AppText style={[styles.title, { color: colors.foreground }]}>Ride Complete!</AppText>
         <AppText style={[styles.subtitle, { color: colors.mutedForeground }]}>Great job, keep it up!</AppText>
@@ -162,19 +164,19 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
+    gap: spacing[12],
+    paddingHorizontal: spacing[32],
   },
   emoji: { ...typography.displayXL },
   title: { ...typography.display, textAlign: 'center' },
   subtitle: { ...typography.title, textAlign: 'center' },
   fareCard: {
-    marginTop: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 20,
-    borderRadius: 20,
+    marginTop: spacing[16],
+    paddingHorizontal: spacing[32],
+    paddingVertical: spacing[20],
+    borderRadius: radius['3xl'],
     alignItems: 'center',
-    gap: 4,
+    gap: spacing[4],
   },
   fareLabel: { ...typography.label,  },
   fareAmount: { ...typography.displayXL,  },

@@ -32,6 +32,10 @@ import { isValidImageAsset } from '@/utils/documentValidation';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
 import { submitVehicleApplication } from '@/domain/verificationSubmissions';
 import { getRequiredVehiclePhotoKeys, getVehicleBrandModelPlaceholders } from '@/hooks/driver-onboarding/onboardingTypes';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 type VehiclePhotoKey = 'outside' | 'inside';
 
@@ -242,8 +246,8 @@ export default function DriverAddVehicleScreen() {
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 16,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: semanticSpacing.cardPadding,
         }}
       >
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
@@ -335,7 +339,7 @@ function PhotoRow({ colors, label, onCamera, uri }: {
           <View style={styles.photoPreviewContent}>
             <View style={styles.photoCapturedRow}>
               <View style={[styles.photoCapturedIcon, { backgroundColor: colors.successHex + '18' }]}>
-                <Feather name="check" size={14} color={colors.success} />
+                <Feather name="check" size={icons.size.xs} color={colors.success} />
               </View>
               <View style={styles.photoCapturedCopy}>
                 <AppText style={[styles.photoCapturedTitle, { color: colors.foreground }]}>Photo captured</AppText>
@@ -352,7 +356,7 @@ function PhotoRow({ colors, label, onCamera, uri }: {
           style={[styles.photoCaptureButton, { borderColor: colors.border, backgroundColor: colors.card }]}
           onPress={onCamera}
         >
-          <Feather name="camera" size={20} color={colors.primary} />
+          <Feather name="camera" size={icons.size.lg} color={colors.primary} />
           <AppText style={[styles.photoCaptureText, { color: colors.primary }]}>Take Photo</AppText>
         </TouchableOpacity>
       )}
@@ -363,37 +367,37 @@ function PhotoRow({ colors, label, onCamera, uri }: {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   section: {
-    gap: 14,
-    paddingBottom: 22,
+    gap: spacing[14],
+    paddingBottom: radius.sheetCompact,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sectionLast: {
-    gap: 14,
-    paddingBottom: 4,
+    gap: spacing[14],
+    paddingBottom: spacing[4],
   },
   sectionTitle: { ...typography.title,  },
-  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  vehicleTypeChip: { borderWidth: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
+  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
+  vehicleTypeChip: { borderWidth: 1, borderRadius: radius.card, paddingVertical: spacing[10], paddingHorizontal: semanticSpacing.rowGap },
   vehicleTypeText: { ...typography.label,  },
-  photoRow: { gap: 8 },
+  photoRow: { gap: semanticSpacing.inlineGap },
   photoLabel: { ...typography.label,  },
-  photoPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  photoPreview: { width: 76, height: 76, borderRadius: 10 },
-  photoPreviewContent: { flex: 1, gap: 10 },
-  photoCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  photoCapturedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  photoPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
+  photoPreview: { width: sizes.thumbnail.lg, height: sizes.thumbnail.lg, borderRadius: radius.md },
+  photoPreviewContent: { flex: 1, gap: spacing[10] },
+  photoCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
+  photoCapturedIcon: { width: sizes.avatar.xs, height: sizes.avatar.xs, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
   photoCapturedCopy: { flex: 1, gap: 1 },
   photoCapturedTitle: { ...typography.label,  },
   photoCaptureButton: {
-    height: 80,
+    height: sizes.thumbnail.xl,
     borderWidth: 1.5,
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: semanticSpacing.inlineGap,
   },
   photoCaptureText: { ...typography.button },
-  photoButton: { alignSelf: 'flex-start', minHeight: 34, paddingHorizontal: 12, borderWidth: 1, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  photoButton: { alignSelf: 'flex-start', minHeight: sizes.iconButton.sm, paddingHorizontal: semanticSpacing.rowGap, borderWidth: 1, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
   photoButtonText: { ...typography.button },
 });

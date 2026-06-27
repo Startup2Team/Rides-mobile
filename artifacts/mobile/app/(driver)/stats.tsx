@@ -21,6 +21,10 @@ import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySumm
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -99,8 +103,8 @@ export default function DriverStats() {
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 24,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: semanticSpacing.sectionGap,
         }}
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
         showsVerticalScrollIndicator={false}
@@ -179,7 +183,7 @@ export default function DriverStats() {
             accessibilityRole="button"
             accessibilityLabel="View ride packages"
           >
-            <Feather name="layers" size={20} color={colors.primary} />
+            <Feather name="layers" size={icons.size.lg} color={colors.primary} />
             <View style={styles.packageHeader}>
               <View style={styles.packageTitleGroup}>
                 <AppText style={[styles.packageName, { color: colors.foreground }]}>
@@ -237,7 +241,7 @@ function MetricTile({ colors, icon, iconColor, label, note, tone, value }: {
     <View style={styles.metricTopRow}>
       {icon === 'star' && iconColor
         ? <AppText style={{ ...typography.h3, lineHeight: 22, color: iconColor }}>★</AppText>
-        : <Feather name={icon} size={18} color={iconColor ?? colors.foreground} />}
+        : <Feather name={icon} size={icons.semantic.row} color={iconColor ?? colors.foreground} />}
       <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</AppText>
     </View>
     <AppText style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</AppText>
@@ -253,7 +257,7 @@ function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
   colors: ReturnType<typeof useColors>; declinesToday: number; priorityReduced: boolean;
 }) {
   return <View style={styles.performanceStatus}>
-    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={20} color={priorityReduced ? colors.destructive : colors.primary} />
+    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={icons.size.lg} color={priorityReduced ? colors.destructive : colors.primary} />
     <View style={styles.performanceStatusCopy}>
       <AppText style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
         {priorityReduced ? 'Lower Priority' : 'High Priority'}
@@ -278,7 +282,7 @@ function DetailRow({ colors, icon, label, last = false, note, value }: {
   colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; note?: string; value: string;
 }) {
   return <View style={[styles.detailRow, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-    <Feather name={icon} size={18} color={colors.primary} />
+    <Feather name={icon} size={icons.semantic.row} color={colors.primary} />
     <View style={styles.detailLabelGroup}>
       <AppText style={[styles.detailLabel, { color: colors.foreground }]}>{label}</AppText>
       {note ? <AppText style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</AppText> : null}
@@ -306,7 +310,7 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
           key={purchase.transactionId}
           style={[styles.historyRow, index < recentPurchases.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
         >
-          <Feather name="package" size={18} color={colors.primary} />
+          <Feather name="package" size={icons.semantic.row} color={colors.primary} />
           <View style={styles.historyLabelGroup}>
             <AppText style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</AppText>
             <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
@@ -359,14 +363,14 @@ function formatHistoryDate(value: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  todayChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
+  todayChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.pill },
   todayChipText: { ...typography.tiny,  },
-  heroCard: { borderRadius: 26, padding: 20, gap: 18, overflow: 'hidden' },
+  heroCard: { borderRadius: 26, padding: semanticSpacing.screenPadding, gap: icons.semantic.row, overflow: 'hidden' },
   heroShadow: { shadowColor: '#007AFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 18, elevation: 7 },
   heroHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroEyebrow: { color: 'rgba(255,255,255,0.76)', ...typography.tiny, letterSpacing: 0.9 },
   heroValue: { color: '#fff', ...typography.displayXL, lineHeight: 40, letterSpacing: -1 },
-  heroCaption: { color: 'rgba(255,255,255,0.72)', ...typography.caption, marginTop: 2 },
+  heroCaption: { color: 'rgba(255,255,255,0.72)', ...typography.caption, marginTop: spacing[2] },
   heroMetrics: { flexDirection: 'row', alignItems: 'center' },
   heroMetric: { flex: 1, minWidth: 0, gap: 3 },
   heroMetricValue: { color: '#fff', ...typography.title,  },
@@ -375,45 +379,45 @@ const styles = StyleSheet.create({
   heroDivider: { width: StyleSheet.hairlineWidth, height: 30, marginHorizontal: 9, backgroundColor: 'rgba(255,255,255,0.26)' },
   heroEmptyText: { color: 'rgba(255,255,255,0.72)', ...typography.tiny, marginTop: -8 },
   section: { gap: 11 },
-  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: 2 },
-  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: 14, padding: 10, gap: 3 },
-  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metricValue: { ...typography.h3, lineHeight: 23, letterSpacing: -0.5, marginTop: 2 },
+  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: spacing[2] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
+  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: radius.card, padding: spacing[10], gap: 3 },
+  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
+  metricValue: { ...typography.h3, lineHeight: 23, letterSpacing: -0.5, marginTop: spacing[2] },
   metricLabel: { flex: 1, ...typography.tiny,  },
   metricNote: { ...typography.tiny, lineHeight: 13 },
-  cardShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
-  surface: { borderRadius: 20, overflow: 'hidden' },
-  packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
-  packageHeader: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cardShadow: { ...elevation.card, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
+  surface: { borderRadius: radius['3xl'], overflow: 'hidden' },
+  packageCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
+  packageHeader: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   packageTitleGroup: { flex: 1, gap: 3 },
   packageName: { ...typography.body,  },
   packageMeta: { ...typography.tiny,  },
-  packageAction: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 100 },
+  packageAction: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 11, paddingVertical: semanticSpacing.inlineGap, borderRadius: radius.pill },
   packageActionText: { ...typography.button },
-  performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16 },
-  performanceStatusCopy: { flex: 1, gap: 4 },
+  performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap, padding: semanticSpacing.cardPadding },
+  performanceStatusCopy: { flex: 1, gap: spacing[4] },
   performanceStatusTitle: { ...typography.body,  },
   performanceStatusNote: { ...typography.tiny, lineHeight: 17 },
-  softDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  softDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.cardPadding },
   performanceStats: { flexDirection: 'row', alignItems: 'center', padding: 15 },
   compactStat: { flex: 1, alignItems: 'center', gap: 3 },
   compactStatValue: { ...typography.h2, letterSpacing: -0.4 },
   compactStatLabel: { ...typography.tiny,  },
   verticalDivider: { width: StyleSheet.hairlineWidth, height: 30 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 15 },
-  detailLabelGroup: { flex: 1, gap: 2 },
+  detailLabelGroup: { flex: 1, gap: spacing[2] },
   detailLabel: { ...typography.label,  },
   detailNote: { ...typography.tiny,  },
   detailValue: { maxWidth: '44%', textAlign: 'right', ...typography.label,  },
-  emptyHistory: { alignItems: 'center', gap: 9, padding: 24 },
+  emptyHistory: { alignItems: 'center', gap: 9, padding: semanticSpacing.sectionGap },
   emptyHistoryText: { ...typography.caption,  },
-  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: spacing[14] },
   historyLabelGroup: { flex: 1, minWidth: 0 },
   historyName: { ...typography.label,  },
   historyMeta: { ...typography.tiny, marginTop: 3 },
   historyTotals: { alignItems: 'flex-end', gap: 5 },
   historyPrice: { ...typography.caption,  },
-  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
+  statusPill: { paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: spacing[4], borderRadius: radius.pill },
   historyStatus: { ...typography.tiny,  },
 });

@@ -19,6 +19,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { getLatestDriverApplicationRejectionSummary, type DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
 import { isDriverApprovalDevtoolEnabled } from '@/utils/driverDevTools';
+import { icons } from '@/constants/icons';
+import { spring } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const STEPS = [
   {
@@ -67,7 +72,7 @@ export default function DriverSubmissionConfirmation() {
     Animated.sequence([
       Animated.parallel([
         Animated.timing(contentOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
-        Animated.spring(contentSlide, { toValue: 0, useNativeDriver: true, bounciness: 4 }),
+        Animated.spring(contentSlide, { ...spring.sheet, toValue: 0 }),
       ]),
     ]).start();
   }, []);
@@ -158,7 +163,7 @@ export default function DriverSubmissionConfirmation() {
                     },
                   ]}>
                     {step.done
-                      ? <Feather name="check" size={12} color="#fff" />
+                      ? <Feather name="check" size={icons.size.xxs} color="#fff" />
                       : step.active
                         ? <View style={[styles.activePulse, { backgroundColor: accent }]} />
                         : null}
@@ -209,12 +214,12 @@ export default function DriverSubmissionConfirmation() {
           variant="secondary"
         />
         <TouchableOpacity style={styles.supportBtn} onPress={() => router.push('/help-support')} activeOpacity={0.6}>
-          <Feather name="help-circle" size={16} color={colors.primary} />
+          <Feather name="help-circle" size={icons.semantic.button} color={colors.primary} />
           <AppText style={[styles.supportText, { color: colors.primary }]}>Contact Support</AppText>
         </TouchableOpacity>
         {showApprovalDevtool && (
           <TouchableOpacity style={[styles.devBtn, { borderColor: colors.border }]} onPress={handleDevApprove} activeOpacity={0.6}>
-            <Feather name="zap" size={14} color={colors.mutedForeground} />
+            <Feather name="zap" size={icons.size.xs} color={colors.mutedForeground} />
             <AppText style={[styles.devText, { color: colors.mutedForeground }]}>DEV — Approve & Enter Dashboard</AppText>
           </TouchableOpacity>
         )}
@@ -228,56 +233,56 @@ const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'center' },
   hero: {
     alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingTop: 10,
-    paddingBottom: 18,
+    paddingHorizontal: spacing[28],
+    paddingTop: spacing[10],
+    paddingBottom: icons.semantic.row,
   },
-  heroText: { alignItems: 'center', gap: 8 },
+  heroText: { alignItems: 'center', gap: semanticSpacing.inlineGap },
   heroTitle: { ...typography.h1, textAlign: 'center' },
   heroSub: { ...typography.bodySmall, lineHeight: 21, textAlign: 'center', maxWidth: 300 },
-  body: { paddingHorizontal: 16, gap: 12 },
+  body: { paddingHorizontal: semanticSpacing.cardPadding, gap: semanticSpacing.rowGap },
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
+    gap: semanticSpacing.inlineGap,
+    paddingHorizontal: spacing[14],
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: radius['3xl'],
     borderWidth: 1,
   },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { ...typography.label,  },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  cardHeading: { ...typography.bodySmall, paddingHorizontal: 16, paddingVertical: 13 },
+  cardHeading: { ...typography.bodySmall, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: 13 },
   divider: { height: StyleSheet.hairlineWidth },
-  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
-  timelineLeft: { alignItems: 'center', width: 24 },
-  timelineDot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  activePulse: { width: 8, height: 8, borderRadius: 4 },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: 13, gap: semanticSpacing.rowGap },
+  timelineLeft: { alignItems: 'center', width: spacing[24] },
+  timelineDot: { width: spacing[24], height: spacing[24], borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' },
+  activePulse: { width: spacing[8], height: spacing[8], borderRadius: radius.xs },
   timelineLine: { width: 2, flex: 1, minHeight: 16, marginTop: 4, borderRadius: 1 },
   timelineContent: { flex: 1, gap: 2 },
   timelineLabel: { ...typography.bodySmall,  },
   timelineDesc: { ...typography.caption, lineHeight: 17 },
-  rejectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 13, paddingBottom: 0 },
-  rejectionText: { ...typography.bodySmall, lineHeight: 20, padding: 16, paddingTop: 10 },
+  rejectionHeader: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap, paddingHorizontal: semanticSpacing.cardPadding, paddingTop: 13, paddingBottom: spacing[0] },
+  rejectionText: { ...typography.bodySmall, lineHeight: 20, padding: semanticSpacing.cardPadding, paddingTop: spacing[10] },
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
+    gap: semanticSpacing.rowGap,
+    padding: spacing[14],
+    borderRadius: radius.card,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  noticeIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  noticeIcon: { width: sizes.iconButton.sm, height: sizes.iconButton.sm, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   noticeText: { flex: 1, ...typography.label, lineHeight: 18 },
-  actions: { paddingHorizontal: 16, gap: 10, paddingTop: 34 },
-  supportBtn: { height: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  actions: { paddingHorizontal: semanticSpacing.cardPadding, gap: spacing[10], paddingTop: sizes.iconButton.sm },
+  supportBtn: { height: sizes.avatar.md + spacing[2], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   supportText: { ...typography.button },
-  devBtn: { height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, borderStyle: 'dashed' },
+  devBtn: { height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[6], borderWidth: 1, borderRadius: radius.md, borderStyle: 'dashed' },
   devText: { ...typography.button },
 });

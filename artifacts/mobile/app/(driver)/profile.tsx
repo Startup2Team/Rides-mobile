@@ -26,6 +26,11 @@ import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { useRide } from '@/context/RideContext';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -111,7 +116,7 @@ export default function DriverProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: pageBackground }]}>
-      <View style={{ paddingTop: insets.top + 16, backgroundColor: pageBackground }}>
+      <View style={{ paddingTop: insets.top + semanticSpacing.comfortableGap, backgroundColor: pageBackground }}>
         <View style={styles.avatarSection}>
           <View style={styles.profileInfoContainer}>
             <TouchableOpacity
@@ -140,7 +145,7 @@ export default function DriverProfileScreen() {
                     >
                       {lastName}
                     </AppText>
-                    {driverProfile?.isVerified === true ? <VerifiedBadge size={24} /> : null}
+                    {driverProfile?.isVerified === true ? <VerifiedBadge size={icons.size.xl} /> : null}
                   </View>
                 </>
               ) : (
@@ -153,7 +158,7 @@ export default function DriverProfileScreen() {
                   >
                     {firstName}
                   </AppText>
-                  {driverProfile?.isVerified === true ? <VerifiedBadge size={24} /> : null}
+                  {driverProfile?.isVerified === true ? <VerifiedBadge size={icons.size.xl} /> : null}
                 </View>
               )}
             </TouchableOpacity>
@@ -161,7 +166,7 @@ export default function DriverProfileScreen() {
             <View style={styles.statsRow}>
               <View style={styles.statColumn}>
                 <View style={styles.ratingGroup}>
-                  <FontAwesome name="star" size={10} color={colors.primary} style={{ marginRight: 3 }} />
+                  <FontAwesome name="star" size={spacing[10]} color={colors.primary} style={{ marginRight: 3 }} />
                   <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
                     {ratingSummary.averageRating?.toFixed(1) ?? '5.0'}
                   </AppText>
@@ -213,10 +218,10 @@ export default function DriverProfileScreen() {
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
-          paddingTop: 8,
+          paddingTop: semanticSpacing.inlineGap,
           paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 22,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: radius.sheetCompact,
         }}
       >
         <View style={styles.section}>
@@ -228,7 +233,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open my vehicles"
           >
-            <Feather name="truck" size={20} color={colors.primary} />
+            <Feather name="truck" size={icons.size.lg} color={colors.primary} />
             <View style={styles.vehicleSummaryCopy}>
               <AppText style={[styles.vehicleSummaryTitle, { color: colors.foreground }]}>
                 {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} linked
@@ -237,7 +242,7 @@ export default function DriverProfileScreen() {
                 Approved {vehicleCounts.approved} • Pending {vehicleCounts.pendingReview} • Rejected {vehicleCounts.rejected}
               </AppText>
             </View>
-            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
 
@@ -250,7 +255,7 @@ export default function DriverProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={activePackage ? 'Manage active ride package' : 'Explore ride packages'}
           >
-            <Feather name="layers" size={20} color={colors.primary} />
+            <Feather name="layers" size={icons.size.lg} color={colors.primary} />
             <View style={styles.packageCopy}>
               <View style={styles.packageTitleRow}>
                 <AppText style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -266,7 +271,7 @@ export default function DriverProfileScreen() {
                 {isEntitlementLoading ? 'Loading package details...' : activePackage ? 'Manage package' : 'Explore available packages'}
               </AppText>
             </View>
-            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
 
@@ -289,12 +294,12 @@ export default function DriverProfileScreen() {
             onPress={handleSwitchToCustomer}
             activeOpacity={0.72}
           >
-            <MaterialCommunityIcons name="swap-horizontal" size={20} color={colors.primary} />
+            <MaterialCommunityIcons name="swap-horizontal" size={icons.size.lg} color={colors.primary} />
             <View style={styles.modeCopy}>
               <AppText style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</AppText>
               <AppText style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</AppText>
             </View>
-            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
 
@@ -394,18 +399,18 @@ function MenuItem({ colors, detail, iconFamily = 'mci', icon, label, last = fals
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.menuIcon}>
         {iconFamily === 'symbol' ? (
-          <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={20} />
+          <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={icons.size.lg} />
         ) : iconFamily === 'feather' ? (
-          <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+          <Feather name={icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={colors.primary} />
         ) : (
-          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={colors.primary} />
         )}
       </View>
       <View style={styles.menuCopy}>
         <AppText style={[styles.menuLabel, { color: colors.foreground }]}>{label}</AppText>
         {detail ? <AppText style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</AppText> : null}
       </View>
-      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
     </TouchableOpacity>
     {!last ? <View style={[styles.separator, { backgroundColor: colors.border }]} /> : null}
   </>;
@@ -417,15 +422,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingHorizontal: semanticSpacing.screenPadding,
+    paddingBottom: semanticSpacing.rowGap,
   },
   profileInfoContainer: {
     flex: 1,
-    gap: 8,
+    gap: semanticSpacing.inlineGap,
   },
   nameContainer: {
-    gap: 0,
+    gap: spacing[0],
   },
   nameFirst: {
     ...typography.displayXL,
@@ -443,12 +448,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 32,
-    marginTop: 2,
+    gap: spacing[32],
+    marginTop: spacing[2],
   },
   statColumn: {
     alignItems: 'center',
-    gap: 0,
+    gap: spacing[0],
   },
   ratingGroup: {
     flexDirection: 'row',
@@ -461,22 +466,21 @@ const styles = StyleSheet.create({
     ...typography.tiny,
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    shadowColor: '#000',
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
+    ...elevation.md,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.16,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: spacing[8],
     ...Platform.select({
       web: { boxShadow: '0 6px 16px rgba(0,0,0,0.16)' },
     }),
   },
   avatarInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
     overflow: 'hidden',
     position: 'relative',
     alignItems: 'center',
@@ -501,36 +505,36 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%', minWidth: 0, flexShrink: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6], maxWidth: '100%', minWidth: spacing[0], flexShrink: 1 },
   phone: { ...typography.label,  },
-  section: { gap: 10 },
-  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: 2 },
+  section: { gap: spacing[10] },
+  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: spacing[2] },
   cardShadow: {
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3,
     ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }),
   },
-  packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
+  packageCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
   packageCopy: { flex: 1, gap: 3 },
   packageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   packageTitle: { flexShrink: 1, ...typography.body,  },
   packageSubtext: { ...typography.tiny,  },
-  packageStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
+  packageStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.pill },
   packageStatusText: { ...typography.tiny,  },
-  vehicleSummaryCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
+  vehicleSummaryCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
   vehicleSummaryCopy: { flex: 1, gap: 3 },
   vehicleSummaryTitle: { ...typography.body,  },
   vehicleSummaryDetail: { ...typography.tiny,  },
-  groupedSection: { borderRadius: 20, overflow: 'hidden' },
+  groupedSection: { borderRadius: radius['3xl'], overflow: 'hidden' },
 
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 66 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 52, paddingHorizontal: 20, paddingVertical: 16 },
-  menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
-  menuCopy: { flex: 1, gap: 2 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[14], minHeight: sizes.avatar.lg, paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: semanticSpacing.cardPadding },
+  menuIcon: { width: sizes.avatar.sm, alignItems: 'center', justifyContent: 'center' },
+  menuCopy: { flex: 1, gap: spacing[2] },
   menuLabel: { ...typography.title, lineHeight: 22 },
   menuDetail: { ...typography.tiny, lineHeight: 16 },
-  modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: 20, padding: 16 },
+  modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
   modeCopy: { flex: 1, gap: 3 },
   modeTitle: { ...typography.body,  },
   modeDescription: { ...typography.tiny,  },
-  version: { textAlign: 'center', ...typography.caption, paddingVertical: 8 },
+  version: { textAlign: 'center', ...typography.caption, paddingVertical: semanticSpacing.inlineGap },
 });

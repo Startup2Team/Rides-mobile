@@ -23,6 +23,8 @@ import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePacka
 import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -280,26 +282,26 @@ function PackageState({ colors, detail, icon, title }: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  syncRow: { marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  syncRow: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   syncCopy: { flex: 1, gap: 3 },
   syncWarning: { ...typography.tiny,  },
 
-  stateCard: { marginHorizontal: 16, borderRadius: 18, borderWidth: 1, padding: 22, alignItems: 'center', gap: 8 },
+  stateCard: { marginHorizontal: semanticSpacing.cardPadding, borderRadius: 18, borderWidth: 1, padding: radius.sheetCompact, alignItems: 'center', gap: semanticSpacing.inlineGap },
   stateTitle: { ...typography.title, textAlign: 'center' },
   stateDetail: { ...typography.caption, lineHeight: 18, textAlign: 'center' },
-  packageCard: { minHeight: 132, marginHorizontal: 16, marginBottom: 14, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 20, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  packageCard: { minHeight: 132, marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], borderRadius: radius.sheetCompact, paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: semanticSpacing.screenPadding, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: spacing[14] },
   packageContent: { flex: 1, gap: 9 },
   packageName: { ...typography.h2, lineHeight: 29 },
   creditRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 },
   creditTotal: { ...typography.bodySmall, lineHeight: 19 },
   bonusCredits: { ...typography.label, lineHeight: 18 },
-  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
+  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing[4], alignSelf: 'flex-start', paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 5, borderRadius: radius.pill },
   campaignBadgeText: { ...typography.tiny,  },
   planLabel: { ...typography.caption, textTransform: 'uppercase', letterSpacing: 0.5 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
   price: { ...typography.body,  },
   normalPrice: { ...typography.tiny, textDecorationLine: 'line-through' },
   unavailableText: { ...typography.tiny, marginTop: 2 },
-  selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  buyButtonContainer: { marginHorizontal: 16, marginTop: 4 },
+  selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: spacing[2] },
+  buyButtonContainer: { marginHorizontal: semanticSpacing.cardPadding, marginTop: spacing[4] },
 });
