@@ -5,7 +5,6 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
@@ -48,6 +47,7 @@ patchComponentFont(Text, 'Inter_400Regular');
 patchComponentFont(TextInput, 'Inter_400Regular');
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AppQueryProvider } from '@/query';
 import { AuthProvider } from '@/context/AuthContext';
 import { DriverEntitlementProvider } from '@/context/DriverEntitlementContext';
 import { PackageSyncProvider } from '@/context/PackageSyncContext';
@@ -64,8 +64,6 @@ import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerifi
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
-
-const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const pathname = usePathname();
@@ -158,7 +156,7 @@ export default function RootLayout() {
           });
         }}
       >
-        <QueryClientProvider client={queryClient}>
+        <AppQueryProvider>
           <AuthProvider>
             <PackageSyncProvider>
               <DriverEntitlementProvider>
@@ -178,7 +176,7 @@ export default function RootLayout() {
               </DriverEntitlementProvider>
             </PackageSyncProvider>
           </AuthProvider>
-        </QueryClientProvider>
+        </AppQueryProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

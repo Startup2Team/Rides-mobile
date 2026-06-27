@@ -1218,6 +1218,24 @@ Phase 7D introduces repository boundaries without changing runtime behavior.
 
 The immediate low-risk consumer migrated in this phase is `SavedLocationsContext`, which now reads and writes through `savedLocationsRepository` instead of calling storage helpers directly.
 
+## 14. Server State Foundation
+
+Phase 8A introduces the TanStack Query foundation without changing runtime consumers yet.
+
+- [`docs/server-state.md`](./server-state.md) defines the query client, policy matrix, and hook wrappers
+- query hooks are the fetch/cache layer above repositories
+- screens should eventually consume server state through query hooks, not direct repository calls
+- repositories still own source selection and local fallback behavior for now
+
+## 15. Capability System
+
+Phase 8A also adds the derived capability model in [`docs/capabilities.md`](./capabilities.md).
+
+- capabilities are derived from shared profile plus driver state
+- screens should not branch on raw `isDriver` checks for new logic
+- customer and driver remain role projections of one account
+- the capability matrix is the long-term UI permission surface for future roles
+
 ## 13. Domain-First Direction
 
 Phase 7E scaffolds a domain-first organization under [`domains/`](../domains/).

@@ -141,6 +141,13 @@ Phase 7G makes `profile` the next extracted domain module without changing runti
 - `domains/profile/hooks.ts` keeps the compatibility hooks available for current screens and components
 - `AuthContext` remains the session and mode compatibility layer
 
+Phase 8A adds the query foundation and capability layer.
+
+- [`docs/server-state.md`](./server-state.md) defines the TanStack Query client, policies, and hook wrappers
+- [`docs/capabilities.md`](./capabilities.md) defines the derived permission model for customer and driver projections
+- repositories remain the data boundary underneath the query layer
+- screens still must not import persistence or sources directly
+
 ## Domain-First Direction
 
 Phase 7E adds the [`domains/`](../domains/) scaffold and the typed ownership map in `domains/domainOwnership.ts`.
