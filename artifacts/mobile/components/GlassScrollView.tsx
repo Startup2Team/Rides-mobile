@@ -153,7 +153,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       }
 
       // Update header scroll store
-      headerScrollStore?.set(pathname, offsetY > 2);
+      headerScrollStore?.set(pathname, offsetY > restingY + 2);
 
       if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
       hideIndicatorTimeout.current = setTimeout(() => {

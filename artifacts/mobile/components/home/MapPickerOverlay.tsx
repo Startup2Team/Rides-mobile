@@ -1,9 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { type RefObject } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MapView, { PROVIDER_DEFAULT, type Region } from 'react-native-maps';
+import { AppText } from '@/components/AppText';
 import { AppButton } from '@/components/AppButton';
 import { BackButton } from '@/components/BackButton';
+import { spacing } from '@/constants/spacing';
 import { FLOATING_ACTION_BOTTOM_OFFSET, TAB_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import type { Coords } from '@/types';
 import type { useColors } from '@/hooks/useColors';
@@ -80,7 +82,7 @@ export function MapPickerOverlay({
 
       <BackButton
         flat={false}
-        style={[styles.mapPickerBack, { top: topInset + (Platform.OS === 'web' ? 67 : 0) + 12 }]}
+        style={[styles.mapPickerBack, { top: topInset + (Platform.OS === 'web' ? 67 : spacing[0]) + spacing[12] }]}
         onPress={onClose}
       />
 
@@ -110,13 +112,13 @@ export function MapPickerOverlay({
       </View>
 
       <View style={[styles.mapPickerHint, { backgroundColor: colors.card }]}>
-        <Text style={[styles.mapPickerHintText, { color: colors.foreground }]}>
+        <AppText variant="label" style={[styles.mapPickerHintText, { color: colors.foreground }]}>
           {target === 'pickup'
             ? 'Drag the map to set your pickup location'
             : target === 'savedLocation'
               ? savedLocationHint ?? 'Drag the map to update this saved location'
               : 'Drag the map to set your drop off location'}
-        </Text>
+        </AppText>
       </View>
 
       <View style={[styles.mapPickerFooter, { paddingBottom: bottomInset + TAB_SCREEN_BOTTOM_PADDING + FLOATING_ACTION_BOTTOM_OFFSET }]}>

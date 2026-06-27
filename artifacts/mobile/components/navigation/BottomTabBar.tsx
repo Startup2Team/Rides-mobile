@@ -2,7 +2,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,7 +11,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { BlurView } from 'expo-blur';
+import { icons } from '@/constants/icons';
+import { duration, easing } from '@/constants/motion';
+import { spacing } from '@/constants/spacing';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
+import { typography } from '@/constants/typography';
 
 const ACTIVE_LIGHT = '#007AFF';
 const ACTIVE_DARK = '#0A84FF';
@@ -51,8 +54,8 @@ function TabBarItem({
   useEffect(() => {
     Animated.timing(progress, {
       toValue: focused ? 1 : 0,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
+      duration: duration.normal,
+      easing: easing.easeOutQuad,
       useNativeDriver: true,
     }).start();
   }, [focused, progress]);
@@ -78,19 +81,19 @@ function TabBarItem({
       Animated.timing(tapScale, {
         toValue: 0.92,
         duration: 55,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
         useNativeDriver: true,
       }),
       Animated.timing(tapScale, {
         toValue: 1.04,
         duration: 70,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
         useNativeDriver: true,
       }),
       Animated.timing(tapScale, {
         toValue: 1,
         duration: 60,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
         useNativeDriver: true,
       }),
     ]).start();
@@ -110,7 +113,7 @@ function TabBarItem({
       <Animated.View style={[styles.iconWrap, { opacity: iconOpacity, transform: [{ scale: iconScale }] }]}>
         {icon?.({
           color: focused ? activeColor : inactiveColor,
-          size: 24,
+          size: icons.semantic.tab,
           focused,
         })}
       </Animated.View>
@@ -121,7 +124,7 @@ function TabBarItem({
           {
             color: focused ? activeColor : inactiveColor,
             opacity: labelOpacity,
-            fontWeight: focused ? '700' : '500',
+            fontFamily: focused ? typography.badge.fontFamily : typography.tab.fontFamily,
           },
         ]}
       >
@@ -157,7 +160,7 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
           borderTopWidth: isHidden ? 0 : StyleSheet.hairlineWidth,
           height: isHidden ? 0 : totalHeight,
           minHeight: 0,
-          paddingTop: isHidden ? 0 : 4,
+          paddingTop: isHidden ? spacing[0] : spacing[4],
           paddingBottom: isHidden ? 0 : paddingBottomVal,
           opacity: isHidden ? 0 : 1,
           overflow: 'hidden',
@@ -228,9 +231,9 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: spacing[0],
+    left: spacing[0],
+    right: spacing[0],
     flexDirection: 'row',
     minHeight: TAB_BAR_CONTENT_HEIGHT,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -241,7 +244,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing[2],
     paddingVertical: 3,
   },
   itemPressed: {
@@ -252,54 +255,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   label: {
-    fontSize: 10,
-    lineHeight: 12,
+    ...typography.tab,
     letterSpacing: 0,
   },
 });
 
 export const customerTabBarIcons = {
   index: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="map" size={24} color={color} />
+    <MaterialCommunityIcons name="map" size={icons.semantic.tab} color={color} />
   ),
   history: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="receipt-text" size={24} color={color} />
+    <MaterialCommunityIcons name="receipt-text" size={icons.semantic.tab} color={color} />
   ),
   share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (
       <SymbolView
         name="square.and.arrow.up.fill"
-        size={24}
+        size={icons.semantic.tab}
         tintColor={color}
       />
     ) : (
-      <Ionicons name="share-social" size={24} color={color} />
+      <Ionicons name="share-social" size={icons.semantic.tab} color={color} />
     )
   ),
   profile: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="account" size={24} color={color} />
+    <MaterialCommunityIcons name="account" size={icons.semantic.tab} color={color} />
   ),
 };
 
 export const driverTabBarIcons = {
   index: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="car" size={24} color={color} />
+    <MaterialCommunityIcons name="car" size={icons.semantic.tab} color={color} />
   ),
   stats: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="chart-box" size={24} color={color} />
+    <MaterialCommunityIcons name="chart-box" size={icons.semantic.tab} color={color} />
   ),
   share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (
       <SymbolView
         name="square.and.arrow.up.fill"
-        size={24}
+        size={icons.semantic.tab}
         tintColor={color}
       />
     ) : (
-      <Ionicons name="share-social" size={24} color={color} />
+      <Ionicons name="share-social" size={icons.semantic.tab} color={color} />
     )
   ),
   profile: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="account" size={24} color={color} />
+    <MaterialCommunityIcons name="account" size={icons.semantic.tab} color={color} />
   ),
 };

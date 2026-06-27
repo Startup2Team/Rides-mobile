@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import React from 'react';
 import { Alert } from 'react-native';
 import SavedPlaceSelectorScreen from '../saved-place-selector';
+import { typography } from '@/constants/typography';
 
 const mockBack = jest.fn();
 const mockPersist = jest.fn();
@@ -136,6 +137,13 @@ jest.mock('@/hooks/home/useLocationSearch', () => ({
   }),
 }));
 
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) {
+    return Object.assign({}, ...style.map(flattenStyle));
+  }
+  return style && typeof style === 'object' ? style as Record<string, unknown> : {};
+}
+
 describe('SavedPlaceSelectorScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -152,6 +160,16 @@ describe('SavedPlaceSelectorScreen', () => {
     fireEvent.press(screen.getByText('Set location on map'));
     expect(screen.getByText('Drag the map to set your home location')).toBeTruthy();
     expect(screen.getByText('Confirm Home Location')).toBeTruthy();
+  });
+
+  test('uses typography tokens for the map selection label', () => {
+    render(<SavedPlaceSelectorScreen />);
+
+    const mapOptionStyle = flattenStyle(screen.getByText('Set location on map').props.style);
+
+    expect(mapOptionStyle.fontSize).toBe(typography.h3.fontSize);
+    expect(mapOptionStyle.lineHeight).toBe(typography.h3.lineHeight);
+    expect(mapOptionStyle.fontFamily).toBe(typography.h3.fontFamily);
   });
 
   test('saves a selected search suggestion in add mode (creates new place)', async () => {

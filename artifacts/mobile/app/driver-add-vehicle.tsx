@@ -1,11 +1,11 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
   Alert,
   Image,
-  ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useColorScheme,
@@ -31,6 +31,11 @@ import { isValidImageAsset } from '@/utils/documentValidation';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
 import { submitVehicleApplication } from '@/domain/verificationSubmissions';
 import { getRequiredVehiclePhotoKeys, getVehicleBrandModelPlaceholders } from '@/hooks/driver-onboarding/onboardingTypes';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { GlassScrollView } from '@/components/GlassScrollView';
 
 type VehiclePhotoKey = 'outside' | 'inside';
 
@@ -237,16 +242,17 @@ export default function DriverAddVehicleScreen() {
         subtitle="Submit another vehicle for review"
         onBackPress={() => router.back()}
       />
-      <ScrollView
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 16,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: semanticSpacing.cardPadding,
         }}
       >
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle type</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle type</AppText>
           <View style={styles.vehicleGrid}>
             {(['moto', 'rifani', 'cab', 'hilux', 'fuso'] as VehicleType[]).map(type => (
               <TouchableOpacity
@@ -261,14 +267,14 @@ export default function DriverAddVehicleScreen() {
                 onPress={() => update('vehicleType', type)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.vehicleTypeText, { color: form.vehicleType === type ? colors.primary : colors.foreground }]}>{VEHICLE_LABELS[type]}</Text>
+                <AppText style={[styles.vehicleTypeText, { color: form.vehicleType === type ? colors.primary : colors.foreground }]}>{VEHICLE_LABELS[type]}</AppText>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         <View style={[styles.section, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle details</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle details</AppText>
           <AppInput label="Brand" value={brand} onChangeText={setBrand} placeholder={vehiclePlaceholders.brand} />
           <AppInput label="Model" value={model} onChangeText={setModel} placeholder={vehiclePlaceholders.model} />
           <AppInput label="Manufacture Year" value={manufactureYear} onChangeText={text => setManufactureYear(text.replace(/\D/g, '').slice(0, 4))} keyboardType="numeric" placeholder="2020" />
@@ -295,7 +301,7 @@ export default function DriverAddVehicleScreen() {
 
         {getRequiredVehiclePhotoKeys(form.vehicleType).length > 0 ? (
           <View style={styles.sectionLast}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</Text>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle photos</AppText>
             <PhotoRow
               colors={colors}
               label="Outside photo"
@@ -314,7 +320,7 @@ export default function DriverAddVehicleScreen() {
         ) : null}
 
         <AppButton title="Submit Vehicle" onPress={() => void submit()} fullWidth size="lg" loading={saving} disabled={missingSubmissionItems.length > 0} />
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }
@@ -327,22 +333,22 @@ function PhotoRow({ colors, label, onCamera, uri }: {
 }) {
   return (
     <View style={styles.photoRow}>
-      <Text style={[styles.photoLabel, { color: colors.foreground }]}>{label}</Text>
+      <AppText style={[styles.photoLabel, { color: colors.foreground }]}>{label}</AppText>
       {uri ? (
         <View style={styles.photoPreviewCard}>
           <Image source={{ uri }} style={styles.photoPreview} />
           <View style={styles.photoPreviewContent}>
             <View style={styles.photoCapturedRow}>
               <View style={[styles.photoCapturedIcon, { backgroundColor: colors.successHex + '18' }]}>
-                <Feather name="check" size={14} color={colors.success} />
+                <Feather name="check" size={icons.size.xs} color={colors.success} />
               </View>
               <View style={styles.photoCapturedCopy}>
-                <Text style={[styles.photoCapturedTitle, { color: colors.foreground }]}>Photo captured</Text>
+                <AppText style={[styles.photoCapturedTitle, { color: colors.foreground }]}>Photo captured</AppText>
               </View>
             </View>
             <TouchableOpacity style={[styles.photoButton, { borderColor: colors.border }]} onPress={onCamera}>
               <Feather name="camera" size={13} color={colors.foreground} />
-              <Text style={[styles.photoButtonText, { color: colors.foreground }]}>Retake Photo</Text>
+              <AppText style={[styles.photoButtonText, { color: colors.foreground }]}>Retake Photo</AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -351,8 +357,8 @@ function PhotoRow({ colors, label, onCamera, uri }: {
           style={[styles.photoCaptureButton, { borderColor: colors.border, backgroundColor: colors.card }]}
           onPress={onCamera}
         >
-          <Feather name="camera" size={20} color={colors.primary} />
-          <Text style={[styles.photoCaptureText, { color: colors.primary }]}>Take Photo</Text>
+          <Feather name="camera" size={icons.size.lg} color={colors.primary} />
+          <AppText style={[styles.photoCaptureText, { color: colors.primary }]}>Take Photo</AppText>
         </TouchableOpacity>
       )}
     </View>
@@ -362,37 +368,37 @@ function PhotoRow({ colors, label, onCamera, uri }: {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   section: {
-    gap: 14,
-    paddingBottom: 22,
+    gap: spacing[14],
+    paddingBottom: radius.sheetCompact,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sectionLast: {
-    gap: 14,
-    paddingBottom: 4,
+    gap: spacing[14],
+    paddingBottom: spacing[4],
   },
-  sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
-  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  vehicleTypeChip: { borderWidth: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-  vehicleTypeText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  photoRow: { gap: 8 },
-  photoLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  photoPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  photoPreview: { width: 76, height: 76, borderRadius: 10 },
-  photoPreviewContent: { flex: 1, gap: 10 },
-  photoCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  photoCapturedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { ...typography.title,  },
+  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
+  vehicleTypeChip: { borderWidth: 1, borderRadius: radius.card, paddingVertical: spacing[10], paddingHorizontal: semanticSpacing.rowGap },
+  vehicleTypeText: { ...typography.label,  },
+  photoRow: { gap: semanticSpacing.inlineGap },
+  photoLabel: { ...typography.label,  },
+  photoPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
+  photoPreview: { width: sizes.thumbnail.lg, height: sizes.thumbnail.lg, borderRadius: radius.md },
+  photoPreviewContent: { flex: 1, gap: spacing[10] },
+  photoCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
+  photoCapturedIcon: { width: sizes.avatar.xs, height: sizes.avatar.xs, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
   photoCapturedCopy: { flex: 1, gap: 1 },
-  photoCapturedTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  photoCapturedTitle: { ...typography.label,  },
   photoCaptureButton: {
-    height: 80,
+    height: sizes.thumbnail.xl,
     borderWidth: 1.5,
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: semanticSpacing.inlineGap,
   },
-  photoCaptureText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  photoButton: { alignSelf: 'flex-start', minHeight: 34, paddingHorizontal: 12, borderWidth: 1, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  photoButtonText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  photoCaptureText: { ...typography.button },
+  photoButton: { alignSelf: 'flex-start', minHeight: sizes.iconButton.sm, paddingHorizontal: semanticSpacing.rowGap, borderWidth: 1, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
+  photoButtonText: { ...typography.button },
 });

@@ -1,3 +1,6 @@
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+
 /**
  * iOS-style button tokens (maps to SwiftUI button styles).
  *
@@ -11,9 +14,9 @@
  * outline is kept for compatibility; it renders like secondary (filled, no stroke).
  */
 export const BUTTON_HEIGHT = {
-  sm: 44,
-  md: 50,
-  lg: 50,
+  sm: sizes.button.sm,
+  md: sizes.button.md,
+  lg: sizes.button.lg,
 } as const;
 
 /** iOS capsule corner radius for a control of the given height (height ÷ 2). */
@@ -22,7 +25,7 @@ export function buttonCornerRadius(height: number): number {
 }
 
 /** Default pill radius for the standard small button height (44pt → 22). */
-export const BUTTON_RADIUS = buttonCornerRadius(BUTTON_HEIGHT.sm);
+export const BUTTON_RADIUS = radius.sheetCompact;
 
 export const BUTTON_FONT_SIZE = {
   sm: 15,

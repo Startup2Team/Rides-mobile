@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AppButton } from '@/components/AppButton';
 import type { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 export function RideActionsSection({
   colors, isArrived, isArriving, isInProgress, onCall, onCancelArrived, onCancelArriving,
@@ -39,5 +40,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   wide: { flex: 1 },
   sos: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 6 },
-  sosText: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.5 },
+  sosText: { ...typography.label, fontFamily: typography.badge.fontFamily, color: '#FFFFFF', letterSpacing: 0.5 },
 });

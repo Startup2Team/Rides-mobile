@@ -1,5 +1,7 @@
 import React from 'react';
-import { Image, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useColors } from '@/hooks/useColors';
 
 interface VerifiedBadgeProps {
   size?: number;
@@ -10,13 +12,15 @@ export function VerifiedBadge({
   size = 18,
   testID,
 }: VerifiedBadgeProps) {
+  const colors = useColors();
   return (
-    <Image
-      source={require('../assets/images/verified badge.png')}
-      style={[styles.badge, { width: size, height: size }]}
-      accessibilityLabel="Verified driver"
-      accessibilityIgnoresInvertColors
+    <MaterialCommunityIcons
+      name="check-decagram"
+      size={size}
+      color={colors.primary}
       testID={testID}
+      accessibilityLabel="Verified driver"
+      style={styles.badge}
     />
   );
 }

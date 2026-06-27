@@ -1,3 +1,5 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
@@ -10,7 +12,6 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   type ImageSourcePropType,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -41,6 +42,13 @@ import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySumm
 import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { duration, spring } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { zIndex } from '@/constants/zIndex';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
@@ -324,7 +332,7 @@ export default function DriverDashboard() {
   const confirmDecline = () => {
     timers.clearInterval(countdownRef.current);
     countdownRef.current = null;
-    Animated.timing(slideAnim, { toValue: 300, duration: 300, useNativeDriver: true }).start(() => {
+    Animated.timing(slideAnim, { toValue: 300, duration: duration.modal, useNativeDriver: true }).start(() => {
       setCountdown(15);
       declineRideRequest();
     });
@@ -509,10 +517,8 @@ export default function DriverDashboard() {
 
   const animateSwitchAvatarToStart = useCallback(() => {
     Animated.spring(switchModeAvatarSlide, {
+      ...spring.card,
       toValue: 0,
-      useNativeDriver: true,
-      bounciness: 8,
-      speed: 18,
     }).start();
   }, [switchModeAvatarSlide]);
 
@@ -616,25 +622,25 @@ export default function DriverDashboard() {
         {request && (
           <Marker coordinate={request.pickup}>
             <View style={[styles.pickupPin, { backgroundColor: colors.primary }]}>
-              <Feather name="user" size={12} color={colors.primaryForeground} />
+              <Feather name="user" size={icons.size.xxs} color={colors.primaryForeground} />
             </View>
           </Marker>
         )}
       </MapView>
 
       {/* Top dashboard overlay */}
-      <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : 0 }]}>
+      <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : spacing[0] }]}>
         <View
-          style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + 14 }]}
+          style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + spacing[14] }]}
           onLayout={onStatusCardLayout}
           testID="driver-status-card"
         >
           <View style={styles.statusHeader}>
             <View style={styles.statusIdentity} testID="driver-identity-block">
               <View style={styles.greetingRow}>
-                <Text style={[styles.statusGreeting, { color: colors.foreground }]} numberOfLines={1}>
-                  Hi, {driverName}
-                </Text>
+                <AppText style={[styles.statusGreeting, { color: colors.foreground }]} numberOfLines={1}>
+                  {driverName}
+                </AppText>
                 {isVerified && (
                   <VerifiedBadge
                     testID="driver-verified-badge"
@@ -643,15 +649,15 @@ export default function DriverDashboard() {
               </View>
               <View style={styles.identityChipRow}>
                 <View style={styles.identityItem}>
-                  <MaterialCommunityIcons name="star" size={14} color={colors.foreground} />
-                  <Text style={[styles.identityChipText, { color: colors.foreground }]}>{ratingLabel}</Text>
+                  <MaterialCommunityIcons name="star" size={icons.size.xs} color={colors.foreground} />
+                  <AppText style={[styles.identityChipText, { color: colors.foreground }]}>{ratingLabel}</AppText>
                 </View>
                 <View style={[styles.metadataSeparator, { backgroundColor: colors.border }]} />
                 <View style={styles.identityItem} testID="driver-header-status">
                   <View style={[styles.onlineDot, { backgroundColor: isOnline ? colors.successHex : colors.foreground }]} />
-                  <Text style={[styles.identityChipText, { color: isOnline ? colors.successHex : colors.mutedForeground }]}>
+                  <AppText style={[styles.identityChipText, { color: isOnline ? colors.successHex : colors.mutedForeground }]}>
                     {statusLabel}
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
@@ -685,15 +691,14 @@ export default function DriverDashboard() {
                     { transform: [{ translateX: switchModeAvatarSlide }] },
                   ]}
                 >
+                  <AppText style={styles.switchModeAvatarText}>{driverInitial}</AppText>
                   {profileImage ? (
                     <Image
                       key={profileImage}
                       source={{ uri: profileImage }}
-                      style={styles.switchModeAvatarImage}
+                      style={styles.switchModeAvatarImageAbsolute}
                     />
-                  ) : (
-                    <Text style={styles.switchModeAvatarText}>{driverInitial}</Text>
-                  )}
+                  ) : null}
                 </Animated.View>
               </View>
               <Animated.View
@@ -703,9 +708,9 @@ export default function DriverDashboard() {
                 ]}
                 pointerEvents="none"
               >
-                <Text style={[styles.switchModeQuickActionText, { color: colors.primaryForeground }]} numberOfLines={1}>
+                <AppText style={[styles.switchModeQuickActionText, { color: colors.primaryForeground }]} numberOfLines={1}>
                   Slide to Customer
-                </Text>
+                </AppText>
                 <Animated.View
                   style={[
                     styles.switchModeLabelMask,
@@ -730,7 +735,7 @@ export default function DriverDashboard() {
                 accessibilityRole="button"
                 accessibilityLabel="Notifications"
               >
-                <Feather name="bell" size={18} color={colors.foreground} />
+                <Feather name="bell" size={icons.semantic.row} color={colors.foreground} />
                 {hasUnreadNotifications && (
                   <View
                     style={[
@@ -746,20 +751,20 @@ export default function DriverDashboard() {
             </View>
           </View>
 
-          <Text style={[styles.activityTitle, { color: colors.foreground }]}>Today's Activity</Text>
+          <AppText style={[styles.activityTitle, { color: colors.foreground }]}>Today's Activity</AppText>
           <View style={styles.activityGrid}>
             <View style={styles.activityStat}>
-              <Text style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+              <AppText style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
                 {formatRwf(activitySummary.todayEarningsRwf)}
-              </Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings</Text>
+              </AppText>
+              <AppText style={[styles.activityLabel, { color: colors.mutedForeground }]}>Earnings</AppText>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <View style={styles.activityStat}>
-              <Text style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+              <AppText style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
                 {activitySummary.completedRidesToday}
-              </Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Trips</Text>
+              </AppText>
+              <AppText style={[styles.activityLabel, { color: colors.mutedForeground }]}>Trips</AppText>
             </View>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
@@ -769,8 +774,8 @@ export default function DriverDashboard() {
               accessibilityRole="button"
               accessibilityLabel="View ride package rides"
             >
-              <Text style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{remainingCreditsText}</Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Rides</Text>
+              <AppText style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{remainingCreditsText}</AppText>
+              <AppText style={[styles.activityLabel, { color: colors.mutedForeground }]}>Rides</AppText>
             </TouchableOpacity>
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
@@ -780,8 +785,8 @@ export default function DriverDashboard() {
               accessibilityRole="button"
               accessibilityLabel="View ride package Bonus Rides"
             >
-              <Text style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{bonusRidesText}</Text>
-              <Text style={[styles.activityLabel, { color: colors.mutedForeground }]}>Bonus Rides</Text>
+              <AppText style={[styles.activityValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{bonusRidesText}</AppText>
+              <AppText style={[styles.activityLabel, { color: colors.mutedForeground }]}>Bonus Rides</AppText>
             </TouchableOpacity>
           </View>
 
@@ -789,19 +794,19 @@ export default function DriverDashboard() {
             <View style={[styles.noCreditsPanel, { backgroundColor: colors.successHex + '12', borderColor: colors.successHex + '35' }]}>
               <View style={styles.noCreditsCopy}>
                 <View style={styles.noCreditsTitleRow}>
-                  <Feather name="layers" size={14} color={colors.success} />
-                  <Text style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Rides</Text>
+                  <Feather name="layers" size={icons.size.xs} color={colors.success} />
+                  <AppText style={[styles.noCreditsTitle, { color: colors.foreground }]}>No Rides</AppText>
                 </View>
-                <Text style={[styles.noCreditsText, { color: colors.mutedForeground }]}>
+                <AppText style={[styles.noCreditsText, { color: colors.mutedForeground }]}>
                   Choose a package to start receiving ride requests.
-                </Text>
+                </AppText>
               </View>
               <TouchableOpacity
                 style={[styles.viewPackagesButton, { backgroundColor: colors.primary }]}
                 onPress={() => router.push('/driver-packages')}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.viewPackagesButtonText, { color: colors.primaryForeground }]}>View Packages</Text>
+                <AppText style={[styles.viewPackagesButtonText, { color: colors.primaryForeground }]}>View Packages</AppText>
               </TouchableOpacity>
             </View>
           )}
@@ -871,9 +876,9 @@ export default function DriverDashboard() {
               activeOpacity={0.85}
             >
               <View style={[styles.onlineBtnDot, { backgroundColor: '#fff' }]} />
-              <Text style={[styles.onlineBtnText, { color: '#fff' }]}>
+              <AppText style={[styles.onlineBtnText, { color: '#fff' }]}>
                 {isOnline ? 'Go Offline' : 'Go Online'}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -882,45 +887,45 @@ export default function DriverDashboard() {
       {/* ── Incoming ride request sheet ── */}
       {request && (
         <Animated.View
-          style={[styles.requestSheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + 10 }]}
+          style={[styles.requestSheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + spacing[10] }]}
         >
           <View style={styles.requestHeader}>
             <ProfileAvatarCircle
-              size={40}
+              size={sizes.avatar.md}
               initial={(request.customerName ?? 'C').charAt(0).toUpperCase()}
               imageUri={request.customerImage ?? null}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.requestEyebrow, { color: colors.mutedForeground }]}>Incoming Ride Request</Text>
-              <Text style={[styles.requestTitle, { color: colors.foreground }]} numberOfLines={1}>{request.customerName ?? 'Customer'}</Text>
+              <AppText style={[styles.requestEyebrow, { color: colors.mutedForeground }]}>Incoming Ride Request</AppText>
+              <AppText style={[styles.requestTitle, { color: colors.foreground }]} numberOfLines={1}>{request.customerName ?? 'Customer'}</AppText>
               {request.customerRating != null ? (
                 <View style={styles.requestRatingRow}>
-                  <MaterialCommunityIcons name="star" size={12} color={colors.star} />
-                  <Text style={[styles.requestRatingText, { color: colors.star }]}>
+                  <MaterialCommunityIcons name="star" size={icons.size.xxs} color={colors.star} />
+                  <AppText style={[styles.requestRatingText, { color: colors.star }]}>
                     {request.customerRating.toFixed(1)}
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
             </View>
             <View style={[styles.countdown, { backgroundColor: countdown <= 5 ? colors.destructive : colors.primary }]}>
-              <Text style={styles.countdownText}>{countdown}</Text>
-              <Text style={styles.countdownSub}>sec</Text>
+              <AppText style={styles.countdownText}>{countdown}</AppText>
+              <AppText style={styles.countdownSub}>sec</AppText>
             </View>
           </View>
           <View style={[styles.routeCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
               <View style={styles.routeTextBlock}>
-                <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestPickupLabel}</Text>
+                <AppText style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                <AppText style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestPickupLabel}</AppText>
               </View>
             </View>
             <View style={[styles.routeConnector, { backgroundColor: colors.border }]} />
             <View style={styles.routeRow}>
               <View style={[styles.routeSquare, { backgroundColor: colors.destructive }]} />
               <View style={styles.routeTextBlock}>
-                <Text style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Destination</Text>
-                <Text style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestDestinationLabel}</Text>
+                <AppText style={[styles.routeInlineLabel, { color: colors.mutedForeground }]}>Destination</AppText>
+                <AppText style={[styles.routeValue, { color: colors.foreground }]} numberOfLines={1}>{requestDestinationLabel}</AppText>
               </View>
             </View>
           </View>
@@ -928,22 +933,22 @@ export default function DriverDashboard() {
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
               <MaterialCommunityIcons name="map-marker-radius" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
-                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Pickup</Text>
-                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestDistanceToPickup}</Text>
+                <AppText style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
+                <AppText style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestDistanceToPickup}</AppText>
               </View>
             </View>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
               <MaterialCommunityIcons name="map-marker-distance" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
-                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Trip Distance</Text>
-                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDistance}</Text>
+                <AppText style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Trip Distance</AppText>
+                <AppText style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDistance}</AppText>
               </View>
             </View>
             <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
               <MaterialCommunityIcons name="clock-outline" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
-                <Text style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Time</Text>
-                <Text style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDuration}</Text>
+                <AppText style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Time</AppText>
+                <AppText style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDuration}</AppText>
               </View>
             </View>
           </View>
@@ -964,14 +969,14 @@ export default function DriverDashboard() {
           <View style={[styles.selectorSheet, { backgroundColor: cardFill }]}>
             <View style={styles.selectorHeader}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.selectorTitle, { color: colors.foreground }]}>Select vehicle for this session</Text>
-                <Text style={[styles.selectorSubtitle, { color: colors.mutedForeground }]}>Choose the approved vehicle you are driving right now.</Text>
+                <AppText style={[styles.selectorTitle, { color: colors.foreground }]}>Select vehicle for this session</AppText>
+                <AppText style={[styles.selectorSubtitle, { color: colors.mutedForeground }]}>Choose the approved vehicle you are driving right now.</AppText>
               </View>
               <TouchableOpacity onPress={() => setVehicleSelectorVisible(false)} accessibilityLabel="Close vehicle selector">
-                <Feather name="x" size={20} color={colors.foreground} />
+                <Feather name="x" size={icons.size.lg} color={colors.foreground} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.selectorList} contentContainerStyle={{ gap: 10 }}>
+            <ScrollView style={styles.selectorList} contentContainerStyle={{ gap: spacing[10] }}>
               {approvedVehicles.map(vehicle => {
                 const vehicleEntitlementForSelection = getVehicleEntitlement(entitlement, vehicle);
                 return (
@@ -982,18 +987,18 @@ export default function DriverDashboard() {
                     activeOpacity={0.78}
                   >
                     <View style={styles.selectorCardCopy}>
-                      <Text style={[styles.selectorVehicleName, { color: colors.foreground }]}>
+                      <AppText style={[styles.selectorVehicleName, { color: colors.foreground }]}>
                         {vehicle.brand ? `${vehicle.brand} ` : ''}{vehicle.model ? `${vehicle.model}` : VEHICLE_LABELS[vehicle.vehicleType]}
-                      </Text>
-                      <Text style={[styles.selectorVehicleMeta, { color: colors.mutedForeground }]}>
+                      </AppText>
+                      <AppText style={[styles.selectorVehicleMeta, { color: colors.mutedForeground }]}>
                         {VEHICLE_LABELS[vehicle.vehicleType]} - {vehicle.plateNumber}
-                      </Text>
-                      <Text style={[styles.selectorVehicleMeta, { color: colors.mutedForeground }]}>
+                      </AppText>
+                      <AppText style={[styles.selectorVehicleMeta, { color: colors.mutedForeground }]}>
                         {getRideBalance(vehicleEntitlementForSelection)} rides left{getActiveBonusRides(vehicleEntitlementForSelection) > 0 ? ` - ${getActiveBonusRides(vehicleEntitlementForSelection)} bonus rides` : ''}
-                      </Text>
+                      </AppText>
                     </View>
                     <View style={[styles.selectorPill, { backgroundColor: colors.successHex + '14' }]}>
-                      <Text style={[styles.selectorPillText, { color: colors.successHex }]}>Approved</Text>
+                      <AppText style={[styles.selectorPillText, { color: colors.successHex }]}>Approved</AppText>
                     </View>
                   </TouchableOpacity>
                 );
@@ -1015,18 +1020,18 @@ export default function DriverDashboard() {
           <View style={[styles.licenseModalSheet, { backgroundColor: cardFill }]}>
             <View style={styles.selectorHeader}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.selectorTitle, { color: colors.foreground }]}>Driver License Expired</Text>
-                <Text style={[styles.selectorSubtitle, { color: colors.mutedForeground }]}>
+                <AppText style={[styles.selectorTitle, { color: colors.foreground }]}>Driver License Expired</AppText>
+                <AppText style={[styles.selectorSubtitle, { color: colors.mutedForeground }]}>
                   {licenseBlockVehicle?.plateNumber ? `${licenseBlockVehicle.plateNumber} is not currently eligible to go online.` : 'Your selected vehicle is not currently eligible to go online.'}
-                </Text>
+                </AppText>
               </View>
               <TouchableOpacity onPress={closeLicenseBlockModal} accessibilityLabel="Close license warning">
-                <Feather name="x" size={20} color={colors.foreground} />
+                <Feather name="x" size={icons.size.lg} color={colors.foreground} />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.licenseModalBody, { color: colors.foreground }]}>
+            <AppText style={[styles.licenseModalBody, { color: colors.foreground }]}>
               Your driver license has expired. Update your driver license documents to continue receiving ride requests.
-            </Text>
+            </AppText>
             <View style={styles.licenseModalActions}>
               <AppButton
                 title="Update License"
@@ -1060,10 +1065,10 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
 
   // Top dashboard
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  topBar: { position: 'absolute', top: spacing[0], left: spacing[0], right: spacing[0], zIndex: zIndex.header },
   statusCard: {
-    borderRadius: 0,
-    padding: 14,
+    borderRadius: radius.none,
+    padding: spacing[14],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -1071,11 +1076,11 @@ const styles = StyleSheet.create({
     elevation: 8,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  statusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.rowGap },
   statusIdentity: { flex: 1, minWidth: 0, height: BUTTON_HEIGHT.sm, justifyContent: 'space-between' },
-  statusGreeting: { fontSize: 17, lineHeight: 20, fontFamily: 'Inter_700Bold', flexShrink: 1 },
-  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 },
-  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  statusGreeting: { ...typography.title, lineHeight: 20, flexShrink: 1 },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], minWidth: spacing[0] },
+  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap, flexShrink: 0 },
   notificationButton: {
     width: BUTTON_HEIGHT.sm,
     height: BUTTON_HEIGHT.sm,
@@ -1089,17 +1094,17 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
-  notifDot: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5 },
-  identityChipRow: { height: 22, flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
+  notifDot: { position: 'absolute', top: spacing[10], right: 11, width: spacing[8], height: spacing[8], borderRadius: radius.xs, borderWidth: 1.5 },
+  identityChipRow: { height: radius.sheetCompact, flexDirection: 'row', alignItems: 'center', gap: spacing[6], overflow: 'hidden' },
   identityItem: {
-    height: 22,
+    height: radius.sheetCompact,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: spacing[4],
   },
-  identityChipText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  metadataSeparator: { width: 3, height: 3, borderRadius: 2, flexShrink: 0 },
+  identityChipText: { ...typography.caption,  },
+  metadataSeparator: { width: 3, height: 3, borderRadius: radius.xxs, flexShrink: 0 },
   onlineDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
   switchModeQuickAction: {
     height: BUTTON_HEIGHT.sm,
@@ -1121,7 +1126,7 @@ const styles = StyleSheet.create({
     marginLeft: CTA_AVATAR_INSET,
     marginVertical: CTA_AVATAR_INSET,
     flexShrink: 0,
-    zIndex: 3,
+    zIndex: zIndex.sticky,
     elevation: 8,
   },
   switchModeAvatarFrame: {
@@ -1138,20 +1143,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.28,
     shadowRadius: 3,
-    zIndex: 3,
+    zIndex: zIndex.sticky,
     elevation: 8,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
     }),
   },
-  switchModeAvatarImage: {
+  switchModeAvatarImageAbsolute: {
     width: CTA_AVATAR_SIZE,
     height: CTA_AVATAR_SIZE,
+    position: 'absolute',
+    top: spacing[0],
+    left: spacing[0],
   },
   switchModeAvatarText: {
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    ...typography.bodySmall,
     color: '#FFFFFF',
   },
   switchModeLabelSlot: {
@@ -1160,50 +1167,50 @@ const styles = StyleSheet.create({
     paddingLeft: 3,
     overflow: 'hidden',
     position: 'relative',
-    zIndex: 1,
+    zIndex: zIndex.raised,
   },
   switchModeLabelMask: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
+    top: spacing[0],
+    bottom: spacing[0],
+    left: spacing[0],
     width: CTA_LABEL_SLOT_WIDTH,
-    zIndex: 2,
+    zIndex: zIndex.sticky - 1,
   },
-  switchModeQuickActionText: { fontSize: 12.5, fontFamily: 'Inter_600SemiBold', lineHeight: 16, zIndex: 1 },
-  statusDivider: { height: 1, marginVertical: 12 },
-  activityTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 14, marginBottom: 7 },
+  switchModeQuickActionText: { ...typography.caption, fontFamily: typography.title.fontFamily, lineHeight: 16, zIndex: zIndex.raised },
+  statusDivider: { height: StyleSheet.hairlineWidth, marginVertical: semanticSpacing.rowGap },
+  activityTitle: { ...typography.caption, marginTop: spacing[14], marginBottom: 7 },
   activityGrid: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing[4],
   },
   activityStat: { flex: 1, alignItems: 'center', minWidth: 0 },
-  activityValue: { fontSize: 18, lineHeight: 22, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  activityLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textAlign: 'center', marginTop: 2 },
-  activityDivider: { width: 1, height: 24 },
+  activityValue: { ...typography.h3, lineHeight: 22, textAlign: 'center' },
+  activityLabel: { ...typography.tiny, textAlign: 'center', marginTop: spacing[2] },
+  activityDivider: { width: StyleSheet.hairlineWidth, height: spacing[24] },
   noCreditsPanel: {
-    marginTop: 8,
-    borderRadius: 12,
+    marginTop: spacing[8],
+    borderRadius: radius.input,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[8],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: semanticSpacing.inlineGap,
   },
   noCreditsCopy: { flex: 1, minWidth: 0 },
   noCreditsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  noCreditsTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  noCreditsText: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 15, marginTop: 1 },
+  noCreditsTitle: { ...typography.label,  },
+  noCreditsText: { ...typography.tiny, lineHeight: 15, marginTop: 1 },
   viewPackagesButton: {
     minHeight: 30,
     borderRadius: 15,
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing[10],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  viewPackagesButtonText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  viewPackagesButtonText: { ...typography.button },
   adCard: {
     marginTop: 4,
     marginHorizontal: 6,
@@ -1224,10 +1231,9 @@ const styles = StyleSheet.create({
   // Map controls
   mapControls: { position: 'absolute', right: 16, gap: 10 },
   mapBtn: {
-    width: 46, height: 46, borderRadius: 23,
+    width: sizes.mapControl.md, height: sizes.mapControl.md, borderRadius: 23,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2, shadowRadius: 6, elevation: 6,
+    ...elevation.mapControl,
   },
 
   // Go Online button
@@ -1235,19 +1241,18 @@ const styles = StyleSheet.create({
   onlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing[10],
     paddingHorizontal: 36,
     height: 54,
     borderRadius: 27,
     borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    ...elevation.lg,
     shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 8,
   },
   onlineBtnDot: { width: 9, height: 9, borderRadius: 5 },
-  onlineBtnText: { fontSize: 17, fontFamily: 'Inter_700Bold' },
+  onlineBtnText: { ...typography.button },
 
   // Driver marker
   driverMarker: { alignItems: 'center' },
@@ -1257,51 +1262,51 @@ const styles = StyleSheet.create({
   // Request sheet
   requestSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingTop: 10, paddingHorizontal: 16, gap: 9,
+    borderTopLeftRadius: radius['3xl'], borderTopRightRadius: radius['3xl'],
+    paddingTop: spacing[10], paddingHorizontal: semanticSpacing.cardPadding, gap: 9,
     shadowColor: '#000', shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.18, shadowRadius: 20, elevation: 20,
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  requestEyebrow: { fontSize: 10, fontFamily: 'Inter_500Medium', marginBottom: 1 },
-  requestTitle: { fontSize: 17, fontFamily: 'Inter_700Bold' },
+  requestHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
+  requestEyebrow: { ...typography.tiny, marginBottom: 1 },
+  requestTitle: { ...typography.title,  },
   requestRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
-  requestRatingText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  requestRatingText: { ...typography.caption,  },
   countdown: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  countdownText: { fontSize: 17, fontFamily: 'Inter_700Bold', color: '#fff', lineHeight: 19 },
-  countdownSub: { fontSize: 9, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.75)', lineHeight: 11 },
-  fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
-  fareLabel: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
-  fareValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  countdownText: { ...typography.title, color: '#fff', lineHeight: 19 },
+  countdownSub: { ...typography.tiny, color: 'rgba(255,255,255,0.75)', lineHeight: 11 },
+  fareRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap, paddingHorizontal: spacing[14], paddingVertical: semanticSpacing.rowGap, borderRadius: radius.input, borderWidth: 1 },
+  fareLabel: { flex: 1, ...typography.label,  },
+  fareValue: { ...typography.body,  },
   routeCard: { borderRadius: 13, paddingHorizontal: 12, paddingVertical: 7, gap: 0 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], paddingVertical: 5 },
   routeDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   routeSquare: { width: 10, height: 10, borderRadius: 3, flexShrink: 0 },
   routeConnector: { height: 1, marginLeft: 20 },
   routeTextBlock: { flex: 1, gap: 1 },
-  routeInlineLabel: { fontSize: 9, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
-  routeValue: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  routeText: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
+  routeInlineLabel: { ...typography.tiny, textTransform: 'uppercase' },
+  routeValue: { ...typography.bodySmall,  },
+  routeText: { ...typography.label, flex: 1 },
   metaRow: { flexDirection: 'row', gap: 5 },
   metaInfoCard: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 12, gap: 5 },
   metaInfoText: { flex: 1, gap: 2 },
-  metaInfoValue: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  metaInfoLabel: { fontSize: 8.5, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' },
+  metaInfoValue: { ...typography.caption,  },
+  metaInfoLabel: { ...typography.tiny, textTransform: 'uppercase' },
   requestActions: { flexDirection: 'row', gap: 10 },
-  selectorBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
-  selectorSheet: { borderRadius: 18, padding: 16, maxHeight: '72%', gap: 14 },
-  selectorHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  selectorTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
-  selectorSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  selectorBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: semanticSpacing.cardPadding },
+  selectorSheet: { borderRadius: 18, padding: semanticSpacing.cardPadding, maxHeight: '72%', gap: spacing[14] },
+  selectorHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10] },
+  selectorTitle: { ...typography.title,  },
+  selectorSubtitle: { ...typography.tiny, marginTop: 2 },
   selectorList: { flexGrow: 0 },
-  selectorCard: { borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  selectorCard: { borderWidth: 1, borderRadius: radius.card, padding: semanticSpacing.rowGap, flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   selectorCardCopy: { flex: 1, minWidth: 0, gap: 2 },
-  selectorVehicleName: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  selectorVehicleMeta: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  selectorVehicleName: { ...typography.bodySmall,  },
+  selectorVehicleMeta: { ...typography.tiny,  },
   selectorPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
-  selectorPillText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  selectorPillText: { ...typography.tiny,  },
   licenseModalSheet: { borderRadius: 18, padding: 16, gap: 14, maxWidth: 420, width: '100%', alignSelf: 'center' },
-  licenseModalBody: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  licenseModalBody: { ...typography.label, lineHeight: 18 },
   licenseModalActions: { gap: 10 },
 });

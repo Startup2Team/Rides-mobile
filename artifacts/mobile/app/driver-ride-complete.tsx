@@ -1,12 +1,16 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { VehicleType } from '@/types';
-import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
+import { radius } from '@/constants/radius';
+import { spacing } from '@/constants/spacing';
 
 const SCREEN_DURATION_MS = 3000;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -137,16 +141,16 @@ export default function DriverRideCompleteScreen() {
         ))}
       </View>
 
-      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}>
-        <Text style={styles.emoji}>🎉</Text>
-        <Text style={[styles.title, { color: colors.foreground }]}>Ride Complete!</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Great job, keep it up!</Text>
+      <View style={[styles.content, { paddingTop: insets.top + spacing[64] - spacing[4], paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}>
+        <AppText style={styles.emoji}>🎉</AppText>
+        <AppText style={[styles.title, { color: colors.foreground }]}>Ride Complete!</AppText>
+        <AppText style={[styles.subtitle, { color: colors.mutedForeground }]}>Great job, keep it up!</AppText>
         {earnedFare != null && earnedFare > 0 && (
           <View style={styles.fareCard}>
-            <Text style={[styles.fareLabel, { color: colors.mutedForeground }]}>You earned</Text>
-            <Text style={[styles.fareAmount, { color: colors.primary }]}>
+            <AppText style={[styles.fareLabel, { color: colors.mutedForeground }]}>You earned</AppText>
+            <AppText style={[styles.fareAmount, { color: colors.primary }]}>
               {earnedFare.toLocaleString()} RWF
-            </Text>
+            </AppText>
           </View>
         )}
       </View>
@@ -160,21 +164,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
+    gap: spacing[12],
+    paddingHorizontal: spacing[32],
   },
-  emoji: { fontSize: 64 },
-  title: { fontSize: 32, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  subtitle: { fontSize: 16, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  emoji: { ...typography.displayXL },
+  title: { ...typography.display, textAlign: 'center' },
+  subtitle: { ...typography.title, textAlign: 'center' },
   fareCard: {
-    marginTop: 16,
-    paddingHorizontal: 32,
-    paddingVertical: 20,
-    borderRadius: 20,
+    marginTop: spacing[16],
+    paddingHorizontal: spacing[32],
+    paddingVertical: spacing[20],
+    borderRadius: radius['3xl'],
     alignItems: 'center',
-    gap: 4,
+    gap: spacing[4],
   },
-  fareLabel: { fontSize: 13, fontFamily: 'Inter_500Medium' },
-  fareAmount: { fontSize: 36, fontFamily: 'Inter_700Bold' },
+  fareLabel: { ...typography.label,  },
+  fareAmount: { ...typography.displayXL,  },
   piece: { position: 'absolute' },
 });

@@ -1,7 +1,9 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { CUSTOMER_VEHICLE_TYPES } from '@/constants/vehicles';
+import { AppText } from '@/components/AppText';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
+import { spacing } from '@/constants/spacing';
 import type { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
 import { styles } from './homeStyles';
@@ -40,31 +42,31 @@ export function HomeCard({
         paddingTop: 22,
         paddingHorizontal: BOOKING_SHEET_PADDING_H,
         paddingBottom: bottomPadding,
-        gap: 10,
+        gap: spacing[10],
       }}
     >
-      <Text style={[styles.greeting, { color: colors.foreground }]}>
+      <AppText variant="h2" style={[styles.greeting, { color: colors.foreground }]}>
         Hi, {userName} {'\u{1F44B}'}
-      </Text>
-      <Text style={[styles.selectRide, { color: colors.mutedForeground }]}>
+      </AppText>
+      <AppText variant="bodySmall" style={[styles.selectRide, { color: colors.mutedForeground }]}>
         Select your ride
-      </Text>
+      </AppText>
 
       {locationStatus === 'unavailable' ? (
         <View style={[styles.locationUnavailable, { backgroundColor: colors.muted }]}>
-          <Text style={[styles.locationUnavailableText, { color: colors.foreground }]}>
+          <AppText variant="label" style={[styles.locationUnavailableText, { color: colors.foreground }]}>
             Unable to determine your location.
-          </Text>
+          </AppText>
           <View style={styles.locationUnavailableActions}>
             <TouchableOpacity onPress={onRetryLocation} activeOpacity={0.75}>
-              <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
+              <AppText variant="caption" style={[styles.locationUnavailableAction, { color: colors.primary }]}>
                 Retry location
-              </Text>
+              </AppText>
             </TouchableOpacity>
             <TouchableOpacity onPress={onSelectPickupManually} activeOpacity={0.75}>
-              <Text style={[styles.locationUnavailableAction, { color: colors.primary }]}>
+              <AppText variant="caption" style={[styles.locationUnavailableAction, { color: colors.primary }]}>
                 Select pickup manually
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -90,14 +92,15 @@ export function HomeCard({
             accessibilityState={{ selected: selectedVehicle === v }}
           >
             <VehicleTypeIcon type={v} selected={selectedVehicle === v} />
-            <Text
+            <AppText
+              variant="tiny"
               style={[
                 styles.vehicleLabel,
                 { color: selectedVehicle === v ? colors.primaryForeground : colors.foreground },
               ]}
             >
               {VEHICLE_LABELS[v]}
-            </Text>
+            </AppText>
           </TouchableOpacity>
         ))}
       </View>
@@ -110,9 +113,9 @@ export function HomeCard({
         accessibilityRole="button"
         accessibilityLabel={`Continue with ${VEHICLE_LABELS[selectedVehicle]}`}
       >
-        <Text style={[styles.continueBtnText, { color: colors.primaryForeground }]}>
+        <AppText variant="button" style={[styles.continueBtnText, { color: colors.primaryForeground }]}>
           Continue with {VEHICLE_LABELS[selectedVehicle]}
-        </Text>
+        </AppText>
       </TouchableOpacity>
     </View>
   );

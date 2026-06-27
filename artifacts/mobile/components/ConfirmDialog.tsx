@@ -8,6 +8,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { elevation } from '@/constants/elevation';
+import { radius } from '@/constants/radius';
+import { semanticSpacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 
 interface ConfirmDialogProps {
@@ -71,19 +74,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: semanticSpacing.sectionGap,
   },
   card: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 20,
+    borderRadius: radius['3xl'],
     padding: 22,
-    gap: 14,
+    gap: semanticSpacing.listItemPadding,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 28,
-    elevation: 28,
+    ...elevation.modal,
   },
 });

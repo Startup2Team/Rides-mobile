@@ -12,6 +12,8 @@
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand",
+    "check:typography": "node scripts/check-typography.js",
+    "check:design-tokens": "node scripts/check-design-tokens.js",
     "release:validate-env": "node scripts/validate-release-env.js",
     "release:config": "expo config --type public",
     "release:export:android": "expo export --platform android --output-dir dist/release-validation --clear",

@@ -1,5 +1,10 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { useColors } from '@/hooks/useColors';
 import { VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
@@ -40,9 +45,9 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
         <View style={styles.compactIconBox}>
           <VehicleTypeIcon type={type} selected={selected} />
         </View>
-        <Text style={[styles.compactName, { color: selected ? colors.primary : colors.foreground }]}>
+        <AppText style={[styles.compactName, { color: selected ? colors.primary : colors.foreground }]}>
           {VEHICLE_LABELS[type]}
-        </Text>
+        </AppText>
       </TouchableOpacity>
     );
   }
@@ -63,13 +68,13 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
         <VehicleTypeIcon type={type} selected={selected} />
       </View>
       <View style={styles.info}>
-        <Text style={[styles.name, { color: colors.foreground }]}>{VEHICLE_LABELS[type]}</Text>
-        <Text style={[styles.desc, { color: colors.mutedForeground }]}>{data.seats} · {data.desc}</Text>
+        <AppText style={[styles.name, { color: colors.foreground }]}>{VEHICLE_LABELS[type]}</AppText>
+        <AppText style={[styles.desc, { color: colors.mutedForeground }]}>{data.seats} · {data.desc}</AppText>
       </View>
       <View style={styles.right}>
-        <Text style={[styles.fare, { color: selected ? colors.primary : colors.foreground }]}>
+        <AppText style={[styles.fare, { color: selected ? colors.primary : colors.foreground }]}>
           {estimatedFare ? `${estimatedFare.toLocaleString()} RWF` : `From ${VEHICLE_BASE_FARE[type].toLocaleString()}`}
-        </Text>
+        </AppText>
       </View>
     </TouchableOpacity>
   );
@@ -79,37 +84,37 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
+    padding: semanticSpacing.listItemPadding,
+    borderRadius: radius.card,
     borderWidth: 1.5,
-    gap: 12,
-    marginBottom: 10,
+    gap: semanticSpacing.rowGap,
+    marginBottom: spacing[10],
   },
   compactCard: {
     width: '47%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    borderRadius: 16,
+    paddingVertical: spacing[20],
+    borderRadius: radius['2xl'],
     borderWidth: 1.5,
-    gap: 10,
+    gap: spacing[10],
   },
   compactIconBox: {
-    width: 56,
-    height: 40,
+    width: sizes.thumbnail.sm,
+    height: sizes.avatar.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  compactName: { ...typography.body,  },
   iconBox: {
-    width: 52,
-    height: 40,
+    width: sizes.avatar.lg,
+    height: sizes.avatar.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   info: { flex: 1 },
-  name: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
-  desc: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  name: { ...typography.body, marginBottom: spacing[2] },
+  desc: { ...typography.caption,  },
   right: { alignItems: 'flex-end' },
-  fare: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  fare: { ...typography.label,  },
 });

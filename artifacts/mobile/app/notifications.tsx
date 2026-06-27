@@ -5,7 +5,6 @@ import {
   Alert,
   Dimensions,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,6 +23,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
 import type { Ride } from '@/types';
+import { AppText } from '@/components/AppText';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
 
 type NotifType = 'ride' | 'promo' | 'system' | 'safety';
 
@@ -215,23 +220,23 @@ function EmptyState({ color, driverMode, mutedColor }: { color: string; driverMo
   return (
     <View style={emptyStyles.wrap}>
       <View style={emptyStyles.iconCircle}>
-        <Feather name="bell-off" size={32} color={color} />
+        <Feather name="bell-off" size={icons.size.xxl} color={color} />
       </View>
-      <Text style={[emptyStyles.title, { color }]}>No notifications yet</Text>
-      <Text style={[emptyStyles.desc, { color: mutedColor }]}>
+      <AppText variant="h3" style={[emptyStyles.title, { color }]}>No notifications yet</AppText>
+      <AppText variant="bodySmall" style={[emptyStyles.desc, { color: mutedColor }]}>
         {driverMode
           ? "We'll notify you about ride requests, completed trips, and ride package updates."
           : "We'll notify you when your driver is confirmed, on the way, or has arrived."}
-      </Text>
+      </AppText>
     </View>
   );
 }
 
 const emptyStyles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingVertical: 60 },
-  iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  title: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 8 },
-  desc: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 22 },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[40], paddingVertical: spacing[64] - spacing[4] },
+  iconCircle: { width: sizes.thumbnail.md, height: sizes.thumbnail.md, borderRadius: spacing[32] + spacing[4], alignItems: 'center', justifyContent: 'center', marginBottom: semanticSpacing.cardPadding },
+  title: { ...typography.h3, fontFamily: typography.badge.fontFamily, marginBottom: semanticSpacing.inlineGap },
+  desc: { ...typography.bodySmall, textAlign: 'center', lineHeight: 22 },
 });
 
 export default function NotificationsScreen() {
@@ -268,8 +273,8 @@ export default function NotificationsScreen() {
   const swipeRefs = useRef<Record<string, Swipeable | null>>({});
   const openRowId = useRef<string | null>(null);
   const autoSwipeLockRef = useRef<Record<string, 'read' | 'delete' | undefined>>({});
-  const horizontalListPadding = 28;
-  const halfCardSwipeThreshold = Math.max(44, (screenWidth - horizontalListPadding) / 2);
+  const horizontalListPadding = spacing[28];
+  const halfCardSwipeThreshold = Math.max(sizes.iconButton.md, (screenWidth - horizontalListPadding) / 2);
 
   useEffect(() => {
     loadNotificationReadState().then(state => {
@@ -380,8 +385,8 @@ export default function NotificationsScreen() {
         friction={1}
         leftThreshold={halfCardSwipeThreshold}
         rightThreshold={halfCardSwipeThreshold}
-        dragOffsetFromLeftEdge={22}
-        dragOffsetFromRightEdge={22}
+        dragOffsetFromLeftEdge={radius.sheetCompact}
+        dragOffsetFromRightEdge={radius.sheetCompact}
         onSwipeableWillOpen={() => {
           closeAllRows(item.id);
           openRowId.current = item.id;
@@ -420,7 +425,7 @@ export default function NotificationsScreen() {
                 styles.actionButton,
                 {
                   backgroundColor: colors.primary,
-                  marginRight: 8,
+                  marginRight: semanticSpacing.inlineGap,
                 },
               ]}
               onPress={() => {
@@ -433,7 +438,7 @@ export default function NotificationsScreen() {
               accessibilityLabel={item.read ? 'Mark notification unread' : 'Mark notification read'}
               accessibilityHint={item.read ? 'Marks this notification as unread' : 'Marks this notification as read'}
             >
-              <Feather name="mail" size={14} color="#fff" />
+              <Feather name="mail" size={icons.size.xs} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
@@ -444,7 +449,7 @@ export default function NotificationsScreen() {
                 styles.actionButton,
                 {
                   backgroundColor: colors.destructive,
-                  marginLeft: 8,
+                  marginLeft: semanticSpacing.inlineGap,
                 },
               ]}
               onPress={() => {
@@ -457,7 +462,7 @@ export default function NotificationsScreen() {
               accessibilityLabel="Delete notification"
               accessibilityHint="Removes this notification from the list"
             >
-              <Feather name="trash-2" size={14} color="#fff" />
+              <Feather name="trash-2" size={icons.size.xs} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
@@ -482,11 +487,12 @@ export default function NotificationsScreen() {
           activeOpacity={0.75}
         >
           <View style={styles.iconWrap}>
-            <Feather name={item.icon} size={18} color={accentColor} />
+            <Feather name={item.icon} size={icons.semantic.row} color={accentColor} />
           </View>
           <View style={styles.textWrap}>
             <View style={styles.titleRow}>
-              <Text
+              <AppText
+                variant="bodySmall"
                 style={[
                   styles.title,
                   { color: item.read ? colors.foreground : colors.primary },
@@ -494,14 +500,14 @@ export default function NotificationsScreen() {
                 numberOfLines={1}
               >
                 {item.title}
-              </Text>
-              <Text style={[styles.time, { color: colors.mutedForeground }]}>
+              </AppText>
+              <AppText variant="tiny" style={[styles.time, { color: colors.mutedForeground }]}>
                 {timeAgo(item.time)}
-              </Text>
+              </AppText>
             </View>
-            <Text style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
+            <AppText variant="label" style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
               {item.message}
-            </Text>
+            </AppText>
           </View>
           {!item.read && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
@@ -511,15 +517,15 @@ export default function NotificationsScreen() {
 
   const renderSection = (title: string, items: AppNotification[]) => (
     <>
-      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</Text>
+      <AppText variant="label" style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</AppText>
       {items.length === 0 ? (
-        <Text style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
+        <AppText variant="label" style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
           No notifications
-        </Text>
+        </AppText>
       ) : (
         items.map((item, index) => (
           <React.Fragment key={item.id}>
-            {index > 0 && <View style={{ height: 8 }} />}
+            {index > 0 && <View style={{ height: semanticSpacing.inlineGap }} />}
             {renderItem(item)}
           </React.Fragment>
         ))
@@ -533,15 +539,15 @@ export default function NotificationsScreen() {
         title="Notifications"
         titleAccessory={unreadCount > 0 && (
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
+            <AppText variant="badge" style={styles.badgeText}>{unreadCount}</AppText>
           </View>
         )}
         right={unreadCount > 0 ? (
           <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
-            <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
+            <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 80 }} />
+          <View style={{ width: sizes.avatar.xxl }} />
         )}
       />
 
@@ -572,56 +578,56 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  badge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
-  badgeText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#000' },
-  markAllBtn: { width: 80, alignItems: 'flex-end' },
-  markAllText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
-  list: { padding: 14 },
+  badge: { minWidth: spacing[20], height: spacing[20], borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  badgeText: { ...typography.badge, color: '#000' },
+  markAllBtn: { width: sizes.avatar.xxl, alignItems: 'flex-end' },
+  markAllText: { ...typography.label },
+  list: { padding: semanticSpacing.listItemPadding },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    marginTop: 16,
-    marginBottom: 10,
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
+    marginTop: semanticSpacing.cardPadding,
+    marginBottom: spacing[10],
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   emptySectionText: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    marginBottom: 8,
+    ...typography.label,
+    fontFamily: typography.caption.fontFamily,
+    marginBottom: semanticSpacing.inlineGap,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    gap: 12,
-    minHeight: 76,
+    padding: semanticSpacing.rowGap,
+    gap: semanticSpacing.rowGap,
+    minHeight: sizes.thumbnail.lg,
   },
   actionButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius['3xl'] - spacing[2],
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
   },
   leftActionTrack: {
-    minHeight: 76,
+    minHeight: sizes.thumbnail.lg,
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
   rightActionTrack: {
-    minHeight: 76,
+    minHeight: sizes.thumbnail.lg,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
-  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  textWrap: { flex: 1, gap: 4, minWidth: 0 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  time: { fontSize: 11, fontFamily: 'Inter_500Medium', flexShrink: 0 },
-  message: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  iconWrap: { width: sizes.avatar.md, height: sizes.avatar.md, borderRadius: radius['3xl'], alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  textWrap: { flex: 1, gap: spacing[4], minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
+  title: { flex: 1, ...typography.bodySmall, fontFamily: typography.badge.fontFamily },
+  time: { ...typography.tiny, flexShrink: 0 },
+  message: { ...typography.label, fontFamily: typography.caption.fontFamily },
   dot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
 });

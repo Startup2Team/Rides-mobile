@@ -23,6 +23,12 @@ import { BRAND_GREEN_HEX } from '@/constants/systemColors';
 
 import { loadStoredPaymentMethods, saveStoredPaymentMethods } from '@/persistence/paymentPersistence';
 import type { PaymentMethod, PaymentProvider } from '@/types';
+import { typography } from '@/constants/typography';
+import { duration } from '@/constants/motion';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const PROVIDER_META: Record<PaymentProvider, { name: string; color: string; icon: string }> = {
   mtn: { name: 'MTN Mobile Money', color: '#FFCC00', icon: 'smartphone' },
@@ -148,7 +154,7 @@ export default function PaymentMethodsScreen() {
         <GlassScrollView
           ref={scrollRef}
           indicatorTop={headerMetrics.indicatorTop}
-          indicatorBottom={insets.bottom + 64}
+          indicatorBottom={insets.bottom + spacing[64]}
           contentContainerStyle={[
             styles.scroll,
             {
@@ -177,7 +183,7 @@ export default function PaymentMethodsScreen() {
                   activeOpacity={0.75}
                 >
                   <View style={styles.methodIcon}>
-                    <Feather name={meta.icon as any} size={18} color={meta.color} />
+                    <Feather name={meta.icon as any} size={icons.semantic.row} color={meta.color} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.methodLabel, { color: colors.foreground }]}>
@@ -206,7 +212,7 @@ export default function PaymentMethodsScreen() {
                         onPress={() => handleRemove(method.id)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        <Feather name="trash-2" size={16} color={colors.destructive} />
+                        <Feather name="trash-2" size={icons.semantic.button} color={colors.destructive} />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -238,18 +244,18 @@ export default function PaymentMethodsScreen() {
                     setTimeout(() => {
                       phoneInputRef.current?.focus();
                       scrollRef.current?.scrollToEnd({ animated: true });
-                    }, 300);
+                    }, duration.modal);
                   }
                 }}
                 activeOpacity={0.75}
               >
                 <View style={styles.methodIcon}>
-                  <Feather name="smartphone" size={18} color={meta.color} />
+                  <Feather name="smartphone" size={icons.semantic.row} color={meta.color} />
                 </View>
                 <Text style={[styles.addCardLabel, { color: colors.foreground }]}>{meta.name}</Text>
                 <Feather
                   name={isOpen ? 'chevron-up' : 'chevron-down'}
-                  size={18}
+                  size={icons.semantic.row}
                   color={colors.mutedForeground}
                 />
               </TouchableOpacity>
@@ -277,7 +283,7 @@ export default function PaymentMethodsScreen() {
                     loading={saving}
                     fullWidth
                     size="md"
-                    style={{ marginTop: 12 }}
+                    style={{ marginTop: semanticSpacing.rowGap }}
                   />
                 </View>
               )}
@@ -287,7 +293,7 @@ export default function PaymentMethodsScreen() {
         </GlassScrollView>
       </KeyboardAvoidingView>
 
-      <View style={[styles.infoBox, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[styles.infoBox, { paddingBottom: insets.bottom + semanticSpacing.comfortableGap }]}>
         <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
           Payments are processed securely. Your MoMo PIN is never stored.
         </Text>
@@ -299,81 +305,81 @@ export default function PaymentMethodsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   keyboardAvoiding: { flex: 1 },
-  scroll: { padding: 20, gap: 0 },
+  scroll: { padding: semanticSpacing.screenPadding, gap: spacing[0] },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.tiny,
+    fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
-    marginBottom: 10,
-    marginTop: 24,
+    marginBottom: spacing[10],
+    marginTop: semanticSpacing.sectionGap,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: radius['2xl'],
     borderWidth: 1,
     overflow: 'hidden',
   },
   methodRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    padding: semanticSpacing.listItemPadding,
+    gap: semanticSpacing.rowGap,
   },
   methodIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: sizes.avatar.md,
+    height: sizes.avatar.md,
+    borderRadius: radius.input,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  methodLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-  methodPhone: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  defaultBadge: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  methodActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  methodLabel: { ...typography.bodySmall, fontFamily: typography.label.fontFamily},
+  methodPhone: { ...typography.label, fontFamily: typography.body.fontFamily, marginTop: spacing[2] },
+  defaultBadge: { ...typography.tiny, fontFamily: typography.title.fontFamily, marginTop: spacing[2] },
+  methodActions: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: spacing[20],
+    height: spacing[20],
+    borderRadius: radius.md,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioInner: { width: 10, height: 10, borderRadius: 5 },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.listItemPadding },
   addCard: {
-    borderRadius: 16,
+    borderRadius: radius['2xl'],
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: spacing[10],
     overflow: 'hidden',
   },
   addCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    padding: semanticSpacing.listItemPadding,
+    gap: semanticSpacing.rowGap,
   },
-  addCardLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
-  addCardBody: { paddingHorizontal: 14, paddingBottom: 14 },
+  addCardLabel: { flex: 1, ...typography.bodySmall, fontFamily: typography.label.fontFamily},
+  addCardBody: { paddingHorizontal: semanticSpacing.listItemPadding, paddingBottom: semanticSpacing.listItemPadding },
   phoneInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: radius.md,
     borderWidth: 1,
-    height: 48,
+    height: sizes.input.md,
     overflow: 'hidden',
   },
-  countryCode: { paddingHorizontal: 14, fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  countryCode: { paddingHorizontal: semanticSpacing.listItemPadding, ...typography.body, fontFamily: typography.title.fontFamily},
   inputDivider: { width: 1, height: '60%' },
-  phoneInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, fontFamily: 'Inter_400Regular', height: '100%' },
+  phoneInput: { flex: 1, paddingHorizontal: semanticSpacing.rowGap, ...typography.body, fontFamily: typography.body.fontFamily, height: '100%' },
   infoBox: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    gap: semanticSpacing.inlineGap,
+    paddingHorizontal: semanticSpacing.screenPadding,
+    paddingTop: semanticSpacing.rowGap,
     alignItems: 'flex-start',
   },
-  infoText: { flex: 1, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  infoText: { flex: 1, ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 18 },
 });

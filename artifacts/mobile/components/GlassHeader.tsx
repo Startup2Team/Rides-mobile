@@ -3,14 +3,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, usePathname } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Platform,
   StyleSheet,
-  Text,
+  Platform,
   useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/BackButton';
+import { AppText } from '@/components/AppText';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import { zIndex } from '@/constants/zIndex';
 import { useColors } from '@/hooks/useColors';
 
 export function useGlassHeaderMetrics() {
@@ -89,7 +93,7 @@ export function GlassHeader({
       style={[
         styles.header,
         {
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 0,
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + spacing[0],
           backgroundColor: isScrolled
             ? (scheme === 'dark' ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)')
             : 'transparent',
@@ -105,11 +109,11 @@ export function GlassHeader({
         ) : (
           <View style={styles.sideSlot} />
         )}
-        <View style={styles.headerCenter}>
+        <View style={styles.headerCenter} pointerEvents="box-none">
           <View style={styles.titleRow}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
+            <AppText variant="h3" style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
               {title}
-            </Text>
+            </AppText>
             {titleAccessory}
           </View>
         </View>
@@ -122,26 +126,31 @@ export function GlassHeader({
 const styles = StyleSheet.create({
   header: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingBottom: 0,
+    top: spacing[0],
+    left: spacing[0],
+    right: spacing[0],
+    zIndex: zIndex.header,
+    paddingBottom: spacing[0],
     overflow: 'hidden',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
-  headerCenter: { flex: 1, alignItems: 'center', minWidth: 0 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
+  headerCenter: {
+    position: 'absolute',
+    left: 80,
+    right: 80,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap, maxWidth: '100%' },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    textShadowColor: 'rgba(0,0,0,0.16)',
-    textShadowRadius: 8,
+    ...typography.h3,
   },
-  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  sideSlot: { width: 44, height: 44 },
+  headerSub: { ...typography.caption, marginTop: spacing[2] },
+  sideSlot: { width: sizes.iconButton.md, height: sizes.iconButton.md },
 });

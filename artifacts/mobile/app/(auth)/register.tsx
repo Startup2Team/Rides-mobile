@@ -17,9 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 import { BackButton } from '@/components/BackButton';
+import { AppText } from '@/components/AppText';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 
 const COUNTRIES = [
@@ -109,7 +111,7 @@ export default function RegisterScreen() {
 
         <View style={styles.centerContent}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.foreground }]}>Register your account</Text>
+            <AppText variant="h2" style={[styles.title, { color: colors.foreground }]}>Register your account</AppText>
           </View>
 
           <View style={styles.form}>
@@ -125,7 +127,7 @@ export default function RegisterScreen() {
             />
 
             <View style={styles.phoneField}>
-              <Text style={[styles.phoneLabel, { color: colors.mutedForeground }]}>Phone number</Text>
+              <AppText variant="label" style={[styles.phoneLabel, { color: colors.mutedForeground }]}>Phone number</AppText>
               <View style={styles.phoneRow}>
                 <TouchableOpacity
                   style={[
@@ -153,9 +155,9 @@ export default function RegisterScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.phonePrefix, { color: colors.foreground }]}>
+                  <AppText variant="body" style={[styles.phonePrefix, { color: colors.foreground }]}>
                     {selectedCountry.dialCode}
-                  </Text>
+                  </AppText>
                   <TextInput
                     placeholder={selectedCountry.example}
                     placeholderTextColor={colors.mutedForeground}
@@ -168,7 +170,7 @@ export default function RegisterScreen() {
                   />
                 </View>
               </View>
-              {errors.phone ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.phone}</Text> : null}
+              {errors.phone ? <AppText variant="caption" style={[styles.errorText, { color: colors.destructive }]}>{errors.phone}</AppText> : null}
             </View>
 
             {editingForm && (
@@ -193,9 +195,9 @@ export default function RegisterScreen() {
         >
           <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
           <View style={styles.row}>
-            <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
+            <AppText variant="bodySmall" style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </AppText>
             <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
-              <Text style={[styles.hint, { color: colors.primary }]}>Log in</Text>
+              <AppText variant="bodySmall" style={[styles.hint, { color: colors.primary }]}>Log in</AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -219,7 +221,7 @@ export default function RegisterScreen() {
           ]}
         >
           <View style={styles.sheetHandle} />
-          <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Choose country code</Text>
+          <AppText variant="h3" style={[styles.sheetTitle, { color: colors.foreground }]}>Choose country code</AppText>
           <ScrollView style={styles.countryList} contentContainerStyle={styles.countryListContent}>
             {COUNTRIES.map(country => {
               const selected = country.code === selectedCountry.code;
@@ -243,10 +245,10 @@ export default function RegisterScreen() {
                 >
                   <Text style={styles.countryOptionFlag}>{getCountryFlag(country.code)}</Text>
                   <View style={styles.countryOptionText}>
-                    <Text style={[styles.countryOptionName, { color: colors.foreground }]}>{country.name}</Text>
-                    <Text style={[styles.countryOptionCode, { color: colors.mutedForeground }]}>
+                    <AppText variant="body" style={[styles.countryOptionName, { color: colors.foreground }]}>{country.name}</AppText>
+                    <AppText variant="label" style={[styles.countryOptionCode, { color: colors.mutedForeground }]}>
                       {country.dialCode}
-                    </Text>
+                    </AppText>
                   </View>
                   {selected && <Feather name="check" size={20} color={colors.primary} />}
                 </TouchableOpacity>
@@ -280,13 +282,9 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
   },
   title: {
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
     letterSpacing: 0,
   },
   subtitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
     lineHeight: 22,
     maxWidth: 320,
   },
@@ -320,33 +318,29 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   countryFlag: {
-    fontSize: 22,
+    // typography-exception: emoji flag sizing behaves like an icon.
+    ...typography.h2,
   },
   phonePrefix: {
     paddingLeft: 16,
     paddingRight: 8,
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    ...typography.body,
+    fontFamily: typography.badge.fontFamily,
   },
   phoneInput: {
     flex: 1,
     height: '100%',
     paddingLeft: 0,
     paddingRight: 16,
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
   },
   inlineContinue: {
     paddingTop: 4,
   },
   phoneLabel: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
     marginLeft: 2,
   },
   errorText: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
     marginLeft: 2,
   },
   bottom: {
@@ -358,10 +352,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
   },
-  hint: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-  },
+  hint: {},
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.42)',
@@ -387,8 +378,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   sheetTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
   },
   countryList: {
     marginHorizontal: -2,
@@ -408,18 +397,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   countryOptionFlag: {
-    fontSize: 24,
+    // typography-exception: emoji flag sizing behaves like an icon.
+    ...typography.h1,
   },
   countryOptionText: {
     flex: 1,
     gap: 2,
   },
   countryOptionName: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: typography.badge.fontFamily,
   },
   countryOptionCode: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
   },
 });

@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { DriverCreditDashboardCard } from '../DriverCreditDashboardCard';
 import { DriverPackageRequiredModal } from '../DriverPackageRequiredModal';
 import { activatePackage, EMPTY_DRIVER_ENTITLEMENT, normalizeEntitlement } from '@/domain/driverRidePackages';
+import { typography } from '@/constants/typography';
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -38,6 +39,13 @@ jest.mock('@/hooks/useColors', () => ({
   }),
 }));
 
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) {
+    return Object.assign({}, ...style.map(flattenStyle));
+  }
+  return style && typeof style === 'object' ? style as Record<string, unknown> : {};
+}
+
 describe('driver dashboard ride-credit UX', () => {
   test('shows a visible zero-credit warning card', () => {
     const onViewPackages = jest.fn();
@@ -54,6 +62,16 @@ describe('driver dashboard ride-credit UX', () => {
 
     expect(screen.getByText('Checking rides...')).toBeTruthy();
     expect(screen.queryByText('No rides')).toBeNull();
+  });
+
+  test('uses typography tokens for shared driver card text', () => {
+    render(<DriverCreditDashboardCard entitlement={EMPTY_DRIVER_ENTITLEMENT} isLoading={false} onViewPackages={jest.fn()} />);
+
+    const flattened = flattenStyle(screen.getByText('No rides').props.style);
+
+    expect(flattened.fontSize).toBe(typography.bodySmall.fontSize);
+    expect(flattened.lineHeight).toBe(typography.bodySmall.lineHeight);
+    expect(flattened.fontFamily).toBe(typography.bodySmall.fontFamily);
   });
 
   test('shows active package progress and low-rides guidance', () => {

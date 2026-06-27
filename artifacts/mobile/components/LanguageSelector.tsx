@@ -1,9 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
+  Animated,
   Keyboard,
   Modal,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +11,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Line, Polygon, Rect } from 'react-native-svg';
+import { duration, easing } from '@/constants/motion';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { SheetBackdrop } from './SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 const LANGUAGE_FLAGS = ['rw', 'uk', 'fr', 'ug'] as const;
 type LanguageFlag = typeof LANGUAGE_FLAGS[number];
@@ -22,6 +29,8 @@ const LANGUAGES: { code: string; label: string; value: LanguageFlag }[] = [
   { code: 'FR', label: 'French', value: 'fr' },
   { code: 'LG', label: 'Luganda', value: 'ug' },
 ];
+
+const ENTRANCE_TRANSLATE_Y = 24;
 
 function FlagPreview({ flag }: { flag: LanguageFlag }) {
   if (flag === 'rw') {
@@ -97,6 +106,10 @@ export function LanguageSelector() {
   const insets = useSafeAreaInsets();
   const [languageFlag, setLanguageFlag] = useState<LanguageFlag>('uk');
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
+  const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = React.useRef(new Animated.Value(ENTRANCE_TRANSLATE_Y)).current;
+  const [shouldRender, setShouldRender] = React.useState(showLanguageSheet);
   const languageCode = LANGUAGES.find(language => language.value === languageFlag)?.code ?? 'EN';
 
   const openLanguageSheet = () => {
@@ -106,7 +119,60 @@ export function LanguageSelector() {
 
   const selectLanguage = (flag: LanguageFlag) => {
     setLanguageFlag(flag);
-    setShowLanguageSheet(false);
+    handleClose();
+  };
+
+  React.useEffect(() => {
+    if (showLanguageSheet) {
+      setShouldRender(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: duration.slow,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetOpacity, {
+          toValue: 1,
+          duration: duration.fast,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
+          toValue: 0,
+          duration: duration.fast,
+          easing: easing.easeOutCubic,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    backdropOpacity.setValue(0);
+    sheetOpacity.setValue(0);
+    sheetTranslateY.setValue(ENTRANCE_TRANSLATE_Y);
+    setShouldRender(false);
+  }, [backdropOpacity, sheetOpacity, sheetTranslateY, showLanguageSheet]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetOpacity, {
+        toValue: 0,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: ENTRANCE_TRANSLATE_Y,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShouldRender(false);
+      setShowLanguageSheet(false);
+    });
   };
 
   return (
@@ -124,52 +190,64 @@ export function LanguageSelector() {
       </TouchableOpacity>
 
       <Modal
-        visible={showLanguageSheet}
+        visible={shouldRender}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowLanguageSheet(false)}
+        animationType="none"
+        onRequestClose={handleClose}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowLanguageSheet(false)} />
-        <View
+        <SheetBackdrop
+          onPress={handleClose}
+          animatedOpacity={backdropOpacity}
+          blurIntensity={0}
+          lightScrimOpacity={0.3}
+          darkScrimOpacity={0.45}
+        />
+        <Animated.View
           style={[
             styles.languageSheet,
             {
               backgroundColor: colors.background,
-              borderColor: colors.border,
-              paddingBottom: insets.bottom + 18,
+              opacity: sheetOpacity,
+              transform: [{ translateY: sheetTranslateY }],
+              paddingBottom: Math.max(insets.bottom, spacing[20]),
             },
           ]}
         >
-          <View style={styles.sheetHandle} />
-          <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Choose language</Text>
-          <View style={styles.languageOptions}>
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetTitleGroup}>
+              <Text style={[styles.sheetTitleText, { color: colors.foreground }]}>Choose language</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.sheetCloseButton, { backgroundColor: colors.muted }]}
+              onPress={handleClose}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close language menu"
+            >
+              <Feather name="x" size={icons.semantic.button} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.languageOptionsCard, { backgroundColor: colors.card }]}>
             {LANGUAGES.map(language => {
               const selected = language.value === languageFlag;
               return (
                 <TouchableOpacity
                   key={language.value}
-                  style={[
-                    styles.languageOption,
-                    {
-                      backgroundColor: selected ? colors.primaryHex + '18' : colors.card,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                  activeOpacity={0.85}
+                  style={styles.languageOption}
+                  activeOpacity={0.7}
                   onPress={() => selectLanguage(language.value)}
+                  accessibilityRole="button"
+                  accessibilityLabel={language.label}
                 >
-                  <View style={[styles.languageOptionFlag, { backgroundColor: colors.card }]}>
-                    <FlagPreview flag={language.value} />
-                  </View>
                   <Text style={[styles.languageOptionText, { color: colors.foreground }]}>
                     {language.label}
                   </Text>
-                  {selected && <Feather name="check" size={20} color={colors.primary} />}
+                  {selected && <Feather name="check" size={icons.semantic.row} color={colors.primary} />}
                 </TouchableOpacity>
               );
             })}
           </View>
-        </View>
+        </Animated.View>
       </Modal>
     </>
   );
@@ -178,23 +256,23 @@ export function LanguageSelector() {
 const styles = StyleSheet.create({
   languageBtn: {
     minWidth: 92,
-    height: 44,
-    borderRadius: 22,
+    height: sizes.iconButton.md,
+    borderRadius: radius.sheetCompact,
     borderWidth: 1,
     paddingLeft: 13,
     paddingRight: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: semanticSpacing.compactGap,
   },
   languageBtnText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+    ...typography.label,
+    fontFamily: typography.badge.fontFamily,
   },
   languageBtnFlag: {
-    width: 34,
-    height: 34,
+    width: sizes.iconButton.sm,
+    height: sizes.iconButton.sm,
     borderRadius: 17,
     overflow: 'hidden',
     alignItems: 'center',
@@ -203,56 +281,56 @@ const styles = StyleSheet.create({
   flagSvg: {
     transform: [{ scale: 0.64 }],
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
   languageSheet: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    borderTopWidth: 1,
-    paddingTop: 10,
-    paddingHorizontal: 22,
-    gap: 16,
+    left: spacing[0],
+    right: spacing[0],
+    bottom: spacing[0],
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingTop: spacing[16],
+    paddingHorizontal: semanticSpacing.sheetPadding,
+    zIndex: 90,
   },
-  sheetHandle: {
-    width: 42,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#777',
-    alignSelf: 'center',
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-  },
-  languageOptions: {
-    gap: 10,
-  },
-  languageOption: {
-    minHeight: 64,
-    borderRadius: 32,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
+  sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: semanticSpacing.inlineGap,
   },
-  languageOptionFlag: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  sheetTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: semanticSpacing.rowGap,
+  },
+  sheetTitleText: {
+    color: '#FFFFFF',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
+  },
+  sheetCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  languageOptionsCard: {
+    borderRadius: radius.card,
     overflow: 'hidden',
+    marginTop: spacing[16],
+    marginBottom: semanticSpacing.inlineGap,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[16],
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
   languageOptionText: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.label.fontFamily,
   },
 });

@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
 import type { DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
@@ -54,18 +56,18 @@ export function DriverApplicationRejectionBanner({
     <View style={[styles.card, { backgroundColor: colors.destructiveHex + '12', borderColor: colors.destructiveHex + '28' }]}>
       <View style={styles.header}>
         <Feather name="alert-circle" size={18} color={colors.destructive} />
-        <Text style={[styles.title, { color: colors.destructive }]}>Reviewer requested changes</Text>
+        <AppText style={[styles.title, { color: colors.destructive }]}>Reviewer requested changes</AppText>
       </View>
-      <Text style={[styles.message, { color: colors.foreground }]}>
+      <AppText style={[styles.message, { color: colors.foreground }]}>
         {rejectionSummary?.reason ?? rejectionReason ?? 'Your application was rejected. Please review the items below and resubmit.'}
-      </Text>
+      </AppText>
       {!!fields.length && (
         <View style={styles.group}>
-          <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>Fields to update</Text>
+          <AppText style={[styles.groupTitle, { color: colors.mutedForeground }]}>Fields to update</AppText>
           <View style={styles.chips}>
             {fields.map(field => (
               <View key={field} style={[styles.chip, { borderColor: colors.destructiveHex + '30', backgroundColor: colors.destructiveHex + '10' }]}>
-                <Text style={[styles.chipText, { color: colors.destructive }]}>{FIELD_LABELS[field] ?? field}</Text>
+                <AppText style={[styles.chipText, { color: colors.destructive }]}>{FIELD_LABELS[field] ?? field}</AppText>
               </View>
             ))}
           </View>
@@ -73,24 +75,24 @@ export function DriverApplicationRejectionBanner({
       )}
       {!!documents.length && (
         <View style={styles.group}>
-          <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>Documents and photos to retake</Text>
+          <AppText style={[styles.groupTitle, { color: colors.mutedForeground }]}>Documents and photos to retake</AppText>
           <View style={styles.chips}>
             {documents.map(document => (
               <View key={document} style={[styles.chip, { borderColor: colors.destructiveHex + '30', backgroundColor: colors.destructiveHex + '10' }]}>
-                <Text style={[styles.chipText, { color: colors.destructive }]}>{DOCUMENT_LABELS[document] ?? document}</Text>
+                <AppText style={[styles.chipText, { color: colors.destructive }]}>{DOCUMENT_LABELS[document] ?? document}</AppText>
               </View>
             ))}
           </View>
         </View>
       )}
       {reviewedAt && (
-        <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+        <AppText style={[styles.meta, { color: colors.mutedForeground }]}>
           Reviewed {reviewedAt.toLocaleDateString()}
           {rejectionSummary?.reviewedBy ? ` by ${rejectionSummary.reviewedBy}` : ''}
-        </Text>
+        </AppText>
       )}
       {rejectionSummary?.submissionId ? (
-        <Text style={[styles.meta, { color: colors.mutedForeground }]}>Submission ID: {rejectionSummary.submissionId}</Text>
+        <AppText style={[styles.meta, { color: colors.mutedForeground }]}>Submission ID: {rejectionSummary.submissionId}</AppText>
       ) : null}
     </View>
   );
@@ -110,20 +112,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    ...typography.body,
   },
   message: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
+    ...typography.label,
     lineHeight: 19,
   },
   group: {
     gap: 8,
   },
   groupTitle: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.caption,
     textTransform: 'uppercase',
     letterSpacing: 0,
   },
@@ -139,12 +138,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   chipText: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.caption,
   },
   meta: {
-    fontSize: 11,
-    fontFamily: 'Inter_400Regular',
+    ...typography.tiny,
     lineHeight: 16,
   },
 });
