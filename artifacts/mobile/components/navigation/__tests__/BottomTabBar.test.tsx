@@ -2,6 +2,7 @@ import { render } from '@testing-library/react-native';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { BottomTabBar } from '@/components/navigation/BottomTabBar';
+import { icons } from '@/constants/icons';
 import { typography } from '@/constants/typography';
 
 jest.mock('react-native', () => {
@@ -30,7 +31,9 @@ jest.mock('react-native', () => {
       sequence: () => ({ start: jest.fn() }),
     },
     Easing: {
+      in: (fn: (t: number) => number) => fn,
       out: (fn: (t: number) => number) => fn,
+      cubic: (t: number) => t,
       quad: (t: number) => t,
     },
     Platform: { OS: 'ios' },
@@ -72,6 +75,8 @@ jest.mock('expo-symbols', () => ({
 
 describe('BottomTabBar typography', () => {
   test('uses tab typography token for labels', () => {
+    const homeIcon = jest.fn(() => null);
+    const historyIcon = jest.fn(() => null);
     const state = {
       index: 0,
       routes: [
@@ -83,13 +88,13 @@ describe('BottomTabBar typography', () => {
       'home-key': {
         options: {
           title: 'Home',
-          tabBarIcon: () => null,
+          tabBarIcon: homeIcon,
         },
       },
       'history-key': {
         options: {
           title: 'History',
-          tabBarIcon: () => null,
+          tabBarIcon: historyIcon,
         },
       },
     };
@@ -115,5 +120,7 @@ describe('BottomTabBar typography', () => {
     expect(activeStyle.fontSize).toBe(typography.tab.fontSize);
     expect(activeStyle.lineHeight).toBe(typography.tab.lineHeight);
     expect(activeStyle.fontFamily).toBe(typography.badge.fontFamily);
+    expect(homeIcon).toHaveBeenCalledWith(expect.objectContaining({ size: icons.semantic.tab }));
+    expect(historyIcon).toHaveBeenCalledWith(expect.objectContaining({ size: icons.semantic.tab }));
   });
 });

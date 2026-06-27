@@ -19,8 +19,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { duration, spring } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { spacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
+import { zIndex } from '@/constants/zIndex';
 
 type ToastVariant = 'success' | 'error' | 'info';
 
@@ -55,17 +61,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 180,
+        duration: duration.normal,
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 8,
-        duration: 180,
+        duration: duration.normal,
         useNativeDriver: true,
       }),
       Animated.timing(scale, {
         toValue: 0.96,
-        duration: 180,
+        duration: duration.normal,
         useNativeDriver: true,
       }),
     ]).start(({ finished }) => {
@@ -94,20 +100,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 220,
+        duration: duration.slow,
         useNativeDriver: true,
       }),
       Animated.spring(translateY, {
         toValue: 0,
-        useNativeDriver: true,
-        speed: 22,
-        bounciness: 0,
+        ...spring.button,
       }),
       Animated.spring(scale, {
         toValue: 1,
-        useNativeDriver: true,
-        speed: 22,
-        bounciness: 0,
+        ...spring.button,
       }),
     ]).start();
 
@@ -165,11 +167,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <View style={styles.content}>
               <View style={styles.iconWrap}>
                 {toast.variant === 'success' ? (
-                  <Feather name="check-circle" size={14} color={colors.primary} />
+                  <Feather name="check-circle" size={icons.size.xs} color={colors.primary} />
                 ) : toast.variant === 'error' ? (
-                  <Feather name="x-circle" size={14} color={colors.destructive} />
+                  <Feather name="x-circle" size={icons.size.xs} color={colors.destructive} />
                 ) : (
-                  <Feather name="info" size={14} color={colors.primary} />
+                  <Feather name="info" size={icons.size.xs} color={colors.primary} />
                 )}
               </View>
               <Text style={styles.message} numberOfLines={2}>
@@ -194,20 +196,17 @@ export function useToast() {
 const styles = StyleSheet.create({
   host: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: spacing[0],
+    right: spacing[0],
     alignItems: 'center',
-    zIndex: 200,
-    paddingHorizontal: 28,
+    zIndex: zIndex.toast,
+    paddingHorizontal: spacing[28],
   },
   capsule: {
     overflow: 'hidden',
-    borderRadius: 22,
+    borderRadius: radius.sheetCompact,
     maxWidth: 340,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 10,
+    ...elevation.toast,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
@@ -243,9 +242,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
+    paddingHorizontal: spacing[20],
+    paddingVertical: spacing[12],
+    gap: spacing[8],
   },
   iconWrap: {
     alignItems: 'center',

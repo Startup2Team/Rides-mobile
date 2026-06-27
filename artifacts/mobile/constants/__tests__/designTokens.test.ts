@@ -15,8 +15,8 @@ jest.mock('react-native', () => ({
 }));
 
 import { elevation } from '@/constants/elevation';
-import { iconSize, semanticIconSize } from '@/constants/icons';
-import { duration, easing, spring } from '@/constants/motion';
+import { icons, iconSize, semanticIconSize } from '@/constants/icons';
+import { duration, easing, motion, spring } from '@/constants/motion';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
@@ -48,6 +48,8 @@ describe('design tokens', () => {
     expect(radius.sheet).toBe(24);
     expect(radius.pill).toBe(999);
     expect(radius.full).toBe(999);
+    expect(radius.card).toBe(14);
+    expect(radius.input).toBe(12);
   });
 
   test('defines elevation presets', () => {
@@ -61,6 +63,7 @@ describe('design tokens', () => {
     });
     expect(elevation.toast.elevation).toBe(10);
     expect(elevation.mapControl.shadowRadius).toBe(6);
+    expect(elevation.card.elevation).toBe(3);
   });
 
   test('defines motion tokens', () => {
@@ -70,6 +73,9 @@ describe('design tokens', () => {
     expect(duration.long).toBe(700);
     expect(easing.easeOutQuad).toEqual(expect.any(Function));
     expect(spring.gallery).toMatchObject({ damping: 20, stiffness: 220, useNativeDriver: true });
+    expect(motion.duration.fast).toBe(duration.fast);
+    expect(motion.easing.easeOutQuad).toBe(easing.easeOutQuad);
+    expect(motion.spring.sheet).toBe(spring.sheet);
   });
 
   test('defines icon tokens', () => {
@@ -78,12 +84,15 @@ describe('design tokens', () => {
     expect(iconSize.hero).toBe(48);
     expect(semanticIconSize.tab).toBe(iconSize.xl);
     expect(semanticIconSize.row).toBe(iconSize.md);
+    expect(icons.size.md).toBe(iconSize.md);
+    expect(icons.semantic.button).toBe(semanticIconSize.button);
   });
 
   test('defines component size tokens and preserves existing constants', () => {
     expect(sizes.button).toMatchObject({ sm: 44, md: 50, lg: 50 });
     expect(sizes.input.lg).toBe(52);
     expect(sizes.sheetHandle).toMatchObject({ width: 40, height: 4 });
+    expect(sizes.sheet).toMatchObject({ handleWidth: 40, handleHeight: 4 });
     expect(sizes.tabBar).toMatchObject({
       iosHeight: 62,
       androidHeight: 56,

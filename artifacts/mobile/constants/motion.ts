@@ -1,5 +1,12 @@
 import { Easing } from 'react-native';
 
+const easingSource = Easing ?? {
+  cubic: (value: number) => value,
+  in: (fn: (value: number) => number) => fn,
+  out: (fn: (value: number) => number) => fn,
+  quad: (value: number) => value,
+};
+
 export const duration = {
   instant: 0,
   fast: 120,
@@ -13,9 +20,9 @@ export const duration = {
 } as const;
 
 export const easing = {
-  easeOutQuad: Easing.out(Easing.quad),
-  easeOutCubic: Easing.out(Easing.cubic),
-  easeInCubic: Easing.in(Easing.cubic),
+  easeOutQuad: easingSource.out(easingSource.quad),
+  easeOutCubic: easingSource.out(easingSource.cubic),
+  easeInCubic: easingSource.in(easingSource.cubic),
 } as const;
 
 export const spring = {
@@ -38,6 +45,12 @@ export const spring = {
     stiffness: 220,
     useNativeDriver: true,
   },
+} as const;
+
+export const motion = {
+  duration,
+  easing,
+  spring,
 } as const;
 
 export type DurationToken = keyof typeof duration;

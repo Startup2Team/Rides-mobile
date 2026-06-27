@@ -2,6 +2,8 @@ import NetInfo from '@react-native-community/netinfo';
 import React, { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { icons } from '@/constants/icons';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
 
@@ -36,7 +38,7 @@ export function OfflineBanner() {
         { backgroundColor: colors.destructive, transform: [{ translateY: slideAnim }] },
       ]}
     >
-      <Feather name="wifi-off" size={14} color="#fff" />
+      <Feather name="wifi-off" size={icons.size.xs} color="#fff" />
       <Text style={styles.text}>No internet connection — showing cached data</Text>
     </Animated.View>
   );
@@ -47,9 +49,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    gap: semanticSpacing.inlineGap,
+    paddingVertical: spacing[10],
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
   text: { ...typography.label, fontFamily: typography.label.fontFamily, color: '#fff' },
 });

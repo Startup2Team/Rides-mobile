@@ -13,6 +13,7 @@ import {
 } from './homeUtils';
 import { AppText } from '@/components/AppText';
 import { AppButton } from '@/components/AppButton';
+import { icons } from '@/constants/icons';
 import type { useColors } from '@/hooks/useColors';
 import type { RideLocation } from '@/types';
 import { formatDistance, formatDuration } from '@/utils/mapUtils';
@@ -119,7 +120,7 @@ export function BookingCard({
                     {pickup.address || 'Enter pickup location'}
                   </AppText>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
               </TouchableOpacity>
 
               <View style={[styles.locDivider, { backgroundColor: colors.border }]} />
@@ -147,7 +148,7 @@ export function BookingCard({
                     {destination?.address?.trim() || destinationText.trim() || 'Where to?'}
                   </AppText>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
 
@@ -164,7 +165,7 @@ export function BookingCard({
                 }}
                 activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
+                <MaterialCommunityIcons name="map-outline" size={icons.semantic.button} color={colors.primary} />
                 <AppText variant="caption" style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
                   Use Map
                 </AppText>
@@ -176,7 +177,7 @@ export function BookingCard({
                   onPress={focusedField === 'dropoff' ? onUseGpsDestination : onUseGpsPickup}
                   activeOpacity={0.7}
                 >
-                  <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
+                  <MaterialCommunityIcons name="crosshairs-gps" size={icons.semantic.button} color={colors.primary} />
                   <AppText variant="caption" style={[styles.currentLocText, { color: colors.primary }]} numberOfLines={1}>
                     {focusedField === 'dropoff' ? 'Use GPS as destination' : 'Use GPS as pickup'}
                   </AppText>
@@ -188,7 +189,7 @@ export function BookingCard({
             {destination ? (
               <View style={styles.rideInfoRow}>
                 <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
-                  <MaterialCommunityIcons name="clock-outline" size={16} color={colors.primary} />
+                  <MaterialCommunityIcons name="clock-outline" size={icons.semantic.button} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>
                       Est. Time
@@ -203,7 +204,7 @@ export function BookingCard({
                   </View>
                 </View>
                 <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
-                  <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
+                  <MaterialCommunityIcons name="map-marker-distance" size={icons.semantic.button} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>
                       Distance

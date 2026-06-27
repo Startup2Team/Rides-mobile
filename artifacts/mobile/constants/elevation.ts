@@ -71,6 +71,13 @@ export const elevation = {
     shadowRadius: 6,
     elevation: 6,
   },
+  card: {
+    shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 3,
+  },
 } satisfies Record<string, ViewStyle>;
 
 export type ElevationToken = keyof typeof elevation;

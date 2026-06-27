@@ -2,6 +2,8 @@ import { render } from '@testing-library/react-native';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { AppButton } from '@/components/AppButton';
+import { BUTTON_HEIGHT, buttonCornerRadius } from '@/constants/buttons';
+import { semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 
 jest.mock('react-native', () => {
@@ -54,5 +56,18 @@ describe('AppButton typography', () => {
     expect(style.fontFamily).toBe(typography.button.fontFamily);
     expect(style.lineHeight).toBe(typography.button.lineHeight);
     expect(style.fontSize).toBe(typography.button.fontSize);
+  });
+
+  test('uses design tokens for button size and spacing', () => {
+    const { getByLabelText } = render(
+      <AppButton title="Find Driver" onPress={jest.fn()} />,
+    );
+
+    const style = StyleSheet.flatten(getByLabelText('Find Driver').props.style);
+    expect(style.height).toBe(BUTTON_HEIGHT.md);
+    expect(style.minHeight).toBe(BUTTON_HEIGHT.md);
+    expect(style.borderRadius).toBe(buttonCornerRadius(BUTTON_HEIGHT.md));
+    expect(style.paddingHorizontal).toBe(semanticSpacing.screenPadding);
+    expect(style.gap).toBe(semanticSpacing.inlineGap);
   });
 });

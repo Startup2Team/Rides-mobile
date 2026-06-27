@@ -3,6 +3,8 @@ import React from 'react';
 import { Image, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { DatePickerField } from '@/components/DatePickerField';
+import { icons } from '@/constants/icons';
+import { spacing } from '@/constants/spacing';
 import type { useColors } from '@/hooks/useColors';
 import type { DocFaces, DocumentKey, DriverOnboardingForm, VehiclePhotoKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardingTypes';
@@ -36,7 +38,7 @@ export function DocumentUploadSection({ colors, docs, errors, form, vehiclePhoto
       <AppText style={[styles.docFaceLabel, { color: colors.mutedForeground }]}>Front face</AppText>
       <DocumentFace colors={colors} uri={docs[document.key][0]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 0)} captureLabel="Take Front Photo" />
       {errors[document.key] ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors[document.key]}</AppText> : null}
-      {docs[document.key][0] && DOCUMENTS_REQUIRING_BACK.includes(document.key) && <><AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: 4 }]}>Back face</AppText>
+      {docs[document.key][0] && DOCUMENTS_REQUIRING_BACK.includes(document.key) && <><AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: spacing[4] }]}>Back face</AppText>
         <DocumentFace colors={colors} uri={docs[document.key][1]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 1)} captureLabel="Take Back Photo" />
       </>}
     </View>)}
@@ -55,7 +57,7 @@ export function DocumentUploadSection({ colors, docs, errors, form, vehiclePhoto
         {errors.vehicleOutsidePhoto ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors.vehicleOutsidePhoto}</AppText> : null}
         {getRequiredVehiclePhotoKeys(form.vehicleType).includes('inside') ? (
           <>
-            <AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: 4 }]}>Inside photo</AppText>
+            <AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: spacing[4] }]}>Inside photo</AppText>
             <DocumentFace colors={colors} uri={vehiclePhotos.inside} hasError={Boolean(errors.vehicleInsidePhoto)} onTake={() => takeVehiclePhoto('inside')} captureLabel="Take Inside Photo" />
             {errors.vehicleInsidePhoto ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors.vehicleInsidePhoto}</AppText> : null}
           </>
@@ -75,7 +77,7 @@ function DocumentFace({ captureLabel, colors, hasError, onTake, uri }: {
         <View style={styles.docPreviewContent}>
           <View style={styles.docCapturedRow}>
             <View style={[styles.docCapturedIcon, { backgroundColor: colors.successHex + '18' }]}>
-              <Feather name="check" size={14} color={colors.success} />
+              <Feather name="check" size={icons.size.xs} color={colors.success} />
             </View>
             <View style={styles.docCapturedCopy}>
               <AppText style={[styles.docUploadedText, { color: colors.foreground }]}>Photo captured</AppText>
@@ -94,5 +96,5 @@ function SmallAction({ colors, label, onPress }: { colors: ReturnType<typeof use
 }
 
 function CaptureAction({ colors, hasError, label, onPress }: { colors: ReturnType<typeof useColors>; hasError: boolean; label: string; onPress: () => void }) {
-  return <TouchableOpacity style={[styles.docUploadBtn, { borderColor: hasError ? colors.destructive : colors.border, backgroundColor: colors.card }]} onPress={onPress}><Feather name="camera" size={20} color={colors.primary} /><AppText style={[styles.docUploadText, { color: colors.primary }]}>{label}</AppText></TouchableOpacity>;
+  return <TouchableOpacity style={[styles.docUploadBtn, { borderColor: hasError ? colors.destructive : colors.border, backgroundColor: colors.card }]} onPress={onPress}><Feather name="camera" size={icons.size.lg} color={colors.primary} /><AppText style={[styles.docUploadText, { color: colors.primary }]}>{label}</AppText></TouchableOpacity>;
 }

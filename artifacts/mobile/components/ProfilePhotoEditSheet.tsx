@@ -12,6 +12,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SheetBackdrop } from './SheetBackdrop';
+import { AppText } from './AppText';
+import { icons } from '@/constants/icons';
+import { duration } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { zIndex } from '@/constants/zIndex';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { typography } from '@/constants/typography';
@@ -57,7 +64,7 @@ export function ProfilePhotoEditSheet({
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 220,
+          duration: duration.slow,
           useNativeDriver: true,
         }),
         Animated.spring(sheetTranslateY, {
@@ -78,12 +85,12 @@ export function ProfilePhotoEditSheet({
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 200,
+        duration: duration.toast,
         useNativeDriver: true,
       }),
       Animated.timing(sheetTranslateY, {
         toValue: 500,
-        duration: 200,
+        duration: duration.toast,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -115,7 +122,7 @@ export function ProfilePhotoEditSheet({
             backgroundColor: colors.background,
             borderColor: colors.border,
             transform: [{ translateY: sheetTranslateY }],
-            paddingBottom: Math.max(insets.bottom, 20),
+            paddingBottom: Math.max(insets.bottom, spacing[20]),
           },
         ]}
       >
@@ -129,7 +136,7 @@ export function ProfilePhotoEditSheet({
                 <Text style={styles.sheetAvatarInitial}>{initials}</Text>
               </LinearGradient>
             )}
-            <Text style={[styles.sheetTitleText, { color: colors.foreground }]}>Edit profile picture</Text>
+            <AppText style={[styles.sheetTitleText, { color: colors.foreground }]}>Edit profile picture</AppText>
           </View>
           <TouchableOpacity
             style={[styles.sheetCloseButton, { backgroundColor: colors.muted }]}
@@ -138,7 +145,7 @@ export function ProfilePhotoEditSheet({
             accessibilityRole="button"
             accessibilityLabel="Close edit menu"
           >
-            <Feather name="x" size={16} color={colors.foreground} />
+            <Feather name="x" size={icons.semantic.button} color={colors.foreground} />
           </TouchableOpacity>
         </View>
 
@@ -151,10 +158,10 @@ export function ProfilePhotoEditSheet({
             accessibilityRole="button"
             accessibilityLabel="Take photo"
           >
-            <Text style={[styles.sheetOptionText, { color: colors.foreground }]}>
+            <AppText style={[styles.sheetOptionText, { color: colors.foreground }]}>
               Take photo
-            </Text>
-            <Feather name="camera" size={18} color={colors.foreground} />
+            </AppText>
+            <Feather name="camera" size={icons.semantic.row} color={colors.foreground} />
           </TouchableOpacity>
 
           <View style={[styles.sheetSeparator, { backgroundColor: colors.border }]} />
@@ -166,10 +173,10 @@ export function ProfilePhotoEditSheet({
             accessibilityRole="button"
             accessibilityLabel="Choose photo"
           >
-            <Text style={[styles.sheetOptionText, { color: colors.foreground }]}>
+            <AppText style={[styles.sheetOptionText, { color: colors.foreground }]}>
               Choose photo
-            </Text>
-            <Feather name="image" size={18} color={colors.foreground} />
+            </AppText>
+            <Feather name="image" size={icons.semantic.row} color={colors.foreground} />
           </TouchableOpacity>
 
           {profileImage && onDeletePhoto && (
@@ -182,10 +189,10 @@ export function ProfilePhotoEditSheet({
                 accessibilityRole="button"
                 accessibilityLabel="Delete photo"
               >
-                <Text style={[styles.sheetOptionText, { color: colors.destructive }]}>
+                <AppText style={[styles.sheetOptionText, { color: colors.destructive }]}>
                   Delete photo
-                </Text>
-                <Feather name="trash-2" size={18} color={colors.destructive} />
+                </AppText>
+                <Feather name="trash-2" size={icons.semantic.row} color={colors.destructive} />
               </TouchableOpacity>
             </>
           )}
@@ -198,30 +205,30 @@ export function ProfilePhotoEditSheet({
 const styles = StyleSheet.create({
   sheetContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    zIndex: 90,
+    left: spacing[0],
+    right: spacing[0],
+    bottom: spacing[0],
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingTop: spacing[16],
+    paddingHorizontal: semanticSpacing.sheetPadding,
+    zIndex: zIndex.modal,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: semanticSpacing.inlineGap,
   },
   sheetTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: semanticSpacing.rowGap,
   },
   sheetAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: sizes.avatar.sm,
+    height: sizes.avatar.sm,
+    borderRadius: radius['2xl'],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -242,17 +249,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetOptionsCard: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: spacing[16],
+    marginBottom: semanticSpacing.inlineGap,
   },
   sheetOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: spacing[16],
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
   sheetOptionText: {
     ...typography.title,
@@ -260,6 +267,6 @@ const styles = StyleSheet.create({
   },
   sheetSeparator: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
+    marginHorizontal: semanticSpacing.cardPadding,
   },
 });

@@ -22,13 +22,16 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/AppText';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import type { useColors } from '@/hooks/useColors';
 
 export const SHEET_PADDING_H = 22;
-export const SHEET_HANDLE_HEIGHT = 4;
-export const SHEET_HANDLE_WIDTH = 40;
-export const SHEET_HANDLE_AREA_PADDING_TOP = 8;
+export const SHEET_HANDLE_HEIGHT = sizes.sheet.handleHeight;
+export const SHEET_HANDLE_WIDTH = sizes.sheet.handleWidth;
+export const SHEET_HANDLE_AREA_PADDING_TOP = spacing[8];
 
 type Props = {
   colors: ReturnType<typeof useColors>;
@@ -128,12 +131,12 @@ const sheetStyles = StyleSheet.create({
   handleArea: {
     alignItems: 'center',
     paddingTop: SHEET_HANDLE_AREA_PADDING_TOP,
-    paddingBottom: 0,
+    paddingBottom: spacing[0],
   },
   handle: {
     width: SHEET_HANDLE_WIDTH,
     height: SHEET_HANDLE_HEIGHT,
-    borderRadius: SHEET_HANDLE_HEIGHT / 2,
+    borderRadius: radius.xxs,
     backgroundColor: '#3A3A3A',
   },
   titleRow: {
@@ -142,9 +145,9 @@ const sheetStyles = StyleSheet.create({
     // Symmetric padding — no right-side close button to offset for.
     paddingLeft: SHEET_PADDING_H,
     paddingRight: SHEET_PADDING_H,
-    paddingTop: 10,
-    paddingBottom: 6,
-    minHeight: 44,
+    paddingTop: spacing[10],
+    paddingBottom: semanticSpacing.compactGap,
+    minHeight: sizes.iconButton.md,
   },
   title: {
     flex: 1,
@@ -153,8 +156,8 @@ const sheetStyles = StyleSheet.create({
   subheader: {
     paddingLeft: SHEET_PADDING_H,
     paddingRight: SHEET_PADDING_H,
-    paddingBottom: 10,
-    gap: 4,
+    paddingBottom: spacing[10],
+    gap: spacing[4],
   },
   subtitle: {
     ...typography.label,

@@ -20,6 +20,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from './BackButton';
+import { icons } from '@/constants/icons';
+import { duration } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { zIndex } from '@/constants/zIndex';
 import { useColors } from '@/hooks/useColors';
 import { SheetBackdrop } from './SheetBackdrop';
 import { typography } from '@/constants/typography';
@@ -120,7 +126,7 @@ export function ImageGalleryPreview({
     } else {
       Animated.timing(sheetAnim, {
         toValue: 320,
-        duration: 200,
+        duration: duration.toast,
         useNativeDriver: true,
       }).start();
     }
@@ -239,7 +245,7 @@ export function ImageGalleryPreview({
     sheetAnim.setValue(320);
     openingProgress.setValue(0);
     Animated.timing(openingProgress, {
-      duration: 220,
+      duration: duration.slow,
       easing: undefined,
       toValue: 1,
       useNativeDriver: true,
@@ -782,7 +788,7 @@ export function ImageGalleryPreview({
                 <Image source={{ uri: currentImage.uri }} style={styles.sheetAvatar} />
               ) : (
                 <View style={[styles.sheetAvatarPlaceholder, { backgroundColor: colors.muted }]}>
-                  <Feather name="user" size={16} color={colors.mutedForeground} />
+                  <Feather name="user" size={icons.semantic.button} color={colors.mutedForeground} />
                 </View>
               )}
               <Text style={[styles.sheetTitleText, { color: colors.foreground }]}>Edit profile picture</Text>
@@ -794,7 +800,7 @@ export function ImageGalleryPreview({
               accessibilityRole="button"
               accessibilityLabel="Close edit menu"
             >
-              <Feather name="x" size={16} color={colors.foreground} />
+              <Feather name="x" size={icons.semantic.button} color={colors.foreground} />
             </TouchableOpacity>
           </View>
 
@@ -821,7 +827,7 @@ export function ImageGalleryPreview({
                       <Text style={[styles.sheetOptionText, { color: textColor }]}>
                         {option.label}
                       </Text>
-                      <Feather name={option.icon} size={18} color={iconColor} />
+                      <Feather name={option.icon} size={icons.semantic.row} color={iconColor} />
                     </TouchableOpacity>
                     {!isLast && <View style={[styles.sheetSeparator, { backgroundColor: colors.border }]} />}
                   </React.Fragment>
@@ -1103,14 +1109,14 @@ const styles = StyleSheet.create({
   backdrop: {},
   header: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    minHeight: 64,
-    paddingBottom: 12,
+    left: spacing[0],
+    right: spacing[0],
+    top: spacing[0],
+    minHeight: sizes.avatar.xl,
+    paddingBottom: spacing[12],
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 2,
+    zIndex: zIndex.raised + 1,
   },
   headerContent: {
     flex: 1,
@@ -1127,14 +1133,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: { ...typography.title, fontFamily: typography.badge.fontFamily, textAlign: 'center' },
-  subtitle: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: 2, textAlign: 'center' },
-  counter: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: 2, textAlign: 'center' },
-  headerSpacer: { width: 44 },
+  subtitle: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: spacing[2], textAlign: 'center' },
+  counter: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: spacing[2], textAlign: 'center' },
+  headerSpacer: { width: sizes.iconButton.md },
   rightActionButton: {
-    minWidth: 44,
-    height: 44,
-    paddingHorizontal: 8,
-    borderRadius: 22,
+    minWidth: sizes.iconButton.md,
+    height: sizes.iconButton.md,
+    paddingHorizontal: semanticSpacing.inlineGap,
+    borderRadius: radius.sheetCompact,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1146,9 +1152,9 @@ const styles = StyleSheet.create({
   animatedImageStage: { width: '100%', height: '100%' },
   galleryPage: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
+    top: spacing[0],
+    bottom: spacing[0],
+    left: spacing[0],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1161,43 +1167,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
-  errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: semanticSpacing.rowGap },
   errorText: { ...typography.label, fontFamily: typography.label.fontFamily },
   sheetBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 10,
+    zIndex: zIndex.header,
   },
   sheetContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    zIndex: 90,
+    left: spacing[0],
+    right: spacing[0],
+    bottom: spacing[0],
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingTop: spacing[16],
+    paddingHorizontal: semanticSpacing.sheetPadding,
+    zIndex: zIndex.modal,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: semanticSpacing.inlineGap,
   },
   sheetTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: semanticSpacing.rowGap,
   },
   sheetAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: sizes.avatar.sm,
+    height: sizes.avatar.sm,
+    borderRadius: radius['2xl'],
   },
   sheetAvatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: sizes.avatar.sm,
+    height: sizes.avatar.sm,
+    borderRadius: radius['2xl'],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1213,17 +1219,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sheetOptionsCard: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: spacing[16],
+    marginBottom: semanticSpacing.inlineGap,
   },
   sheetOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: spacing[16],
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
   sheetOptionText: {
     ...typography.title,
@@ -1231,6 +1237,6 @@ const styles = StyleSheet.create({
   },
   sheetSeparator: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
+    marginHorizontal: semanticSpacing.cardPadding,
   },
 });

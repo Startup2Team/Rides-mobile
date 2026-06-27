@@ -3,6 +3,10 @@ import { AppText } from '@/components/AppText';
 import React from 'react';
 import { Modal, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 
 interface DriverPackageRequiredModalProps {
@@ -25,10 +29,10 @@ export function DriverPackageRequiredModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', paddingBottom: bottomInset + 20 }]}>
+        <View style={[styles.sheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', paddingBottom: bottomInset + spacing[20] }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={[styles.icon, { backgroundColor: colors.primaryHex + '18' }]}>
-            <Feather name="layers" size={24} color={colors.primary} />
+            <Feather name="layers" size={icons.size.xl} color={colors.primary} />
           </View>
           <AppText style={[styles.title, { color: colors.foreground }]}>Ride package required</AppText>
           <AppText style={[styles.lead, { color: colors.foreground }]}>
@@ -53,19 +57,19 @@ const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.48)' },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingHorizontal: semanticSpacing.sheetPadding,
+    paddingTop: spacing[12],
     alignItems: 'center',
   },
-  handle: { width: 36, height: 4, borderRadius: 2 },
-  icon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
-  title: { ...typography.h2, marginTop: 14 },
-  lead: { ...typography.body, lineHeight: 21, textAlign: 'center', marginTop: 10 },
-  text: { ...typography.label, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 20 },
-  primary: { width: '100%', height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  handle: { width: 36, height: sizes.sheet.handleHeight, borderRadius: radius.xxs },
+  icon: { width: sizes.avatar.lg, height: sizes.avatar.lg, borderRadius: radius['2xl'], alignItems: 'center', justifyContent: 'center', marginTop: spacing[14] },
+  title: { ...typography.h2, marginTop: spacing[14] },
+  lead: { ...typography.body, lineHeight: 21, textAlign: 'center', marginTop: spacing[10] },
+  text: { ...typography.label, lineHeight: 19, textAlign: 'center', marginTop: spacing[8], marginBottom: spacing[20] },
+  primary: { width: '100%', height: sizes.input.lg, borderRadius: radius.card, alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#fff', ...typography.button },
-  secondary: { height: 48, alignItems: 'center', justifyContent: 'center' },
+  secondary: { height: sizes.input.md, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { ...typography.button },
 });

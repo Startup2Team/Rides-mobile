@@ -11,6 +11,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Line, Polygon, Rect } from 'react-native-svg';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
 
@@ -165,7 +169,7 @@ export function LanguageSelector() {
                   <Text style={[styles.languageOptionText, { color: colors.foreground }]}>
                     {language.label}
                   </Text>
-                  {selected && <Feather name="check" size={20} color={colors.primary} />}
+                  {selected && <Feather name="check" size={icons.size.lg} color={colors.primary} />}
                 </TouchableOpacity>
               );
             })}
@@ -179,23 +183,23 @@ export function LanguageSelector() {
 const styles = StyleSheet.create({
   languageBtn: {
     minWidth: 92,
-    height: 44,
-    borderRadius: 22,
+    height: sizes.iconButton.md,
+    borderRadius: radius.sheetCompact,
     borderWidth: 1,
     paddingLeft: 13,
     paddingRight: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: semanticSpacing.compactGap,
   },
   languageBtnText: {
     ...typography.label,
     fontFamily: typography.badge.fontFamily,
   },
   languageBtnFlag: {
-    width: 34,
-    height: 34,
+    width: sizes.iconButton.sm,
+    height: sizes.iconButton.sm,
     borderRadius: 17,
     overflow: 'hidden',
     alignItems: 'center',
@@ -210,20 +214,20 @@ const styles = StyleSheet.create({
   },
   languageSheet: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    left: spacing[0],
+    right: spacing[0],
+    bottom: spacing[0],
+    borderTopLeftRadius: radius.sheetCompact,
+    borderTopRightRadius: radius.sheetCompact,
     borderTopWidth: 1,
-    paddingTop: 10,
+    paddingTop: spacing[10],
     paddingHorizontal: 22,
-    gap: 16,
+    gap: semanticSpacing.comfortableGap,
   },
   sheetHandle: {
     width: 42,
-    height: 4,
-    borderRadius: 2,
+    height: sizes.sheet.handleHeight,
+    borderRadius: radius.xxs,
     backgroundColor: '#777',
     alignSelf: 'center',
   },
@@ -232,21 +236,21 @@ const styles = StyleSheet.create({
     fontFamily: typography.badge.fontFamily,
   },
   languageOptions: {
-    gap: 10,
+    gap: spacing[10],
   },
   languageOption: {
     minHeight: 64,
-    borderRadius: 32,
+    borderRadius: sizes.avatar.sm,
     borderWidth: 1.5,
-    paddingHorizontal: 14,
+    paddingHorizontal: semanticSpacing.listItemPadding,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: semanticSpacing.rowGap,
   },
   languageOptionFlag: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: sizes.avatar.md,
+    height: sizes.avatar.md,
+    borderRadius: radius['3xl'],
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

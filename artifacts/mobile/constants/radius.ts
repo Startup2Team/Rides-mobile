@@ -12,6 +12,9 @@ export const radius = {
   sheet: 24,
   pill: 999,
   full: 999,
+  card: 14,
+  button: 999,
+  input: 12,
 } as const;
 
 export type RadiusToken = keyof typeof radius;

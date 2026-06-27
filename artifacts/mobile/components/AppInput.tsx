@@ -8,6 +8,10 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 
@@ -66,7 +70,7 @@ export function AppInput({
               {
                 backgroundColor: colors.background,
                 color: focused ? colors.primary : colors.mutedForeground,
-                left: leftIcon ? 38 : 12,
+                left: leftIcon ? 38 : spacing[12],
               },
             ]}
           >
@@ -74,7 +78,7 @@ export function AppInput({
           </Text>
         )}
         {leftIcon && (
-          <Feather name={leftIcon} size={18} color={colors.mutedForeground} style={styles.leftIcon} />
+          <Feather name={leftIcon} size={icons.semantic.row} color={colors.mutedForeground} style={styles.leftIcon} />
         )}
         {leftLabel && (
           <Text
@@ -107,7 +111,7 @@ export function AppInput({
         />
         {rightIcon && (
           <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
-            <Feather name={rightIcon} size={18} color={colors.mutedForeground} />
+            <Feather name={rightIcon} size={icons.semantic.row} color={colors.mutedForeground} />
           </TouchableOpacity>
         )}
       </View>
@@ -119,21 +123,21 @@ export function AppInput({
 }
 
 const styles = StyleSheet.create({
-  wrapper: { gap: 6, flex: 1 },
+  wrapper: { gap: semanticSpacing.compactGap, flex: 1 },
   label: {
     ...typography.label,
-    marginLeft: 2,
+    marginLeft: spacing[2],
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    height: 52,
-    paddingHorizontal: 14,
+    borderRadius: radius.input,
+    height: sizes.input.lg,
+    paddingHorizontal: semanticSpacing.listItemPadding,
   },
   floatingLabel: {
     position: 'absolute',
-    top: -8,
+    top: -spacing[8],
     paddingHorizontal: 3,
     ...typography.tiny,
     zIndex: 2,
@@ -142,12 +146,12 @@ const styles = StyleSheet.create({
     flex: 1,
     ...typography.body,
   },
-  leftIcon: { marginRight: 10 },
+  leftIcon: { marginRight: spacing[10] },
   leftLabel: {
     ...typography.body,
     fontFamily: typography.label.fontFamily,
-    marginRight: 4,
-    paddingRight: 8,
+    marginRight: spacing[4],
+    paddingRight: spacing[8],
   },
   leftLabelDivider: {
     borderRightWidth: 1,
@@ -155,12 +159,12 @@ const styles = StyleSheet.create({
   },
   leftLabelNoDivider: {
     borderRightWidth: 0,
-    paddingRight: 0,
-    marginRight: 6,
+    paddingRight: spacing[0],
+    marginRight: spacing[6],
   },
-  rightIcon: { padding: 4 },
+  rightIcon: { padding: spacing[4] },
   error: {
     ...typography.caption,
-    marginLeft: 2,
+    marginLeft: spacing[2],
   },
 });

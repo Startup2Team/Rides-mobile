@@ -3,6 +3,7 @@ import { TouchableOpacity, View } from 'react-native';
 import { CUSTOMER_VEHICLE_TYPES } from '@/constants/vehicles';
 import { AppText } from '@/components/AppText';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
+import { spacing } from '@/constants/spacing';
 import type { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS, type VehicleType } from '@/types';
 import { styles } from './homeStyles';
@@ -41,7 +42,7 @@ export function HomeCard({
         paddingTop: 22,
         paddingHorizontal: BOOKING_SHEET_PADDING_H,
         paddingBottom: bottomPadding,
-        gap: 10,
+        gap: spacing[10],
       }}
     >
       <AppText variant="h2" style={[styles.greeting, { color: colors.foreground }]}>

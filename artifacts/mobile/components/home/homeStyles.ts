@@ -1,7 +1,12 @@
 ﻿import { StyleSheet } from 'react-native';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { elevation } from '@/constants/elevation';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { floatingPanelSurface } from '@/constants/surfaces';
 import { typography } from '@/constants/typography';
+import { zIndex } from '@/constants/zIndex';
 import {
   BOOKING_CLOSE_EDGE_INSET,
   BOOKING_CLOSE_ROTATION_PAD,
@@ -28,47 +33,47 @@ export const darkMapStyle = [
 
 export const styles = StyleSheet.create({
   container: { flex: 1 },
-  recenterBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
-  mapLayerBtn: { position: 'absolute', right: 16, width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 6 },
+  recenterBtn: { position: 'absolute', right: semanticSpacing.cardPadding, width: sizes.mapControl.md, height: sizes.mapControl.md, borderRadius: sizes.mapControl.md / 2, alignItems: 'center', justifyContent: 'center', ...elevation.mapControl },
+  mapLayerBtn: { position: 'absolute', right: semanticSpacing.cardPadding, width: sizes.mapControl.md, height: sizes.mapControl.md, borderRadius: sizes.mapControl.md / 2, alignItems: 'center', justifyContent: 'center', ...elevation.mapControl },
   youAreHereContainer: { alignItems: 'center' },
-  youAreHereBubble: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },
+  youAreHereBubble: { paddingHorizontal: spacing[10], paddingVertical: spacing[6], borderRadius: radius['3xl'], ...elevation.md, shadowOpacity: 0.3, shadowRadius: spacing[4] },
   youAreHereText: { ...typography.caption, fontFamily: typography.title.fontFamily, color: '#fff' },
   youAreHereTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   // Home bottom panel â€” edge-to-edge bottom sheet (top corners rounded)
   bottomPanel: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
+    bottom: spacing[0],
+    left: spacing[0],
     width: SCREEN_WIDTH,
     paddingTop: 22,
     paddingHorizontal: 22,
-    gap: 10,
-    zIndex: 30,
+    gap: spacing[10],
+    zIndex: zIndex.sheet,
     overflow: 'visible',
   },
   greeting: { ...typography.h2, textAlign: 'left', marginLeft: GREETING_LEFT_INSET },
   selectRide: { ...typography.bodySmall, fontFamily: typography.label.fontFamily, textAlign: 'left', marginTop: -4, marginLeft: GREETING_LEFT_INSET },
-  locationUnavailable: { marginHorizontal: GREETING_LEFT_INSET, padding: 12, borderRadius: 14, gap: 8 },
+  locationUnavailable: { marginHorizontal: GREETING_LEFT_INSET, padding: spacing[12], borderRadius: radius.card, gap: semanticSpacing.inlineGap },
   locationUnavailableText: { ...typography.label },
-  locationUnavailableActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  locationUnavailableActions: { flexDirection: 'row', justifyContent: 'space-between', gap: semanticSpacing.rowGap },
   locationUnavailableAction: { ...typography.caption, fontFamily: typography.title.fontFamily },
-  vehicleRow: { flexDirection: 'row', gap: 8, marginTop: 2, marginHorizontal: GREETING_LEFT_INSET },
-  vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 7, borderRadius: 14, gap: 4, minHeight: 56, justifyContent: 'center' },
+  vehicleRow: { flexDirection: 'row', gap: semanticSpacing.inlineGap, marginTop: spacing[2], marginHorizontal: GREETING_LEFT_INSET },
+  vehicleChip: { flex: 1, flexDirection: 'column', alignItems: 'center', paddingVertical: 7, borderRadius: radius.card, gap: spacing[4], minHeight: sizes.thumbnail.sm, justifyContent: 'center' },
   vehicleLabel: { ...typography.tiny, fontFamily: typography.title.fontFamily },
-  continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: buttonCornerRadius(50), gap: 8, marginTop: 4, marginHorizontal: GREETING_LEFT_INSET },
+  continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: sizes.button.md, borderRadius: buttonCornerRadius(sizes.button.md), gap: semanticSpacing.inlineGap, marginTop: spacing[4], marginHorizontal: GREETING_LEFT_INSET },
   continueBtnText: { ...typography.button },
   // Booking sheet
   bookingSheetWrapper: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 30,
+    top: spacing[0],
+    left: spacing[0],
+    right: spacing[0],
+    zIndex: zIndex.sheet,
     overflow: 'visible',
   },
   bookingSheet: {
-    paddingTop: 0,
-    gap: 0,
+    paddingTop: spacing[0],
+    gap: spacing[0],
     overflow: 'visible',
   },
   bookingSheetViewport: {
@@ -76,19 +81,19 @@ export const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bookingSheetContent: {
-    paddingTop: 0,
-    gap: 0,
+    paddingTop: spacing[0],
+    gap: spacing[0],
     overflow: 'visible',
   },
   overlayFormSheet: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: spacing[0],
+    right: spacing[0],
+    bottom: spacing[0],
     width: SCREEN_WIDTH,
   },
   overlayFormSheetRaised: {
-    zIndex: 90,
+    zIndex: zIndex.modal,
   },
   formSheetSurface: {
     ...floatingPanelSurface,
@@ -96,21 +101,21 @@ export const styles = StyleSheet.create({
     // overlay sheets are now anchored to the tab-bar top edge, so a border
     // would create a visible seam exactly where the sheet meets the navbar.
     // CustomerBottomSheet has no border; these sheets now match.
-    borderWidth: 0,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderTopWidth: 0,
-    paddingTop: 0,
-    gap: 0,
+    borderWidth: spacing[0],
+    borderBottomLeftRadius: radius.none,
+    borderBottomRightRadius: radius.none,
+    borderTopWidth: spacing[0],
+    paddingTop: spacing[0],
+    gap: spacing[0],
     overflow: 'hidden',
   },
   formSheetBody: {
     paddingHorizontal: BOOKING_SHEET_PADDING_H,
-    gap: 10,
-    paddingTop: 4,
+    gap: spacing[10],
+    paddingTop: spacing[4],
   },
   bookingFormSheetBody: {
-    paddingTop: 0,
+    paddingTop: spacing[0],
   },
   bookingSheetHeader: {
     flexDirection: 'column',
@@ -128,17 +133,17 @@ export const styles = StyleSheet.create({
     marginBottom: BOOKING_HANDLE_TO_TITLE_GAP,
   },
   bookingSheetHandle: {
-    width: 40,
+    width: sizes.sheet.handleWidth,
     height: BOOKING_HANDLE_HEIGHT,
-    borderRadius: 2,
+    borderRadius: radius.xxs,
     backgroundColor: '#3A3A3A',
   },
   bookingSheetTitle: {
     ...typography.title,
     lineHeight: BOOKING_TITLE_LINE_HEIGHT,
   },
-  formSheetDragZone: { paddingTop: 0, paddingBottom: 0, marginTop: 0 },
-  formSheetHandleTouch: { paddingTop: 6, paddingBottom: 4, marginBottom: 0 },
+  formSheetDragZone: { paddingTop: spacing[0], paddingBottom: spacing[0], marginTop: spacing[0] },
+  formSheetHandleTouch: { paddingTop: spacing[6], paddingBottom: spacing[4], marginBottom: spacing[0] },
   formSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -172,12 +177,12 @@ export const styles = StyleSheet.create({
     height: 44 + BOOKING_CLOSE_ROTATION_PAD * 2,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: zIndex.header,
   },
-  sheetDragZone: { paddingTop: 4, paddingBottom: 2 },
+  sheetDragZone: { paddingTop: spacing[4], paddingBottom: spacing[2] },
   sheetHandleTouch: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: -2 },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A' },
-  sheetTitle: { flex: 1, ...typography.title, marginRight: 8 },
+  sheetHandle: { width: sizes.sheet.handleWidth, height: sizes.sheet.handleHeight, borderRadius: radius.xxs, backgroundColor: '#3A3A3A' },
+  sheetTitle: { flex: 1, ...typography.title, marginRight: semanticSpacing.inlineGap },
   locationCard: {
     borderRadius: 15,
     padding: 10,

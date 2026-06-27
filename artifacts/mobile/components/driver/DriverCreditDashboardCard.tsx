@@ -3,6 +3,10 @@ import { AppText } from '@/components/AppText';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing } from '@/constants/spacing';
 import { getActivePackageActivation, getRideCreditBalanceMessage, getRideCreditProgress, type DriverEntitlement } from '@/domain/driverRidePackages';
 import { useColors } from '@/hooks/useColors';
 
@@ -58,7 +62,7 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
           <AppText style={[styles.title, { color: colors.foreground }]}>{activePackage?.packageName ?? 'Combined package rides'}</AppText>
           <AppText style={[styles.description, { color: colors.mutedForeground }]}>{balanceLabel}</AppText>
         </View>
-        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
       </View>
       <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
         <View style={[styles.progressFill, { backgroundColor: message ? colors.destructive : colors.primary, width: `${progress.ratio * 100}%` }]} />
@@ -70,34 +74,34 @@ export function DriverCreditDashboardCard({ entitlement, isLoading, onViewPackag
 
 const styles = StyleSheet.create({
   loadingCard: {
-    marginTop: 8,
+    marginTop: spacing[8],
     alignSelf: 'flex-end',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 20,
+    gap: spacing[8],
+    paddingHorizontal: spacing[12],
+    height: sizes.avatar.md,
+    borderRadius: radius['3xl'],
   },
   loadingText: { ...typography.caption,  },
   zeroCard: {
-    marginTop: 8,
-    borderRadius: 16,
+    marginTop: spacing[8],
+    borderRadius: radius['2xl'],
     borderWidth: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing[10],
     paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing[10],
   },
-  zeroIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  zeroIcon: { width: sizes.avatar.sm, height: sizes.avatar.sm, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
   title: { ...typography.bodySmall,  },
   description: { ...typography.tiny, lineHeight: 16, marginTop: 2 },
-  action: { paddingHorizontal: 10, height: 30, borderRadius: 15, justifyContent: 'center' },
+  action: { paddingHorizontal: spacing[10], height: 30, borderRadius: 15, justifyContent: 'center' },
   actionText: { ...typography.button },
-  progressCard: { marginTop: 8, borderRadius: 16, padding: 12, gap: 9 },
-  progressHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  progressCard: { marginTop: spacing[8], borderRadius: radius['2xl'], padding: spacing[12], gap: 9 },
+  progressHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[8] },
   eyebrow: { ...typography.tiny, letterSpacing: 0.6 },
   progressTrack: { height: 5, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },

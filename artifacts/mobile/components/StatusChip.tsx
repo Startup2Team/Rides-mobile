@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { RideStatus } from '@/types';
 import { AppText } from '@/components/AppText';
+import { radius } from '@/constants/radius';
+import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 
@@ -98,9 +100,9 @@ export function StatusChip({ status, variant = 'default', compact = false }: Sta
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 100,
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[4],
+    borderRadius: radius.full,
     alignSelf: 'flex-start',
   },
   text: {
@@ -112,8 +114,8 @@ const styles = StyleSheet.create({
     maxWidth: 108,
   },
   chipPlain: {
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    paddingHorizontal: spacing[0],
+    paddingVertical: spacing[0],
   },
   textCompact: {
     ...typography.tiny,

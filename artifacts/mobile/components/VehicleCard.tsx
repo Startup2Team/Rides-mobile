@@ -2,6 +2,9 @@ import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { VehicleTypeIcon } from '@/components/VehicleTypeIcon';
 import { useColors } from '@/hooks/useColors';
 import { VehicleType, VEHICLE_BASE_FARE, VEHICLE_LABELS } from '@/types';
@@ -81,36 +84,36 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
+    padding: semanticSpacing.listItemPadding,
+    borderRadius: radius.card,
     borderWidth: 1.5,
-    gap: 12,
-    marginBottom: 10,
+    gap: semanticSpacing.rowGap,
+    marginBottom: spacing[10],
   },
   compactCard: {
     width: '47%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    borderRadius: 16,
+    paddingVertical: spacing[20],
+    borderRadius: radius['2xl'],
     borderWidth: 1.5,
-    gap: 10,
+    gap: spacing[10],
   },
   compactIconBox: {
-    width: 56,
-    height: 40,
+    width: sizes.thumbnail.sm,
+    height: sizes.avatar.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   compactName: { ...typography.body,  },
   iconBox: {
-    width: 52,
-    height: 40,
+    width: sizes.avatar.lg,
+    height: sizes.avatar.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   info: { flex: 1 },
-  name: { ...typography.body, marginBottom: 2 },
+  name: { ...typography.body, marginBottom: spacing[2] },
   desc: { ...typography.caption,  },
   right: { alignItems: 'flex-end' },
   fare: { ...typography.label,  },

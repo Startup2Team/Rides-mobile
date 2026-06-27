@@ -36,6 +36,10 @@ export const sizes = {
     width: 40,
     height: 4,
   },
+  sheet: {
+    handleWidth: 40,
+    handleHeight: 4,
+  },
   mapControl: {
     sm: 44,
     md: 46,

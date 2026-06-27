@@ -3,6 +3,10 @@ import { AppText } from '@/components/AppText';
 import React, { type ReactNode } from 'react';
 import { Image, Platform, StyleSheet, View, type ColorValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { elevation } from '@/constants/elevation';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing } from '@/constants/spacing';
 import type { Ride } from '@/types';
 import { VEHICLE_LABELS_FULL } from '@/types';
 import type { useColors } from '@/hooks/useColors';
@@ -64,18 +68,18 @@ function FareItem({ label, labelColor, value, valueColor }: {
 }
 
 const styles = StyleSheet.create({
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  driverRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   details: { flex: 1 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 3, ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' } }) },
-  avatarImage: { width: 40, height: 40, borderRadius: 20 },
-  avatarImageShadow: { borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.16, shadowRadius: 5, elevation: 4, ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.16)' } }) },
+  avatar: { width: sizes.avatar.md, height: sizes.avatar.md, borderRadius: radius['3xl'], alignItems: 'center', justifyContent: 'center', ...elevation.card, ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' } }) },
+  avatarImage: { width: sizes.avatar.md, height: sizes.avatar.md, borderRadius: radius['3xl'] },
+  avatarImageShadow: { borderRadius: radius['3xl'], ...elevation.md, shadowOpacity: 0.16, shadowRadius: 5, ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.16)' } }) },
   initial: { ...typography.h2, color: '#FFFFFF', lineHeight: 24 },
   name: { ...typography.body,  },
   vehicle: { ...typography.tiny,  },
-  ratingBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100 },
+  ratingBadge: { paddingHorizontal: spacing[8], paddingVertical: 3, borderRadius: radius.full },
   rating: { ...typography.caption,  },
-  fareRow: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden' },
-  fareItem: { flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 },
+  fareRow: { flexDirection: 'row', borderRadius: radius.card, overflow: 'hidden' },
+  fareItem: { flex: 1, alignItems: 'center', paddingVertical: spacing[8], gap: spacing[2] },
   divider: { width: 1 },
   fareLabel: { ...typography.tiny,  },
   fareValue: { ...typography.label,  },

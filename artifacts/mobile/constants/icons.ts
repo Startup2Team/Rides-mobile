@@ -18,5 +18,10 @@ export const semanticIconSize = {
   hero: iconSize.hero,
 } as const;
 
+export const icons = {
+  size: iconSize,
+  semantic: semanticIconSize,
+} as const;
+
 export type IconSizeToken = keyof typeof iconSize;
 export type SemanticIconSizeToken = keyof typeof semanticIconSize;
