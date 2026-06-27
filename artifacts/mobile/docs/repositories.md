@@ -1,0 +1,125 @@
+# Repositories
+
+This document defines the repository boundary for the Rides mobile app.
+
+Rides is one app with shared identity, shared session, and role projections for customer and driver. Repositories are the data boundary that sits between app state and data sources.
+
+## Repository Tree
+
+```
+data/
+  repositories/
+    interfaces.ts
+    index.ts
+  adapters/
+    localRepositories.ts
+  sources/
+    localDataSources.ts
+    localRideDataSource.ts
+```
+
+## Ownership Rules
+
+Each domain has a single repository contract.
+
+- `AuthRepository`
+  - current user
+  - driver profile
+  - session boundary
+
+- `ProfileRepository`
+  - profile image and profile media helpers
+
+- `BookingRepository`
+  - booking draft ownership
+  - transient booking flow state
+
+- `RideRepository`
+  - ride history
+  - ride append/replay boundaries
+
+- `SavedLocationsRepository`
+  - saved place CRUD
+  - ordering
+  - validation
+
+- `DriverRepository`
+  - driver profile
+  - availability
+  - driver-side identity projection
+
+- `VehicleRepository`
+  - vehicle list
+  - active vehicle selection
+
+- `PackageRepository`
+  - package catalog
+  - campaigns
+  - offer source cache
+
+- `NotificationRepository`
+  - notification read state
+
+- `PaymentRepository`
+  - payment methods
+
+- `SearchRepository`
+  - search history
+  - search suggestions
+
+- `MapRepository`
+  - reverse geocoding and map lookup helpers
+
+## Dependency Rules
+
+Allowed direction:
+
+`Screen -> Store/Context -> Repository -> Data Source`
+
+Forbidden direction:
+
+- screens importing persistence modules
+- screens importing raw data sources
+- screens importing backend clients directly
+- data sources importing screens or components
+- repositories depending on UI state
+
+## Current Local Strategy
+
+The current app still behaves the same because the local repository adapters wrap the existing persistence and service modules.
+
+That gives us:
+
+- a stable API for screens and contexts
+- one place to swap local, remote, or hybrid sources later
+- a single point for cache, retry, and offline policy
+
+## Future Backend Strategy
+
+Repository implementations will be able to move to hybrid or remote sources without screen changes.
+
+The expected progression is:
+
+1. Local repository adapter
+2. Hybrid local plus remote repository
+3. Remote-first repository with cache fallback
+
+## Future Offline Strategy
+
+Repositories are the correct place to add:
+
+- cache hydration
+- stale-while-revalidate
+- mutation queueing
+- retry and backoff
+- conflict resolution
+- idempotency
+
+## Current Low-Risk Consumers
+
+The only consumer migrated in Phase 7D is the saved-locations flow.
+
+- `SavedLocationsContext` now depends on `savedLocationsRepository`
+- behavior stays the same
+- storage format stays the same
+- UI and navigation stay unchanged

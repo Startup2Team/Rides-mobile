@@ -7,10 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { MAX_SAVED_LOCATIONS } from '@/constants/savedLocations';
-import {
-  loadStoredSavedLocations,
-  saveStoredSavedLocations,
-} from '@/persistence/savedLocationsPersistence';
+import { savedLocationsRepository } from '@/data/repositories';
 import { RideLocation, SavedLocation } from '@/types';
 
 interface SavedLocationsContextValue {
@@ -29,8 +26,8 @@ export function SavedLocationsProvider({ children }: { children: React.ReactNode
 
   const reload = useCallback(async () => {
     try {
-      const stored = await loadStoredSavedLocations();
-      setSavedPlaces(stored.data ?? []);
+      const stored = await savedLocationsRepository.listSavedLocations();
+      setSavedPlaces(stored);
     } catch {
       setSavedPlaces([]);
     } finally {
@@ -44,7 +41,7 @@ export function SavedLocationsProvider({ children }: { children: React.ReactNode
 
   const persistSavedPlaces = useCallback(async (next: SavedLocation[]) => {
     setSavedPlaces(next);
-    await saveStoredSavedLocations(next);
+    await savedLocationsRepository.replaceSavedLocations(next);
   }, []);
 
   const saveLocation = useCallback(async (location: RideLocation, label: string) => {
@@ -59,7 +56,7 @@ export function SavedLocationsProvider({ children }: { children: React.ReactNode
 
     setSavedPlaces(current => {
       const next = [saved, ...current.filter(place => place.label !== cleanLabel)].slice(0, MAX_SAVED_LOCATIONS);
-      void saveStoredSavedLocations(next);
+      void savedLocationsRepository.replaceSavedLocations(next);
       return next;
     });
     return true;

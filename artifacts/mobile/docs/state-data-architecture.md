@@ -1204,3 +1204,15 @@ Reason:
 - highest local duplication
 - lowest backend risk
 - best path to reducing `RideProvider` and screen coupling without introducing cache or event complexity too early
+
+## 12. Repository Layer Update
+
+Phase 7D introduces repository boundaries without changing runtime behavior.
+
+- Repository contracts live in [`docs/repositories.md`](./repositories.md).
+- Screens must not import persistence or sources directly.
+- Contexts and focused stores may call repositories.
+- Repositories own the data-source decision and preserve the current local behavior for now.
+- Local adapters are the default implementation until backend and offline strategies are introduced.
+
+The immediate low-risk consumer migrated in this phase is `SavedLocationsContext`, which now reads and writes through `savedLocationsRepository` instead of calling storage helpers directly.
