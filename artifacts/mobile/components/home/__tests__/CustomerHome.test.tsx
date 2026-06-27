@@ -195,6 +195,11 @@ jest.mock('../CustomerBottomSheet', () => {
         <TouchableOpacity onPress={() => bookingCard.onOpenLocationSearch('dropoff')}>
           <Text>Open Dropoff Search</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => bookingCard.onUseMap('pickup', { latitude: -1.95, longitude: 30.06, address: 'Map Pickup' })}
+        >
+          <Text>Open Map Picker</Text>
+        </TouchableOpacity>
       </View>
     ),
   };
@@ -229,6 +234,8 @@ describe('CustomerHome Navigation Refactoring', () => {
       'utf8'
     );
     expect(fileContent).not.toContain('LocationSearchOverlay');
+    expect(fileContent).not.toContain('MapPickerOverlay');
+    expect(fileContent).not.toContain('triggerMapPicker');
   });
 
   test('tapping pickup navigates to route-based search screen with target pickup', () => {
@@ -257,6 +264,22 @@ describe('CustomerHome Navigation Refactoring', () => {
         target: 'dropoff',
         userLatitude: expect.any(String),
         userLongitude: expect.any(String),
+      }),
+    });
+  });
+
+  test('tapping map picker launches the map-picker route', () => {
+    render(<CustomerHome />);
+
+    fireEvent.press(screen.getByText('Open Map Picker'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/map-picker',
+      params: expect.objectContaining({
+        target: 'pickup',
+        mode: 'booking',
+        initialLatitude: expect.any(String),
+        initialLongitude: expect.any(String),
       }),
     });
   });

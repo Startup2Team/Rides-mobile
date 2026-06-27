@@ -273,7 +273,7 @@ export default function DriverOnboarding() {
           disabled={step === 3 && !acceptedTerms}
         />
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <AppButton title="Save & exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
+          <AppButton title="Save and exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
         <AppButton title="Contact Support" onPress={() => router.push('/help-support')} size="sm" compact variant="plain" style={{ flex: 1 }} />
       </View>
       </ScrollView>

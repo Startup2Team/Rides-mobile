@@ -2,6 +2,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMapPicker } from '@/context/MapPickerContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { useSavedLocations } from '@/hooks/useSavedLocations';
@@ -14,6 +15,7 @@ export default function LocationSearchScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { showToast } = useToast();
+  const { consumeSelection } = useMapPicker();
 
   const {
     pickup,
@@ -39,6 +41,15 @@ export default function LocationSearchScreen() {
       }, 100);
       return () => clearTimeout(timer);
     }, [reloadSavedPlaces])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const selection = consumeSelection();
+      if (!selection || selection.flow !== 'booking') return undefined;
+      router.back();
+      return undefined;
+    }, [consumeSelection]),
   );
 
   const {
@@ -198,15 +209,20 @@ export default function LocationSearchScreen() {
   }, []);
 
   const handleChooseOnMap = useCallback(() => {
-    router.replace({
-      pathname: '/(tabs)',
+    const baseLocation = target === 'dropoff'
+      ? (destination ?? gpsLocation ?? userLocation)
+      : (pickup.locationType !== 'generic' ? pickup : (gpsLocation ?? userLocation));
+    router.push({
+      pathname: '/map-picker',
       params: {
-        triggerMapPicker: target,
-        mapPickerLat: gpsLatitude || userLatitude,
-        mapPickerLng: gpsLongitude || userLongitude,
+        target,
+        mode: 'booking',
+        initialLatitude: baseLocation.latitude.toString(),
+        initialLongitude: baseLocation.longitude.toString(),
+        initialAddress: baseLocation.address ?? '',
       },
     });
-  }, [target, gpsLatitude, userLatitude, gpsLongitude, userLongitude]);
+  }, [destination, gpsLocation, pickup, target, userLocation]);
 
   const savedLocations = useMemo(() => savedPlaces, [savedPlaces]);
 

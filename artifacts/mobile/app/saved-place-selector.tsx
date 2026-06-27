@@ -1,40 +1,32 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppText } from '@/components/AppText';
-import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
-import { buttonCornerRadius } from '@/constants/buttons';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { typography } from '@/constants/typography';
+import { useMapPicker } from '@/context/MapPickerContext';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
 import { KIGALI_CENTER, type RideLocation, type SavedLocation } from '@/types';
-import { formatReverseGeocodeAddress } from '@/utils/locationUtils';
 
 type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Church' | 'Other';
-const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
-type AppMapType = typeof MAP_TYPES[number];
-const MAP_LOCATION_DELTA = 0.012;
 
 export default function SavedPlaceSelectorScreen() {
   const colors = useColors();
@@ -105,12 +97,6 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   }, [initialAddress, existing]);
 
-  const [uiMode, setUiMode] = useState<'search' | 'map'>('search');
-  const [mapCoords, setMapCoords] = useState(initialCoords);
-  const [mapAddress, setMapAddress] = useState(initialAddressStr);
-  const [isDragging, setIsDragging] = useState(false);
-  const [mapType, setMapType] = useState<AppMapType>('standard');
-
   const [customLabel, setCustomLabel] = useState(() => {
     if (displayLabel === 'Other') {
       if (mode === 'add' && label === 'Other') {
@@ -121,7 +107,7 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   });
 
-  const mapRef = useRef<MapView>(null);
+  const { consumeSelection } = useMapPicker();
   const inputRef = useRef<TextInput>(null);
   const {
     text: searchText,
@@ -134,14 +120,7 @@ export default function SavedPlaceSelectorScreen() {
   } = useLocationSearch(initialCoords);
 
   useEffect(() => {
-    if (initialCoords && (initialCoords.latitude !== KIGALI_CENTER.latitude || initialCoords.longitude !== KIGALI_CENTER.longitude)) {
-      setMapCoords(initialCoords);
-    }
-  }, [initialCoords]);
-
-  useEffect(() => {
     if (initialAddressStr) {
-      setMapAddress(initialAddressStr);
       setSearchText(initialAddressStr);
     }
   }, [initialAddressStr, setSearchText]);
@@ -151,6 +130,40 @@ export default function SavedPlaceSelectorScreen() {
       setCustomLabel(label);
     }
   }, [displayLabel, label]);
+
+  const savePlace = useCallback(async (place: RideLocation) => {
+    const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
+    if (!finalLabel) {
+      Alert.alert('Name this place', 'Enter a label before saving this location.');
+      return;
+    }
+    const saved: SavedLocation = {
+      ...place,
+      id: (mode === 'edit' && existing) ? existing.id : `settings-${finalLabel.toLowerCase()}-${Date.now()}`,
+      label: finalLabel,
+    };
+    const next = [
+      saved,
+      ...savedPlaces.filter(item => {
+        const isCurrentItem = (mode === 'edit' && existing) ? item.id === existing.id : false;
+        const isSameLabel = item.label.toLowerCase() === finalLabel.toLowerCase();
+        const isSameId = item.id === saved.id;
+        return !isCurrentItem && !isSameLabel && !isSameId;
+      }),
+    ];
+    await persistSavedPlaces(next);
+    router.back();
+  }, [customLabel, displayLabel, existing, label, mode, persistSavedPlaces, savedPlaces]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const selection = consumeSelection();
+      if (!selection || selection.flow !== 'saved-place') return undefined;
+      void savePlace(selection.location);
+      return undefined;
+    }, [consumeSelection, savePlace]),
+  );
+
   if (mode === 'edit' && !existing) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -181,30 +194,6 @@ export default function SavedPlaceSelectorScreen() {
     );
   }
 
-  const savePlace = async (place: RideLocation) => {
-    const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
-    if (!finalLabel) {
-      Alert.alert('Name this place', 'Enter a label before saving this location.');
-      return;
-    }
-    const saved: SavedLocation = {
-      ...place,
-      id: (mode === 'edit' && existing) ? existing.id : `settings-${finalLabel.toLowerCase()}-${Date.now()}`,
-      label: finalLabel,
-    };
-    const next = [
-      saved,
-      ...savedPlaces.filter(item => {
-        const isCurrentItem = (mode === 'edit' && existing) ? item.id === existing.id : false;
-        const isSameLabel = item.label.toLowerCase() === finalLabel.toLowerCase();
-        const isSameId = item.id === saved.id;
-        return !isCurrentItem && !isSameLabel && !isSameId;
-      }),
-    ];
-    await persistSavedPlaces(next);
-    router.back();
-  };
-
   const deletePlace = () => {
     if (!existing) return;
     Alert.alert(
@@ -225,65 +214,21 @@ export default function SavedPlaceSelectorScreen() {
     );
   };
 
-  const openMap = async () => {
-    let coords: { latitude: number; longitude: number } = initialCoords;
-    try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-    } catch {}
-    setMapCoords(coords);
-    setMapAddress(initialAddressStr);
-    setUiMode('map');
-    Keyboard.dismiss();
-    requestAnimationFrame(() => {
-      mapRef.current?.animateToRegion(
-        { ...coords, latitudeDelta: MAP_LOCATION_DELTA, longitudeDelta: MAP_LOCATION_DELTA },
-        300,
-      );
+  const openMap = () => {
+    const routeLabel = displayLabel === 'Other' ? (customLabel.trim() || label) : label;
+    router.push({
+      pathname: '/map-picker',
+      params: {
+        target: 'saved-place',
+        mode: mode === 'edit' ? 'saved-place-edit' : 'saved-place-add',
+        savedPlaceId: mode === 'edit' && existing ? existing.id : undefined,
+        label: routeLabel,
+        initialLatitude: initialCoords.latitude.toString(),
+        initialLongitude: initialCoords.longitude.toString(),
+        initialAddress: searchText.trim() || initialAddressStr,
+      },
     });
   };
-
-  const syncMapAddress = async (coords: typeof KIGALI_CENTER) => {
-    const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
-    setMapAddress(formatReverseGeocodeAddress(geo, 'Selected location'));
-  };
-
-  if (uiMode === 'map') {
-    return (
-      <MapPickerOverlay
-          target="savedLocation"
-          mapRef={mapRef}
-          pinCoords={mapCoords}
-          mapType={mapType}
-          colors={colors}
-          topInset={insets.top}
-          bottomInset={insets.bottom}
-          isDragging={isDragging}
-          onLayout={() => {}}
-          onDragStart={() => setIsDragging(true)}
-          onRegionChangeComplete={(region: Region) => {
-            const coords = { latitude: region.latitude, longitude: region.longitude };
-            setIsDragging(false);
-            setMapCoords(coords);
-            void syncMapAddress(coords);
-          }}
-          onClose={() => setUiMode('search')}
-          onCycleMapType={() => setMapType(previous => MAP_TYPES[(MAP_TYPES.indexOf(previous) + 1) % MAP_TYPES.length])}
-          onCenterUser={() => mapRef.current?.animateToRegion({
-            ...mapCoords,
-            latitudeDelta: MAP_LOCATION_DELTA,
-            longitudeDelta: MAP_LOCATION_DELTA,
-          }, 600)}
-          onConfirm={() => savePlace({
-            ...mapCoords,
-            address: mapAddress || 'Selected location',
-            locationType: 'precise',
-          })}
-          savedLocationHint={`Drag the map to set your ${label.toLowerCase()} location`}
-          savedLocationConfirmTitle={`Confirm ${label} Location`}
-        />
-    );
-  }
 
   const hasQuery = searchText.trim().length >= 2;
   return (
@@ -434,7 +379,7 @@ const styles = StyleSheet.create({
   searchBody: { flex: 1, paddingHorizontal: semanticSpacing.cardPadding },
   searchInputWrap: {
     height: sizes.input.lg,
-    borderRadius: buttonCornerRadius(sizes.input.lg),
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -443,7 +388,7 @@ const styles = StyleSheet.create({
   },
   labelInputWrap: {
     height: sizes.input.lg,
-    borderRadius: buttonCornerRadius(sizes.input.lg),
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',

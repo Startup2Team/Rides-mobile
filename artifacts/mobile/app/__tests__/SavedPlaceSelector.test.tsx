@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import SavedPlaceSelectorScreen from '../saved-place-selector';
 import { typography } from '@/constants/typography';
 
+const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockPersist = jest.fn();
 const mockSetText = jest.fn();
@@ -30,6 +31,12 @@ let mockSearch = {
     coords: { latitude: number; longitude: number };
   }[],
 };
+let mockSelection: any = null;
+const mockConsumeSelection = jest.fn(() => {
+  const current = mockSelection;
+  mockSelection = null;
+  return current;
+});
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -53,8 +60,17 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  router: { back: (...args: unknown[]) => mockBack(...args) },
+  router: {
+    push: (...args: unknown[]) => mockPush(...args),
+    back: (...args: unknown[]) => mockBack(...args),
+  },
   useLocalSearchParams: () => mockParams,
+  useFocusEffect: (cb: () => void) => {
+    const React = require('react');
+    React.useEffect(() => {
+      cb();
+    }, [cb]);
+  },
 }));
 
 jest.mock('expo-location', () => ({
@@ -95,25 +111,6 @@ jest.mock('@/components/GlassScrollView', () => {
   return { GlassScrollView: (props: { children: React.ReactNode }) => <View>{props.children}</View> };
 });
 
-jest.mock('@/components/home/MapPickerOverlay', () => {
-  const React = require('react');
-  const { Text, TouchableOpacity, View } = require('react-native');
-  return {
-    MapPickerOverlay: ({ onConfirm, savedLocationConfirmTitle, savedLocationHint }: {
-      onConfirm: () => void;
-      savedLocationConfirmTitle?: string;
-      savedLocationHint?: string;
-    }) => (
-      <View>
-        <Text>{savedLocationHint}</Text>
-        <TouchableOpacity testID="confirm-map-picker" onPress={onConfirm}>
-          <Text>{savedLocationConfirmTitle}</Text>
-        </TouchableOpacity>
-      </View>
-    ),
-  };
-});
-
 jest.mock('@/components/AppButton', () => {
   const React = require('react');
   const { Text, TouchableOpacity } = require('react-native');
@@ -124,6 +121,16 @@ jest.mock('@/context/SavedLocationsContext', () => ({
   useSavedLocations: () => ({
     savedPlaces: mockSavedPlaces,
     persistSavedPlaces: (...args: unknown[]) => mockPersist(...args),
+  }),
+}));
+
+jest.mock('@/context/MapPickerContext', () => ({
+  useMapPicker: () => ({
+    selection: mockSelection,
+    consumeSelection: mockConsumeSelection,
+    clearSelection: jest.fn(),
+    setBookingSelection: jest.fn(),
+    setSavedPlaceSelection: jest.fn(),
   }),
 }));
 
@@ -150,6 +157,7 @@ describe('SavedPlaceSelectorScreen', () => {
     mockParams = { label: 'Home', mode: 'add' };
     mockSavedPlaces = [];
     mockSearch = { text: '', loading: false, suggestions: [] };
+    mockSelection = null;
   });
 
   test('offers address search and map selection in add mode', () => {
@@ -158,8 +166,14 @@ describe('SavedPlaceSelectorScreen', () => {
     expect(screen.getByText('Add Home')).toBeTruthy();
     expect(screen.getByPlaceholderText('Search home address')).toBeTruthy();
     fireEvent.press(screen.getByText('Set location on map'));
-    expect(screen.getByText('Drag the map to set your home location')).toBeTruthy();
-    expect(screen.getByText('Confirm Home Location')).toBeTruthy();
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/map-picker',
+      params: expect.objectContaining({
+        target: 'saved-place',
+        mode: 'saved-place-add',
+        label: 'Home',
+      }),
+    });
   });
 
   test('uses typography tokens for the map selection label', () => {
@@ -249,20 +263,7 @@ describe('SavedPlaceSelectorScreen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  test('map picker works in add mode', async () => {
-    mockParams = { mode: 'add', label: 'Work' };
-    render(<SavedPlaceSelectorScreen />);
-
-    fireEvent.press(screen.getByText('Set location on map'));
-    fireEvent.press(screen.getByTestId('confirm-map-picker'));
-
-    await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
-      expect.objectContaining({ label: 'Work', address: 'Selected location' }),
-    ]));
-    expect(mockBack).toHaveBeenCalled();
-  });
-
-  test('map picker works in edit mode', async () => {
+  test('map picker launches in edit mode with the saved place id', () => {
     mockParams = { mode: 'edit', savedPlaceId: 'place-work' };
     mockSavedPlaces = [{
       id: 'place-work',
@@ -274,10 +275,72 @@ describe('SavedPlaceSelectorScreen', () => {
 
     render(<SavedPlaceSelectorScreen />);
     fireEvent.press(screen.getByText('Set location on map'));
-    fireEvent.press(screen.getByTestId('confirm-map-picker'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/map-picker',
+      params: expect.objectContaining({
+        target: 'saved-place',
+        mode: 'saved-place-edit',
+        savedPlaceId: 'place-work',
+        label: 'Work',
+      }),
+    });
+  });
+
+  test('consumes a saved-place map result in add mode', async () => {
+    mockSelection = {
+      flow: 'saved-place',
+      mode: 'saved-place-add',
+      label: 'Work',
+      location: {
+        latitude: -1.95,
+        longitude: 30.07,
+        address: 'Map selected location',
+        locationType: 'precise',
+      },
+    };
+
+    render(<SavedPlaceSelectorScreen />);
 
     await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
-      expect.objectContaining({ id: 'place-work', label: 'Work' }),
+      expect.objectContaining({
+        label: 'Home',
+        address: 'Map selected location',
+      }),
+    ]));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('consumes a saved-place map result in edit mode', async () => {
+    mockParams = { mode: 'edit', savedPlaceId: 'place-work' };
+    mockSavedPlaces = [{
+      id: 'place-work',
+      label: 'Work',
+      address: '123 Main St',
+      latitude: -1.94,
+      longitude: 30.06,
+    }];
+    mockSelection = {
+      flow: 'saved-place',
+      mode: 'saved-place-edit',
+      savedPlaceId: 'place-work',
+      label: 'Work',
+      location: {
+        latitude: -1.95,
+        longitude: 30.07,
+        address: 'Updated map location',
+        locationType: 'precise',
+      },
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'place-work',
+        label: 'Work',
+        address: 'Updated map location',
+      }),
     ]));
     expect(mockBack).toHaveBeenCalled();
   });

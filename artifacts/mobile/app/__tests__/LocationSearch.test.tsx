@@ -151,6 +151,12 @@ const mockDestText = 'Initial Dropoff';
 const mockSetPickup = jest.fn();
 const mockSetDestination = jest.fn();
 const mockSetDestText = jest.fn();
+let mockSelection: any = null;
+const mockConsumeSelection = jest.fn(() => {
+  const current = mockSelection;
+  mockSelection = null;
+  return current;
+});
 
 jest.mock('@/context/RideContext', () => ({
   useRide: () => ({
@@ -180,6 +186,16 @@ jest.mock('@/context/ToastContext', () => ({
   }),
 }));
 
+jest.mock('@/context/MapPickerContext', () => ({
+  useMapPicker: () => ({
+    consumeSelection: mockConsumeSelection,
+    clearSelection: jest.fn(),
+    selection: mockSelection,
+    setBookingSelection: jest.fn(),
+    setSavedPlaceSelection: jest.fn(),
+  }),
+}));
+
 // Mock geocoding service
 jest.mock('@/services/geocoding', () => ({
   geocodeAddress: jest.fn(() => Promise.resolve([
@@ -196,6 +212,7 @@ describe('LocationSearchScreen Route-Based Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    mockSelection = null;
     mockLocalParams = {
       target: 'pickup',
       userLatitude: '-1.9441',
@@ -222,17 +239,36 @@ describe('LocationSearchScreen Route-Based Tests', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  test('tapping choose on map redirects to index with triggerMapPicker and coordinates', () => {
+  test('tapping choose on map opens the map-picker route with coordinates', () => {
     render(<LocationSearchScreen />);
     fireEvent.press(screen.getByText('Choose on map'));
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/(tabs)',
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/map-picker',
       params: {
-        triggerMapPicker: 'pickup',
-        mapPickerLat: '-1.95',
-        mapPickerLng: '30.07',
+        target: 'pickup',
+        mode: 'booking',
+        initialLatitude: '-1.95',
+        initialLongitude: '30.07',
+        initialAddress: 'Gps Address',
       },
     });
+  });
+
+  test('consumes a booking map selection and closes the screen', () => {
+    mockSelection = {
+      flow: 'booking',
+      target: 'pickup',
+      location: {
+        latitude: -1.95,
+        longitude: 30.07,
+        address: 'Map selection',
+        locationType: 'precise',
+      },
+    };
+
+    render(<LocationSearchScreen />);
+
+    expect(mockBack).toHaveBeenCalled();
   });
 
   test('entering text shows geocoding suggestions and choosing suggestion updates pickup and navigates back', async () => {

@@ -212,7 +212,7 @@ export default function DriverProfileScreen() {
         }}
       >
         <View style={styles.section}>
-          <SectionTitle title="My Vehicles" />
+          <SectionTitle title="My vehicles" />
           <TouchableOpacity
             style={[styles.vehicleSummaryCard, styles.cardShadow, { backgroundColor: cardFill }]}
             onPress={() => router.push('/driver-vehicles')}
