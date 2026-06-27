@@ -15,6 +15,7 @@ import { SheetBackdrop } from './SheetBackdrop';
 import { AppText } from './AppText';
 import { icons } from '@/constants/icons';
 import { duration } from '@/constants/motion';
+import { easing } from '@/constants/motion';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
@@ -31,6 +32,8 @@ interface ProfilePhotoEditSheetProps {
   onChoosePhoto: () => void;
   onDeletePhoto?: () => void;
 }
+
+const ENTRANCE_TRANSLATE_Y = 24;
 
 export function ProfilePhotoEditSheet({
   visible,
@@ -55,7 +58,8 @@ export function ProfilePhotoEditSheet({
   const gradientColors = isDriver ? (['#69A8F7', '#6674D8'] as const) : (['#9DBBE0', '#7984C3'] as const);
 
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = React.useRef(new Animated.Value(500)).current;
+  const sheetOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = React.useRef(new Animated.Value(ENTRANCE_TRANSLATE_Y)).current;
   const [shouldRender, setShouldRender] = React.useState(visible);
 
   React.useEffect(() => {
@@ -67,19 +71,25 @@ export function ProfilePhotoEditSheet({
           duration: duration.slow,
           useNativeDriver: true,
         }),
-        Animated.spring(sheetTranslateY, {
+        Animated.timing(sheetOpacity, {
+          toValue: 1,
+          duration: duration.fast,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
           toValue: 0,
-          tension: 50,
-          friction: 8,
+          duration: duration.fast,
+          easing: easing.easeOutCubic,
           useNativeDriver: true,
         }),
       ]).start();
     } else {
       backdropOpacity.setValue(0);
-      sheetTranslateY.setValue(500);
+      sheetOpacity.setValue(0);
+      sheetTranslateY.setValue(ENTRANCE_TRANSLATE_Y);
       setShouldRender(false);
     }
-  }, [visible]);
+  }, [sheetOpacity, backdropOpacity, visible]);
 
   const handleClose = () => {
     Animated.parallel([
@@ -88,8 +98,13 @@ export function ProfilePhotoEditSheet({
         duration: duration.toast,
         useNativeDriver: true,
       }),
+      Animated.timing(sheetOpacity, {
+        toValue: 0,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
       Animated.timing(sheetTranslateY, {
-        toValue: 500,
+        toValue: ENTRANCE_TRANSLATE_Y,
         duration: duration.toast,
         useNativeDriver: true,
       }),
@@ -121,6 +136,7 @@ export function ProfilePhotoEditSheet({
           {
             backgroundColor: colors.background,
             borderColor: colors.border,
+            opacity: sheetOpacity,
             transform: [{ translateY: sheetTranslateY }],
             paddingBottom: Math.max(insets.bottom, spacing[20]),
           },

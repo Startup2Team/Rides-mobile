@@ -5,7 +5,6 @@ import React from 'react';
 import {
   Alert,
   Image,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -36,6 +35,7 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { GlassScrollView } from '@/components/GlassScrollView';
 
 type VehiclePhotoKey = 'outside' | 'inside';
 
@@ -242,7 +242,8 @@ export default function DriverAddVehicleScreen() {
         subtitle="Submit another vehicle for review"
         onBackPress={() => router.back()}
       />
-      <ScrollView
+      <GlassScrollView
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
@@ -319,7 +320,7 @@ export default function DriverAddVehicleScreen() {
         ) : null}
 
         <AppButton title="Submit Vehicle" onPress={() => void submit()} fullWidth size="lg" loading={saving} disabled={missingSubmissionItems.length > 0} />
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }

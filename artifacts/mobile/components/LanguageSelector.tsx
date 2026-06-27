@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Line, Polygon, Rect } from 'react-native-svg';
-import { duration } from '@/constants/motion';
+import { duration, easing } from '@/constants/motion';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
@@ -29,6 +29,8 @@ const LANGUAGES: { code: string; label: string; value: LanguageFlag }[] = [
   { code: 'FR', label: 'French', value: 'fr' },
   { code: 'LG', label: 'Luganda', value: 'ug' },
 ];
+
+const ENTRANCE_TRANSLATE_Y = 24;
 
 function FlagPreview({ flag }: { flag: LanguageFlag }) {
   if (flag === 'rw') {
@@ -105,7 +107,8 @@ export function LanguageSelector() {
   const [languageFlag, setLanguageFlag] = useState<LanguageFlag>('uk');
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = React.useRef(new Animated.Value(500)).current;
+  const sheetOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = React.useRef(new Animated.Value(ENTRANCE_TRANSLATE_Y)).current;
   const [shouldRender, setShouldRender] = React.useState(showLanguageSheet);
   const languageCode = LANGUAGES.find(language => language.value === languageFlag)?.code ?? 'EN';
 
@@ -128,10 +131,15 @@ export function LanguageSelector() {
           duration: duration.slow,
           useNativeDriver: true,
         }),
-        Animated.spring(sheetTranslateY, {
+        Animated.timing(sheetOpacity, {
+          toValue: 1,
+          duration: duration.fast,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
           toValue: 0,
-          tension: 50,
-          friction: 8,
+          duration: duration.fast,
+          easing: easing.easeOutCubic,
           useNativeDriver: true,
         }),
       ]).start();
@@ -139,9 +147,10 @@ export function LanguageSelector() {
     }
 
     backdropOpacity.setValue(0);
-    sheetTranslateY.setValue(500);
+    sheetOpacity.setValue(0);
+    sheetTranslateY.setValue(ENTRANCE_TRANSLATE_Y);
     setShouldRender(false);
-  }, [backdropOpacity, sheetTranslateY, showLanguageSheet]);
+  }, [backdropOpacity, sheetOpacity, sheetTranslateY, showLanguageSheet]);
 
   const handleClose = () => {
     Animated.parallel([
@@ -150,8 +159,13 @@ export function LanguageSelector() {
         duration: duration.toast,
         useNativeDriver: true,
       }),
+      Animated.timing(sheetOpacity, {
+        toValue: 0,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
       Animated.timing(sheetTranslateY, {
-        toValue: 500,
+        toValue: ENTRANCE_TRANSLATE_Y,
         duration: duration.toast,
         useNativeDriver: true,
       }),
@@ -193,6 +207,7 @@ export function LanguageSelector() {
             styles.languageSheet,
             {
               backgroundColor: colors.background,
+              opacity: sheetOpacity,
               transform: [{ translateY: sheetTranslateY }],
               paddingBottom: Math.max(insets.bottom, spacing[20]),
             },

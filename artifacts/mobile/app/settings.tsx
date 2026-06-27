@@ -16,6 +16,7 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { useAuth } from '@/context/AuthContext';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { AppText } from '@/components/AppText';
@@ -30,6 +31,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
+  const { logout } = useAuth();
   const { savedPlaces } = useSavedLocations();
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
@@ -66,6 +68,19 @@ export default function SettingsScreen() {
         { text: 'Keep my account', style: 'cancel' },
       ],
     );
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        onPress: async () => {
+          await logout();
+          router.replace('/(auth)/welcome');
+        },
+      },
+    ]);
   };
 
   const savedAddress = (label: string) =>
@@ -122,6 +137,8 @@ export default function SettingsScreen() {
 
         <Section title="Danger zone">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
+            <SettingsRow icon="log-out" label="Log Out" detail="Sign out of your account" onPress={handleLogout} destructive />
+            <Divider />
             <SettingsRow icon="trash-2" label="Delete Account" detail="Permanently remove your account" onPress={handleDeleteAccount} destructive />
           </View>
         </Section>
@@ -156,13 +173,13 @@ function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.rowIcon}>
         {iconFamily === 'mci' ? (
-          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={colors.primary} />
+          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />
         ) : (
-          <Feather name={icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={colors.primary} />
+          <Feather name={icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />
         )}
       </View>
       <View style={styles.rowCopy}>
-        <AppText variant="body" style={[styles.rowLabel, { color: colors.foreground }]}>{label}</AppText>
+        <AppText variant="body" style={[styles.rowLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</AppText>
         {detail ? <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</AppText> : null}
       </View>
       <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />

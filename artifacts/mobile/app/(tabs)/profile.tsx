@@ -95,7 +95,7 @@ export default function ProfileScreen() {
   const isDark = scheme === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile, logout, switchMode } = useAuth();
+  const { user, driverProfile, switchMode } = useAuth();
   const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
@@ -137,19 +137,6 @@ export default function ProfileScreen() {
       return;
     }
     router.push(driverAction.route);
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        onPress: async () => {
-          await logout();
-          router.replace('/(auth)/welcome');
-        },
-      },
-    ]);
   };
 
   return (
@@ -335,20 +322,6 @@ export default function ProfileScreen() {
             showSeparator={false}
             separatorColor={separatorColor}
           />
-        </View>
-      </View>
-
-      <View style={styles.sectionGroup}>
-        <AppText variant="h3" style={[styles.sectionTitle, { color: colors.foreground }]}>Actions</AppText>
-        <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
-        <MenuItem
-          iconFamily="feather"
-          icon="log-out"
-          label="Log Out"
-          onPress={handleLogout}
-          showSeparator={false}
-          separatorColor={separatorColor}
-        />
         </View>
       </View>
 

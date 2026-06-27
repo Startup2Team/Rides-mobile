@@ -39,7 +39,7 @@ export default function DriverProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { user, driverProfile, logout, switchMode } = useAuth();
+  const { user, driverProfile, switchMode } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { rideHistory, loadHistory } = useRide();
   const activePackage = getActivePackageActivation(entitlement);
@@ -91,19 +91,6 @@ export default function DriverProfileScreen() {
         onPress: async () => {
           await switchMode('customer');
           router.replace('/(tabs)');
-        },
-      },
-    ]);
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        onPress: async () => {
-          await logout();
-          router.replace('/(auth)/welcome');
         },
       },
     ]);
@@ -296,7 +283,7 @@ export default function DriverProfileScreen() {
           >
             <MaterialCommunityIcons name="swap-horizontal" size={icons.size.lg} color={colors.primary} />
             <View style={styles.modeCopy}>
-              <AppText variant="title" style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</AppText>
+              <AppText variant="body" style={[styles.modeTitle, { color: colors.foreground }]}>Switch to Customer Mode</AppText>
               <AppText variant="label" style={[styles.modeDescription, { color: colors.mutedForeground }]}>Book rides using your customer account</AppText>
             </View>
             <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
@@ -309,13 +296,6 @@ export default function DriverProfileScreen() {
             <MenuItem colors={colors} iconFamily="feather" icon="star" label={`Rate ${APP_NAME}`} detail="Enjoying the app? Take a moment to rate it and share your feedback." onPress={() => { void rateRides(); }} />
             <MenuItem colors={colors} iconFamily="mci" icon="message-text" label="Leave Feedback" detail="We'd love to hear from you." onPress={() => { void leaveRidesFeedback(); }} />
             <MenuItem colors={colors} iconFamily="symbol" icon="share-2" label="Share the App" detail={`Invite friends and family to experience ${APP_NAME}.`} onPress={() => router.push(getShareRouteForMode(user?.mode))} last />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <SectionTitle title="Actions" />
-          <View style={[styles.groupedSection, styles.cardShadow, { backgroundColor: cardFill }]}>
-            <MenuItem colors={colors} iconFamily="feather" icon="log-out" label="Log Out" onPress={handleLogout} last />
           </View>
         </View>
 
@@ -534,7 +514,7 @@ const styles = StyleSheet.create({
   menuDetail: { ...typography.tiny, lineHeight: 16 },
   modeCard: { flexDirection: 'row', alignItems: 'center', gap: 13, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
   modeCopy: { flex: 1, gap: 3 },
-  modeTitle: { ...typography.title },
+  modeTitle: { ...typography.body },
   modeDescription: { ...typography.label, fontFamily: typography.caption.fontFamily, marginTop: spacing[2] },
   version: { textAlign: 'center', ...typography.caption, paddingVertical: semanticSpacing.inlineGap },
 });

@@ -111,6 +111,10 @@ jest.mock('@/components/GlassHeader', () => ({
   useGlassHeaderMetrics: () => ({ contentTop: 0, indicatorTop: 0 }),
 }));
 
+jest.mock('@/components/GlassScrollView', () => ({
+  GlassScrollView: ({ children }: { children?: React.ReactNode }) => React.createElement('View', null, children),
+}));
+
 jest.mock('@expo/vector-icons', () => {
   return { Feather: () => null };
 });
