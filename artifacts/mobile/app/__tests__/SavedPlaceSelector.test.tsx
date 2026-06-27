@@ -20,6 +20,8 @@ const mockBuildTypedLocation = jest.fn(() => ({
 
 let mockParams: Record<string, string> = { label: 'Home', mode: 'add' };
 let mockSavedPlaces: any[] = [];
+let sessionCounter = 0;
+let mockResult: any = null;
 let mockSearch = {
   text: '',
   loading: false,
@@ -31,12 +33,39 @@ let mockSearch = {
     coords: { latitude: number; longitude: number };
   }[],
 };
-let mockSelection: any = null;
-const mockConsumeSelection = jest.fn(() => {
-  const current = mockSelection;
-  mockSelection = null;
+const mockCreateMapPickerSessionId = jest.fn(() => `session-${++sessionCounter}`);
+function setMockResult(result: any) {
+  mockResult = result;
+}
+
+function consumeMockResult(sessionId: string) {
+  const current = mockResult;
+  if (!current) return null;
+  const isFresh = Date.now() - current.createdAt <= 5 * 60 * 1000;
+  if (!isFresh || current.sessionId !== sessionId) {
+    mockResult = null;
+    return null;
+  }
+  mockResult = null;
   return current;
+}
+
+function clearMockResult(sessionId?: string) {
+  if (!mockResult) return;
+  if (sessionId && mockResult.sessionId !== sessionId) return;
+  mockResult = null;
+}
+
+function clearMockAll() {
+  mockResult = null;
+}
+
+const mockSetResult = jest.fn((result: any) => {
+  setMockResult(result);
 });
+const mockConsumeResult = jest.fn((sessionId: string) => consumeMockResult(sessionId));
+const mockClearResult = jest.fn((sessionId?: string) => clearMockResult(sessionId));
+const mockClearAll = jest.fn(() => clearMockAll());
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -125,12 +154,18 @@ jest.mock('@/context/SavedLocationsContext', () => ({
 }));
 
 jest.mock('@/context/MapPickerContext', () => ({
+  createMapPickerSessionId: () => mockCreateMapPickerSessionId(),
   useMapPicker: () => ({
-    selection: mockSelection,
-    consumeSelection: mockConsumeSelection,
+    result: mockResult,
+    consumeResult: (sessionId: string) => mockConsumeResult(sessionId),
+    clearResult: (sessionId?: string) => mockClearResult(sessionId),
+    clearAll: () => mockClearAll(),
+    selection: null,
+    consumeSelection: jest.fn(),
     clearSelection: jest.fn(),
     setBookingSelection: jest.fn(),
     setSavedPlaceSelection: jest.fn(),
+    setResult: jest.fn(),
   }),
 }));
 
@@ -154,10 +189,15 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 describe('SavedPlaceSelectorScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSetResult.mockImplementation((result: any) => setMockResult(result));
+    mockConsumeResult.mockImplementation((sessionId: string) => consumeMockResult(sessionId));
+    mockClearResult.mockImplementation((sessionId?: string) => clearMockResult(sessionId));
+    mockClearAll.mockImplementation(() => clearMockAll());
     mockParams = { label: 'Home', mode: 'add' };
     mockSavedPlaces = [];
+    mockResult = null;
     mockSearch = { text: '', loading: false, suggestions: [] };
-    mockSelection = null;
+    sessionCounter = 0;
   });
 
   test('offers address search and map selection in add mode', () => {
@@ -172,6 +212,7 @@ describe('SavedPlaceSelectorScreen', () => {
         target: 'saved-place',
         mode: 'saved-place-add',
         label: 'Home',
+        sessionId: 'session-1',
       }),
     });
   });
@@ -283,24 +324,28 @@ describe('SavedPlaceSelectorScreen', () => {
         mode: 'saved-place-edit',
         savedPlaceId: 'place-work',
         label: 'Work',
+        sessionId: 'session-1',
       }),
     });
   });
 
   test('consumes a saved-place map result in add mode', async () => {
-    mockSelection = {
-      flow: 'saved-place',
+    mockClearResult.mockImplementation(() => {});
+    mockResult = {
+      sessionId: 'session-1',
       mode: 'saved-place-add',
       label: 'Work',
-      location: {
-        latitude: -1.95,
-        longitude: 30.07,
-        address: 'Map selected location',
-        locationType: 'precise',
-      },
+      savedPlaceId: undefined,
+      address: 'Map selected location',
+      latitude: -1.95,
+      longitude: 30.07,
+      createdAt: Date.now(),
+      target: 'saved-place',
     };
 
     render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Set location on map'));
 
     await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
       expect.objectContaining({
@@ -312,6 +357,7 @@ describe('SavedPlaceSelectorScreen', () => {
   });
 
   test('consumes a saved-place map result in edit mode', async () => {
+    mockClearResult.mockImplementation(() => {});
     mockParams = { mode: 'edit', savedPlaceId: 'place-work' };
     mockSavedPlaces = [{
       id: 'place-work',
@@ -320,20 +366,20 @@ describe('SavedPlaceSelectorScreen', () => {
       latitude: -1.94,
       longitude: 30.06,
     }];
-    mockSelection = {
-      flow: 'saved-place',
+    mockResult = {
+      sessionId: 'session-1',
       mode: 'saved-place-edit',
       savedPlaceId: 'place-work',
-      label: 'Work',
-      location: {
-        latitude: -1.95,
-        longitude: 30.07,
-        address: 'Updated map location',
-        locationType: 'precise',
-      },
+      address: 'Updated map location',
+      latitude: -1.95,
+      longitude: 30.07,
+      createdAt: Date.now(),
+      target: 'saved-place',
     };
 
     render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Set location on map'));
 
     await waitFor(() => expect(mockPersist).toHaveBeenCalledWith([
       expect.objectContaining({
@@ -343,6 +389,67 @@ describe('SavedPlaceSelectorScreen', () => {
       }),
     ]));
     expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('ignores a stale saved-place result', async () => {
+    mockResult = {
+      sessionId: 'session-1',
+      mode: 'saved-place-add',
+      label: 'Home',
+      savedPlaceId: undefined,
+      address: 'Stale location',
+      latitude: -1.9,
+      longitude: 30.1,
+      createdAt: Date.now() - (6 * 60 * 1000),
+      target: 'saved-place',
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Set location on map'));
+
+    expect(mockPersist).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  test('ignores a saved-place edit result with a mismatched savedPlaceId', async () => {
+    mockParams = { mode: 'edit', savedPlaceId: 'place-work' };
+    mockSavedPlaces = [{
+      id: 'place-work',
+      label: 'Work',
+      address: '123 Main St',
+      latitude: -1.94,
+      longitude: 30.06,
+    }];
+    mockResult = {
+      sessionId: 'session-1',
+      mode: 'saved-place-edit',
+      savedPlaceId: 'different-place',
+      address: 'Wrong location',
+      latitude: -1.9,
+      longitude: 30.1,
+      createdAt: Date.now(),
+      target: 'saved-place',
+    };
+
+    render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Set location on map'));
+
+    expect(mockPersist).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  test('cancelled picker does not update the saved-place selector', () => {
+    render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Set location on map'));
+
+    expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({
+      pathname: '/map-picker',
+    }));
+    expect(mockPersist).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   test('delete flow triggers confirmation and deletes saved place', async () => {

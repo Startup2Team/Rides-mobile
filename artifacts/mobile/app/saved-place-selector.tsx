@@ -20,7 +20,7 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { typography } from '@/constants/typography';
-import { useMapPicker } from '@/context/MapPickerContext';
+import { createMapPickerSessionId, useMapPicker } from '@/context/MapPickerContext';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
@@ -51,6 +51,8 @@ export default function SavedPlaceSelectorScreen() {
   }>();
 
   const { savedPlaces, persistSavedPlaces } = useSavedLocations();
+  const { consumeResult, clearResult } = useMapPicker();
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
   const existing = useMemo(() => {
     if (mode === 'edit' && savedPlaceId) {
@@ -107,7 +109,6 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   });
 
-  const { consumeSelection } = useMapPicker();
   const inputRef = useRef<TextInput>(null);
   const {
     text: searchText,
@@ -130,6 +131,14 @@ export default function SavedPlaceSelectorScreen() {
       setCustomLabel(label);
     }
   }, [displayLabel, label]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingSessionId) {
+        clearResult(pendingSessionId);
+      }
+    };
+  }, [clearResult, pendingSessionId]);
 
   const savePlace = useCallback(async (place: RideLocation) => {
     const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
@@ -157,11 +166,28 @@ export default function SavedPlaceSelectorScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const selection = consumeSelection();
-      if (!selection || selection.flow !== 'saved-place') return undefined;
-      void savePlace(selection.location);
+      if (!pendingSessionId) return undefined;
+      const result = consumeResult(pendingSessionId);
+      if (!result) return undefined;
+      setPendingSessionId(null);
+
+      const expectedResultMode = mode === 'edit' ? 'saved-place-edit' : 'saved-place-add';
+      const expectedSavedPlaceId = mode === 'edit' ? existing?.id ?? savedPlaceId : undefined;
+
+      if (result.mode !== expectedResultMode) return undefined;
+      if (expectedSavedPlaceId && result.savedPlaceId !== expectedSavedPlaceId) return undefined;
+      if (!expectedSavedPlaceId && result.savedPlaceId && result.savedPlaceId.length > 0) {
+        return undefined;
+      }
+
+      void savePlace({
+        latitude: result.latitude,
+        longitude: result.longitude,
+        address: result.address,
+        locationType: 'precise',
+      });
       return undefined;
-    }, [consumeSelection, savePlace]),
+    }, [consumeResult, existing?.id, mode, pendingSessionId, savePlace, savedPlaceId]),
   );
 
   if (mode === 'edit' && !existing) {
@@ -216,11 +242,15 @@ export default function SavedPlaceSelectorScreen() {
 
   const openMap = () => {
     const routeLabel = displayLabel === 'Other' ? (customLabel.trim() || label) : label;
+    const sessionId = createMapPickerSessionId();
+    clearResult();
+    setPendingSessionId(sessionId);
     router.push({
       pathname: '/map-picker',
       params: {
         target: 'saved-place',
         mode: mode === 'edit' ? 'saved-place-edit' : 'saved-place-add',
+        sessionId,
         savedPlaceId: mode === 'edit' && existing ? existing.id : undefined,
         label: routeLabel,
         initialLatitude: initialCoords.latitude.toString(),

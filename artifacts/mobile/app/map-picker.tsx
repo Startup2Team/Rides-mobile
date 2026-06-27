@@ -49,13 +49,14 @@ export default function MapPickerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { setBookingSelection, setSavedPlaceSelection } = useMapPicker();
+  const { setBookingSelection, setResult } = useMapPicker();
   const { pickup, destination, setPickup, setDestination, setDestText } = useRide();
   const { savedPlaces } = useSavedLocations();
 
   const params = useLocalSearchParams<{
     target?: string;
     mode?: string;
+    sessionId?: string;
     savedPlaceId?: string;
     initialLatitude?: string;
     initialLongitude?: string;
@@ -65,6 +66,7 @@ export default function MapPickerScreen() {
 
   const routeTarget = params.target;
   const routeMode = params.mode;
+  const sessionId = params.sessionId;
   const initialCoordsFromParams = parseCoords(params.initialLatitude, params.initialLongitude);
 
   const existingSavedPlace = useMemo(() => {
@@ -78,9 +80,10 @@ export default function MapPickerScreen() {
     }
     if (routeMode === 'booking' && routeTarget === 'saved-place') return null;
     if (routeMode !== 'booking' && routeTarget !== 'saved-place') return null;
+    if (routeMode !== 'booking' && !sessionId) return null;
     if (routeMode === 'saved-place-edit' && !params.savedPlaceId) return null;
-    return { target: routeTarget, mode: routeMode };
-  }, [params.savedPlaceId, routeMode, routeTarget]);
+    return { target: routeTarget, mode: routeMode, sessionId: sessionId ?? null };
+  }, [params.savedPlaceId, routeMode, routeTarget, sessionId]);
 
   const initialCoords = useMemo(() => {
     if (initialCoordsFromParams) return initialCoordsFromParams;
@@ -123,6 +126,7 @@ export default function MapPickerScreen() {
   const [isResolving, setIsResolving] = useState(false);
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const hasConfirmedRef = useRef(false);
 
   const syncMapAddress = useCallback(async (coords: RideLocation) => {
     setIsResolving(true);
@@ -195,6 +199,8 @@ export default function MapPickerScreen() {
 
   const confirmSelection = useCallback(async () => {
     if (!routeConfig) return;
+    if (hasConfirmedRef.current) return;
+    hasConfirmedRef.current = true;
     const location = buildLocation(mapCoords, mapAddress || 'Selected location');
 
     if (routeConfig.mode === 'booking') {
@@ -211,13 +217,19 @@ export default function MapPickerScreen() {
         location,
       });
     } else {
-      setSavedPlaceSelection({
-        flow: 'saved-place',
+      const savedPlaceSessionId = routeConfig.sessionId;
+      if (!savedPlaceSessionId) return;
+      const result = {
+        sessionId: savedPlaceSessionId,
         mode: routeConfig.mode,
         savedPlaceId: params.savedPlaceId,
-        label: savedLocationLabel,
-        location,
-      });
+        address: location.address ?? 'Selected location',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        createdAt: Date.now(),
+        target: 'saved-place' as const,
+      };
+      setResult(result);
     }
 
     setHasConfirmed(true);
@@ -227,12 +239,11 @@ export default function MapPickerScreen() {
     mapCoords,
     params.savedPlaceId,
     routeConfig,
-    savedLocationLabel,
+    setResult,
     setBookingSelection,
     setDestText,
     setDestination,
     setPickup,
-    setSavedPlaceSelection,
   ]);
 
   if (!routeConfig) {

@@ -7,7 +7,7 @@ const mockSetPickup = jest.fn();
 const mockSetDestination = jest.fn();
 const mockSetDestText = jest.fn();
 const mockSetBookingSelection = jest.fn();
-const mockSetSavedPlaceSelection = jest.fn();
+const mockSetResult = jest.fn();
 
 let mockParams: Record<string, string | undefined> = {};
 
@@ -66,7 +66,7 @@ jest.mock('@/components/home/MapPickerOverlay', () => {
 jest.mock('@/context/MapPickerContext', () => ({
   useMapPicker: () => ({
     setBookingSelection: (...args: unknown[]) => mockSetBookingSelection(...args),
-    setSavedPlaceSelection: (...args: unknown[]) => mockSetSavedPlaceSelection(...args),
+    setResult: (...args: unknown[]) => mockSetResult(...args),
   }),
 }));
 
@@ -168,6 +168,7 @@ describe('MapPickerScreen', () => {
     mockParams = {
       target: 'saved-place',
       mode: 'saved-place-add',
+      sessionId: 'session-1',
       label: 'Home',
       initialLatitude: '-1.97',
       initialLongitude: '30.09',
@@ -178,17 +179,37 @@ describe('MapPickerScreen', () => {
 
     fireEvent.press(screen.getByText('Confirm Home Location'));
 
-    expect(mockSetSavedPlaceSelection).toHaveBeenCalledWith(expect.objectContaining({
-      flow: 'saved-place',
+    expect(mockSetResult).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
       mode: 'saved-place-add',
-      label: 'Home',
-      location: expect.objectContaining({
-        latitude: -1.97,
-        longitude: 30.09,
-        address: 'Draft location',
-        locationType: 'precise',
-      }),
+      savedPlaceId: undefined,
+      address: 'Draft location',
+      latitude: -1.97,
+      longitude: 30.09,
+      createdAt: expect.any(Number),
+      target: 'saved-place',
     }));
     expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('double confirm only writes one saved-place result', () => {
+    mockParams = {
+      target: 'saved-place',
+      mode: 'saved-place-add',
+      sessionId: 'session-1',
+      label: 'Home',
+      initialLatitude: '-1.97',
+      initialLongitude: '30.09',
+      initialAddress: 'Draft location',
+    };
+
+    render(<MapPickerScreen />);
+
+    const confirmButton = screen.getByText('Confirm Home Location');
+    fireEvent.press(confirmButton);
+    fireEvent.press(confirmButton);
+
+    expect(mockSetResult).toHaveBeenCalledTimes(1);
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 });
