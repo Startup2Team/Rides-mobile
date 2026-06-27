@@ -28,7 +28,9 @@ Each domain has a single repository contract.
   - session boundary
 
 - `ProfileRepository`
+  - shared user identity
   - profile image and profile media helpers
+  - profile preferences and settings
 
 - `BookingRepository`
   - booking draft ownership
@@ -131,6 +133,13 @@ Phase 7F adds the first domain boundary under `domains/saved-locations/`.
 - `domains/saved-locations/hooks.ts` wraps the existing context for compatibility
 - `hooks/useSavedLocations.ts` now forwards through the domain entry point
 - the context remains the compatibility layer until a later TanStack Query migration
+
+Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
+
+- `domains/profile/types.ts` owns the shared identity projection
+- `domains/profile/repository.ts` exposes the shared profile repository
+- `domains/profile/hooks.ts` keeps the compatibility hooks available for current screens and components
+- `AuthContext` remains the session and mode compatibility layer
 
 ## Domain-First Direction
 

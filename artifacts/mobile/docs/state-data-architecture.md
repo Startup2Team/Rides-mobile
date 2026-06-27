@@ -28,7 +28,7 @@ Rides is one application with one authenticated user and one shared session. Cus
 
 Shared state:
 - auth/session
-- user profile
+- user profile / shared identity
 - role/mode
 - notifications
 - settings
@@ -108,7 +108,7 @@ Rules:
 ### 2.3 Server Or Cacheable State
 
 Examples:
-- profile
+- profile / shared identity
 - saved locations
 - ride history
 - notifications
@@ -376,9 +376,10 @@ Idempotency expectations:
 ### 4.2 `ProfileRepository.ts`
 
 Responsibility:
-- user profile
-- driver profile summary
+- shared user identity
 - profile image metadata
+- profile preferences and settings
+- driver-facing profile projection fields derived from the shared account
 
 Current local implementation:
 - secure persistence plus local merge logic
@@ -387,7 +388,7 @@ Future backend implementation:
 - profile fetch/update endpoints
 
 Cache behavior:
-- query cache plus secure fallback for sensitive profile fields
+- query cache plus secure fallback for sensitive profile fields and image metadata
 
 Persistence behavior:
 - SecureStore for sensitive profile state
@@ -1237,3 +1238,12 @@ The goal is not to move runtime code yet. The goal is to make ownership explicit
 - contexts and focused stores remain the short-term integration layer
 - runtime behavior remains unchanged until later phases move code deliberately
 This is the domain-first direction for state and data organization.
+
+Phase 7G adds the shared `profile` domain as the second extracted domain:
+
+- `domains/profile/types.ts` owns the shared identity projection types
+- `domains/profile/repository.ts` exposes the shared profile repository boundary
+- `domains/profile/hooks.ts` provides compatibility hooks for current screens and components
+- `AuthContext` remains the compatibility layer for session and role switching
+- the same account continues to back both customer and driver projections
+- the profile domain is about who the user is, not whether they are an approved driver

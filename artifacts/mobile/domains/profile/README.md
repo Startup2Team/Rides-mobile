@@ -1,28 +1,58 @@
 # Profile Domain
 
-Owns shared profile presentation and profile media.
+Shared identity domain for the one-app customer/driver model.
+
+Rides uses one authenticated account per user. Every user starts as a customer. A customer may later become an approved driver, but the identity stays the same across both role projections.
 
 Owns:
-- user profile
-- profile image
-- contact details
+- user id
+- full name
+- phone number
+- email if present
+- profile photo
+- preferred language
+- account settings
+- notification preferences
+- shared identity fields used in customer and driver mode
 
 Must not own:
-- driver verification state
-- ride history
-- booking state
+- driver approval or rejection state
+- driver verification documents
+- driver vehicles
+- driver package entitlements
+- driver online/offline availability
+- active ride lifecycle truth
+- saved locations canonical storage
+- payments or wallet canonical state
 
 Current source files outside this domain:
+- `context/AuthContext.tsx`
 - `persistence/profilePersistence.ts`
 - `components/ProfileAvatarCircle.tsx`
-- `app/profile.tsx`
+- `components/HomeTopHeader.tsx`
+- `hooks/useProfilePhotoActions.ts`
+- `app/(tabs)/profile.tsx`
+- `app/(driver)/profile.tsx`
+- `app/(driver)/index.tsx`
+- `app/edit-profile.tsx`
+
+Compatibility layer:
+- `AuthContext` still owns the live app session and role switching
+- `useProfilePhotoActions` still exists as a wrapper
+- `SavedLocationsContext` style replacement is not needed here yet
 
 Future migration plan:
-- move profile rules into `domains/profile`
-- back them with `ProfileRepository`
+- move the remaining profile consumers to the domain entry point
+- replace direct storage reads with query/repository-backed reads when the server profile exists
+- keep customer and driver identity projection on the same account
 
 Ownership:
-- repository: `ProfileRepository`
+- repository: `profileRepository`
 - store: none yet
 - query: future profile query hooks
 - events: profile update acknowledgements
+
+One-account rule:
+- customer and driver are role projections of the same profile
+- logout clears the shared session, not a role-specific account
+- driver approval adds a projection, it does not create a second user

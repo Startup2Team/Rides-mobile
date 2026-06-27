@@ -1,5 +1,5 @@
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
   Alert,
   Image,
@@ -19,7 +19,6 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
@@ -97,7 +96,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile, switchMode } = useAuth();
-  const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
+  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
@@ -110,18 +109,6 @@ export default function ProfileScreen() {
   const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase() : '';
   const lastName = nameParts.slice(1).join(' ').toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data);
-      });
-      return () => {
-        active = false;
-      };
-    }, [setProfileImage]),
-  );
 
   const handleSwitchToDriver = () => {
     if (canAccessDriverMode(driverProfile)) {

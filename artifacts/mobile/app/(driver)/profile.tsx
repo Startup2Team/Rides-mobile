@@ -1,7 +1,7 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import { Alert, Image, Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
@@ -19,7 +19,6 @@ import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driver
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
@@ -47,7 +46,7 @@ export default function DriverProfileScreen() {
   const vehicles = getDriverVehicles(driverProfile);
   const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
-  const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
+  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
@@ -58,18 +57,6 @@ export default function DriverProfileScreen() {
   const [showPhotoSheet, setShowPhotoSheet] = React.useState(false);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
-      return () => {
-        active = false;
-      };
-    }, [driverProfile?.profileImage, setProfileImage]),
-  );
 
   React.useEffect(() => {
     let cancelled = false;

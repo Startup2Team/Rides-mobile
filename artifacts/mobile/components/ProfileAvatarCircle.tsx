@@ -12,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { profileRepository } from '@/domains/profile/repository';
 import { elevation } from '@/constants/elevation';
 import { sizes } from '@/constants/sizes';
 import { typography } from '@/constants/typography';
@@ -45,8 +45,8 @@ export function ProfileAvatarCircle({
     useCallback(() => {
       if (!useStoredProfile) return undefined;
       let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setStoredProfileImage(stored.data);
+      void profileRepository.getProfileImage().then(stored => {
+        if (active) setStoredProfileImage(stored);
       });
       return () => {
         active = false;

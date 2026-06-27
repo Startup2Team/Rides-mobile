@@ -51,8 +51,8 @@ import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { getApprovedDriverVehicles } from '@/domain/driverVehicles';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import {
@@ -139,7 +139,7 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
+  const { profileImage } = useProfilePhotoActions(driverProfile?.profileImage ?? null);
   const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
@@ -206,16 +206,9 @@ export default function DriverDashboard() {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, []);
 
-  useEffect(() => {
-    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
-  }, [driverProfile?.profileImage]);
-
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
       void loadStoredDriverRatings().then(stored => {
         if (active) {
           setRatingSummary(user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY);

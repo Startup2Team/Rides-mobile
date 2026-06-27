@@ -38,7 +38,6 @@ import {
 } from '@/constants/homeDriverCta';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 import { getDriverApplicationAction } from '@/utils/driverVerification';
@@ -46,6 +45,7 @@ import type { DriverVerificationStatus } from '@/types';
 import { typography } from '@/constants/typography';
 import { zIndex } from '@/constants/zIndex';
 import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 
 const AVATAR_SIZE = sizes.iconButton.md;
 const CTA_AVATAR_SIZE = sizes.iconButton.sm;
@@ -100,7 +100,7 @@ export function HomeTopHeader({
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
   const { driverProfile, switchMode } = useAuth();
-  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
+  const { profileImage, refreshProfileImage } = useProfilePhotoActions(driverProfile?.profileImage ?? null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [messageIndex, setMessageIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -166,16 +166,9 @@ export function HomeTopHeader({
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, [canSwitchToDriverMode]);
 
-  useEffect(() => {
-    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
-  }, [driverProfile?.profileImage]);
-
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
       void loadNotificationReadState().then(state => {
         if (active) setHasUnreadNotifications(state.unread.size > 0);
       });
@@ -184,8 +177,12 @@ export function HomeTopHeader({
       return () => {
         active = false;
       };
-    }, [driverProfile?.profileImage, switchModeAvatarSlide]),
+    }, [switchModeAvatarSlide]),
   );
+
+  useEffect(() => {
+    void refreshProfileImage().catch(() => {});
+  }, [driverProfile?.profileImage, refreshProfileImage]);
 
   useFocusEffect(
     useCallback(() => {
