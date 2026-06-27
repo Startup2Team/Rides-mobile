@@ -1,9 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
+  Animated,
   Keyboard,
   Modal,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Line, Polygon, Rect } from 'react-native-svg';
+import { duration } from '@/constants/motion';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { SheetBackdrop } from './SheetBackdrop';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
 
@@ -102,6 +104,9 @@ export function LanguageSelector() {
   const insets = useSafeAreaInsets();
   const [languageFlag, setLanguageFlag] = useState<LanguageFlag>('uk');
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
+  const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = React.useRef(new Animated.Value(500)).current;
+  const [shouldRender, setShouldRender] = React.useState(showLanguageSheet);
   const languageCode = LANGUAGES.find(language => language.value === languageFlag)?.code ?? 'EN';
 
   const openLanguageSheet = () => {
@@ -111,7 +116,49 @@ export function LanguageSelector() {
 
   const selectLanguage = (flag: LanguageFlag) => {
     setLanguageFlag(flag);
-    setShowLanguageSheet(false);
+    handleClose();
+  };
+
+  React.useEffect(() => {
+    if (showLanguageSheet) {
+      setShouldRender(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: duration.slow,
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    backdropOpacity.setValue(0);
+    sheetTranslateY.setValue(500);
+    setShouldRender(false);
+  }, [backdropOpacity, sheetTranslateY, showLanguageSheet]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: 500,
+        duration: duration.toast,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShouldRender(false);
+      setShowLanguageSheet(false);
+    });
   };
 
   return (
@@ -129,52 +176,63 @@ export function LanguageSelector() {
       </TouchableOpacity>
 
       <Modal
-        visible={showLanguageSheet}
+        visible={shouldRender}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowLanguageSheet(false)}
+        animationType="none"
+        onRequestClose={handleClose}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowLanguageSheet(false)} />
-        <View
+        <SheetBackdrop
+          onPress={handleClose}
+          animatedOpacity={backdropOpacity}
+          blurIntensity={0}
+          lightScrimOpacity={0.3}
+          darkScrimOpacity={0.45}
+        />
+        <Animated.View
           style={[
             styles.languageSheet,
             {
               backgroundColor: colors.background,
-              borderColor: colors.border,
-              paddingBottom: insets.bottom + 18,
+              transform: [{ translateY: sheetTranslateY }],
+              paddingBottom: Math.max(insets.bottom, spacing[20]),
             },
           ]}
         >
-          <View style={styles.sheetHandle} />
-          <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Choose language</Text>
-          <View style={styles.languageOptions}>
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetTitleGroup}>
+              <Text style={[styles.sheetTitleText, { color: colors.foreground }]}>Choose language</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.sheetCloseButton, { backgroundColor: colors.muted }]}
+              onPress={handleClose}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close language menu"
+            >
+              <Feather name="x" size={icons.semantic.button} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.languageOptionsCard, { backgroundColor: colors.card }]}>
             {LANGUAGES.map(language => {
               const selected = language.value === languageFlag;
               return (
                 <TouchableOpacity
                   key={language.value}
-                  style={[
-                    styles.languageOption,
-                    {
-                      backgroundColor: selected ? colors.primaryHex + '18' : colors.card,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                  activeOpacity={0.85}
+                  style={styles.languageOption}
+                  activeOpacity={0.7}
                   onPress={() => selectLanguage(language.value)}
+                  accessibilityRole="button"
+                  accessibilityLabel={language.label}
                 >
-                  <View style={[styles.languageOptionFlag, { backgroundColor: colors.card }]}>
-                    <FlagPreview flag={language.value} />
-                  </View>
                   <Text style={[styles.languageOptionText, { color: colors.foreground }]}>
                     {language.label}
                   </Text>
-                  {selected && <Feather name="check" size={icons.size.lg} color={colors.primary} />}
+                  {selected && <Feather name="check" size={icons.semantic.row} color={colors.primary} />}
                 </TouchableOpacity>
               );
             })}
           </View>
-        </View>
+        </Animated.View>
       </Modal>
     </>
   );
@@ -208,56 +266,56 @@ const styles = StyleSheet.create({
   flagSvg: {
     transform: [{ scale: 0.64 }],
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
   languageSheet: {
     position: 'absolute',
     left: spacing[0],
     right: spacing[0],
     bottom: spacing[0],
-    borderTopLeftRadius: radius.sheetCompact,
-    borderTopRightRadius: radius.sheetCompact,
-    borderTopWidth: 1,
-    paddingTop: spacing[10],
-    paddingHorizontal: 22,
-    gap: semanticSpacing.comfortableGap,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingTop: spacing[16],
+    paddingHorizontal: semanticSpacing.sheetPadding,
+    zIndex: 90,
   },
-  sheetHandle: {
-    width: 42,
-    height: sizes.sheet.handleHeight,
-    borderRadius: radius.xxs,
-    backgroundColor: '#777',
-    alignSelf: 'center',
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: semanticSpacing.inlineGap,
   },
-  sheetTitle: {
-    ...typography.h3,
-    fontFamily: typography.badge.fontFamily,
-  },
-  languageOptions: {
-    gap: spacing[10],
-  },
-  languageOption: {
-    minHeight: 64,
-    borderRadius: sizes.avatar.sm,
-    borderWidth: 1.5,
-    paddingHorizontal: semanticSpacing.listItemPadding,
+  sheetTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: semanticSpacing.rowGap,
   },
-  languageOptionFlag: {
-    width: sizes.avatar.md,
-    height: sizes.avatar.md,
-    borderRadius: radius['3xl'],
+  sheetTitleText: {
+    color: '#FFFFFF',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
+  },
+  sheetCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  languageOptionsCard: {
+    borderRadius: radius.card,
     overflow: 'hidden',
+    marginTop: spacing[16],
+    marginBottom: semanticSpacing.inlineGap,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[16],
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
   languageOptionText: {
     flex: 1,
     ...typography.title,
-    fontFamily: typography.title.fontFamily,
+    fontFamily: typography.label.fontFamily,
   },
 });
