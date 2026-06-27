@@ -117,12 +117,20 @@ Repositories are the correct place to add:
 
 ## Current Low-Risk Consumers
 
-The only consumer migrated in Phase 7D is the saved-locations flow.
+The first extracted domain consumer is the saved-locations flow.
 
 - `SavedLocationsContext` now depends on `savedLocationsRepository`
 - behavior stays the same
 - storage format stays the same
 - UI and navigation stay unchanged
+
+Phase 7F adds the first domain boundary under `domains/saved-locations/`.
+
+- `domains/saved-locations/types.ts` re-exports the saved-location type
+- `domains/saved-locations/repository.ts` re-exports the repository contract and instance
+- `domains/saved-locations/hooks.ts` wraps the existing context for compatibility
+- `hooks/useSavedLocations.ts` now forwards through the domain entry point
+- the context remains the compatibility layer until a later TanStack Query migration
 
 ## Domain-First Direction
 
@@ -134,6 +142,8 @@ That scaffold does not change runtime behavior. It simply makes the future migra
 2. repository boundaries stay stable
 3. domain-specific stores and query hooks can be moved in later phases
 4. file moves can happen with less risk because the ownership model is already frozen in docs and tests
+
+Phase 7F makes `saved-locations` the first real extracted domain module without changing runtime behavior.
 
 The repository layer remains the correct boundary for source selection while the domain scaffold becomes the organizational map for the next phases.
 This is the domain-first direction for the app.

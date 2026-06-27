@@ -8,7 +8,8 @@ jest.mock('expo-location', () => ({
   ),
 }));
 
-import { savedLocationsRepository, paymentRepository, notificationRepository, rideRepository, searchRepository, mapRepository, authRepository, profileRepository, driverRepository, vehicleRepository } from '@/data/repositories';
+import { paymentRepository, notificationRepository, rideRepository, searchRepository, mapRepository, authRepository, profileRepository, driverRepository, vehicleRepository } from '@/data/repositories';
+import { savedLocationsRepository } from '@/domains/saved-locations/repository';
 import { createListenerSet } from '@/state/storeUtils';
 import { KIGALI_CENTER } from '@/types';
 

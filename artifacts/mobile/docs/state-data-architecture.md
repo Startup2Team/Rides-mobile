@@ -1221,6 +1221,14 @@ The immediate low-risk consumer migrated in this phase is `SavedLocationsContext
 
 Phase 7E scaffolds a domain-first organization under [`domains/`](../domains/).
 
+Phase 7F makes `saved-locations` the first extracted domain:
+
+- `domains/saved-locations/types.ts` owns the saved-location type re-export
+- `domains/saved-locations/repository.ts` owns the repository entry point
+- `domains/saved-locations/hooks.ts` owns the public compatibility hooks
+- `SavedLocationsContext` remains the compatibility provider for now
+- later phases can replace the compatibility layer with query-backed reads without changing the public domain API
+
 The goal is not to move runtime code yet. The goal is to make ownership explicit before imports start shifting.
 
 - `domains/<name>/README.md` documents ownership for each domain

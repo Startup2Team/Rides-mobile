@@ -13,16 +13,19 @@ Must not own:
 - notification state
 
 Current source files outside this domain:
+- `hooks/useSavedLocations.ts` compatibility wrapper
 - `context/SavedLocationsContext.tsx`
 - `persistence/savedLocationsPersistence.ts`
 - `app/saved-place-selector.tsx`
 
 Future migration plan:
-- move saved-place rules into `domains/saved-locations`
+- keep `SavedLocationsContext` as a compatibility layer for now
+- move query reads to TanStack Query in a later phase without changing the public domain API
 - keep repository boundary in `SavedLocationsRepository`
 
 Ownership:
 - repository: `SavedLocationsRepository`
 - store: none yet
-- query: future saved-locations query hooks
+- query: future saved-locations query hooks and cache adapters
 - events: saved-place-added, saved-place-updated, saved-place-removed
+- compatibility: `SavedLocationsContext` and `hooks/useSavedLocations.ts`

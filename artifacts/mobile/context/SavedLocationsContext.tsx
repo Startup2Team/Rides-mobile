@@ -7,8 +7,9 @@ import React, {
   useState,
 } from 'react';
 import { MAX_SAVED_LOCATIONS } from '@/constants/savedLocations';
-import { savedLocationsRepository } from '@/data/repositories';
-import { RideLocation, SavedLocation } from '@/types';
+import { savedLocationsRepository } from '@/domains/saved-locations/repository';
+import type { SavedLocation } from '@/domains/saved-locations/types';
+import type { RideLocation } from '@/types';
 
 interface SavedLocationsContextValue {
   savedPlaces: SavedLocation[];
