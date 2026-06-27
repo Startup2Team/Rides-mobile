@@ -192,6 +192,52 @@ describe('MapPickerScreen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
+  test('confirming a saved-place edit returns the matching draft selection', () => {
+    mockParams = {
+      target: 'saved-place',
+      mode: 'saved-place-edit',
+      sessionId: 'session-2',
+      savedPlaceId: 'place-1',
+      label: 'Work',
+      initialLatitude: '-1.95',
+      initialLongitude: '30.07',
+      initialAddress: 'Edited location',
+    };
+
+    render(<MapPickerScreen />);
+
+    fireEvent.press(screen.getByText('Confirm Work Location'));
+
+    expect(mockSetResult).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-2',
+      mode: 'saved-place-edit',
+      savedPlaceId: 'place-1',
+      address: 'Edited location',
+      latitude: -1.95,
+      longitude: 30.07,
+      createdAt: expect.any(Number),
+      target: 'saved-place',
+    }));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  test('cancel closes the map picker without writing a result', () => {
+    mockParams = {
+      target: 'pickup',
+      mode: 'booking',
+      initialLatitude: '-1.95',
+      initialLongitude: '30.07',
+      initialAddress: 'Map Pickup',
+    };
+
+    render(<MapPickerScreen />);
+
+    fireEvent.press(screen.getByText('Back'));
+
+    expect(mockSetResult).not.toHaveBeenCalled();
+    expect(mockBack).toHaveBeenCalled();
+  });
+
   test('double confirm only writes one saved-place result', () => {
     mockParams = {
       target: 'saved-place',

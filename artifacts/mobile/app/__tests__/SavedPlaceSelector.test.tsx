@@ -122,11 +122,14 @@ jest.mock('@expo/vector-icons', () => {
 
 jest.mock('@/components/GlassHeader', () => {
   const React = require('react');
-  const { Text, View } = require('react-native');
+  const { Text, TouchableOpacity, View } = require('react-native');
   return {
     GlassHeader: ({ title, right }: { title: string; right?: React.ReactNode }) => (
       <View>
         <Text>{title}</Text>
+        <TouchableOpacity onPress={() => mockBack()}>
+          <Text>Back</Text>
+        </TouchableOpacity>
         {right}
       </View>
     ),
@@ -450,6 +453,15 @@ describe('SavedPlaceSelectorScreen', () => {
     }));
     expect(mockPersist).not.toHaveBeenCalled();
     expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  test('back cancels the selector without persisting changes', () => {
+    render(<SavedPlaceSelectorScreen />);
+
+    fireEvent.press(screen.getByText('Back'));
+
+    expect(mockPersist).not.toHaveBeenCalled();
+    expect(mockBack).toHaveBeenCalled();
   });
 
   test('delete flow triggers confirmation and deletes saved place', async () => {
