@@ -1216,3 +1216,16 @@ Phase 7D introduces repository boundaries without changing runtime behavior.
 - Local adapters are the default implementation until backend and offline strategies are introduced.
 
 The immediate low-risk consumer migrated in this phase is `SavedLocationsContext`, which now reads and writes through `savedLocationsRepository` instead of calling storage helpers directly.
+
+## 13. Domain-First Direction
+
+Phase 7E scaffolds a domain-first organization under [`domains/`](../domains/).
+
+The goal is not to move runtime code yet. The goal is to make ownership explicit before imports start shifting.
+
+- `domains/<name>/README.md` documents ownership for each domain
+- `domains/domainOwnership.ts` provides a typed ownership map
+- repository boundaries remain the data boundary
+- contexts and focused stores remain the short-term integration layer
+- runtime behavior remains unchanged until later phases move code deliberately
+This is the domain-first direction for state and data organization.

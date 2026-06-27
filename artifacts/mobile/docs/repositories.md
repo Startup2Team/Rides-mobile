@@ -123,3 +123,17 @@ The only consumer migrated in Phase 7D is the saved-locations flow.
 - behavior stays the same
 - storage format stays the same
 - UI and navigation stay unchanged
+
+## Domain-First Direction
+
+Phase 7E adds the [`domains/`](../domains/) scaffold and the typed ownership map in `domains/domainOwnership.ts`.
+
+That scaffold does not change runtime behavior. It simply makes the future migration path explicit:
+
+1. domain ownership is documented
+2. repository boundaries stay stable
+3. domain-specific stores and query hooks can be moved in later phases
+4. file moves can happen with less risk because the ownership model is already frozen in docs and tests
+
+The repository layer remains the correct boundary for source selection while the domain scaffold becomes the organizational map for the next phases.
+This is the domain-first direction for the app.
