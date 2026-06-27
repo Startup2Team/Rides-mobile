@@ -28,6 +28,11 @@ import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { AppText } from '@/components/AppText';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 
 
@@ -65,19 +70,19 @@ function MenuItem({
             <SymbolView
               name="square.and.arrow.up"
               tintColor={destructive ? colors.destructive : colors.primary}
-              size={20}
+              size={icons.size.lg}
             />
           ) : iconFamily === 'feather' ? (
-            <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={destructive ? colors.destructive : colors.primary} />
+            <Feather name={icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />
           ) : (
-            <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={destructive ? colors.destructive : colors.primary} />
+            <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />
           )}
         </View>
         <View style={styles.menuCopy}>
           <AppText variant="body" style={[styles.menuLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</AppText>
           {detail ? <AppText variant="tiny" style={[styles.menuDetail, { color: colors.mutedForeground }]}>{detail}</AppText> : null}
         </View>
-        {!destructive && <Feather name="chevron-right" size={18} color={colors.mutedForeground} />}
+        {!destructive && <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />}
       </TouchableOpacity>
       {showSeparator && <View style={[styles.separator, { backgroundColor: separatorColor }]} />}
     </>
@@ -150,7 +155,7 @@ export default function ProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: pageBackground }]}>
       <OfflineBanner />
-      <View style={{ paddingTop: insets.top + 16, backgroundColor: pageBackground }}>
+      <View style={{ paddingTop: insets.top + spacing[16], backgroundColor: pageBackground }}>
         <View style={styles.avatarSection}>
           <View style={styles.profileInfoContainer}>
             <TouchableOpacity
@@ -183,7 +188,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
 
             <View style={styles.ratingBadge}>
-              <FontAwesome name="star" size={12} color={colors.primary} />
+              <FontAwesome name="star" size={icons.size.xxs} color={colors.primary} />
               <AppText variant="label" style={[styles.ratingText, { color: colors.foreground }]}>5.0</AppText>
             </View>
           </View>
@@ -216,7 +221,7 @@ export default function ProfileScreen() {
       <GlassScrollView
         indicatorTop={0}
         contentContainerStyle={{
-          paddingTop: 8,
+          paddingTop: spacing[8],
           paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
         }}
       >
@@ -236,12 +241,12 @@ export default function ProfileScreen() {
               {driverAction.label === 'In Review' ? 'Review usually takes not too long' : `Earn money driving on ${APP_NAME}`}
             </AppText>
           </View>
-          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
         </TouchableOpacity>
       )}
 
       {canAccessDriverMode(driverProfile) && (
-        <View style={[styles.menuSection, { backgroundColor: cardFill, marginHorizontal: 16, marginBottom: 20 }]}>
+        <View style={[styles.menuSection, { backgroundColor: cardFill, marginHorizontal: semanticSpacing.cardPadding, marginBottom: semanticSpacing.screenPadding }]}>
           <MenuItem
             iconFamily="mci"
             icon="swap-horizontal"
@@ -418,26 +423,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingHorizontal: semanticSpacing.screenPadding,
+    paddingBottom: spacing[24],
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
+    ...elevation.md,
     shadowOpacity: 0.16,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: spacing[8],
     ...Platform.select({
       web: { boxShadow: '0 6px 16px rgba(0,0,0,0.16)' },
     }),
   },
   avatarInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
     overflow: 'hidden',
     position: 'relative',
     alignItems: 'center',
@@ -460,10 +463,10 @@ const styles = StyleSheet.create({
   },
   profileInfoContainer: {
     flex: 1,
-    gap: 8,
+    gap: semanticSpacing.inlineGap,
   },
   nameContainer: {
-    gap: 0,
+    gap: spacing[0],
   },
   nameFirst: {
     ...typography.displayXL,
@@ -481,43 +484,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 4,
+    gap: spacing[4],
   },
   ratingText: {
     ...typography.label,
     fontFamily: typography.title.fontFamily,
   },
   contactDetails: {
-    marginTop: 4,
-    gap: 2,
+    marginTop: spacing[4],
+    gap: spacing[2],
   },
   phone: { ...typography.bodySmall },
   email: { ...typography.label, fontFamily: typography.caption.fontFamily },
   driverBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    minHeight: 52,
-    borderRadius: 14,
-    gap: 14,
+    marginHorizontal: semanticSpacing.cardPadding,
+    marginBottom: semanticSpacing.screenPadding,
+    paddingHorizontal: semanticSpacing.screenPadding,
+    paddingVertical: semanticSpacing.cardPadding,
+    minHeight: sizes.input.lg,
+    borderRadius: radius.card,
+    gap: semanticSpacing.listItemPadding,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
   },
   driverBannerIcon: {
-    width: 32,
+    width: sizes.avatar.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bannerTitle: { ...typography.title },
-  bannerDesc: { ...typography.label, fontFamily: typography.caption.fontFamily, marginTop: 2 },
-  sectionGroup: { gap: 10, marginHorizontal: 16, marginBottom: 20 },
-  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: 2 },
+  bannerDesc: { ...typography.label, fontFamily: typography.caption.fontFamily, marginTop: spacing[2] },
+  sectionGroup: { gap: spacing[10], marginHorizontal: semanticSpacing.cardPadding, marginBottom: semanticSpacing.screenPadding },
+  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: spacing[2] },
   menuSection: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
@@ -526,18 +529,18 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    minHeight: 52,
+    gap: semanticSpacing.listItemPadding,
+    paddingHorizontal: semanticSpacing.screenPadding,
+    paddingVertical: semanticSpacing.cardPadding,
+    minHeight: sizes.input.lg,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 66,
+    marginLeft: spacing[64] + spacing[2],
   },
-  menuIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
-  menuCopy: { flex: 1, gap: 2 },
+  menuIcon: { width: sizes.avatar.sm, alignItems: 'center', justifyContent: 'center' },
+  menuCopy: { flex: 1, gap: spacing[2] },
   menuLabel: { ...typography.body },
   menuDetail: { ...typography.tiny, fontFamily: typography.caption.fontFamily, lineHeight: 16 },
-  version: { ...typography.caption, textAlign: 'center', paddingVertical: 8 },
+  version: { ...typography.caption, textAlign: 'center', paddingVertical: semanticSpacing.inlineGap },
 });

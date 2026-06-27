@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Easing,
   Keyboard,
   Modal,
   PanResponder,
@@ -20,6 +19,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
+import { duration, easing } from '@/constants/motion';
+import { sizes } from '@/constants/sizes';
+import { spacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 import { computeTabBarHeight } from '@/constants/tabBar';
 import { useRoutePreview } from '@/hooks/home/useRoutePreview';
@@ -197,14 +199,14 @@ export default function CustomerHome() {
       pickerTranslateX.setValue(SCREEN_WIDTH);
       Animated.timing(pickerTranslateX, {
         toValue: 0,
-        duration: 300,
-        easing: Easing.out(Easing.cubic),
+        duration: duration.modal,
+        easing: easing.easeOutCubic,
         useNativeDriver: true,
       }).start();
     }
   }, [mapPicker, pickerTranslateX]);
   // ── Derived / layout ──────────────────────────────────────────────────────
-  const recenterBottomOffset = sheetHeight + 16;
+  const recenterBottomOffset = sheetHeight + spacing[16];
   const hasPreciseRouteLocations =
     showBooking
     && destination !== null
@@ -422,8 +424,8 @@ export default function CustomerHome() {
   const closeMapPicker = useCallback(() => {
     Animated.timing(pickerTranslateX, {
       toValue: SCREEN_WIDTH,
-      duration: 250,
-      easing: Easing.out(Easing.cubic),
+      duration: duration.sheet,
+      easing: easing.easeOutCubic,
       useNativeDriver: true,
     }).start(({ finished }) => {
       if (finished) {
@@ -513,7 +515,7 @@ export default function CustomerHome() {
 
       {mapPicker === null ? (
         <HomeTopHeader
-          paddingTop={insets.top + (Platform.OS === 'web' ? 67 : 0) + 12}
+          paddingTop={insets.top + (Platform.OS === 'web' ? 67 : spacing[0]) + spacing[12]}
           locationText={currentLocationAddress}
           locLoading={locLoading}
           profileInitial={user?.name?.trim()?.[0]?.toUpperCase() ?? '?'}
@@ -526,7 +528,7 @@ export default function CustomerHome() {
 
       {/* Map layer button */}
       <TouchableOpacity
-        style={[styles.mapLayerBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset + 56 }]}
+        style={[styles.mapLayerBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset + sizes.thumbnail.sm }]}
         onPress={cycleMapType}
         activeOpacity={0.8}
       >

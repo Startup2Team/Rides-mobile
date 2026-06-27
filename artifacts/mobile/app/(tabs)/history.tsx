@@ -18,16 +18,19 @@ import { RouteTimeline } from '@/components/RouteTimeline';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { AppText } from '@/components/AppText';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 
 /** Matches card horizontal padding — space before calendar / after RWF. */
-const CARD_CONTENT_INSET = 16;
-const INSET_CARD_MARGIN_H = 16;
-const CHEVRON_SIZE = 18;
+const CARD_CONTENT_INSET = semanticSpacing.cardPadding;
+const INSET_CARD_MARGIN_H = semanticSpacing.cardPadding;
+const CHEVRON_SIZE = icons.semantic.row;
 /** Trailing fare slot — keeps large amounts right-aligned without shrinking the status chip row. */
 const FARE_COLUMN_WIDTH = 102;
-const INSET_CARD_RADIUS = Platform.OS === 'ios' ? 10 : 12;
-const CARD_GAP = 12;
+const INSET_CARD_RADIUS = Platform.OS === 'ios' ? radius.md : radius.input;
+const CARD_GAP = semanticSpacing.rowGap;
 
 function RideHistoryCard({ ride }: { ride: Ride }) {
   const colors = useColors();
@@ -80,7 +83,7 @@ function RideHistoryCard({ ride }: { ride: Ride }) {
           <View
             style={[
               styles.metaCluster,
-              fareLabel != null && { paddingRight: FARE_COLUMN_WIDTH + 8 },
+              fareLabel != null && { paddingRight: FARE_COLUMN_WIDTH + spacing[8] },
             ]}
           >
             <View style={[styles.metaItem, styles.metaItemDate]}>
@@ -169,7 +172,7 @@ export default function HistoryScreen() {
       >
         {rideHistory.length === 0 ? (
           <View style={styles.empty}>
-            <Feather name="map" size={48} color={colors.mutedForeground} />
+            <Feather name="map" size={icons.size.hero} color={colors.mutedForeground} />
             <AppText variant="h2" style={[styles.emptyTitle, { color: colors.foreground }]}>No trips yet</AppText>
             <AppText variant="bodySmall" style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
               Your completed trips will appear here
@@ -191,7 +194,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   list: {
     paddingHorizontal: INSET_CARD_MARGIN_H,
-    paddingBottom: 8,
+    paddingBottom: spacing[8],
   },
   cardList: {
     gap: CARD_GAP,
@@ -202,7 +205,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: INSET_CARD_RADIUS,
     paddingHorizontal: CARD_CONTENT_INSET,
-    paddingVertical: 14,
+    paddingVertical: semanticSpacing.listItemPadding,
     overflow: 'hidden',
   },
   cardIos: {
@@ -213,14 +216,14 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     flex: 1,
-    gap: 12,
+    gap: semanticSpacing.rowGap,
     minWidth: 0,
   },
   chevronAnchor: {
     position: 'absolute',
     right: CARD_CONTENT_INSET,
-    top: 0,
-    bottom: 0,
+    top: spacing[0],
+    bottom: spacing[0],
     justifyContent: 'center',
   },
   divider: {
@@ -230,7 +233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: semanticSpacing.rowGap,
     minWidth: 0,
   },
   vehicleLabel: {
@@ -238,8 +241,8 @@ const styles = StyleSheet.create({
     ...typography.title,
     minWidth: 0,
   },
-  routeRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  routeLabels: { flex: 1, gap: 10 },
+  routeRow: { flexDirection: 'row', gap: semanticSpacing.rowGap, alignItems: 'center' },
+  routeLabels: { flex: 1, gap: spacing[10] },
   routeText: { ...typography.bodySmall },
   cardBottom: {
     position: 'relative',
@@ -258,7 +261,7 @@ const styles = StyleSheet.create({
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing[4],
     flexShrink: 0,
   },
   metaItemDate: {
@@ -288,7 +291,7 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: spacing[64] + spacing[16], gap: semanticSpacing.rowGap },
   emptyTitle: { ...typography.h2 },
   emptyDesc: { ...typography.bodySmall, textAlign: 'center' },
 });

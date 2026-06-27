@@ -10,6 +10,8 @@ import {
 import { AppText } from '@/components/AppText';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
+import { icons } from '@/constants/icons';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import type { useColors } from '@/hooks/useColors';
 import type { LocationListTab, LocationSearchTarget } from '@/hooks/home/useLocationSearch';
 import type { GeocodeSuggestion } from '@/services/geocoding';
@@ -80,7 +82,7 @@ export function LocationSearchOverlay({
         style={[
           styles.locationSearchBody,
           {
-            paddingTop: headerMetrics.contentTop - 8,
+            paddingTop: headerMetrics.contentTop - spacing[8],
             paddingBottom: bottomInset,
           },
         ]}
@@ -91,7 +93,7 @@ export function LocationSearchOverlay({
             onPress={() => inputRef.current?.focus()}
             activeOpacity={1}
           >
-            <Feather name="search" size={18} color={colors.mutedForeground} />
+            <Feather name="search" size={icons.semantic.row} color={colors.mutedForeground} />
             <TextInput
               ref={inputRef}
               style={[styles.locationSearchInput, { color: colors.foreground }]}
@@ -116,7 +118,7 @@ export function LocationSearchOverlay({
                 }}
                 activeOpacity={0.75}
               >
-                <Feather name="x" size={16} color={colors.mutedForeground} />
+                <Feather name="x" size={icons.semantic.button} color={colors.mutedForeground} />
               </TouchableOpacity>
             )}
           </TouchableOpacity>
@@ -132,7 +134,7 @@ export function LocationSearchOverlay({
               activeOpacity={0.85}
             >
               <View style={[styles.locationQuickIcon, { backgroundColor: colors.primaryHex + '18' }]}>
-                <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.primary} />
+                <MaterialCommunityIcons name="crosshairs-gps" size={icons.semantic.button} color={colors.primary} />
               </View>
               <View style={styles.locationQuickText}>
                 <AppText variant="caption" style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Use current location</AppText>
@@ -146,7 +148,7 @@ export function LocationSearchOverlay({
               activeOpacity={0.85}
             >
               <View style={[styles.locationQuickIcon, { backgroundColor: colors.primaryHex + '18' }]}>
-                <MaterialCommunityIcons name="map-outline" size={16} color={colors.primary} />
+                <MaterialCommunityIcons name="map-outline" size={icons.semantic.button} color={colors.primary} />
               </View>
               <View style={styles.locationQuickText}>
                 <AppText variant="caption" style={[styles.locationQuickTitle, { color: colors.foreground }]} numberOfLines={1}>Choose on map</AppText>
@@ -179,14 +181,14 @@ export function LocationSearchOverlay({
 
         <GlassScrollView
           style={styles.locationSearchScroll}
-          indicatorTop={8}
-          indicatorBottom={bottomInset + 20}
+          indicatorTop={spacing[8]}
+          indicatorBottom={bottomInset + spacing[20]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={Keyboard.dismiss}
           contentContainerStyle={[
             styles.locationSearchList,
-            { paddingHorizontal: 20, paddingBottom: bottomInset + 20 },
+            { paddingHorizontal: semanticSpacing.screenPadding, paddingBottom: bottomInset + spacing[20] },
           ]}
         >
           {hasSearchResults && (
@@ -198,7 +200,7 @@ export function LocationSearchOverlay({
                   onPress={() => onApplyLocation(target, buildTypedLocation())}
                 >
                   <View style={styles.locationOptionIcon}>
-                    <Feather name="edit-2" size={16} color={colors.foreground} />
+                    <Feather name="edit-2" size={icons.semantic.button} color={colors.foreground} />
                   </View>
                   <View style={styles.locationOptionText}>
                     <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -228,7 +230,7 @@ export function LocationSearchOverlay({
                     onPress={() => onApplyLocation(target, location)}
                   >
                     <View style={styles.locationOptionIcon}>
-                      <MaterialCommunityIcons name="map-marker-outline" size={18} color={colors.foreground} />
+                      <MaterialCommunityIcons name="map-marker-outline" size={icons.semantic.row} color={colors.foreground} />
                     </View>
                     <View style={styles.locationOptionText}>
                       <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>

@@ -19,6 +19,10 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppText } from '@/components/AppText';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { buttonCornerRadius } from '@/constants/buttons';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { typography } from '@/constants/typography';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
@@ -155,19 +159,19 @@ export default function SavedPlaceSelectorScreen() {
           style={[
             styles.searchBody,
             {
-              paddingTop: headerMetrics.contentTop + 24,
+              paddingTop: headerMetrics.contentTop + spacing[24],
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 16,
+              gap: semanticSpacing.cardPadding,
             },
           ]}
         >
-          <Feather name="alert-triangle" size={48} color={colors.destructive} />
+          <Feather name="alert-triangle" size={icons.size.hero} color={colors.destructive} />
           <AppText variant="title" style={{ color: colors.foreground, textAlign: 'center' }}>
             Saved place not found or has been deleted.
           </AppText>
           <TouchableOpacity
-            style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.primary }}
+            style={{ paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: spacing[10], borderRadius: radius['3xl'], backgroundColor: colors.primary }}
             onPress={() => router.back()}
           >
             <AppText variant="button" style={{ color: colors.primaryForeground }}>Go Back</AppText>
@@ -288,14 +292,14 @@ export default function SavedPlaceSelectorScreen() {
         title={displayLabel === 'Other' ? (mode === 'edit' ? 'Edit Place' : 'Add Place') : `${mode === 'edit' ? 'Edit' : 'Add'} ${label}`}
         right={
           mode === 'edit' && existing ? (
-            <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: sizes.iconButton.md, height: sizes.iconButton.md, alignItems: 'center', justifyContent: 'center' }}>
               <TouchableOpacity
                 onPress={deletePlace}
                 activeOpacity={0.8}
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
+                  width: sizes.avatar.xs,
+                  height: sizes.avatar.xs,
+                  borderRadius: radius.xl,
                   backgroundColor: colors.primary,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -304,16 +308,16 @@ export default function SavedPlaceSelectorScreen() {
                 accessibilityLabel="Delete saved place"
                 testID="header-delete-button"
               >
-                <Feather name="trash-2" size={16} color={colors.primaryForeground} />
+                <Feather name="trash-2" size={icons.semantic.button} color={colors.primaryForeground} />
               </TouchableOpacity>
             </View>
           ) : undefined
         }
       />
-      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - 4 }]}>
+      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - spacing[4] }]}>
         {displayLabel === 'Other' ? (
           <View style={[styles.labelInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="bookmark" size={18} color={colors.mutedForeground} />
+            <Feather name="bookmark" size={icons.semantic.row} color={colors.mutedForeground} />
             <TextInput
               autoFocus
               value={customLabel}
@@ -329,7 +333,7 @@ export default function SavedPlaceSelectorScreen() {
           </View>
         ) : null}
         <View style={[styles.searchInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="search" size={18} color={colors.mutedForeground} />
+          <Feather name="search" size={icons.semantic.row} color={colors.mutedForeground} />
           <TextInput
             ref={inputRef}
             autoFocus={displayLabel !== 'Other'}
@@ -352,7 +356,7 @@ export default function SavedPlaceSelectorScreen() {
               onPress={clearSearchText}
               accessibilityLabel="Clear address search"
             >
-              <Feather name="x" size={16} color={colors.mutedForeground} />
+              <Feather name="x" size={icons.semantic.button} color={colors.mutedForeground} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -366,7 +370,7 @@ export default function SavedPlaceSelectorScreen() {
 
         <GlassScrollView
           style={styles.results}
-          indicatorTop={8}
+          indicatorTop={spacing[8]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
@@ -427,43 +431,43 @@ function normalizeLabel(value?: string): SavedPlaceLabel {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  searchBody: { flex: 1, paddingHorizontal: 16 },
+  searchBody: { flex: 1, paddingHorizontal: semanticSpacing.cardPadding },
   searchInputWrap: {
-    height: 52,
-    borderRadius: buttonCornerRadius(52),
+    height: sizes.input.lg,
+    borderRadius: buttonCornerRadius(sizes.input.lg),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
+    gap: spacing[10],
+    paddingHorizontal: semanticSpacing.listItemPadding,
   },
   labelInputWrap: {
-    height: 52,
-    borderRadius: buttonCornerRadius(52),
+    height: sizes.input.lg,
+    borderRadius: buttonCornerRadius(sizes.input.lg),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    gap: spacing[10],
+    paddingHorizontal: semanticSpacing.listItemPadding,
+    marginBottom: spacing[10],
   },
   searchInput: { flex: 1, ...typography.title, fontFamily: typography.label.fontFamily },
   searchClear: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: sizes.avatar.xs,
+    height: sizes.avatar.xs,
+    borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mapOption: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 18 },
-  mapOptionIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  mapOption: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: radius['3xl'] - spacing[2] },
+  mapOptionIcon: { width: sizes.iconButton.md, height: sizes.iconButton.md, borderRadius: radius.sheetCompact, alignItems: 'center', justifyContent: 'center' },
   mapOptionText: { flex: 1, ...typography.h3 },
   results: { flex: 1 },
   resultRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   resultCopy: { flex: 1, gap: 3 },
   resultTitle: { ...typography.bodySmall, fontFamily: typography.title.fontFamily },
   resultSubtitle: { ...typography.tiny, fontFamily: typography.caption.fontFamily },
-  emptyText: { paddingVertical: 22, ...typography.caption },
+  emptyText: { paddingVertical: radius.sheetCompact, ...typography.caption },
 
 });

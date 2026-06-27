@@ -1,10 +1,17 @@
 import { Easing } from 'react-native';
 
-const easingSource = Easing ?? {
+const fallbackEasing = {
   cubic: (value: number) => value,
   in: (fn: (value: number) => number) => fn,
   out: (fn: (value: number) => number) => fn,
   quad: (value: number) => value,
+};
+
+const easingSource = {
+  cubic: Easing?.cubic ?? fallbackEasing.cubic,
+  in: Easing?.in ?? fallbackEasing.in,
+  out: Easing?.out ?? fallbackEasing.out,
+  quad: Easing?.quad ?? fallbackEasing.quad,
 };
 
 export const duration = {

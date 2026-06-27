@@ -6,6 +6,9 @@ import { AppButton } from '@/components/AppButton';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
+import { duration } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { showCancelSearchAlert } from '@/utils/cancelSearchAlert';
 import {
   VEHICLE_MAP_MARKER_IMAGES,
@@ -36,7 +39,7 @@ export default function SearchingScreen() {
           }),
           Animated.timing(anim, {
             toValue: 0,
-            duration: 0,
+            duration: duration.instant,
             useNativeDriver: true,
           }),
         ])
@@ -96,8 +99,8 @@ export default function SearchingScreen() {
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0),
-          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0),
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : spacing[0]),
+          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : spacing[0]),
         },
       ]}
     >
@@ -210,15 +213,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   routeCard: {
-    borderRadius: 16,
-    padding: 14,
-    gap: 8,
-    marginTop: 8,
+    borderRadius: radius['2xl'],
+    padding: semanticSpacing.listItemPadding,
+    gap: semanticSpacing.inlineGap,
+    marginTop: spacing[8],
   },
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing[10],
   },
   routeDot: {
     width: 10,
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   routeLine: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginLeft: 20,
   },
   routeText: {

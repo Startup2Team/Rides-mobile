@@ -15,6 +15,10 @@ import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const FAQS = [
   {
@@ -91,16 +95,16 @@ export default function HelpSupportScreen() {
               <TouchableOpacity style={styles.contactRow} onPress={ch.onPress} activeOpacity={0.75}>
                 <View style={styles.contactIcon}>
                   {ch.family === 'mci' ? (
-                    <MaterialCommunityIcons name={ch.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+                    <MaterialCommunityIcons name={ch.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={colors.primary} />
                   ) : (
-                    <Feather name={ch.icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+                    <Feather name={ch.icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={colors.primary} />
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.contactLabel, { color: colors.foreground }]}>{ch.label}</Text>
                   <Text style={[styles.contactDetail, { color: colors.mutedForeground }]}>{ch.detail}</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                <Feather name="chevron-right" size={icons.semantic.button} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
           ))}
@@ -120,7 +124,7 @@ export default function HelpSupportScreen() {
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.faqQuestion, { color: colors.foreground, flex: 1 }]}>{faq.q}</Text>
-                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={icons.semantic.button} color={colors.mutedForeground} />
                 </TouchableOpacity>
                 {isOpen && (
                   <View style={[styles.faqAnswer, { borderTopColor: colors.border }]}>
@@ -145,36 +149,36 @@ export default function HelpSupportScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { padding: 20 },
+  scroll: { padding: semanticSpacing.screenPadding },
   sectionLabel: {
     ...typography.tiny,
     fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
-    marginBottom: 10,
-    marginTop: 24,
+    marginBottom: spacing[10],
+    marginTop: semanticSpacing.sectionGap,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
-  contactRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  contactIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.listItemPadding },
+  contactRow: { flexDirection: 'row', alignItems: 'center', padding: semanticSpacing.listItemPadding, gap: semanticSpacing.rowGap },
+  contactIcon: { width: sizes.avatar.md, height: sizes.avatar.md, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' },
   contactLabel: { ...typography.bodySmall, fontFamily: typography.title.fontFamily},
-  contactDetail: { ...typography.caption, fontFamily: typography.body.fontFamily, marginTop: 2 },
-  faqRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  contactDetail: { ...typography.caption, fontFamily: typography.body.fontFamily, marginTop: spacing[2] },
+  faqRow: { flexDirection: 'row', alignItems: 'center', padding: semanticSpacing.listItemPadding, gap: semanticSpacing.rowGap },
   faqQuestion: { ...typography.bodySmall, fontFamily: typography.label.fontFamily, lineHeight: 20 },
-  faqAnswer: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: StyleSheet.hairlineWidth },
-  faqAnswerText: { ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 20, marginTop: 10 },
+  faqAnswer: { paddingHorizontal: semanticSpacing.listItemPadding, paddingBottom: semanticSpacing.listItemPadding, borderTopWidth: StyleSheet.hairlineWidth },
+  faqAnswerText: { ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 20, marginTop: spacing[10] },
   infoBox: {
     flexDirection: 'row',
-    gap: 8,
-    padding: 14,
-    borderRadius: 14,
-    marginTop: 20,
+    gap: semanticSpacing.inlineGap,
+    padding: semanticSpacing.listItemPadding,
+    borderRadius: radius.card,
+    marginTop: spacing[20],
     alignItems: 'flex-start',
     ...Platform.select({
       ios: { borderCurve: 'continuous' },

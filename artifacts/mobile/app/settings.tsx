@@ -19,6 +19,10 @@ import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { AppText } from '@/components/AppText';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 
 export default function SettingsScreen() {
@@ -75,14 +79,14 @@ export default function SettingsScreen() {
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 22,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: radius.sheetCompact,
         }}
       >
         <Section title="Preferences">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
             <View style={styles.languageRow}>
-              <View style={styles.rowIcon}><Feather name="globe" size={20} color={colors.primary} /></View>
+              <View style={styles.rowIcon}><Feather name="globe" size={icons.size.lg} color={colors.primary} /></View>
               <View style={styles.rowCopy}>
                 <AppText variant="body" style={[styles.rowLabel, { color: colors.foreground }]}>Language</AppText>
                 <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]}>Choose your preferred language</AppText>
@@ -152,33 +156,33 @@ function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.rowIcon}>
         {iconFamily === 'mci' ? (
-          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={colors.primary} />
         ) : (
-          <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+          <Feather name={icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={colors.primary} />
         )}
       </View>
       <View style={styles.rowCopy}>
         <AppText variant="body" style={[styles.rowLabel, { color: colors.foreground }]}>{label}</AppText>
         {detail ? <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</AppText> : null}
       </View>
-      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  section: { gap: 10 },
-  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: 2 },
+  section: { gap: spacing[10] },
+  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: spacing[2] },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 58, paddingHorizontal: 16, paddingVertical: 12 },
-  languageRow: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 66, paddingHorizontal: 16, paddingVertical: 10 },
-  rowIcon: { width: 24, alignItems: 'center', justifyContent: 'center' },
-  rowCopy: { flex: 1, minWidth: 0, gap: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 58, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[12] },
+  languageRow: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: spacing[64] + spacing[2], paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[10] },
+  rowIcon: { width: icons.size.xl, alignItems: 'center', justifyContent: 'center' },
+  rowCopy: { flex: 1, minWidth: 0, gap: spacing[2] },
   rowLabel: { ...typography.body, fontFamily: typography.label.fontFamily },
   rowDetail: { ...typography.tiny, fontFamily: typography.caption.fontFamily },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 53 },

@@ -13,6 +13,10 @@ import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { RideLocation, VEHICLE_LABELS } from '@/types';
@@ -59,7 +63,7 @@ function DetailRow({
 
   return (
     <View style={styles.detailRow}>
-      <Feather name={icon} size={18} color={color} />
+      <Feather name={icon} size={icons.semantic.row} color={color} />
       <AppText variant="bodySmall" style={[styles.detailLabel, { color: colors.mutedForeground }]}>{label}</AppText>
       <AppText variant="bodySmall" style={[styles.detailValue, { color: valueColor ?? colors.foreground }]} numberOfLines={1}>
         {value}
@@ -132,7 +136,7 @@ export default function RideDetailScreen() {
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <GlassHeader title="Ride Details" />
         <View style={styles.empty}>
-          <Feather name="map" size={40} color={colors.mutedForeground} />
+          <Feather name="map" size={sizes.avatar.md} color={colors.mutedForeground} />
           <AppText variant="h3" style={[styles.emptyTitle, { color: colors.foreground }]}>Ride not found</AppText>
           <AppText variant="bodySmall" style={[styles.emptyText, { color: colors.mutedForeground }]}>
             This ride may not be available in your history anymore.
@@ -237,7 +241,7 @@ export default function RideDetailScreen() {
             <View style={[styles.card, { backgroundColor: colors.card }]}>
               <View style={styles.driverRow}>
                 <ProfileAvatarCircle
-                  size={44}
+                  size={sizes.iconButton.md}
                   initial={ride.driver.name.trim()[0]?.toUpperCase() ?? '?'}
                   imageUri={ride.driver.profileImage ?? null}
                   accessibilityLabel={`${ride.driver.name} profile photo`}
@@ -262,20 +266,20 @@ export default function RideDetailScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { paddingHorizontal: 20, gap: 12 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 32 },
+  scroll: { paddingHorizontal: semanticSpacing.screenPadding, gap: semanticSpacing.rowGap },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: semanticSpacing.inlineGap, paddingHorizontal: spacing[32] },
   emptyTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily },
   emptyText: { ...typography.bodySmall, textAlign: 'center' },
   summaryCard: {
-    borderRadius: 18,
-    padding: 18,
-    gap: 16,
+    borderRadius: radius['3xl'] - spacing[2],
+    padding: radius['3xl'] - spacing[2],
+    gap: semanticSpacing.cardPadding,
   },
-  summaryTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  summaryTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap },
   summaryLabel: { ...typography.caption, fontFamily: typography.title.fontFamily, textTransform: 'uppercase', letterSpacing: 0.5 },
-  fareValue: { ...typography.display, marginTop: 4 },
+  fareValue: { ...typography.display, marginTop: spacing[4] },
   summaryDivider: { height: StyleSheet.hairlineWidth },
-  summaryMetaRow: { flexDirection: 'row', gap: 12 },
+  summaryMetaRow: { flexDirection: 'row', gap: semanticSpacing.rowGap },
   summaryMetaItem: { flex: 1, minWidth: 0 },
   summaryMetaDateItem: { flex: 1.35 },
   summaryMetaLabel: { ...typography.tiny, marginBottom: 3 },
@@ -284,15 +288,15 @@ const styles = StyleSheet.create({
     ...typography.tiny,
     fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
-    marginTop: 10,
+    marginTop: spacing[10],
   },
-  card: { borderRadius: 16, padding: 16 },
-  routeRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  routeLabels: { flex: 1, gap: 10 },
+  card: { borderRadius: radius['2xl'], padding: semanticSpacing.cardPadding },
+  routeRow: { flexDirection: 'row', gap: semanticSpacing.listItemPadding, alignItems: 'center' },
+  routeLabels: { flex: 1, gap: spacing[10] },
   routeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: semanticSpacing.rowGap,
     minWidth: 0,
   },
   routeItemText: { flex: 1, gap: 3, minWidth: 0 },
@@ -300,29 +304,29 @@ const styles = StyleSheet.create({
   routeItemValue: { ...typography.bodySmall, fontFamily: typography.title.fontFamily },
   saveLocationButton: {
     minWidth: 54,
-    height: 34,
+    height: sizes.iconButton.sm,
     borderRadius: 17,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: semanticSpacing.rowGap,
     flexShrink: 0,
   },
   saveLocationButtonText: {
     ...typography.badge,
   },
   routeDivider: { height: StyleSheet.hairlineWidth },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 34 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, minHeight: sizes.iconButton.sm },
   detailLabel: { flex: 1, ...typography.bodySmall },
   detailValue: { maxWidth: '48%', ...typography.bodySmall, fontFamily: typography.badge.fontFamily, textAlign: 'right' },
-  rowDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowDivider: { height: StyleSheet.hairlineWidth, marginVertical: semanticSpacing.inlineGap },
+  driverRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   driverName: { ...typography.body, fontFamily: typography.badge.fontFamily },
-  driverSub: { ...typography.caption, marginTop: 2 },
+  driverSub: { ...typography.caption, marginTop: spacing[2] },
   ratingBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 100,
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[4],
+    borderRadius: radius.full,
   },
   ratingText: { ...typography.label, fontFamily: typography.title.fontFamily },
 });

@@ -15,6 +15,10 @@ import { APP_NAME, PRIVACY_EMAIL, PRIVACY_URL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const SECTIONS = [
   {
@@ -86,7 +90,7 @@ export default function PrivacySecurityScreen() {
           <View key={section.title} style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIcon}>
-                <Feather name={section.icon} size={20} color={colors.primary} />
+                <Feather name={section.icon} size={icons.size.lg} color={colors.primary} />
               </View>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{section.title}</Text>
             </View>
@@ -107,7 +111,7 @@ export default function PrivacySecurityScreen() {
           onPress={() => Linking.openURL(PRIVACY_URL)}
           activeOpacity={0.75}
         >
-          <Feather name="external-link" size={20} color={colors.primary} />
+          <Feather name="external-link" size={icons.size.lg} color={colors.primary} />
           <Text style={[styles.linkText, { color: colors.primary }]}>Read full Privacy Policy</Text>
         </TouchableOpacity>
 
@@ -121,44 +125,44 @@ export default function PrivacySecurityScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { padding: 20, gap: 0 },
+  scroll: { padding: semanticSpacing.screenPadding, gap: spacing[0] },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 8,
+    gap: spacing[14],
+    padding: semanticSpacing.cardPadding,
+    borderRadius: radius.card,
+    marginBottom: spacing[8],
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  bannerTitle: { ...typography.body, fontFamily: typography.title.fontFamily, marginBottom: 2 },
+  bannerTitle: { ...typography.body, fontFamily: typography.title.fontFamily, marginBottom: spacing[2] },
   bannerDesc: { ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 18 },
-  section: { marginTop: 24 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  sectionIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  section: { marginTop: semanticSpacing.sectionGap },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], marginBottom: spacing[10] },
+  sectionIcon: { width: sizes.avatar.sm, height: sizes.avatar.sm, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { ...typography.body, fontFamily: typography.badge.fontFamily},
   card: {
-    borderRadius: 14,
-    padding: 14,
-    gap: 12,
+    borderRadius: radius.card,
+    padding: semanticSpacing.listItemPadding,
+    gap: semanticSpacing.rowGap,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
+  itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10] },
+  bullet: { width: spacing[6], height: spacing[6], borderRadius: 3, marginTop: 7 },
   itemText: { flex: 1, ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 20 },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 28,
-    paddingVertical: 14,
+    gap: semanticSpacing.inlineGap,
+    marginTop: spacing[28],
+    paddingVertical: semanticSpacing.listItemPadding,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   linkText: { ...typography.bodySmall, fontFamily: typography.label.fontFamily},
-  lastUpdated: { textAlign: 'center', ...typography.tiny, fontFamily: typography.body.fontFamily, marginTop: 16 },
+  lastUpdated: { textAlign: 'center', ...typography.tiny, fontFamily: typography.body.fontFamily, marginTop: semanticSpacing.comfortableGap },
 });

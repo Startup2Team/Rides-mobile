@@ -8,6 +8,9 @@ import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const REPORT_TYPES = [
   {
@@ -70,7 +73,7 @@ export default function ReportRideIssueScreen() {
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
+          paddingHorizontal: semanticSpacing.cardPadding,
           flexGrow: 1,
         }}
       >
@@ -93,13 +96,13 @@ export default function ReportRideIssueScreen() {
                   style={styles.row}
                 >
                   <View style={styles.icon}>
-                    <Feather name={report.icon} size={20} color={colors.primary} />
+                    <Feather name={report.icon} size={icons.size.lg} color={colors.primary} />
                   </View>
                   <View style={styles.copy}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>
                     <Text style={[styles.detail, { color: colors.mutedForeground }]}>{report.detail}</Text>
                   </View>
-                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                  <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </React.Fragment>
             ))}
@@ -118,20 +121,20 @@ export default function ReportRideIssueScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  introWrap: { alignItems: 'center', paddingHorizontal: 20, marginBottom: 18 },
+  introWrap: { alignItems: 'center', paddingHorizontal: semanticSpacing.screenPadding, marginBottom: 18 },
   intro: { maxWidth: 320, ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 19, textAlign: 'center' },
   centeredContent: { flex: 1, justifyContent: 'center' },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  row: { minHeight: 76, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 13 },
-  icon: { width: 28, alignItems: 'center', justifyContent: 'center' },
+  row: { minHeight: 76, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 13 },
+  icon: { width: spacing[28], alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, gap: 3 },
   label: { ...typography.body, fontFamily: typography.title.fontFamily},
   detail: { ...typography.tiny, fontFamily: typography.body.fontFamily, lineHeight: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 57 },
-  safetyNoteWrap: { alignItems: 'center', paddingHorizontal: 28, paddingTop: 16 },
+  safetyNoteWrap: { alignItems: 'center', paddingHorizontal: spacing[28], paddingTop: semanticSpacing.comfortableGap },
   safetyNote: { maxWidth: 300, ...typography.tiny, fontFamily: typography.body.fontFamily, lineHeight: 16, textAlign: 'center' },
 });

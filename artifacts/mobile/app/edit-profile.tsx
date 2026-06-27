@@ -26,6 +26,10 @@ import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 
 export default function EditProfileScreen() {
@@ -113,7 +117,7 @@ export default function EditProfileScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: headerMetrics.contentTop + 28, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
+          { paddingTop: headerMetrics.contentTop + spacing[28], paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
         ]}
         keyboardShouldPersistTaps="handled"
       >
@@ -129,7 +133,7 @@ export default function EditProfileScreen() {
               ) : null}
             </View>
             <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary }]}>
-              <Feather name="camera" size={12} color={colors.primaryForeground} />
+              <Feather name="camera" size={icons.size.xxs} color={colors.primaryForeground} />
             </View>
           </TouchableOpacity>
           <Text style={[styles.avatarHint, { color: colors.mutedForeground }]}>
@@ -249,28 +253,28 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { paddingHorizontal: 20 },
-  avatarSection: { alignItems: 'center', marginBottom: 32, gap: 8 },
-  avatarContainer: { position: 'relative', marginBottom: 4 },
+  scroll: { paddingHorizontal: semanticSpacing.screenPadding },
+  avatarSection: { alignItems: 'center', marginBottom: spacing[32], gap: semanticSpacing.inlineGap },
+  avatarContainer: { position: 'relative', marginBottom: spacing[4] },
   avatarInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
     overflow: 'hidden',
     position: 'relative',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImageAbsolute: { width: 80, height: 80, position: 'absolute', top: 0, left: 0 },
+  avatarImageAbsolute: { width: sizes.avatar.xxl, height: sizes.avatar.xxl, position: 'absolute', top: spacing[0], left: spacing[0] },
   avatarEditBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: spacing[0],
+    right: spacing[0],
     width: 26,
     height: 26,
     borderRadius: 13,
@@ -281,27 +285,27 @@ const styles = StyleSheet.create({
   },
   avatarText: { ...typography.h1, fontFamily: typography.badge.fontFamily},
   avatarHint: { ...typography.caption, fontFamily: typography.body.fontFamily},
-  form: { gap: 16, marginBottom: 28 },
+  form: { gap: semanticSpacing.cardPadding, marginBottom: spacing[28] },
   readOnlyField: {
-    borderRadius: 12,
+    borderRadius: radius.input,
     borderWidth: 1,
-    height: 52,
-    paddingHorizontal: 14,
+    height: sizes.input.lg,
+    paddingHorizontal: semanticSpacing.listItemPadding,
     justifyContent: 'center',
   },
   readOnlyValue: { ...typography.body, fontFamily: typography.body.fontFamily},
-  phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.rowGap },
   changePhoneText: { ...typography.label, fontFamily: typography.title.fontFamily},
   phoneHint: { ...typography.tiny, fontFamily: typography.body.fontFamily, marginTop: -8 },
-  phoneFieldContainer: { gap: 6 },
+  phoneFieldContainer: { gap: semanticSpacing.compactGap },
   fieldLabel: {
     ...typography.label,
     fontFamily: typography.label.fontFamily,
-    marginLeft: 2,
+    marginLeft: spacing[2],
   },
   emergencyHeaderGroup: {
-    gap: 6,
-    marginTop: 8,
+    gap: semanticSpacing.compactGap,
+    marginTop: semanticSpacing.inlineGap,
   },
   sectionHeader: {
     ...typography.title,
@@ -313,6 +317,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 4,
+    marginVertical: spacing[4],
   },
 });

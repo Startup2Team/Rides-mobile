@@ -26,13 +26,17 @@ import { type DriverRatingStars } from '@/domain/driverWallet';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { buildLocalDriverRating, saveDriverRatingOnce } from '@/persistence/driverRatingPersistence';
 import { typography } from '@/constants/typography';
+import { elevation } from '@/constants/elevation';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import {
   isUploadedProfileImageUri,
   resolveDriverProfileImage,
 } from '@/utils/driverProfileImage';
 
 const CARD_MAX_WIDTH = 320;
-const DRIVER_ICON_SIZE = 64;
+const DRIVER_ICON_SIZE = sizes.avatar.xl;
 
 type RatingPhase = 'rate' | 'thanks' | 'review';
 
@@ -218,8 +222,8 @@ export default function RatingScreen() {
           contentContainerStyle={[
             styles.keyboardScrollContent,
             {
-              paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 12,
-              paddingBottom: insets.bottom + 16,
+              paddingTop: insets.top + (Platform.OS === 'web' ? 67 : spacing[0]) + semanticSpacing.rowGap,
+              paddingBottom: insets.bottom + semanticSpacing.comfortableGap,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -409,7 +413,7 @@ const styles = StyleSheet.create({
   keyboardScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 28,
+    paddingHorizontal: spacing[28],
   },
   keyboardDismissArea: {
     width: '100%',
@@ -420,21 +424,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 28,
+    paddingHorizontal: spacing[28],
   },
   card: {
     width: '100%',
     maxWidth: CARD_MAX_WIDTH,
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingTop: 22,
-    paddingBottom: 4,
-    paddingHorizontal: 20,
+    paddingTop: radius.sheetCompact,
+    paddingBottom: spacing[4],
+    paddingHorizontal: semanticSpacing.screenPadding,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
+    ...elevation.modal,
     shadowOpacity: 0.28,
-    shadowRadius: 28,
     elevation: 24,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
@@ -442,13 +444,13 @@ const styles = StyleSheet.create({
     }),
   },
   thanksCard: {
-    paddingTop: 20,
+    paddingTop: spacing[20],
   },
   reviewCard: {
-    paddingTop: 20,
+    paddingTop: spacing[20],
   },
   driverAvatar: {
-    marginBottom: 14,
+    marginBottom: spacing[14],
     alignSelf: 'center',
   },
   title: {
@@ -461,17 +463,17 @@ const styles = StyleSheet.create({
     ...typography.label,
     textAlign: 'center',
     lineHeight: 18,
-    marginTop: 6,
+    marginTop: spacing[6],
     marginBottom: 18,
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing[4],
   },
   thanksSubtitle: {
-    marginBottom: 14,
+    marginBottom: spacing[14],
   },
   starsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
+    gap: spacing[6],
     marginBottom: 18,
   },
   starLarge: {
@@ -486,34 +488,34 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     minHeight: 88,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 10,
+    borderRadius: radius.md,
+    paddingHorizontal: semanticSpacing.rowGap,
+    paddingTop: spacing[10],
+    paddingBottom: spacing[10],
     ...typography.bodySmall,
     lineHeight: 20,
-    marginBottom: 16,
+    marginBottom: semanticSpacing.comfortableGap,
   },
   divider: {
     alignSelf: 'stretch',
     height: StyleSheet.hairlineWidth,
-    marginBottom: 4,
+    marginBottom: spacing[4],
   },
   actionsRow: {
     alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'stretch',
-    minHeight: 44,
+    minHeight: sizes.iconButton.md,
   },
   actionBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: semanticSpacing.rowGap,
   },
   actionDivider: {
     width: StyleSheet.hairlineWidth,
-    marginVertical: 8,
+    marginVertical: semanticSpacing.inlineGap,
   },
   actionText: {
     ...typography.title,

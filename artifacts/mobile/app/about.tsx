@@ -20,6 +20,10 @@ import {
 } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const LINKS = [
   { label: 'Terms of Service', icon: 'file-text' as const, url: TERMS_URL },
@@ -48,7 +52,7 @@ export default function AboutScreen() {
       >
         <View style={styles.hero}>
           <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
-            <Feather name="navigation" size={32} color={colors.primaryForeground} />
+            <Feather name="navigation" size={icons.size.xxl} color={colors.primaryForeground} />
           </View>
           <Text style={[styles.appName, { color: colors.foreground }]}>{APP_NAME}</Text>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
@@ -90,10 +94,10 @@ export default function AboutScreen() {
                 activeOpacity={0.75}
               >
                 <View style={styles.linkIcon}>
-                  <Feather name={link.icon} size={20} color={colors.primary} />
+                  <Feather name={link.icon} size={icons.size.lg} color={colors.primary} />
                 </View>
                 <Text style={[styles.linkLabel, { color: colors.foreground, flex: 1 }]}>{link.label}</Text>
-                <Feather name="external-link" size={14} color={colors.mutedForeground} />
+                <Feather name="external-link" size={icons.size.xs} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
           ))}
@@ -109,45 +113,45 @@ export default function AboutScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { paddingHorizontal: 20 },
-  hero: { alignItems: 'center', paddingTop: 32, paddingBottom: 28, gap: 8 },
+  scroll: { paddingHorizontal: semanticSpacing.screenPadding },
+  hero: { alignItems: 'center', paddingTop: spacing[32], paddingBottom: spacing[28], gap: semanticSpacing.inlineGap },
   logoMark: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: radius.sheet,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: spacing[4],
   },
   appName: { ...typography.h1, fontFamily: typography.badge.fontFamily},
   tagline: { ...typography.bodySmall, fontFamily: typography.body.fontFamily},
   versionBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: semanticSpacing.listItemPadding,
+    paddingVertical: spacing[6],
+    borderRadius: radius['3xl'],
     borderWidth: 1,
-    marginTop: 4,
+    marginTop: spacing[4],
   },
   versionText: { ...typography.caption, fontFamily: typography.label.fontFamily},
   statsRow: {
     flexDirection: 'row',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: radius.card,
+    padding: semanticSpacing.cardPadding,
+    marginBottom: semanticSpacing.comfortableGap,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  statItem: { flex: 1, alignItems: 'center', gap: 2 },
+  statItem: { flex: 1, alignItems: 'center', gap: spacing[2] },
   statValue: { ...typography.h1, fontFamily: typography.badge.fontFamily},
   statLabel: { ...typography.caption, fontFamily: typography.title.fontFamily},
   statSub: { ...typography.tiny, fontFamily: typography.body.fontFamily, textAlign: 'center' },
-  statDivider: { width: 1, marginVertical: 4 },
+  statDivider: { width: StyleSheet.hairlineWidth, marginVertical: spacing[4] },
   missionCard: {
-    borderRadius: 14,
-    padding: 16,
-    gap: 8,
-    marginBottom: 24,
+    borderRadius: radius.card,
+    padding: semanticSpacing.cardPadding,
+    gap: semanticSpacing.inlineGap,
+    marginBottom: semanticSpacing.sectionGap,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
@@ -158,19 +162,19 @@ const styles = StyleSheet.create({
     ...typography.tiny,
     fontFamily: typography.title.fontFamily,
     letterSpacing: 0.8,
-    marginBottom: 10,
+    marginBottom: spacing[10],
   },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
-    marginBottom: 24,
+    marginBottom: semanticSpacing.sectionGap,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
     }),
   },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  linkIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.listItemPadding },
+  linkRow: { flexDirection: 'row', alignItems: 'center', padding: semanticSpacing.listItemPadding, gap: semanticSpacing.rowGap },
+  linkIcon: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   linkLabel: { ...typography.bodySmall, fontFamily: typography.body.fontFamily},
-  copyright: { textAlign: 'center', ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 20, paddingBottom: 8 },
+  copyright: { textAlign: 'center', ...typography.caption, fontFamily: typography.body.fontFamily, lineHeight: 20, paddingBottom: semanticSpacing.inlineGap },
 });
