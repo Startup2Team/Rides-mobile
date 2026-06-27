@@ -26,7 +26,6 @@ import { useDriverOnboardingValidation } from '@/hooks/driver-onboarding/useDriv
 import type { DriverProfile } from '@/types';
 import { buildDraftDriverProfile, buildPendingDriverProfile, formFromDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
 import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, saveStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
-import { saveStoredProfileImage } from '@/persistence/profilePersistence';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
 import { getLatestDriverApplicationRejectionSummary, submitDriverApplication, type DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
@@ -35,6 +34,7 @@ import type { DocFaces, DocumentKey, VehiclePhotoKey } from '@/hooks/driver-onbo
 import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardingTypes';
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
+import { profileRepository } from '@/domains/profile/repository';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -137,7 +137,7 @@ export default function DriverOnboarding() {
     setLoading(true);
     await saveStoredDriverOnboardingDraft({ form, docs, vehiclePhotos, selfieUri, acceptedTerms, step, updatedAt: new Date().toISOString() });
     await saveDriverProfile(buildDraftDriverProfile(form, selfieUri));
-    if (selfieUri) await saveStoredProfileImage(selfieUri);
+    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
     setLoading(false);
     navigateToCustomerHomeAfterCompletion(router);
   };
@@ -159,7 +159,7 @@ export default function DriverOnboarding() {
       selfieUri,
       submittedAt: new Date().toISOString(),
     });
-    if (selfieUri) await saveStoredProfileImage(selfieUri);
+    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
     setLoading(false);

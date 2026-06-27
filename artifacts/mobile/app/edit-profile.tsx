@@ -24,7 +24,7 @@ import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
-import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useProfileActions } from '@/domains/profile';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
@@ -36,7 +36,7 @@ export default function EditProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile, updateUser, saveDriverProfile } = useAuth();
+  const { user, driverProfile } = useAuth();
   const { showToast } = useToast();
 
   const [name, setName] = useState(user?.name ?? '');
@@ -50,7 +50,7 @@ export default function EditProfileScreen() {
     emergencyContactName?: string;
     emergencyContactPhone?: string;
   }>({});
-  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
+  const { profileImage, handleImagePick, handleDeletePhoto, updateUser } = useProfileActions(driverProfile?.profileImage);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   const handlePickImage = () => {

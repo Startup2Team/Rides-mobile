@@ -128,6 +128,7 @@ describe('profile domain', () => {
     expect(actions.result.current.logout).toBe(mockAuth.logout);
     expect(actions.result.current.switchMode).toBe(mockAuth.switchMode);
     expect(actions.result.current.updateUser).toBe(mockAuth.updateUser);
+    expect(actions.result.current).not.toHaveProperty('saveDriverProfile');
   });
 
   test('loads profile photo through the domain hook', async () => {

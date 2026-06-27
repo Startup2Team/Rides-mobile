@@ -39,7 +39,7 @@ export const DOMAIN_OWNERSHIP: Record<DomainName, DomainOwnershipEntry> = {
     domain: 'profile',
     owns: ['shared user identity', 'profile photo', 'language preference', 'notification preferences', 'account settings'],
     mustNotOwn: ['driver approval state', 'driver verification state', 'driver vehicle state', 'ride lifecycle', 'saved locations canonical storage', 'payment canonical state'],
-    currentFiles: ['domains/profile/types.ts', 'domains/profile/repository.ts', 'domains/profile/hooks.ts', 'domains/profile/index.ts', 'context/AuthContext.tsx', 'persistence/profilePersistence.ts', 'components/ProfileAvatarCircle.tsx', 'components/HomeTopHeader.tsx', 'app/(tabs)/profile.tsx', 'app/(driver)/profile.tsx', 'app/(driver)/index.tsx', 'app/edit-profile.tsx'],
+    currentFiles: ['domains/profile/types.ts', 'domains/profile/repository.ts', 'domains/profile/hooks.ts', 'domains/profile/index.ts', 'context/AuthContext.tsx', 'persistence/profilePersistence.ts', 'components/ProfileAvatarCircle.tsx', 'components/HomeTopHeader.tsx', 'app/(tabs)/profile.tsx', 'app/(driver)/profile.tsx', 'app/(driver)/index.tsx', 'app/edit-profile.tsx', 'app/change-phone-number.tsx', 'app/driver-onboarding.tsx'],
     futureFiles: ['domains/profile/*', 'data/repositories/interfaces.ts'],
     canonicalRepository: 'ProfileRepository',
     canonicalStore: null,

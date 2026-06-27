@@ -47,15 +47,14 @@ export function useProfile() {
   };
 }
 
-export function useProfileActions() {
-  const { logout, switchMode, updateUser, saveDriverProfile } = useAuth();
-  const photo = useProfilePhoto();
+export function useProfileActions(fallbackImage?: string | null) {
+  const { logout, switchMode, updateUser } = useAuth();
+  const photo = useProfilePhoto(fallbackImage);
 
   return {
     logout,
     switchMode,
     updateUser,
-    saveDriverProfile,
     ...photo,
   };
 }

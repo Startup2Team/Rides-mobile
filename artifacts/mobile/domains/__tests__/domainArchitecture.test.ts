@@ -45,6 +45,7 @@ describe('domain architecture scaffold', () => {
     expect(docs).toContain('One App, Two Role Projections');
     expect(docs).toContain('one authenticated user');
     expect(docs).toContain('role projections over the same account');
+    expect(docs).toContain('Shared Identity Ownership');
   });
 
   test('repository docs mention the domain-first direction', () => {

@@ -4,6 +4,19 @@ Shared identity domain for the one-app customer/driver model.
 
 Rides uses one authenticated account per user. Every user starts as a customer. A customer may later become an approved driver, but the identity stays the same across both role projections.
 
+## Shared Identity Ownership
+
+One user. One identity. Many capabilities.
+
+The same account can express different capabilities over time:
+- Customer
+- Driver
+- Fleet Owner, future
+- Business Account, future
+- Delivery Partner, future
+
+The profile remains shared across all capabilities. The capability changes, not the identity.
+
 Owns:
 - user id
 - full name
@@ -35,11 +48,14 @@ Current source files outside this domain:
 - `app/(driver)/profile.tsx`
 - `app/(driver)/index.tsx`
 - `app/edit-profile.tsx`
+- `app/change-phone-number.tsx`
+- `app/driver-onboarding.tsx`
 
 Compatibility layer:
 - `AuthContext` still owns the live app session and role switching
 - `useProfilePhotoActions` still exists as a wrapper
 - `SavedLocationsContext` style replacement is not needed here yet
+- shared identity writes should flow through this domain, not directly from screens
 
 Future migration plan:
 - move the remaining profile consumers to the domain entry point

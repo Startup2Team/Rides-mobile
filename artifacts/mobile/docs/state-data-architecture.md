@@ -1247,3 +1247,17 @@ Phase 7G adds the shared `profile` domain as the second extracted domain:
 - `AuthContext` remains the compatibility layer for session and role switching
 - the same account continues to back both customer and driver projections
 - the profile domain is about who the user is, not whether they are an approved driver
+- shared identity writes should flow through the profile domain hooks and repository facade, not directly from screens
+
+### Shared Identity Ownership
+
+One user. One identity. Many capabilities.
+
+The shared profile stays canonical while capabilities can expand over time:
+- customer
+- driver
+- fleet owner, future
+- business account, future
+- delivery partner, future
+
+The identity remains stable. The capability projections change. That is the model that keeps customer and driver behavior unified without splitting the account or duplicating profile state.
