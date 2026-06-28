@@ -19,4 +19,3 @@ export function useSavedLocationActions() {
     saveLocation: (location: RideLocation, label: string) => Promise<boolean>;
   };
 }
-

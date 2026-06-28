@@ -6,4 +6,3 @@ export type PlateNumber = string;
 export type VehicleStatus = DriverVehicleStatus;
 export type VehicleVerificationStatus = DriverVehicleDocumentReviewStatus;
 export type { VehicleType };
-

@@ -114,4 +114,3 @@ export function subscribeBookingStore(listener: (state: BookingState) => void) {
 export function getInitialBookingState() {
   return { ...initialState };
 }
-

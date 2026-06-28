@@ -69,4 +69,3 @@ describe('bookingStore', () => {
     expect(getBookingState().cancelledDraft).toBeNull();
   });
 });
-

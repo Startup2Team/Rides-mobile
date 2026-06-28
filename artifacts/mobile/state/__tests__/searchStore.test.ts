@@ -35,4 +35,3 @@ describe('searchStore', () => {
     expect(getSearchState()).toEqual(getInitialSearchState());
   });
 });
-

@@ -35,4 +35,3 @@ describe('appModeStore', () => {
     expect(getAppModeState()).toEqual(getInitialAppModeState());
   });
 });
-

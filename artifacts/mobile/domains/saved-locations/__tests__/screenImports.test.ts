@@ -24,4 +24,3 @@ describe('saved-locations screen imports', () => {
     }
   });
 });
-
