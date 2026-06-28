@@ -58,6 +58,18 @@ jest.mock('@/context/ToastContext', () => ({
   useToast: () => mockToast,
 }));
 
+const mockUseProfileQuery = jest.fn();
+const mockUseProfilePhotoQuery = jest.fn();
+const mockUseUpdateProfileMutation = jest.fn();
+const mockUseUpdateProfilePhotoMutation = jest.fn();
+
+jest.mock('@/query/hooks/useProfileQuery', () => ({
+  useProfileQuery: () => mockUseProfileQuery(),
+  useProfilePhotoQuery: () => mockUseProfilePhotoQuery(),
+  useUpdateProfileMutation: () => mockUseUpdateProfileMutation(),
+  useUpdateProfilePhotoMutation: () => mockUseUpdateProfilePhotoMutation(),
+}));
+
 jest.mock('expo-router', () => ({
   useFocusEffect: (cb: () => void) => {
     const React = require('react');
@@ -84,6 +96,10 @@ jest.mock('@/persistence/profilePersistence', () => ({
 describe('profile domain', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseProfileQuery.mockReturnValue({ data: { user: mockUser, profilePhoto: mockProfilePhoto }, refetch: jest.fn() });
+    mockUseProfilePhotoQuery.mockReturnValue({ data: 'file://stored.jpg', refetch: jest.fn() });
+    mockUseUpdateProfileMutation.mockReturnValue({ mutateAsync: jest.fn(async (updates: Partial<typeof mockUser>) => ({ ...mockUser, ...updates })) });
+    mockUseUpdateProfilePhotoMutation.mockReturnValue({ mutateAsync: jest.fn(async (uri: string | null) => uri) });
   });
 
   test('exports the profile repository boundary', () => {
@@ -127,7 +143,11 @@ describe('profile domain', () => {
     }));
     expect(actions.result.current.logout).toBe(mockAuth.logout);
     expect(actions.result.current.switchMode).toBe(mockAuth.switchMode);
-    expect(actions.result.current.updateUser).toBe(mockAuth.updateUser);
+    await act(async () => {
+      await actions.result.current.updateUser({ name: 'Alicia Rider' });
+    });
+    expect(mockUseUpdateProfileMutation).toHaveBeenCalled();
+    expect(mockAuth.updateUser).toHaveBeenCalledWith({ name: 'Alicia Rider' });
     expect(actions.result.current).not.toHaveProperty('saveDriverProfile');
   });
 

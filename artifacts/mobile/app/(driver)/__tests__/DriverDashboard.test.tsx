@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { Linking, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -204,16 +205,24 @@ function rating(overrides: Partial<DriverRating>): DriverRating {
 }
 
 function DashboardProviders() {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
   return (
-    <AuthProvider>
-      <DriverEntitlementProvider>
-        <RideProvider>
-          <View testID="dashboard-root">
-            <DriverDashboard />
-          </View>
-        </RideProvider>
-      </DriverEntitlementProvider>
-    </AuthProvider>
+    <QueryClientProvider client={client}>
+      <AuthProvider>
+        <DriverEntitlementProvider>
+          <RideProvider>
+            <View testID="dashboard-root">
+              <DriverDashboard />
+            </View>
+          </RideProvider>
+        </DriverEntitlementProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

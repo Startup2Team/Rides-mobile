@@ -2,6 +2,8 @@
 
 Shared identity domain for the one-app customer/driver model.
 
+This domain is query-backed now, but it still behaves as a compatibility layer around the existing app session and profile persistence.
+
 Rides uses one authenticated account per user. Every user starts as a customer. A customer may later become an approved driver, but the identity stays the same across both role projections.
 
 ## Shared Identity Ownership
@@ -56,6 +58,7 @@ Compatibility layer:
 - `useProfilePhotoActions` still exists as a wrapper
 - `SavedLocationsContext` style replacement is not needed here yet
 - shared identity writes should flow through this domain, not directly from screens
+- query hooks back the shared profile reads and writes, but the existing screens still rely on the compatibility hooks
 
 Future migration plan:
 - move the remaining profile consumers to the domain entry point

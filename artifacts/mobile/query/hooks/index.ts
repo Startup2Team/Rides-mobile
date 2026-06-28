@@ -3,7 +3,13 @@ export { useDriverVehiclesQuery } from './useDriverVehiclesQuery';
 export { useNotificationsQuery } from './useNotificationsQuery';
 export { usePackagesQuery } from './usePackagesQuery';
 export { usePaymentMethodsQuery } from './usePaymentMethodsQuery';
-export { useProfileQuery } from './useProfileQuery';
+export {
+  useProfileQuery,
+  useProfilePhotoQuery,
+  useUpdatePhoneMutation,
+  useUpdateProfileMutation,
+  useUpdateProfilePhotoMutation,
+} from './useProfileQuery';
 export { useRideHistoryQuery } from './useRideHistoryQuery';
 export { useReverseGeocodeQuery } from './useReverseGeocodeQuery';
 export {

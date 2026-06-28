@@ -1,6 +1,7 @@
 import { Alert, Pressable, Text, View } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockReplace = jest.fn();
 let mockAlert: jest.Mock;
@@ -153,7 +154,17 @@ describe('DriverProfileScreen', () => {
 
   test('does not show a logout action', async () => {
     const DriverProfileScreen = require('../profile').default;
-    render(<DriverProfileScreen />);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DriverProfileScreen />
+      </QueryClientProvider>,
+    );
 
     expect(screen.queryByText('Log Out')).toBeNull();
     expect(mockAlert).not.toHaveBeenCalled();

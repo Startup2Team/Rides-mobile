@@ -1,4 +1,4 @@
-import { authRepository } from '@/data/repositories';
+import { authRepository } from '@/data/repositories/authRepository';
 import { driverKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';

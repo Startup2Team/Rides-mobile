@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   Image,
   Platform,
@@ -12,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { profileRepository } from '@/domains/profile/repository';
+import { useProfilePhotoQuery } from '@/query/hooks/useProfileQuery';
 import { elevation } from '@/constants/elevation';
 import { sizes } from '@/constants/sizes';
 import { typography } from '@/constants/typography';
@@ -36,22 +36,18 @@ export function ProfileAvatarCircle({
   accessibilityLabel = 'Profile',
 }: ProfileAvatarCircleProps) {
   const isDark = useColorScheme() === 'dark';
-  const [storedProfileImage, setStoredProfileImage] = useState<string | null>(null);
+  const photoQuery = useProfilePhotoQuery();
   const radius = size / 2;
   const useStoredProfile = imageUri === undefined;
-  const displayUri = useStoredProfile ? storedProfileImage : imageUri;
+  const displayUri = useStoredProfile ? photoQuery.data ?? null : imageUri;
 
   useFocusEffect(
     useCallback(() => {
       if (!useStoredProfile) return undefined;
-      let active = true;
-      void profileRepository.getProfileImage().then(stored => {
-        if (active) setStoredProfileImage(stored);
-      });
+      void photoQuery.refetch();
       return () => {
-        active = false;
       };
-    }, [useStoredProfile]),
+    }, [photoQuery, useStoredProfile]),
   );
 
   const content = (

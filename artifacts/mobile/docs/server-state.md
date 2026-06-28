@@ -95,9 +95,11 @@ The active ride and mutation-heavy flows should move later, after query behavior
 
 ## Current Query-Backed Domains
 
-Saved locations is the first production domain that is now backed by TanStack Query.
+Saved locations and shared profile are the first production domains that are now backed by TanStack Query.
 
 - `useSavedLocationsQuery(userId)` reads through the repository
 - add/edit/delete mutations update the repository and invalidate the saved-locations key
 - `SavedLocationsContext` remains as a compatibility facade during the migration
+- `useProfileQuery()` and the profile mutations read and write the shared identity through the query layer
+- `AuthContext` remains as the session and role compatibility layer
 - the persistence format stays unchanged
