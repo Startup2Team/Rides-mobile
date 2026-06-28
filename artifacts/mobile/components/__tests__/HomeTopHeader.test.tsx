@@ -118,6 +118,10 @@ jest.mock('@/persistence/profilePersistence', () => ({
   loadStoredProfileImage: jest.fn(() => Promise.resolve({ data: null })),
 }));
 
+jest.mock('@/query/hooks/useNotificationsQuery', () => ({
+  useUnreadNotificationCountQuery: () => ({ data: 0, isFetched: true, isLoading: false, isFetching: false }),
+}));
+
 function renderHeader(
   driverVerificationStatus: React.ComponentProps<typeof HomeTopHeader>['driverVerificationStatus'],
   canSwitchToDriverMode = false,

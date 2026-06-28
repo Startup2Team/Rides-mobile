@@ -1245,6 +1245,18 @@ Phase 8B.1 moves saved locations to TanStack Query while preserving the current 
 - `SavedLocationsContext` remains a compatibility facade so existing screens do not change yet
 - saved locations are now query-backed instead of manually managed in local context state
 
+Phase 8B.2 moves the shared profile onto the query layer.
+
+- `useProfileQuery()` is the shared identity read layer
+- profile mutations update the repository and invalidate the profile cache
+- `AuthContext` remains the session and mode compatibility layer
+
+Phase 8B.3 moves notifications onto the query layer.
+
+- `useNotificationsQuery()` is the notification feed read layer
+- notification read/unread mutations update the repository and invalidate the notification cache
+- the local feed and read-state payload stay compatible for now
+
 ## 13. Domain-First Direction
 
 Phase 7E scaffolds a domain-first organization under [`domains/`](../domains/).

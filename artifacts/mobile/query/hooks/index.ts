@@ -1,6 +1,13 @@
 export { useDriverProfileQuery } from './useDriverProfileQuery';
 export { useDriverVehiclesQuery } from './useDriverVehiclesQuery';
 export { useNotificationsQuery } from './useNotificationsQuery';
+export {
+  useClearNotificationsMutation,
+  useMarkAllNotificationsReadMutation,
+  useMarkNotificationReadMutation,
+  useMarkNotificationUnreadMutation,
+  useUnreadNotificationCountQuery,
+} from './useNotificationsQuery';
 export { usePackagesQuery } from './usePackagesQuery';
 export { usePaymentMethodsQuery } from './usePaymentMethodsQuery';
 export {

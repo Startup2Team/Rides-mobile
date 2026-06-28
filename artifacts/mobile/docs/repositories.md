@@ -155,6 +155,17 @@ Phase 8B.1 moves saved locations onto the query layer without changing the repos
 - `SavedLocationsContext` stays in place as a compatibility facade for existing screens
 - saved locations are now query-backed, but storage format and repository behavior stay the same
 
+Phase 8B.2 moves the shared profile onto the query layer.
+
+- `useProfileQuery()` and profile mutations read and write the shared identity through the repository boundary
+- `AuthContext` remains the session and mode compatibility layer
+
+Phase 8B.3 moves notifications onto the query layer.
+
+- `useNotificationsQuery()` reads the notification feed through the repository boundary
+- notification read state remains repository-owned and still uses the existing local payload
+- notifications are now query-backed while the current local feed and persistence format stay compatible
+
 ## Domain-First Direction
 
 Phase 7E adds the [`domains/`](../domains/) scaffold and the typed ownership map in `domains/domainOwnership.ts`.
