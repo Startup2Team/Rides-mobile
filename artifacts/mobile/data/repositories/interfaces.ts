@@ -3,6 +3,7 @@ import type {
   BookingFormDraft,
   Coords,
   DriverProfile,
+  DriverVehicleProfile,
   PaymentMethod,
   Ride,
   RideLocation,
@@ -82,6 +83,10 @@ export interface DriverRepository {
 export interface VehicleRepository {
   getVehicles(): Promise<DriverProfile['vehicles']>;
   setActiveVehicle(vehicleId: string | null): Promise<void>;
+  setPrimaryVehicle(vehicleId: string | null): Promise<void>;
+  addVehicle(vehicle: DriverVehicleProfile): Promise<void>;
+  updateVehicle(vehicle: DriverVehicleProfile): Promise<void>;
+  deleteVehicle(vehicleId: string): Promise<void>;
 }
 
 export interface PackageRepository {

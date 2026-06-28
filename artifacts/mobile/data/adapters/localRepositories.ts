@@ -1,4 +1,4 @@
-import { KIGALI_CENTER, type BookingFormDraft, type Coords, type DriverProfile, type PaymentMethod, type Ride, type RideLocation, type SavedLocation, type User } from '@/types';
+import { KIGALI_CENTER, type BookingFormDraft, type Coords, type DriverProfile, type DriverVehicleProfile, type PaymentMethod, type Ride, type RideLocation, type SavedLocation, type User } from '@/types';
 import type {
   AuthRepository,
   BookingRepository,
@@ -27,6 +27,7 @@ import {
 import { createListenerSet } from '@/state/storeUtils';
 import { MAX_SAVED_LOCATIONS } from '@/constants/savedLocations';
 import type { NotificationReadState } from '@/persistence/notificationPersistence';
+import { appendDriverVehicle, getDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
 
 let bookingDraft: BookingFormDraft | null = null;
 let recentSearchQueries: string[] = [];
@@ -44,7 +45,8 @@ export class LocalAuthRepository implements AuthRepository {
   }
 
   async getDriverProfile() {
-    return (await localAuthDataSource.loadStoredDriverProfile()).data;
+    currentDriverProfile = (await localAuthDataSource.loadStoredDriverProfile()).data;
+    return currentDriverProfile;
   }
 
   async saveDriverProfile(profile: DriverProfile) {
@@ -162,21 +164,56 @@ export class LocalDriverRepository implements DriverRepository {
 
 export class LocalVehicleRepository implements VehicleRepository {
   async getVehicles() {
-    const profile = currentDriverProfile ?? (await localAuthDataSource.loadStoredDriverProfile()).data;
+    const profile = currentDriverProfile ?? (await this.getDriverProfile());
     return profile?.vehicles;
   }
 
   async setActiveVehicle(vehicleId: string | null) {
+    await this.setPrimaryVehicle(vehicleId);
+  }
+
+  async setPrimaryVehicle(vehicleId: string | null) {
     const profile = currentDriverProfile ?? (await this.getDriverProfile());
     if (!profile) return;
-    await localAuthDataSource.saveStoredDriverProfile({
+    currentDriverProfile = setDriverActiveVehicle(profile, vehicleId);
+    await localAuthDataSource.saveStoredDriverProfile(currentDriverProfile);
+  }
+
+  async addVehicle(vehicle: DriverVehicleProfile) {
+    const profile = currentDriverProfile ?? (await this.getDriverProfile());
+    if (!profile) return;
+    currentDriverProfile = appendDriverVehicle(profile, vehicle);
+    await localAuthDataSource.saveStoredDriverProfile(currentDriverProfile);
+  }
+
+  async updateVehicle(vehicle: DriverVehicleProfile) {
+    const profile = currentDriverProfile ?? (await this.getDriverProfile());
+    if (!profile) return;
+    const vehicles = getDriverVehicles(profile);
+    currentDriverProfile = {
       ...profile,
-      activeVehicle: { vehicleId, selectedAt: vehicleId ? new Date().toISOString() : undefined },
-    });
+      vehicles: vehicles.some(item => item.id === vehicle.id)
+        ? vehicles.map(item => item.id === vehicle.id ? vehicle : item)
+        : [...vehicles, vehicle],
+    };
+    await localAuthDataSource.saveStoredDriverProfile(currentDriverProfile);
+  }
+
+  async deleteVehicle(vehicleId: string) {
+    const profile = currentDriverProfile ?? (await this.getDriverProfile());
+    if (!profile) return;
+    const vehicles = getDriverVehicles(profile).filter(item => item.id !== vehicleId);
+    currentDriverProfile = {
+      ...profile,
+      vehicles,
+      activeVehicle: profile.activeVehicle?.vehicleId === vehicleId ? { vehicleId: null } : profile.activeVehicle,
+    };
+    await localAuthDataSource.saveStoredDriverProfile(currentDriverProfile);
   }
 
   private async getDriverProfile() {
-    return (await localAuthDataSource.loadStoredDriverProfile()).data;
+    currentDriverProfile = (await localAuthDataSource.loadStoredDriverProfile()).data;
+    return currentDriverProfile;
   }
 }
 

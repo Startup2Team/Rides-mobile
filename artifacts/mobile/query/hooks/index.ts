@@ -1,5 +1,12 @@
 export { useDriverProfileQuery } from './useDriverProfileQuery';
-export { useDriverVehiclesQuery } from './useDriverVehiclesQuery';
+export {
+  useAddVehicleMutation,
+  useDeleteVehicleMutation,
+  useDriverVehicleQuery,
+  useDriverVehiclesQuery,
+  usePrimaryVehicleMutation,
+  useUpdateVehicleMutation,
+} from './useDriverVehiclesQuery';
 export { useNotificationsQuery } from './useNotificationsQuery';
 export {
   useClearNotificationsMutation,

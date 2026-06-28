@@ -53,6 +53,8 @@ Each domain has a single repository contract.
 - `VehicleRepository`
   - vehicle list
   - active vehicle selection
+  - single vehicle lookup
+  - vehicle create/update/delete operations
 
 - `PackageRepository`
   - package catalog
@@ -165,6 +167,13 @@ Phase 8B.3 moves notifications onto the query layer.
 - `useNotificationsQuery()` reads the notification feed through the repository boundary
 - notification read state remains repository-owned and still uses the existing local payload
 - notifications are now query-backed while the current local feed and persistence format stay compatible
+
+Phase 8B.4 moves driver vehicles onto the query layer.
+
+- `useDriverVehiclesQuery()` reads the driver vehicle list through the repository boundary
+- `useDriverVehicleQuery(vehicleId)` reads a single vehicle projection through the same repository boundary
+- add/update/delete/primary-selection mutations still use the existing local repository implementation
+- `vehicleRepository` remains the source boundary while the current auth-session compatibility path stays intact
 
 ## Domain-First Direction
 

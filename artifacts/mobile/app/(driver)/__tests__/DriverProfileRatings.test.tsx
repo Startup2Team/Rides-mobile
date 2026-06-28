@@ -159,6 +159,19 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+jest.mock('@/domains/vehicle', () => ({
+  useVehicles: () => ({
+    vehicles: [],
+    isLoading: false,
+    isRefreshing: false,
+    refreshVehicles: jest.fn(),
+    addVehicle: jest.fn(),
+    updateVehicle: jest.fn(),
+    deleteVehicle: jest.fn(),
+    setPrimaryVehicle: jest.fn(),
+  }),
+}));
+
 jest.mock('@/context/RideContext', () => ({
   useRide: () => ({
     rideHistory: [],

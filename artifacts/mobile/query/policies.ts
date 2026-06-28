@@ -42,6 +42,10 @@ export const queryPolicies = {
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
+  driverVehicle: policy({
+    staleTime: 5 * minute,
+    gcTime: 30 * minute,
+  }),
   packages: policy({
     staleTime: 10 * minute,
     gcTime: 45 * minute,

@@ -30,7 +30,8 @@ describe('query foundation', () => {
     const rideActive: readonly ['ride', 'active'] = rideKeys.active();
     const rideHistory: readonly ['ride', 'history', string] = rideKeys.history('user-1');
     const driverProfile: readonly ['driver', 'profile'] = driverKeys.profile();
-    const driverVehicles: readonly ['driver', 'vehicles'] = driverKeys.vehicles();
+    const driverVehicles = driverKeys.vehicles('user-1');
+    const driverVehicle: readonly ['driver', 'vehicle', string] = driverKeys.vehicle('vehicle-1');
     const driverPackages: readonly ['driver', 'packages'] = driverKeys.packages();
     const notificationList: readonly ['notifications', 'list'] = notificationKeys.list();
     const paymentMethods: readonly ['payments', 'methods'] = paymentKeys.methods();
@@ -45,7 +46,8 @@ describe('query foundation', () => {
     expect(rideActive).toEqual(['ride', 'active']);
     expect(rideHistory).toEqual(['ride', 'history', 'user-1']);
     expect(driverProfile).toEqual(['driver', 'profile']);
-    expect(driverVehicles).toEqual(['driver', 'vehicles']);
+    expect(driverVehicles).toEqual(['driver', 'user-1', 'vehicles']);
+    expect(driverVehicle).toEqual(['driver', 'vehicle', 'vehicle-1']);
     expect(driverPackages).toEqual(['driver', 'packages']);
     expect(notificationList).toEqual(['notifications', 'list']);
     expect(paymentMethods).toEqual(['payments', 'methods']);
@@ -62,6 +64,7 @@ describe('query foundation', () => {
       rideHistory,
       driverProfile,
       driverVehicles,
+      driverVehicle,
       driverPackages,
       notificationList,
       paymentMethods,
@@ -77,6 +80,7 @@ describe('query foundation', () => {
       'activeRide',
       'driverProfile',
       'driverVehicles',
+      'driverVehicle',
       'notifications',
       'packages',
       'paymentMethods',

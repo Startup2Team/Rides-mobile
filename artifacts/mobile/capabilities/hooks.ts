@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useOptionalAuth } from '@/context/AuthContext';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getDriverVehicles } from '@/domain/driverVehicles';
+import { useDriverVehiclesQuery } from '@/query/hooks/useDriverVehiclesQuery';
 import { resolveCapabilities } from './resolver';
 import type { CapabilityName, CapabilitySet } from './types';
 
@@ -28,19 +29,21 @@ const defaultCapabilities: CapabilitySet = {
 export function useCapabilities() {
   const auth = useOptionalAuth();
   const entitlement = useOptionalDriverEntitlement();
+  const vehiclesQuery = useDriverVehiclesQuery(auth?.user?.id ?? null);
 
   return useMemo(() => {
     if (!auth) {
       return defaultCapabilities;
     }
+    const queryVehicles = vehiclesQuery.data ?? getDriverVehicles(auth.driverProfile);
     return resolveCapabilities({
       user: auth.user,
       driverProfile: auth.driverProfile,
       driverEntitlement: entitlement?.entitlement ?? null,
-      vehicles: getDriverVehicles(auth.driverProfile),
+      vehicles: queryVehicles,
       mode: auth.user?.mode ?? null,
     }).capabilities;
-  }, [auth, entitlement?.entitlement]);
+  }, [auth, entitlement?.entitlement, vehiclesQuery.data]);
 }
 
 export function useCapability(name: CapabilityName) {

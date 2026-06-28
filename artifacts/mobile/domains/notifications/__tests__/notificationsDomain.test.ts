@@ -47,7 +47,7 @@ describe('notifications domain boundary', () => {
     expect(notifications.find(item => item.id === 'system_1')?.read).toBe(true);
     expect(notifications.find(item => item.id === 'ride_ride-1')?.read).toBe(false);
     expect(await getUnreadNotificationCount(feedContext)).toBeGreaterThan(0);
-    expect(getNotificationDayBucket('2026-06-28T10:00:00.000Z')).toBe('today');
+    expect(getNotificationDayBucket(new Date().toISOString())).toBe('today');
   });
 
   test('screens do not import notification persistence directly', () => {

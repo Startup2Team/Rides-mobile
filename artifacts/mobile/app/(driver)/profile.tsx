@@ -15,7 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { getActivePackageActivation } from '@/domain/driverRidePackages';
-import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
+import { useVehicles } from '@/domains/vehicle';
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
@@ -44,8 +44,12 @@ export default function DriverProfileScreen() {
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { rideHistory, loadHistory } = useRide();
   const activePackage = getActivePackageActivation(entitlement);
-  const vehicles = getDriverVehicles(driverProfile);
-  const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
+  const { vehicles } = useVehicles();
+  const vehicleCounts = React.useMemo(() => ({
+    approved: vehicles.filter(vehicle => vehicle.status === 'approved').length,
+    pendingReview: vehicles.filter(vehicle => vehicle.status === 'pending_review').length,
+    rejected: vehicles.filter(vehicle => vehicle.status === 'rejected').length,
+  }), [vehicles]);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   React.useEffect(() => {

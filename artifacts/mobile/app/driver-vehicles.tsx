@@ -12,7 +12,7 @@ import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getActiveBonusRides, getActivePackageActivation, getActiveRideCredits, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
-import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
+import { useVehicles } from '@/domains/vehicle';
 import { useColors } from '@/hooks/useColors';
 import { VEHICLE_LABELS } from '@/types';
 import { radius } from '@/constants/radius';
@@ -27,12 +27,16 @@ export default function DriverVehiclesScreen() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { driverProfile, setActiveVehicle } = useAuth();
+  const { driverProfile } = useAuth();
   const { entitlement, isLoading } = useDriverEntitlement();
+  const { vehicles, setPrimaryVehicle } = useVehicles();
   const params = useLocalSearchParams<{ sourceVehicleId?: string }>();
 
-  const vehicles = getDriverVehicles(driverProfile);
-  const statusCounts = getDriverVehicleStatusCounts(driverProfile);
+  const statusCounts = React.useMemo(() => ({
+    approved: vehicles.filter(vehicle => vehicle.status === 'approved').length,
+    pendingReview: vehicles.filter(vehicle => vehicle.status === 'pending_review').length,
+    rejected: vehicles.filter(vehicle => vehicle.status === 'rejected').length,
+  }), [vehicles]);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const online = driverProfile?.isOnline === true;
   const sourceVehicleId = typeof params.sourceVehicleId === 'string' ? params.sourceVehicleId : null;
@@ -56,7 +60,7 @@ export default function DriverVehiclesScreen() {
 
   const handleSelectVehicle = async (vehicleId: string) => {
     if (online) return;
-    await setActiveVehicle(vehicleId);
+    await setPrimaryVehicle(vehicleId);
   };
 
   const handleAddVehicle = () => {

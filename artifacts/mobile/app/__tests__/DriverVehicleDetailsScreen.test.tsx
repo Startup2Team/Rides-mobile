@@ -12,6 +12,9 @@ const mockLaunchCamera = jest.fn((_options?: unknown) => Promise.resolve({
 }));
 let mockDriverProfile: DriverProfile | null = null;
 let mockParams: Record<string, string> = {};
+const mockUseVehicle = jest.fn((vehicleId?: string | null) => (
+  mockDriverProfile?.vehicles?.find(vehicle => vehicle.id === vehicleId) ?? null
+));
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -47,6 +50,10 @@ jest.mock('@/context/AuthContext', () => ({
     driverProfile: mockDriverProfile,
     saveDriverProfile: mockSaveDriverProfile,
   }),
+}));
+
+jest.mock('@/domains/vehicle', () => ({
+  useVehicle: (vehicleId?: string | null) => mockUseVehicle(vehicleId),
 }));
 
 jest.mock('@/domain/verificationSubmissions', () => ({
@@ -177,6 +184,7 @@ describe('DriverVehicleDetailsScreen', () => {
     mockPush.mockClear();
     mockSaveDriverProfile.mockClear();
     mockParams = { vehicleId: 'driver-vehicle:moto:rad-001-a' };
+    mockUseVehicle.mockClear();
     mockDriverProfile = {
       vehicleType: 'moto',
       plateNumber: 'RAD 001 A',
@@ -199,6 +207,7 @@ describe('DriverVehicleDetailsScreen', () => {
       vehicles: [makeVehicle()],
       activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
     };
+    mockUseVehicle.mockImplementation((vehicleId?: string | null) => mockDriverProfile?.vehicles?.find(vehicle => vehicle.id === vehicleId) ?? null);
   });
 
   test('renders the approved vehicle state and opens document previews', () => {

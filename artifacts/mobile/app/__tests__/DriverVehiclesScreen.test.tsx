@@ -7,9 +7,10 @@ import DriverVehiclesScreen from '../driver-vehicles';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
-const mockSetActiveVehicle = jest.fn(() => Promise.resolve());
+const mockSetPrimaryVehicle = jest.fn(() => Promise.resolve());
 let mockDriverProfile: DriverProfile | null = null;
 let mockEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+let mockVehicles: DriverVehicleProfile[] = [];
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -39,7 +40,16 @@ jest.mock('expo-router', () => ({
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     driverProfile: mockDriverProfile,
-    setActiveVehicle: mockSetActiveVehicle,
+  }),
+}));
+
+jest.mock('@/domains/vehicle', () => ({
+  useVehicles: () => ({
+    vehicles: mockVehicles,
+    setPrimaryVehicle: mockSetPrimaryVehicle,
+    isLoading: false,
+    isRefreshing: false,
+    refreshVehicles: jest.fn(),
   }),
 }));
 
@@ -124,9 +134,10 @@ describe('DriverVehiclesScreen', () => {
   beforeEach(() => {
     mockBack.mockClear();
     mockPush.mockClear();
-    mockSetActiveVehicle.mockClear();
+    mockSetPrimaryVehicle.mockClear();
     mockDriverProfile = null;
     mockEntitlement = EMPTY_DRIVER_ENTITLEMENT;
+    mockVehicles = [];
   });
 
   test('shows one migrated vehicle for a legacy approved driver', async () => {
@@ -151,6 +162,7 @@ describe('DriverVehiclesScreen', () => {
       earningsTotal: 0,
     };
     const vehicle = makeVehicle('driver-vehicle:moto:rad-001-a', 'moto', 'RAD 001 A');
+    mockVehicles = [vehicle];
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
       vehicleEntitlements: [makeVehicleEntitlement(vehicle, 8, 2)],
@@ -198,6 +210,7 @@ describe('DriverVehiclesScreen', () => {
       activeVehicle: { vehicleId: approved.id },
       vehicles: [approved, secondary, pending, rejected],
     };
+    mockVehicles = [approved, secondary, pending, rejected];
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
       vehicleEntitlements: [
@@ -221,7 +234,7 @@ describe('DriverVehiclesScreen', () => {
 
     fireEvent.press(screen.getByText('Use for session'));
 
-    await waitFor(() => expect(mockSetActiveVehicle).toHaveBeenCalledWith(secondary.id));
+    await waitFor(() => expect(mockSetPrimaryVehicle).toHaveBeenCalledWith(secondary.id));
   });
 
   test('does not allow switching active vehicle while online', async () => {
@@ -250,6 +263,7 @@ describe('DriverVehiclesScreen', () => {
       activeVehicle: { vehicleId: approved.id },
       vehicles: [approved, secondary],
     };
+    mockVehicles = [approved, secondary];
     mockEntitlement = {
       ...EMPTY_DRIVER_ENTITLEMENT,
       vehicleEntitlements: [
@@ -265,7 +279,7 @@ describe('DriverVehiclesScreen', () => {
     expect(screen.getByText('Go offline to switch')).toBeTruthy();
     fireEvent.press(screen.getByText('Use for session'));
 
-    expect(mockSetActiveVehicle).not.toHaveBeenCalled();
+    expect(mockSetPrimaryVehicle).not.toHaveBeenCalled();
   });
 
 });

@@ -52,7 +52,7 @@ import { zIndex } from '@/constants/zIndex';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
-import { getApprovedDriverVehicles } from '@/domain/driverVehicles';
+import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
 import {
@@ -162,6 +162,7 @@ export default function DriverDashboard() {
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+  const { vehicles } = useVehicles();
 
   const clearAdLoopReset = useCallback(() => {
     if (adLoopResetRef.current) {
@@ -200,7 +201,7 @@ export default function DriverDashboard() {
   const isOnline = driverProfile?.isOnline === true;
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const activeVehicleEntitlement = getVehicleEntitlement(entitlement, activeVehicle);
-  const approvedVehicles = getApprovedDriverVehicles(driverProfile);
+  const approvedVehicles = vehicles.filter(vehicle => vehicle.status === 'approved');
 
   useEffect(() => {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);

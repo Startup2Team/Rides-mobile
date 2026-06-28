@@ -20,6 +20,7 @@ export type QueryPolicyName =
   | 'activeRide'
   | 'driverProfile'
   | 'driverVehicles'
+  | 'driverVehicle'
   | 'packages'
   | 'notifications'
   | 'paymentMethods'

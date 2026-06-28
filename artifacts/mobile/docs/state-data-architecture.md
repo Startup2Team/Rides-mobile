@@ -1257,6 +1257,14 @@ Phase 8B.3 moves notifications onto the query layer.
 - notification read/unread mutations update the repository and invalidate the notification cache
 - the local feed and read-state payload stay compatible for now
 
+Phase 8B.4 moves driver vehicles onto the query layer.
+
+- `domains/vehicle/` is the domain entry point
+- `useDriverVehiclesQuery()` is the driver vehicle list read layer
+- `useDriverVehicleQuery(vehicleId)` is the single vehicle detail read layer
+- add/update/delete/primary-selection mutations update the repository, optimistically update the cache, and then invalidate the driver vehicle queries
+- `AuthContext` remains the compatibility bridge while vehicle screens migrate to the query layer
+
 ## 13. Domain-First Direction
 
 Phase 7E scaffolds a domain-first organization under [`domains/`](../domains/).
@@ -1300,3 +1308,12 @@ The shared profile stays canonical while capabilities can expand over time:
 - delivery partner, future
 
 The identity remains stable. The capability projections change. That is the model that keeps customer and driver behavior unified without splitting the account or duplicating profile state.
+
+## 17. Vehicle Query Migration
+
+Driver vehicles are the next query-backed driver domain after shared identity and notifications.
+
+- the vehicle domain is the canonical driver vehicle entry point
+- the repository boundary remains the same local implementation for now
+- screen consumers can move from auth-session reads to query-backed reads without changing vehicle behavior
+- capability resolution can stay derived from the same vehicle truth while the UI migrates in small steps

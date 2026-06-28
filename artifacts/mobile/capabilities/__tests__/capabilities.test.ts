@@ -1,3 +1,21 @@
+jest.mock('@/query/hooks/useDriverVehiclesQuery', () => ({
+  useDriverVehiclesQuery: () => ({ data: [] }),
+}));
+
+jest.mock('@/domain/driverVehicles', () => ({
+  getDriverVehicles: () => [],
+  getActiveDriverVehicle: () => null,
+  getApprovedDriverVehicles: () => [],
+}));
+
+jest.mock('@/context/AuthContext', () => ({
+  useOptionalAuth: () => null,
+}));
+
+jest.mock('@/context/DriverEntitlementContext', () => ({
+  useOptionalDriverEntitlement: () => null,
+}));
+
 import type { DriverProfile, User, DriverVehicleProfile } from '@/types';
 import { EMPTY_DRIVER_ENTITLEMENT, type DriverEntitlement } from '@/domain/driverRidePackages';
 import { CAPABILITY_NAMES, resolveCapabilities } from '..';

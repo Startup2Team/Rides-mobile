@@ -31,7 +31,8 @@ Examples:
 - `profileKeys.current()`
 - `savedLocationKeys.list(userId)`
 - `rideKeys.active()`
-- `driverKeys.vehicles()`
+- `driverKeys.vehicles(userId)`
+- `driverKeys.vehicle(vehicleId)`
 - `packageKeys.catalog(vehicleType)`
 - `searchKeys.autocomplete(query, near)`
 - `searchKeys.reverseGeocode(coords)`
@@ -64,6 +65,7 @@ Examples:
 - `useRideHistoryQuery(userId)`
 - `useDriverProfileQuery()`
 - `useDriverVehiclesQuery()`
+- `useDriverVehicleQuery(vehicleId)`
 - `usePackagesQuery(vehicleType)`
 - `usePaymentMethodsQuery()`
 - `useSearchAutocompleteQuery(query, options)`
@@ -104,3 +106,5 @@ Saved locations, shared profile, and notifications are the first production doma
 - `AuthContext` remains as the session and role compatibility layer
 - `useNotificationsQuery()` and the notification mutations read and write the notification feed and read state through the query layer
 - the persistence format stays unchanged
+- `useDriverVehiclesQuery()` and `useDriverVehicleQuery()` now expose the driver vehicle list and detail projections through the query layer
+- vehicle add/update/delete/primary-selection mutations still preserve the existing local driver-profile compatibility path
