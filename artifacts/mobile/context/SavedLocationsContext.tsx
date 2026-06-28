@@ -2,14 +2,20 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
 } from 'react';
-import { MAX_SAVED_LOCATIONS } from '@/constants/savedLocations';
+import { useOptionalAuth } from '@/context/AuthContext';
 import { savedLocationsRepository } from '@/domains/saved-locations/repository';
 import type { SavedLocation } from '@/domains/saved-locations/types';
 import type { RideLocation } from '@/types';
+import {
+  useAddSavedLocationMutation,
+  useDeleteSavedLocationMutation,
+  useEditSavedLocationMutation,
+  useSavedLocationsQuery,
+} from '@/query/hooks/useSavedLocationsQuery';
+import { useQueryClient } from '@tanstack/react-query';
+import { savedLocationKeys } from '@/query/keys';
 
 interface SavedLocationsContextValue {
   savedPlaces: SavedLocation[];
@@ -17,61 +23,63 @@ interface SavedLocationsContextValue {
   reload: () => Promise<void>;
   persistSavedPlaces: (next: SavedLocation[]) => Promise<void>;
   saveLocation: (location: RideLocation, label: string) => Promise<boolean>;
+  updateLocation: (id: string, location: RideLocation, label: string) => Promise<void>;
+  removeLocation: (id: string) => Promise<void>;
 }
 
 const SavedLocationsContext = createContext<SavedLocationsContextValue | null>(null);
 
 export function SavedLocationsProvider({ children }: { children: React.ReactNode }) {
-  const [savedPlaces, setSavedPlaces] = useState<SavedLocation[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const auth = useOptionalAuth();
+  const userId = auth?.user?.id ?? null;
+  const queryClient = useQueryClient();
+  const query = useSavedLocationsQuery(userId);
+  const addMutation = useAddSavedLocationMutation(userId);
+  const editMutation = useEditSavedLocationMutation(userId);
+  const deleteMutation = useDeleteSavedLocationMutation(userId);
 
   const reload = useCallback(async () => {
-    try {
-      const stored = await savedLocationsRepository.listSavedLocations();
-      setSavedPlaces(stored);
-    } catch {
-      setSavedPlaces([]);
-    } finally {
-      setLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+    await query.refetch();
+  }, [query]);
 
   const persistSavedPlaces = useCallback(async (next: SavedLocation[]) => {
-    setSavedPlaces(next);
-    await savedLocationsRepository.replaceSavedLocations(next);
-  }, []);
+    const key = savedLocationKeys.list(userId ?? 'current');
+    const previous = queryClient.getQueryData<SavedLocation[]>(key) ?? [];
+    queryClient.setQueryData(key, next);
+    try {
+      await queryClient.cancelQueries({ queryKey: key });
+      await savedLocationsRepository.replaceSavedLocations(next);
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (error) {
+      queryClient.setQueryData(key, previous);
+      throw error;
+    }
+  }, [queryClient, userId]);
 
   const saveLocation = useCallback(async (location: RideLocation, label: string) => {
-    const cleanLabel = label.trim();
-    if (!cleanLabel) return false;
+    const result = await addMutation.mutateAsync({ location, label });
+    return Boolean(result);
+  }, [addMutation]);
 
-    const saved: SavedLocation = {
-      ...location,
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      label: cleanLabel,
-    };
+  const updateLocation = useCallback(async (id: string, location: RideLocation, label: string) => {
+    await editMutation.mutateAsync({ id, location, label });
+  }, [editMutation]);
 
-    setSavedPlaces(current => {
-      const next = [saved, ...current.filter(place => place.label !== cleanLabel)].slice(0, MAX_SAVED_LOCATIONS);
-      void savedLocationsRepository.replaceSavedLocations(next);
-      return next;
-    });
-    return true;
-  }, []);
+  const removeLocation = useCallback(async (id: string) => {
+    await deleteMutation.mutateAsync({ id });
+  }, [deleteMutation]);
 
   const value = useMemo(
     () => ({
-      savedPlaces,
-      loaded,
+      savedPlaces: query.data ?? [],
+      loaded: query.isFetched,
       reload,
       persistSavedPlaces,
       saveLocation,
+      updateLocation,
+      removeLocation,
     }),
-    [loaded, persistSavedPlaces, reload, saveLocation, savedPlaces],
+    [persistSavedPlaces, query.data, query.isFetched, reload, saveLocation, updateLocation, removeLocation],
   );
 
   return (

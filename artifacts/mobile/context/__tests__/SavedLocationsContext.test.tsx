@@ -16,21 +16,43 @@ jest.mock('react-native', () => {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SavedLocationsProvider, useSavedLocations } from '../SavedLocationsContext';
 import type { SavedLocation } from '@/domains/saved-locations';
 
 const mockListSavedLocations = jest.fn();
 const mockReplaceSavedLocations = jest.fn();
+const mockSaveLocation = jest.fn();
+const mockUseOptionalAuth = jest.fn();
 
 jest.mock('@/domains/saved-locations/repository', () => ({
   savedLocationsRepository: {
     listSavedLocations: (...args: unknown[]) => mockListSavedLocations(...args),
     replaceSavedLocations: (...args: unknown[]) => mockReplaceSavedLocations(...args),
-    saveLocation: jest.fn(),
+    saveLocation: (...args: unknown[]) => mockSaveLocation(...args),
     removeSavedLocation: jest.fn(),
     clearSavedLocations: jest.fn(),
   },
 }));
+
+jest.mock('@/context/AuthContext', () => ({
+  useOptionalAuth: () => mockUseOptionalAuth(),
+}));
+
+function renderWithProviders(ui: React.ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={client}>
+      {ui}
+    </QueryClientProvider>,
+  );
+}
 
 function Consumer() {
   const { savedPlaces, loaded, saveLocation, persistSavedPlaces } = useSavedLocations();
@@ -54,6 +76,7 @@ function Consumer() {
 describe('SavedLocationsContext', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseOptionalAuth.mockReturnValue({ user: { id: 'user-1' } });
     mockListSavedLocations.mockResolvedValue([
       {
         id: 'home',
@@ -64,10 +87,11 @@ describe('SavedLocationsContext', () => {
       } satisfies SavedLocation,
     ]);
     mockReplaceSavedLocations.mockResolvedValue(undefined);
+    mockSaveLocation.mockResolvedValue(true);
   });
 
   test('loads saved places through the repository and preserves behavior', async () => {
-    render(
+    renderWithProviders(
       <SavedLocationsProvider>
         <Consumer />
       </SavedLocationsProvider>,
@@ -78,7 +102,7 @@ describe('SavedLocationsContext', () => {
   });
 
   test('saveLocation still persists through the repository boundary', async () => {
-    render(
+    renderWithProviders(
       <SavedLocationsProvider>
         <Consumer />
       </SavedLocationsProvider>,
@@ -87,9 +111,11 @@ describe('SavedLocationsContext', () => {
     await waitFor(() => expect(screen.getByTestId('loaded').props.children).toBe('loaded'));
     fireEvent.press(screen.getByText('Save'));
 
-    await waitFor(() => expect(mockReplaceSavedLocations).toHaveBeenCalled());
-    expect(mockReplaceSavedLocations).toHaveBeenLastCalledWith([
-      expect.objectContaining({ label: 'Home', address: 'KG 10 Street' }),
-    ]);
+    await waitFor(() => expect(mockSaveLocation).toHaveBeenCalled());
+    expect(mockSaveLocation).toHaveBeenLastCalledWith(
+      { latitude: -1.94, longitude: 30.06, address: 'KG 10 Street', locationType: 'precise' },
+      'Home',
+    );
+    expect(mockReplaceSavedLocations).not.toHaveBeenCalled();
   });
 });

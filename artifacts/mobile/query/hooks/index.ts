@@ -6,5 +6,10 @@ export { usePaymentMethodsQuery } from './usePaymentMethodsQuery';
 export { useProfileQuery } from './useProfileQuery';
 export { useRideHistoryQuery } from './useRideHistoryQuery';
 export { useReverseGeocodeQuery } from './useReverseGeocodeQuery';
-export { useSavedLocationsQuery } from './useSavedLocationsQuery';
+export {
+  useAddSavedLocationMutation,
+  useDeleteSavedLocationMutation,
+  useEditSavedLocationMutation,
+  useSavedLocationsQuery,
+} from './useSavedLocationsQuery';
 export { useSearchAutocompleteQuery } from './useSearchAutocompleteQuery';

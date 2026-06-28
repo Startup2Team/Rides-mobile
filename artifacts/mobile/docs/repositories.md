@@ -148,6 +148,13 @@ Phase 8A adds the query foundation and capability layer.
 - repositories remain the data boundary underneath the query layer
 - screens still must not import persistence or sources directly
 
+Phase 8B.1 moves saved locations onto the query layer without changing the repository contract.
+
+- `useSavedLocationsQuery(userId)` is the canonical read surface
+- add/edit/delete mutations update the repository and invalidate the saved-locations cache
+- `SavedLocationsContext` stays in place as a compatibility facade for existing screens
+- saved locations are now query-backed, but storage format and repository behavior stay the same
+
 ## Domain-First Direction
 
 Phase 7E adds the [`domains/`](../domains/) scaffold and the typed ownership map in `domains/domainOwnership.ts`.

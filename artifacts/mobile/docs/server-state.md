@@ -92,3 +92,12 @@ Phase 8B can start moving read-heavy domains onto query hooks one at a time:
 - ride history
 
 The active ride and mutation-heavy flows should move later, after query behavior is proven stable.
+
+## Current Query-Backed Domains
+
+Saved locations is the first production domain that is now backed by TanStack Query.
+
+- `useSavedLocationsQuery(userId)` reads through the repository
+- add/edit/delete mutations update the repository and invalidate the saved-locations key
+- `SavedLocationsContext` remains as a compatibility facade during the migration
+- the persistence format stays unchanged

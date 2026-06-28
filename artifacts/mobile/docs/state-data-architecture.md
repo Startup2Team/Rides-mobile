@@ -1236,6 +1236,15 @@ Phase 8A also adds the derived capability model in [`docs/capabilities.md`](./ca
 - customer and driver remain role projections of one account
 - the capability matrix is the long-term UI permission surface for future roles
 
+## 16. Saved Locations Query Migration
+
+Phase 8B.1 moves saved locations to TanStack Query while preserving the current repository and persistence format.
+
+- `useSavedLocationsQuery(userId)` is the read layer
+- add/edit/delete mutations update the repository and invalidate the saved-locations cache
+- `SavedLocationsContext` remains a compatibility facade so existing screens do not change yet
+- saved locations are now query-backed instead of manually managed in local context state
+
 ## 13. Domain-First Direction
 
 Phase 7E scaffolds a domain-first organization under [`domains/`](../domains/).
