@@ -83,7 +83,7 @@ export type HomeTopHeaderProps = {
 /** Shared caption size for CTA label and compact location line. */
 const HEADER_CAPTION_TEXT = {
   ...typography.caption,
-    fontFamily: typography.title.fontFamily,
+  fontFamily: typography.title.fontFamily,
   lineHeight: 16,
 };
 
