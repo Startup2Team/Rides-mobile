@@ -1,7 +1,11 @@
 export * from './commandHandlers';
+export * from './commandCreators';
 export * from './events';
+export * from './eventFactories';
+export * from './idempotency';
 export * from './projectors';
 export * from './readModels';
 export { rideHistoryRepository, type RideHistoryOptions } from './repository';
+export * from './sequence';
 export type * from './commands';
 export type { Ride } from './types';
