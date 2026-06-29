@@ -108,3 +108,7 @@ Phase 9E already does that bootstrap in dev/test only. Graduation to any UI-driv
 - replay parity with live events
 - no surprise query or provider mutations
 - production gating remains off until the migration is explicitly approved
+
+## Production Readiness
+
+Phase 9F extends this with readiness gates that prove replay determinism, mismatch telemetry, and isolation from query/UI mutation before any UI migration is allowed.

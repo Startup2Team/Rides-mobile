@@ -84,3 +84,7 @@ Validation failures and projector/subscriber errors are captured as dead-letter 
 ## Future Integration
 
 Future backend integration should persist events server-side and assign durable global ordering. Future realtime integration can translate remote event messages into validated `DomainEvent` objects. Future ride lifecycle migration can register ride command handlers and ride read-model projectors without changing this infrastructure.
+
+## Production Readiness
+
+Phase 9F adds readiness gates that stress deduplication, stale-sequence rejection, replay correctness, ordering, and dead-letter behavior. The same deterministic profiles are documented in `docs/production-readiness.md`.

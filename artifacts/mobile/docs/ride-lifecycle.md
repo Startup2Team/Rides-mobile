@@ -169,3 +169,7 @@ Graduation criteria before any projected read model can drive UI:
 - replay results match live processing
 - no unwanted RideProvider or Query cache mutation is observed
 - production gating is still explicitly disabled
+
+## Production Readiness
+
+Phase 9F adds readiness gates that stress offline queue behavior, realtime reconnect behavior, event replay ordering, shadow parity, and observability before any RideProvider migration begins. The formal criteria live in `docs/production-readiness.md`.

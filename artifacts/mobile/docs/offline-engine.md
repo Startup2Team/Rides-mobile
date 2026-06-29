@@ -100,3 +100,7 @@ It is not mounted in production UI by this phase.
 ## Future Integration
 
 Later phases can integrate domain processors behind repository boundaries. The engine is ready for backend and realtime integration, but current runtime behavior intentionally does not change.
+
+## Production Readiness
+
+Phase 9F adds readiness gates that stress the offline queue with throughput, retry/backoff, persistence restore, expiry handling, pause/resume, and collapse checks. CI uses a smaller deterministic profile; the full counts are documented in `docs/production-readiness.md`.

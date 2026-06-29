@@ -82,3 +82,7 @@ The event bus supports local `publish`, `subscribe`, and unsubscribe callbacks. 
 ## Future Integration
 
 Backend integration should provide a real `RealtimeTransport` implementation. Ride engine integration should consume typed events through the dispatcher/event bus and register subscriptions explicitly. Notification integration should follow the same pattern. This phase intentionally leaves those integrations out so the realtime infrastructure can be validated independently.
+
+## Production Readiness
+
+Phase 9F adds readiness gates for reconnect backoff, heartbeat timeout, subscription restore, offline/online transitions, and duplicate reconnect protection. The readiness profiles and execution guidance live in `docs/production-readiness.md`.

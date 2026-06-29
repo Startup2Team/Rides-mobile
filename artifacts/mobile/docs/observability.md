@@ -82,3 +82,7 @@ Future OpenTelemetry work should add exporters that translate local metrics and 
 ## Future Sentry Integration
 
 Future Sentry integration should implement crash and log exporters. The current crash reporter is dependency-injected and does not import Sentry. PII filtering rules should remain centralized before any exporter sends data off-device.
+
+## Production Readiness
+
+Phase 9F uses the observability foundation as a readiness gate. The gate checks that logs, metrics, traces, correlation propagation, and health checks all emit expected diagnostics before any ride runtime migration is approved.
