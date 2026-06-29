@@ -48,3 +48,5 @@ Before projected ride models can drive UI:
 
 Phase 10 should only start after these gates are green and the migration plan is explicitly approved.
 Phase 10A is the gated dual-read step; Phase 10B should only begin after the dual-read diagnostics remain clean under normal and replayed lifecycle traffic.
+
+Phase 10C adds command-pipeline validation and offline-mutation previews in dry-run or shadow mode only. Production remains disabled until the command pipeline proves stable beside the live RideProvider path.

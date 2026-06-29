@@ -179,3 +179,5 @@ Phase 9F adds readiness gates that stress offline queue behavior, realtime recon
 Phase 10A adds a live-vs-projected comparison layer, but the UI still consumes live RideProvider state only. The projected source remains disabled for cutover.
 
 Phase 10B adds a projection coordinator above that comparison layer. It selects and compares ride read models for diagnostics only, while RideProvider remains the live source for runtime UI behavior.
+
+Phase 10C adds a ride command pipeline that validates and classifies ride commands in dry-run or shadow mode only. It does not route UI actions yet and does not change RideProvider state transitions.

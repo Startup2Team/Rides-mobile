@@ -104,3 +104,5 @@ Later phases can integrate domain processors behind repository boundaries. The e
 ## Production Readiness
 
 Phase 9F adds readiness gates that stress the offline queue with throughput, retry/backoff, persistence restore, expiry handling, pause/resume, and collapse checks. CI uses a smaller deterministic profile; the full counts are documented in `docs/production-readiness.md`.
+
+Phase 10C introduces a ride command pipeline that can produce offline mutation previews from validated commands, but it still does not enqueue by default. The queue remains infrastructure only until a later cutover phase enables it explicitly.

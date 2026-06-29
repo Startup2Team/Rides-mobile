@@ -62,3 +62,5 @@ drive UI. Graduation requires:
 - production cutover flag intentionally enabled only after explicit approval
 
 Until then, the application stays on live RideProvider data.
+
+Phase 10C sits beside this layer and validates ride commands in dry-run or shadow mode only. The command pipeline does not change projection selection or rollout rules; it only prepares the next safe migration step.
