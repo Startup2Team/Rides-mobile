@@ -1,28 +1,21 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useRide } from '@/context/RideContext';
 import type { Ride } from '@/types';
 import type { ActiveRideReadModel, DriverRideRequestReadModel, RideHistoryReadModel } from '../readModels';
 import { rideShadowProjectionManager } from '../shadow/shadowProjectionManager';
 import type { RideShadowSnapshot } from '../shadow/shadowTypes';
-import { compareActiveRide, compareDriverRequests, compareRideDualReadModels, compareRideHistory } from './rideDualReadComparator';
-import { recordRideDualReadTelemetry } from './rideDualReadMetrics';
 import {
-  ENABLE_RIDE_DUAL_READ,
-  USE_PROJECTED_RIDE_READ_MODEL,
-  type RideDualReadLiveSnapshot,
-  type RideDualReadProjectedSnapshot,
-  type RideDualReadSlice,
-  type RideDualReadSnapshot,
-  type RideReadModelSource,
+  rideProjectionCoordinator,
+  useProjectionCoordinator,
+} from '../projection';
+import type {
+  RideDualReadLiveSnapshot,
+  RideDualReadProjectedSnapshot,
+  RideDualReadSlice,
+  RideDualReadSnapshot,
+  RideReadModelSource,
 } from './rideDualReadTypes';
-
-let liveReadModelForced = false;
-
-function normalizeDriverRequests(live: Ride | Ride[] | null | undefined) {
-  if (Array.isArray(live)) return live;
-  if (!live) return [];
-  return [live];
-}
+import { ENABLE_RIDE_DUAL_READ, USE_PROJECTED_RIDE_READ_MODEL } from './rideDualReadTypes';
 
 export function getLiveActiveRide(live: Ride | null | undefined) {
   return live ?? null;
@@ -40,8 +33,8 @@ export function getProjectedRideHistory(snapshot: RideShadowSnapshot | null | un
   return [...(snapshot?.shadowRideHistory ?? [])];
 }
 
-export function getLiveDriverRequests(live: Ride | Ride[] | null | undefined) {
-  return normalizeDriverRequests(live);
+export function getLiveDriverRequests(live: Ride[] | null | undefined) {
+  return live ?? [];
 }
 
 export function getProjectedDriverRequests(snapshot: RideShadowSnapshot | null | undefined) {
@@ -49,14 +42,13 @@ export function getProjectedDriverRequests(snapshot: RideShadowSnapshot | null |
 }
 
 export function getReadModelSource(options: { projectedAvailable?: boolean } = {}): RideReadModelSource {
-  if (liveReadModelForced) return 'live';
-  if (!ENABLE_RIDE_DUAL_READ) return 'live';
-  if (!USE_PROJECTED_RIDE_READ_MODEL) return 'live';
-  return options.projectedAvailable ? 'projected' : 'live';
+  return rideProjectionCoordinator.resolveSelection(Boolean(options.projectedAvailable)).source === 'PROJECTED'
+    ? 'projected'
+    : 'live';
 }
 
 export function forceLiveRideReadModel() {
-  liveReadModelForced = true;
+  rideProjectionCoordinator.rollbackToLive();
   return 'live' as const;
 }
 
@@ -67,51 +59,27 @@ export function assertProjectedReadDisabledInProduction() {
   return true;
 }
 
+function mapProjectionSnapshot(snapshot: ReturnType<typeof useProjectionCoordinator>): RideDualReadSnapshot {
+  return {
+    enabled: snapshot.enabled,
+    source: snapshot.source,
+    projectedAvailable: snapshot.projectedAvailable,
+    live: snapshot.live,
+    projected: snapshot.projected,
+    comparison: snapshot.comparison,
+  };
+}
+
 export function createRideDualReadSnapshot(
   live: RideDualReadLiveSnapshot,
   shadowSnapshot: RideShadowSnapshot | null | undefined,
 ): RideDualReadSnapshot {
-  const projectedAvailable = Boolean(shadowSnapshot?.enabled && shadowSnapshot?.running);
-  const projected: RideDualReadProjectedSnapshot | null = projectedAvailable
-    ? {
-        activeRide: getProjectedActiveRide(shadowSnapshot),
-        rideHistory: getProjectedRideHistory(shadowSnapshot),
-        driverRequests: getProjectedDriverRequests(shadowSnapshot),
-      }
-    : null;
-
-  return {
-    enabled: ENABLE_RIDE_DUAL_READ,
-    source: getReadModelSource({ projectedAvailable }),
-    projectedAvailable,
-    live: {
-      activeRide: getLiveActiveRide(live.activeRide),
-      rideHistory: getLiveRideHistory(live.rideHistory),
-      driverRequests: getLiveDriverRequests(live.driverRequests),
-    },
-    projected,
-    comparison: ENABLE_RIDE_DUAL_READ && projectedAvailable
-      ? compareRideDualReadModels(live, projected)
-      : null,
-  };
+  return mapProjectionSnapshot(rideProjectionCoordinator.createSnapshot(live, shadowSnapshot));
 }
 
 export function useRideReadModel(): RideDualReadSnapshot {
-  const ride = useRide();
-  const shadowSnapshot = rideShadowProjectionManager.getSnapshot();
-
-  const snapshot = useMemo(() => createRideDualReadSnapshot({
-    activeRide: ride.currentRide,
-    rideHistory: ride.rideHistory,
-    driverRequests: ride.pendingRequest ? [ride.pendingRequest] : [],
-  }, shadowSnapshot), [ride.currentRide, ride.rideHistory, ride.pendingRequest, shadowSnapshot]);
-
-  useEffect(() => {
-    if (!ENABLE_RIDE_DUAL_READ) return;
-    recordRideDualReadTelemetry(snapshot);
-  }, [snapshot]);
-
-  return snapshot;
+  const snapshot = useProjectionCoordinator();
+  return useMemo(() => mapProjectionSnapshot(snapshot), [snapshot]);
 }
 
 export function useActiveRideReadModel(): RideDualReadSlice<Ride | null, ActiveRideReadModel | null> {

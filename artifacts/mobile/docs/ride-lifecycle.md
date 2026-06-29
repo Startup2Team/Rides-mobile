@@ -177,3 +177,5 @@ Graduation criteria before any projected read model can drive UI:
 Phase 9F adds readiness gates that stress offline queue behavior, realtime reconnect behavior, event replay ordering, shadow parity, and observability before any RideProvider migration begins. The formal criteria live in `docs/production-readiness.md`.
 
 Phase 10A adds a live-vs-projected comparison layer, but the UI still consumes live RideProvider state only. The projected source remains disabled for cutover.
+
+Phase 10B adds a projection coordinator above that comparison layer. It selects and compares ride read models for diagnostics only, while RideProvider remains the live source for runtime UI behavior.

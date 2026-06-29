@@ -20,6 +20,7 @@ import {
 import { compareActiveRide } from '../rideDualReadComparator';
 import { recordRideDualReadTelemetry, MemoryRideDualReadTelemetry } from '../rideDualReadMetrics';
 import { ENABLE_RIDE_DUAL_READ, USE_PROJECTED_RIDE_READ_MODEL } from '../rideDualReadTypes';
+import { rideProjectionCoordinator } from '../../projection';
 
 const originalNodeEnv = process.env.NODE_ENV;
 const environment = process.env as Record<string, string | undefined>;
@@ -30,6 +31,7 @@ describe('ride dual read', () => {
     resetObservabilityForTests();
     rideShadowProjectionManager.stop();
     rideShadowProjectionManager.reset();
+    rideProjectionCoordinator.reset();
   });
 
   afterEach(async () => {
@@ -37,6 +39,7 @@ describe('ride dual read', () => {
     resetObservabilityForTests();
     rideShadowProjectionManager.stop();
     rideShadowProjectionManager.reset();
+    rideProjectionCoordinator.reset();
     environment.NODE_ENV = originalNodeEnv;
     jest.resetModules();
   });

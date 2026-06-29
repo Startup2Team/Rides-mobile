@@ -4,6 +4,7 @@ export * from './events';
 export * from './eventFactories';
 export * from './idempotency';
 export * from './projectors';
+export * from './projection';
 export * from './readModels';
 export { rideHistoryRepository, type RideHistoryOptions } from './repository';
 export * from './sequence';
