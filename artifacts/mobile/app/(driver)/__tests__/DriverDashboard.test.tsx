@@ -22,6 +22,107 @@ let mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const mockAlert = jest.fn();
 const mockReact = React;
 
+type ScheduledHandle = {
+  id: number;
+  kind: 'timeout' | 'interval';
+  delay: number;
+  remaining: number;
+  token: number;
+  active: boolean;
+  callback: () => void;
+};
+
+function createScreenTimerManager() {
+  let session = 0;
+  let nextId = 0;
+  const handles = new Map<number, ScheduledHandle>();
+
+  const clearHandle = (handle: ScheduledHandle | null) => {
+    if (!handle) return;
+    handles.delete(handle.id);
+    handle.active = false;
+  };
+
+  const clearAll = () => {
+    handles.clear();
+  };
+
+  const startSession = () => {
+    clearAll();
+    session += 1;
+    return session;
+  };
+
+  const scheduleTimeout = (callback: () => void, delayMs: number, token = session) => {
+    const handle: ScheduledHandle = {
+      id: ++nextId,
+      kind: 'timeout',
+      delay: delayMs,
+      remaining: delayMs,
+      token,
+      active: true,
+      callback,
+    };
+    handles.set(handle.id, handle);
+    return handle;
+  };
+
+  const scheduleInterval = (callback: () => void, delayMs: number, token = session) => {
+    const handle: ScheduledHandle = {
+      id: ++nextId,
+      kind: 'interval',
+      delay: delayMs,
+      remaining: delayMs,
+      token,
+      active: true,
+      callback,
+    };
+    handles.set(handle.id, handle);
+    return handle;
+  };
+
+  const advance = (ms: number) => {
+    let remainingMs = ms;
+    while (remainingMs > 0) {
+      const activeHandles = [...handles.values()].filter(handle => handle.active && handle.token === session);
+      if (activeHandles.length === 0) break;
+      const step = Math.min(remainingMs, ...activeHandles.map(handle => handle.remaining));
+      activeHandles.forEach(handle => {
+        handle.remaining -= step;
+      });
+      activeHandles
+        .filter(handle => handle.remaining <= 0)
+        .sort((a, b) => a.id - b.id)
+        .forEach(handle => {
+          if (!handle.active || handle.token !== session) return;
+          if (handle.kind === 'timeout') {
+            clearHandle(handle);
+            handle.callback();
+            return;
+          }
+          handle.callback();
+          handle.remaining = handle.delay;
+        });
+      remainingMs -= step;
+    }
+  };
+
+  return {
+    startSession,
+    endSession: startSession,
+    currentSession: () => session,
+    isActive: (token: number) => token === session,
+    scheduleTimeout,
+    scheduleInterval,
+    clearTimeout: clearHandle,
+    clearInterval: clearHandle,
+    clearAll,
+    advance,
+  };
+}
+
+const mockScreenTimers = createScreenTimerManager();
+
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
@@ -79,6 +180,10 @@ jest.mock('react-native', () => {
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: () => undefined,
+}));
+
+jest.mock('@/hooks/useScreenTimerManager', () => ({
+  useScreenTimerManager: () => mockScreenTimers,
 }));
 
 jest.mock('@expo/vector-icons', () => {
@@ -271,6 +376,8 @@ describe('DriverDashboard online state', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
+    mockScreenTimers.clearAll();
+    mockScreenTimers.startSession();
     mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
@@ -299,7 +406,7 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('Go Offline')).toBeTruthy();
 
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
     expect(screen.getByText('Amina K.')).toBeTruthy();
@@ -380,7 +487,7 @@ describe('DriverDashboard online state', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(6_000);
+      mockScreenTimers.advance(6_000);
     });
     expect(screen.queryByText('Incoming Ride')).toBeNull();
   });
@@ -391,7 +498,7 @@ describe('DriverDashboard online state', () => {
     render(<DashboardProviders />);
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
@@ -407,7 +514,7 @@ describe('DriverDashboard online state', () => {
     render(<DashboardProviders />);
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
@@ -416,18 +523,18 @@ describe('DriverDashboard online state', () => {
     await waitFor(() => expect(screen.queryByText('Incoming Ride Request')).toBeNull());
   });
 
-  test.skip('countdown expiry clears the incoming request', async () => {
+  test('countdown expiry clears the incoming request', async () => {
     await seedDriverState({ profile: { ...baseProfile, isOnline: true } });
 
     render(<DashboardProviders />);
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
-    await act(async () => {
-      jest.advanceTimersByTime(16_000);
+    act(() => {
+      mockScreenTimers.advance(16_000);
     });
 
     expect(screen.queryByText('Incoming Ride Request')).toBeNull();
