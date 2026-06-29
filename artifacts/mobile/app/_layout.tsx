@@ -65,6 +65,7 @@ import {
   bootstrapShadowRideProjection,
   stopShadowRideProjection,
 } from '@/domains/ride/shadow';
+import { RideDualReadDiagnostics } from '@/domains/ride/dualRead';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -172,6 +173,7 @@ export default function RootLayout() {
             <PackageSyncProvider>
               <DriverEntitlementProvider>
                 <RideProvider>
+                  <RideDualReadDiagnostics />
                   <ToastProvider>
                     <SavedLocationsProvider>
                       <MapPickerProvider>

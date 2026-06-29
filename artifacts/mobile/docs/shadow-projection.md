@@ -2,6 +2,8 @@
 
 Phase 9D registers ride read-model projectors in shadow mode only. Phase 9E boots that shadow projection automatically in dev/test only. The existing `RideProvider` remains the production source of truth.
 
+Phase 10A layers a dual-read adapter on top of the shadow projection so live RideProvider snapshots can be compared with projected read models without changing runtime behavior.
+
 ## Purpose
 
 Shadow projection lets the app build event-driven ride read models in parallel with the current lifecycle. This gives the team a way to measure divergence before changing runtime behavior.
@@ -112,3 +114,5 @@ Phase 9E already does that bootstrap in dev/test only. Graduation to any UI-driv
 ## Production Readiness
 
 Phase 9F extends this with readiness gates that prove replay determinism, mismatch telemetry, and isolation from query/UI mutation before any UI migration is allowed.
+
+Phase 10A does not change the shadow contract: shadow projection still feeds diagnostics only, and the projected read model remains non-authoritative.

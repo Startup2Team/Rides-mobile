@@ -2,6 +2,8 @@
 
 Phase 9F adds readiness gates that stress-test the ride infrastructure before any migration away from `RideProvider`.
 
+Phase 10A keeps the UI on live `RideProvider` state while dual-read diagnostics compare projected ride models in the background.
+
 ## What The Gates Protect
 
 - Offline queue: throughput, retry/backoff, restore, expiry, pause/resume, collapse
@@ -41,6 +43,8 @@ Before projected ride models can drive UI:
 - dead-letter behavior is verified
 - observability metrics are emitted
 - performance stays within the agreed CI threshold
+- dual-read parity stays stable with no unresolved mismatch in the core lifecycle
+- live source rollback remains available and verified
 
 Phase 10 should only start after these gates are green and the migration plan is explicitly approved.
-
+Phase 10A is the gated dual-read step; Phase 10B should only begin after the dual-read diagnostics remain clean under normal and replayed lifecycle traffic.

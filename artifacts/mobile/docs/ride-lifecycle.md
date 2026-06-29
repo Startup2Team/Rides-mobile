@@ -2,6 +2,8 @@
 
 Phase 9A defines the production ride lifecycle contracts and event-driven integration plan. It does not change the current mock ride lifecycle, UI, navigation, matching, negotiation, payment, or RideProvider behavior.
 
+Phase 10A adds a dual-read diagnostics layer that compares projected ride models beside `RideProvider` without changing what the UI renders.
+
 ## Production Lifecycle
 
 The production lifecycle is modeled as an ordered aggregate stream for `aggregateType=ride` and `aggregateId=rideId`.
@@ -173,3 +175,5 @@ Graduation criteria before any projected read model can drive UI:
 ## Production Readiness
 
 Phase 9F adds readiness gates that stress offline queue behavior, realtime reconnect behavior, event replay ordering, shadow parity, and observability before any RideProvider migration begins. The formal criteria live in `docs/production-readiness.md`.
+
+Phase 10A adds a live-vs-projected comparison layer, but the UI still consumes live RideProvider state only. The projected source remains disabled for cutover.
