@@ -117,13 +117,13 @@ export const DOMAIN_OWNERSHIP: Record<DomainName, DomainOwnershipEntry> = {
   },
   payments: {
     domain: 'payments',
-    owns: ['payment methods', 'wallet metadata', 'transaction history'],
-    mustNotOwn: ['driver verification truth', 'ride lifecycle', 'saved locations'],
+    owns: ['payment methods', 'default payment method', 'billing profile', 'mobile money configuration', 'card metadata', 'payment preferences'],
+    mustNotOwn: ['payment transactions', 'receipts', 'refunds', 'settlement', 'wallet balance', 'earnings', 'withdrawals', 'driver verification truth', 'ride lifecycle', 'saved locations'],
     currentFiles: ['persistence/paymentPersistence.ts', 'app/payment-methods.tsx'],
     futureFiles: ['domains/payments', 'data/repositories/interfaces.ts'],
     canonicalRepository: 'PaymentRepository',
     canonicalStore: null,
-    serverStateStrategy: 'repository',
+    serverStateStrategy: 'query',
   },
   search: {
     domain: 'search',

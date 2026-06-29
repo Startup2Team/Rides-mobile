@@ -38,6 +38,9 @@ Examples:
 - `packageKeys.entitlements(driverId)`
 - `packageKeys.purchases(driverId)`
 - `packageKeys.offers(driverId, vehicleType)`
+- `paymentKeys.methods(userId)`
+- `paymentKeys.default(userId)`
+- `paymentKeys.billing(userId)`
 - `searchKeys.autocomplete(query, near)`
 - `searchKeys.reverseGeocode(coords)`
 
@@ -53,7 +56,7 @@ Current intent:
 - driver profile and vehicles: medium stale time
 - packages: medium stale time with longer cache lifetime
 - notifications: short stale time
-- payment methods: medium stale time
+- payment methods: long stale time
 - search autocomplete and reverse geocode: effectively immediate freshness
 
 The policies are centralized so future fetch behavior can be tuned without changing screens.
@@ -81,6 +84,12 @@ Examples:
 - `useActivatePackageMutation()`
 - `useDeductRideCreditMutation()`
 - `usePaymentMethodsQuery()`
+- `useDefaultPaymentMethodQuery()`
+- `useBillingProfileQuery()`
+- `useAddPaymentMethodMutation()`
+- `useUpdatePaymentMethodMutation()`
+- `useDeletePaymentMethodMutation()`
+- `useSetDefaultPaymentMethodMutation()`
 - `useSearchAutocompleteQuery(query, options)`
 - `useReverseGeocodeQuery(coords)`
 
@@ -105,6 +114,7 @@ Phase 8B can start moving read-heavy domains onto query hooks one at a time:
 - vehicles
 - packages
 - ride history
+- payment methods
 
 The active ride and mutation-heavy flows should move later, after query behavior is proven stable.
 
@@ -125,3 +135,6 @@ Saved locations, shared profile, and notifications are the first production doma
 - `useDriverEntitlementsQuery(driverId)` and `useDriverPackagePurchasesQuery(driverId)` expose the driver entitlement snapshot and purchase history through the query layer
 - package create/update/activate/deduct mutations still preserve the local prototype economics while updating the cache and repository boundary
 - `PackageSyncContext` and `DriverEntitlementContext` remain compatibility facades while package callers migrate
+- `usePaymentMethodsQuery()`, `useDefaultPaymentMethodQuery()`, and `useBillingProfileQuery()` read payment method and billing preference projections through TanStack Query
+- payment method add/update/delete/default mutations update `PaymentRepository`, optimistically update only method caches, and invalidate manually after writes
+- payment transaction truth, receipts, refunds, wallet balances, driver payouts, and settlement remain future backend work

@@ -75,8 +75,8 @@ export const queryPolicies = {
     gcTime: 15 * minute,
   }),
   paymentMethods: policy({
-    staleTime: 10 * minute,
-    gcTime: 30 * minute,
+    staleTime: 60 * minute,
+    gcTime: 120 * minute,
   }),
   searchAutocomplete: policy({
     staleTime: 0,

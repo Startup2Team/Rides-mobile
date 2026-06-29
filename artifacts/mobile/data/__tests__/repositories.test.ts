@@ -33,6 +33,17 @@ describe('repository layer', () => {
   test('payment and notification repositories proxy the existing local sources', async () => {
     await paymentRepository.savePaymentMethods([{ id: 'cash', provider: 'cash', label: 'Cash', isDefault: true }]);
     expect(await paymentRepository.listPaymentMethods()).toHaveLength(1);
+    await paymentRepository.addPaymentMethod({ id: 'mtn', provider: 'mtn', label: 'MTN Mobile Money', phoneNumber: '788000000', isDefault: false });
+    await paymentRepository.updatePaymentMethod('mtn', { label: 'Personal MTN' });
+    await paymentRepository.setDefaultPaymentMethod('mtn');
+    expect(await paymentRepository.listPaymentMethods()).toEqual([
+      expect.objectContaining({ id: 'mtn', label: 'Personal MTN', isDefault: true }),
+      expect.objectContaining({ id: 'cash', isDefault: false }),
+    ]);
+    await paymentRepository.removePaymentMethod('mtn');
+    expect(await paymentRepository.listPaymentMethods()).toEqual([
+      expect.objectContaining({ id: 'cash', isDefault: false }),
+    ]);
 
     await notificationRepository.clear();
     await notificationRepository.markRead('ride-1');

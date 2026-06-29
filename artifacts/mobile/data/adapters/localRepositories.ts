@@ -290,9 +290,19 @@ export class LocalPaymentRepository implements PaymentRepository {
     await this.savePaymentMethods([method, ...methods.filter(item => item.id !== method.id)]);
   }
 
+  async updatePaymentMethod(methodId: string, updates: Partial<PaymentMethod>) {
+    const methods = await this.listPaymentMethods();
+    await this.savePaymentMethods(methods.map(method => method.id === methodId ? { ...method, ...updates, id: method.id } : method));
+  }
+
   async removePaymentMethod(methodId: string) {
     const methods = await this.listPaymentMethods();
     await this.savePaymentMethods(methods.filter(method => method.id !== methodId));
+  }
+
+  async setDefaultPaymentMethod(methodId: string) {
+    const methods = await this.listPaymentMethods();
+    await this.savePaymentMethods(methods.map(method => ({ ...method, isDefault: method.id === methodId })));
   }
 }
 

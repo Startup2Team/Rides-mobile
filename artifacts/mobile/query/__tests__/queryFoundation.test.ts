@@ -35,7 +35,9 @@ describe('query foundation', () => {
     const driverVehicle: readonly ['driver', 'vehicle', string] = driverKeys.vehicle('vehicle-1');
     const driverPackages: readonly ['driver', 'packages'] = driverKeys.packages();
     const notificationList: readonly ['notifications', 'list'] = notificationKeys.list();
-    const paymentMethods: readonly ['payments', 'methods'] = paymentKeys.methods();
+    const paymentMethods: readonly ['payments', 'methods', string] = paymentKeys.methods('user-1');
+    const paymentDefault: readonly ['payments', 'default', string] = paymentKeys.default('user-1');
+    const paymentBilling: readonly ['payments', 'billing', string] = paymentKeys.billing('user-1');
     const packageCatalog: readonly ['packages', 'catalog'] = packageKeys.catalog();
     const packageVehicleCatalog: readonly ['packages', 'catalog', string] = packageKeys.catalog('moto');
     const packageEntitlements: readonly ['packages', 'entitlements', string] = packageKeys.entitlements('driver-1');
@@ -56,7 +58,9 @@ describe('query foundation', () => {
     expect(driverVehicle).toEqual(['driver', 'vehicle', 'vehicle-1']);
     expect(driverPackages).toEqual(['driver', 'packages']);
     expect(notificationList).toEqual(['notifications', 'list']);
-    expect(paymentMethods).toEqual(['payments', 'methods']);
+    expect(paymentMethods).toEqual(['payments', 'methods', 'user-1']);
+    expect(paymentDefault).toEqual(['payments', 'default', 'user-1']);
+    expect(paymentBilling).toEqual(['payments', 'billing', 'user-1']);
     expect(packageCatalog).toEqual(['packages', 'catalog']);
     expect(packageVehicleCatalog).toEqual(['packages', 'catalog', 'moto']);
     expect(packageEntitlements).toEqual(['packages', 'entitlements', 'driver-1']);
@@ -79,6 +83,8 @@ describe('query foundation', () => {
       driverPackages,
       notificationList,
       paymentMethods,
+      paymentDefault,
+      paymentBilling,
       packageCatalog,
       packageVehicleCatalog,
       packageEntitlements,

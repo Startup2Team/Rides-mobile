@@ -27,7 +27,15 @@ export {
   usePackageCatalogQuery,
   useUpdatePackagePurchaseStatusMutation,
 } from './usePackagesQuery';
-export { usePaymentMethodsQuery } from './usePaymentMethodsQuery';
+export {
+  useAddPaymentMethodMutation,
+  useBillingProfileQuery,
+  useDefaultPaymentMethodQuery,
+  useDeletePaymentMethodMutation,
+  usePaymentMethodsQuery,
+  useSetDefaultPaymentMethodMutation,
+  useUpdatePaymentMethodMutation,
+} from './usePaymentMethodsQuery';
 export {
   useProfileQuery,
   useProfilePhotoQuery,
