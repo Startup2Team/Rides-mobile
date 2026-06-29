@@ -1,4 +1,5 @@
 import { createListenerSet } from '@/state/storeUtils';
+import { observability } from '@/observability/context/observabilityContext';
 import type { RealtimeAuthProvider } from '../auth/auth';
 import { RealtimeDispatcher } from '../dispatcher/dispatcher';
 import type { RealtimeEventBus } from '../events/eventBus';
@@ -103,6 +104,7 @@ export class RealtimeConnectionManager {
   }
 
   async connect() {
+    observability.metrics.counter('realtime.connect');
     if (this.destroyed || this.paused || !this.network.isOnline) return this.getSnapshot();
     this.setPresence('Connecting');
     try {
@@ -113,6 +115,7 @@ export class RealtimeConnectionManager {
       this.heartbeat.start();
       await this.restoreSubscriptions();
     } catch (error) {
+      observability.metrics.counter('realtime.connect.error');
       this.lastError = serializeError(error);
       this.setPresence('Degraded');
       throw error;
@@ -121,6 +124,7 @@ export class RealtimeConnectionManager {
   }
 
   async authenticate(token?: string | null) {
+    observability.metrics.counter('realtime.authenticate');
     if (this.destroyed || this.paused || !this.network.isOnline) return this.getSnapshot();
     const resolvedToken = token ?? await this.authProvider?.getToken();
     if (!resolvedToken) return this.getSnapshot();
@@ -134,6 +138,7 @@ export class RealtimeConnectionManager {
   }
 
   async disconnect() {
+    observability.metrics.counter('realtime.disconnect');
     this.heartbeat.stop();
     await this.transport.disconnect();
     this.setPresence('Disconnected');
@@ -141,6 +146,7 @@ export class RealtimeConnectionManager {
   }
 
   async reconnect(options: { immediate?: boolean } = {}) {
+    observability.metrics.counter('realtime.reconnect');
     if (this.destroyed || this.paused || !this.network.isOnline) return this.getSnapshot();
     this.reconnectCount += 1;
     this.setPresence('Reconnecting');

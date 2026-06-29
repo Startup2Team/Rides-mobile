@@ -1,4 +1,6 @@
 import { createListenerSet } from '@/state/storeUtils';
+import { observability } from '@/observability/context/observabilityContext';
+import { observeMutationEngine } from '@/observability/performance/instrumentation';
 import { DEFAULT_RETRY_POLICY, canRetry, getNextRetryAt, isExpired, isRetryDue } from '../retry/backoff';
 import { loadOfflineQueueState, saveOfflineQueueState } from '../storage/offlineQueueStorage';
 import type {
@@ -95,6 +97,7 @@ export class OfflineMutationQueue {
   }
 
   async enqueue<TPayload>(input: EnqueueMutationInput<TPayload>) {
+    observeMutationEngine('enqueue');
     const createdAt = input.createdAt ?? this.now().toISOString();
     const id = input.id ?? this.idFactory();
     const mutation: PendingMutation<TPayload> = {
@@ -189,6 +192,7 @@ export class OfflineMutationQueue {
   }
 
   async process() {
+    observeMutationEngine('process');
     if (this.state.paused || !this.network.isOnline || this.state.processing) return null;
     await this.expireDueMutations();
     const mutation = this.peek();
@@ -211,6 +215,7 @@ export class OfflineMutationQueue {
     try {
       const result = await this.processor(mutation);
       if (result?.ok === false) throw new Error(result.error ?? 'Mutation failed');
+      observeMutationEngine('process', 'completed');
       this.state = {
         ...this.state,
         processing: false,
@@ -219,6 +224,8 @@ export class OfflineMutationQueue {
       await this.persistAndNotify();
       return mutation;
     } catch (error) {
+      observeMutationEngine('process', 'failed');
+      observability.logger.warn('offline.mutation.failed', { mutationType: mutation.type });
       const retryCount = mutation.retryCount + 1;
       const now = this.now();
       const status = canRetry({ ...mutation, retryCount }, this.retryPolicy) ? 'failed' : 'expired';
