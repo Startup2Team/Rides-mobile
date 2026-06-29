@@ -33,7 +33,11 @@ Examples:
 - `rideKeys.active()`
 - `driverKeys.vehicles(userId)`
 - `driverKeys.vehicle(vehicleId)`
-- `packageKeys.catalog(vehicleType)`
+- `packageKeys.catalog()`
+- `packageKeys.campaigns()`
+- `packageKeys.entitlements(driverId)`
+- `packageKeys.purchases(driverId)`
+- `packageKeys.offers(driverId, vehicleType)`
 - `searchKeys.autocomplete(query, near)`
 - `searchKeys.reverseGeocode(coords)`
 
@@ -66,7 +70,16 @@ Examples:
 - `useDriverProfileQuery()`
 - `useDriverVehiclesQuery()`
 - `useDriverVehicleQuery(vehicleId)`
+- `usePackageCatalogQuery()`
+- `usePackageCampaignsQuery()`
+- `useDriverEntitlementsQuery(driverId)`
+- `useDriverPackagePurchasesQuery(driverId)`
+- `useAvailablePackageOffersQuery(driverId, vehicleType)`
 - `usePackagesQuery(vehicleType)`
+- `useCreatePackagePurchaseMutation()`
+- `useUpdatePackagePurchaseStatusMutation()`
+- `useActivatePackageMutation()`
+- `useDeductRideCreditMutation()`
 - `usePaymentMethodsQuery()`
 - `useSearchAutocompleteQuery(query, options)`
 - `useReverseGeocodeQuery(coords)`
@@ -108,3 +121,7 @@ Saved locations, shared profile, and notifications are the first production doma
 - the persistence format stays unchanged
 - `useDriverVehiclesQuery()` and `useDriverVehicleQuery()` now expose the driver vehicle list and detail projections through the query layer
 - vehicle add/update/delete/primary-selection mutations still preserve the existing local driver-profile compatibility path
+- `usePackageCatalogQuery()` and `usePackageCampaignsQuery()` now read the package offer source through TanStack Query
+- `useDriverEntitlementsQuery(driverId)` and `useDriverPackagePurchasesQuery(driverId)` expose the driver entitlement snapshot and purchase history through the query layer
+- package create/update/activate/deduct mutations still preserve the local prototype economics while updating the cache and repository boundary
+- `PackageSyncContext` and `DriverEntitlementContext` remain compatibility facades while package callers migrate

@@ -16,6 +16,17 @@ export {
   useUnreadNotificationCountQuery,
 } from './useNotificationsQuery';
 export { usePackagesQuery } from './usePackagesQuery';
+export {
+  useActivatePackageMutation,
+  useAvailablePackageOffersQuery,
+  useCreatePackagePurchaseMutation,
+  useDeductRideCreditMutation,
+  useDriverEntitlementsQuery,
+  useDriverPackagePurchasesQuery,
+  usePackageCampaignsQuery,
+  usePackageCatalogQuery,
+  useUpdatePackagePurchaseStatusMutation,
+} from './usePackagesQuery';
 export { usePaymentMethodsQuery } from './usePaymentMethodsQuery';
 export {
   useProfileQuery,

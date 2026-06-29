@@ -35,7 +35,11 @@ describe('query foundation', () => {
     const driverPackages: readonly ['driver', 'packages'] = driverKeys.packages();
     const notificationList: readonly ['notifications', 'list'] = notificationKeys.list();
     const paymentMethods: readonly ['payments', 'methods'] = paymentKeys.methods();
-    const packageCatalog: readonly ['packages', 'catalog', string] = packageKeys.catalog('moto');
+    const packageCatalog: readonly ['packages', 'catalog'] = packageKeys.catalog();
+    const packageVehicleCatalog: readonly ['packages', 'catalog', string] = packageKeys.catalog('moto');
+    const packageEntitlements: readonly ['packages', 'entitlements', string] = packageKeys.entitlements('driver-1');
+    const packagePurchases: readonly ['packages', 'purchases', string] = packageKeys.purchases('driver-1');
+    const packageOffers: readonly ['packages', 'offers', string, string] = packageKeys.offers('driver-1', 'moto');
     const autocomplete = searchKeys.autocomplete('kigali');
     const reverseGeocode = searchKeys.reverseGeocode({ latitude: -1.94, longitude: 30.06 });
 
@@ -51,7 +55,11 @@ describe('query foundation', () => {
     expect(driverPackages).toEqual(['driver', 'packages']);
     expect(notificationList).toEqual(['notifications', 'list']);
     expect(paymentMethods).toEqual(['payments', 'methods']);
-    expect(packageCatalog).toEqual(['packages', 'catalog', 'moto']);
+    expect(packageCatalog).toEqual(['packages', 'catalog']);
+    expect(packageVehicleCatalog).toEqual(['packages', 'catalog', 'moto']);
+    expect(packageEntitlements).toEqual(['packages', 'entitlements', 'driver-1']);
+    expect(packagePurchases).toEqual(['packages', 'purchases', 'driver-1']);
+    expect(packageOffers).toEqual(['packages', 'offers', 'driver-1', 'moto']);
     expect(autocomplete[0]).toBe('search');
     expect(reverseGeocode[0]).toBe('search');
 
@@ -69,6 +77,10 @@ describe('query foundation', () => {
       notificationList,
       paymentMethods,
       packageCatalog,
+      packageVehicleCatalog,
+      packageEntitlements,
+      packagePurchases,
+      packageOffers,
       autocomplete,
       reverseGeocode,
     ];
@@ -82,6 +94,11 @@ describe('query foundation', () => {
       'driverVehicles',
       'driverVehicle',
       'notifications',
+      'packageCampaigns',
+      'packageCatalog',
+      'packageEntitlements',
+      'packageOffers',
+      'packagePurchases',
       'packages',
       'paymentMethods',
       'profile',

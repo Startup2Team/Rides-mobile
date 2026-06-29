@@ -56,7 +56,10 @@ jest.mock('expo-secure-store', () => {
       storage.delete(key);
       return Promise.resolve();
     }),
-    __clear: () => storage.clear(),
+    __clear: () => {
+      storage.clear();
+      globalThis.__RIDES_CLEAR_DRIVER_ENTITLEMENT_CACHE__?.();
+    },
   };
 });
 

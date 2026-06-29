@@ -50,6 +50,26 @@ export const queryPolicies = {
     staleTime: 10 * minute,
     gcTime: 45 * minute,
   }),
+  packageCatalog: policy({
+    staleTime: 10 * minute,
+    gcTime: 45 * minute,
+  }),
+  packageCampaigns: policy({
+    staleTime: 10 * minute,
+    gcTime: 45 * minute,
+  }),
+  packageEntitlements: policy({
+    staleTime: 2 * minute,
+    gcTime: 20 * minute,
+  }),
+  packagePurchases: policy({
+    staleTime: 2 * minute,
+    gcTime: 20 * minute,
+  }),
+  packageOffers: policy({
+    staleTime: 1 * minute,
+    gcTime: 10 * minute,
+  }),
   notifications: policy({
     staleTime: 60 * 1000,
     gcTime: 15 * minute,

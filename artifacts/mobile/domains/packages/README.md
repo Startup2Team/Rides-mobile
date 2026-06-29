@@ -1,30 +1,43 @@
 # Packages Domain
 
-Owns driver package catalog, campaigns, and entitlements.
+Owns driver package catalog, campaigns, offers, entitlements, purchases, activation, balance, and credit rules.
 
 Owns:
 - package catalog
 - campaigns
-- entitlements
-- package offer source
+- offers
+- driver entitlements
+- package purchases
+- package activation
+- package balance and ride credits
+- eligibility rules
 
 Must not own:
-- ride lifecycle
-- customer booking draft
-- saved locations
+- payment truth
+- ride lifecycle truth
+- driver approval truth
+- vehicle verification truth
+- customer booking truth
 
 Current source files outside this domain:
 - `context/PackageSyncContext.tsx`
+- `context/DriverEntitlementContext.tsx`
 - `services/packageSyncRepositories.ts`
 - `domain/driverRidePackages.ts`
 
+Current implementation notes:
+- catalog and campaigns are query-backed from the shared package sync cache
+- entitlements and purchases are query-backed from secure storage
+- package mutations preserve current local prototype behavior
+- compatibility contexts remain in place for legacy callers
+
 Future migration plan:
-- move package rules into `domains/packages`
-- keep data access behind `PackageRepository`
-- avoid letting package state mutate ride truth directly
+- move remaining package screens to read from the query/domain hooks directly
+- replace compatibility contexts once all callers are migrated
+- introduce backend truth behind the repository boundary without changing screen code
 
 Ownership:
-- repository: `PackageRepository`
-- store: none yet
-- query: future package catalog hooks
-- events: package-activated, package-purchased
+- repository: `packageRepository` plus entitlement storage helpers
+- store: none
+- query: package catalog, campaigns, entitlements, purchases, offers
+- events: package-activated, package-purchased, credit-deducted

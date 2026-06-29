@@ -60,6 +60,7 @@ Each domain has a single repository contract.
   - package catalog
   - campaigns
   - offer source cache
+  - entitlement and purchase history access through the package domain facade
 
 - `NotificationRepository`
   - notification read state
@@ -175,6 +176,14 @@ Phase 8B.4 moves driver vehicles onto the query layer.
 - add/update/delete/primary-selection mutations still use the existing local repository implementation
 - `vehicleRepository` remains the source boundary while the current auth-session compatibility path stays intact
 
+Phase 8B.5 moves driver packages and entitlements onto the query layer.
+
+- `usePackageCatalogQuery()` and `usePackageCampaignsQuery()` read the shared package generation through TanStack Query
+- `useDriverEntitlementsQuery(driverId)` and `useDriverPackagePurchasesQuery(driverId)` read the entitlement snapshot and purchase history through TanStack Query
+- `useAvailablePackageOffersQuery(driverId, vehicleType)` derives active offers from catalog, campaigns, and entitlement state
+- `PackageSyncContext` and `DriverEntitlementContext` remain compatibility facades while package callers migrate
+- local package economics, credit rules, and payment simulation behavior stay unchanged
+
 ## Domain-First Direction
 
 Phase 7E adds the [`domains/`](../domains/) scaffold and the typed ownership map in `domains/domainOwnership.ts`.
@@ -190,3 +199,9 @@ Phase 7F makes `saved-locations` the first real extracted domain module without 
 
 The repository layer remains the correct boundary for source selection while the domain scaffold becomes the organizational map for the next phases.
 This is the domain-first direction for the app.
+
+Phase 8B.5 extends that direction into packages:
+
+- the package domain owns catalog, campaigns, entitlements, purchases, activation, and credits
+- the repository facade still preserves the local prototype payment behavior
+- compatibility contexts remain until all callers migrate to the package domain and query hooks
