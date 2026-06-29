@@ -46,4 +46,3 @@ export async function runProductionReadinessGates(
   const results = await Promise.all(gates.map(gate => gate.run()));
   return createReadinessReport(results);
 }
-

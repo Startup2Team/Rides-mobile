@@ -38,4 +38,3 @@ export function compareRideDualReadModels(
     compareDriverRequests(live.driverRequests, projected.driverRequests),
   );
 }
-

@@ -93,4 +93,3 @@ export function getShadowRideProjectionBootstrapState() {
     running: rideShadowProjectionManager.getSnapshot().running,
   };
 }
-

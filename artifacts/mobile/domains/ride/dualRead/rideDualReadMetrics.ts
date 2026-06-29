@@ -69,4 +69,3 @@ export function recordRideDualReadTelemetry(
     timestamp: new Date().toISOString(),
   });
 }
-

@@ -25,4 +25,3 @@ export function createReadinessReport(gates: ReadinessGateResult[], now: () => D
     gates: [...gates],
   };
 }
-

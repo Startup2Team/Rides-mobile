@@ -52,4 +52,3 @@ Projected ride models can only drive UI after all of the following are true:
 - replay stays deterministic
 - no query cache or RideProvider mutation is observed
 - rollback remains a one-step switch back to live source
-
