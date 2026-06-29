@@ -35,7 +35,7 @@ export {
   useUpdateProfileMutation,
   useUpdateProfilePhotoMutation,
 } from './useProfileQuery';
-export { useRideHistoryQuery } from './useRideHistoryQuery';
+export { useRideDetailQuery, useRideHistoryQuery } from './useRideHistoryQuery';
 export { useReverseGeocodeQuery } from './useReverseGeocodeQuery';
 export {
   useAddSavedLocationMutation,

@@ -29,6 +29,7 @@ describe('query foundation', () => {
     const savedLocationDetail: readonly ['saved-locations', 'detail', string] = savedLocationKeys.detail('home');
     const rideActive: readonly ['ride', 'active'] = rideKeys.active();
     const rideHistory: readonly ['ride', 'history', string] = rideKeys.history('user-1');
+    const rideDetail: readonly ['ride', 'detail', string] = rideKeys.detail('ride-1');
     const driverProfile: readonly ['driver', 'profile'] = driverKeys.profile();
     const driverVehicles = driverKeys.vehicles('user-1');
     const driverVehicle: readonly ['driver', 'vehicle', string] = driverKeys.vehicle('vehicle-1');
@@ -49,6 +50,7 @@ describe('query foundation', () => {
     expect(savedLocationDetail).toEqual(['saved-locations', 'detail', 'home']);
     expect(rideActive).toEqual(['ride', 'active']);
     expect(rideHistory).toEqual(['ride', 'history', 'user-1']);
+    expect(rideDetail).toEqual(['ride', 'detail', 'ride-1']);
     expect(driverProfile).toEqual(['driver', 'profile']);
     expect(driverVehicles).toEqual(['driver', 'user-1', 'vehicles']);
     expect(driverVehicle).toEqual(['driver', 'vehicle', 'vehicle-1']);
@@ -70,6 +72,7 @@ describe('query foundation', () => {
       savedLocationDetail,
       rideActive,
       rideHistory,
+      rideDetail,
       driverProfile,
       driverVehicles,
       driverVehicle,

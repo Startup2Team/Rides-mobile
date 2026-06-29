@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { DriverEntitlement } from '@/domain/driverRidePackages';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import DriverStats from '../stats';
 
-const mockLoadHistory = jest.fn();
+const mockListRideHistory = jest.fn();
 
 let mockEntitlement: DriverEntitlement = {
   ...EMPTY_DRIVER_ENTITLEMENT,
@@ -134,18 +135,40 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
 
 jest.mock('@/context/RideContext', () => ({
   useRide: () => ({
-    loadHistory: mockLoadHistory,
     rideHistory: [],
   }),
+}));
+
+jest.mock('@/domains/ride', () => ({
+  rideHistoryRepository: {
+    listRideHistory: (...args: unknown[]) => mockListRideHistory(...args),
+    getRideDetail: jest.fn(),
+  },
 }));
 
 jest.mock('@/persistence/driverRatingPersistence', () => ({
   loadStoredDriverRatings: jest.fn(() => Promise.resolve({ data: [] })),
 }));
 
+function renderWithQueryClient(ui: React.ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={client}>
+      {ui}
+    </QueryClientProvider>,
+  );
+}
+
 describe('DriverStats', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockListRideHistory.mockResolvedValue([]);
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
       console.warn(...args);
@@ -157,9 +180,9 @@ describe('DriverStats', () => {
   });
 
   test('shows package purchase history in the stats tab', async () => {
-    render(<DriverStats />);
+    renderWithQueryClient(<DriverStats />);
 
-    await waitFor(() => expect(mockLoadHistory).toHaveBeenCalled());
+    await waitFor(() => expect(mockListRideHistory).toHaveBeenCalled());
 
     expect(screen.getByText('Statistics')).toBeTruthy();
     expect(screen.getByText("TODAY'S ACTIVITY")).toBeTruthy();
@@ -203,9 +226,9 @@ describe('DriverStats', () => {
       updatedAt: '2026-06-09T10:00:00.000Z',
     };
 
-    render(<DriverStats />);
+    renderWithQueryClient(<DriverStats />);
 
-    await waitFor(() => expect(mockLoadHistory).toHaveBeenCalled());
+    await waitFor(() => expect(mockListRideHistory).toHaveBeenCalled());
 
     expect(screen.getByText('Growth Package v2')).toBeTruthy();
     expect(screen.getByText('70 Rides + 20 Bonus Rides')).toBeTruthy();

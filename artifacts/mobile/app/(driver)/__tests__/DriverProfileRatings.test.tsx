@@ -179,6 +179,13 @@ jest.mock('@/context/RideContext', () => ({
   }),
 }));
 
+jest.mock('@/query/hooks/useRideHistoryQuery', () => ({
+  useRideHistoryQuery: () => ({
+    data: [],
+    refetch: jest.fn(() => Promise.resolve({ data: [] })),
+  }),
+}));
+
 jest.mock('@/persistence/driverRatingPersistence', () => ({
   loadStoredDriverRatings: jest.fn(() => Promise.resolve({ data: mockRatings, source: 'current' })),
 }));

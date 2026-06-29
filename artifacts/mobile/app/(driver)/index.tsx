@@ -55,6 +55,7 @@ import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
+import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 import {
   formatDistanceToPickup,
   formatRequestLocation,
@@ -129,12 +130,11 @@ export default function DriverDashboard() {
   const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const {
     pendingRequest,
-    rideHistory,
-    loadHistory,
     simulateIncomingRideRequest,
     acceptRideRequest,
     declineRideRequest,
   } = useRide();
+  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
 
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
@@ -247,10 +247,6 @@ export default function DriverDashboard() {
     }
     return () => { mounted = false; };
   }, []);
-
-  useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
 
   useEffect(() => {
     positionAdCarouselAtStart();

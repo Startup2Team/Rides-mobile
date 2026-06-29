@@ -712,9 +712,7 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
-
-    expect(screen.getByText('3,500 RWF')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('3,500 RWF')).toBeTruthy());
     expect(screen.getByText('Trips')).toBeTruthy();
     expect(screen.getByText('Rides')).toBeTruthy();
     expect(screen.getByText('30')).toBeTruthy();
@@ -735,9 +733,7 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
-
-    expect(screen.getByText('0 RWF')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('0 RWF')).toBeTruthy());
     expect(screen.queryByText('3,500 RWF')).toBeNull();
     expect(screen.queryByText('4,200 RWF')).toBeNull();
     expect(screen.queryByText('1,900 RWF')).toBeNull();

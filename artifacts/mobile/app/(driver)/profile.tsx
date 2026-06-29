@@ -25,13 +25,13 @@ import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { useProfile } from '@/domains/profile';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
-import { useRide } from '@/context/RideContext';
 import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -42,7 +42,7 @@ export default function DriverProfileScreen() {
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, switchMode, profile } = useProfile();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
-  const { rideHistory, loadHistory } = useRide();
+  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
   const activePackage = getActivePackageActivation(entitlement);
   const { vehicles } = useVehicles();
   const vehicleCounts = React.useMemo(() => ({
@@ -52,10 +52,6 @@ export default function DriverProfileScreen() {
   }), [vehicles]);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
-  React.useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
-
   const completedRides = rideHistory.filter(ride => ride.driverId === user?.id && ride.status === 'completed');
   const totalDistance = completedRides.reduce((sum, ride) => sum + (ride.distance || 0), 0);
   const [isPreviewVisible, setIsPreviewVisible] = React.useState(false);

@@ -100,6 +100,11 @@ export class LocalRideRepository implements RideRepository {
     return (await localRideDataSource.loadRideHistory()) ?? null;
   }
 
+  async getRideDetail(rideId: string) {
+    const history = (await this.loadRideHistory()) ?? [];
+    return history.find(ride => ride.id === rideId) ?? null;
+  }
+
   async clearRideHistory() {
     return undefined;
   }

@@ -62,6 +62,7 @@ export interface BookingRepository {
 export interface RideRepository {
   appendRideHistory(completed: Ride): Promise<void>;
   loadRideHistory(): Promise<Ride[] | null>;
+  getRideDetail(rideId: string): Promise<Ride | null>;
   clearRideHistory(): Promise<void>;
 }
 
