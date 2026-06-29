@@ -111,7 +111,7 @@ Ride projectors are implemented and tested as pure transformation functions in `
 
 They transform ride domain events into read models, ignore stale sequence numbers, track applied event ids, and avoid mutating their inputs.
 
-These projectors are not registered in the runtime app flow yet. The current RideProvider mock lifecycle remains the active behavior. The next phase should register these projectors with the Domain Event Platform in parallel/shadow mode so projected state can be compared against the existing RideProvider state without changing the user experience.
+These projectors are registered through a shadow projection manager for diagnostics only. The current RideProvider mock lifecycle remains the active behavior. Shadow projection builds memory-only read models and compares them with production snapshots without changing the user experience.
 
 ## Future Command Flow
 
@@ -150,4 +150,4 @@ Current ride buttons continue to call the existing RideProvider behavior.
 
 ## Runtime Guardrail
 
-Phase 9C keeps the existing mock lifecycle as the runtime source of truth. Ride projectors are implemented and tested, but they are not wired into UI, RideProvider, navigation, matching, negotiation, payment, driver flows, packages, repositories, or realtime behavior.
+Phase 9D keeps the existing mock lifecycle as the runtime source of truth. Ride projectors can run in shadow mode for diagnostics, but they are not wired into UI, RideProvider state updates, navigation, matching, negotiation, payment, driver flows, packages, repositories, or realtime behavior.
