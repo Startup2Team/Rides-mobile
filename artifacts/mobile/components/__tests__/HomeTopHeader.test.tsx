@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { HomeTopHeader } from '../HomeTopHeader';
 
@@ -117,6 +118,10 @@ jest.mock('@/persistence/profilePersistence', () => ({
   loadStoredProfileImage: jest.fn(() => Promise.resolve({ data: null })),
 }));
 
+jest.mock('@/query/hooks/useNotificationsQuery', () => ({
+  useUnreadNotificationCountQuery: () => ({ data: 0, isFetched: true, isLoading: false, isFetching: false }),
+}));
+
 function renderHeader(
   driverVerificationStatus: React.ComponentProps<typeof HomeTopHeader>['driverVerificationStatus'],
   canSwitchToDriverMode = false,
@@ -128,17 +133,25 @@ function renderHeader(
     isVerified: driverVerificationStatus === 'approved',
     driverApprovalAcknowledgedAt,
   };
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
   return render(
-    <HomeTopHeader
-      paddingTop={12}
-      locationText="Kigali"
-      locLoading={false}
-      profileInitial="T"
-      driverVerificationStatus={driverVerificationStatus}
-      canSwitchToDriverMode={canSwitchToDriverMode}
-      driverApplicationDraftUpdatedAt={driverApplicationDraftUpdatedAt}
-      driverApprovalAcknowledgedAt={driverApprovalAcknowledgedAt}
-    />,
+    <QueryClientProvider client={client}>
+      <HomeTopHeader
+        paddingTop={12}
+        locationText="Kigali"
+        locLoading={false}
+        profileInitial="T"
+        driverVerificationStatus={driverVerificationStatus}
+        canSwitchToDriverMode={canSwitchToDriverMode}
+        driverApplicationDraftUpdatedAt={driverApplicationDraftUpdatedAt}
+        driverApprovalAcknowledgedAt={driverApprovalAcknowledgedAt}
+      />
+    </QueryClientProvider>,
   );
 }
 

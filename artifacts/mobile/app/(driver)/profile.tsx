@@ -1,7 +1,7 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import { Alert, Image, Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
@@ -15,15 +15,15 @@ import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { getActivePackageActivation } from '@/domain/driverRidePackages';
-import { getDriverVehicleStatusCounts, getDriverVehicles } from '@/domain/driverVehicles';
+import { useVehicles } from '@/domains/vehicle';
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useProfile } from '@/domains/profile';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { useRide } from '@/context/RideContext';
 import { elevation } from '@/constants/elevation';
@@ -40,14 +40,18 @@ export default function DriverProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { user, driverProfile, switchMode } = useAuth();
+  const { user, driverProfile, switchMode, profile } = useProfile();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { rideHistory, loadHistory } = useRide();
   const activePackage = getActivePackageActivation(entitlement);
-  const vehicles = getDriverVehicles(driverProfile);
-  const vehicleCounts = getDriverVehicleStatusCounts(driverProfile);
+  const { vehicles } = useVehicles();
+  const vehicleCounts = React.useMemo(() => ({
+    approved: vehicles.filter(vehicle => vehicle.status === 'approved').length,
+    pendingReview: vehicles.filter(vehicle => vehicle.status === 'pending_review').length,
+    rejected: vehicles.filter(vehicle => vehicle.status === 'rejected').length,
+  }), [vehicles]);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
-  const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
+  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   React.useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
@@ -58,18 +62,6 @@ export default function DriverProfileScreen() {
   const [showPhotoSheet, setShowPhotoSheet] = React.useState(false);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
-      return () => {
-        active = false;
-      };
-    }, [driverProfile?.profileImage, setProfileImage]),
-  );
 
   React.useEffect(() => {
     let cancelled = false;
@@ -97,8 +89,8 @@ export default function DriverProfileScreen() {
       ]);
   };
 
-  const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
-  const nameParts = user?.name ? user.name.trim().split(/\s+/) : [];
+  const profileInitial = profile?.fullName?.trim()?.[0]?.toUpperCase() ?? user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
+  const nameParts = profile?.fullName ? profile.fullName.trim().split(/\s+/) : user?.name ? user.name.trim().split(/\s+/) : [];
   const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase() : '';
   const lastName = nameParts.slice(1).join(' ').toUpperCase();
 

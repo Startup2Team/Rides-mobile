@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -16,11 +16,9 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useToast } from '@/context/ToastContext';
-import { loadNotificationReadState, saveNotificationReadState, type NotificationReadState } from '@/persistence/notificationPersistence';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
-import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
 import type { Ride } from '@/types';
 import { AppText } from '@/components/AppText';
@@ -29,21 +27,14 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
+import {
+  getNotificationAccentColor,
+  getNotificationDayBucket,
+  useNotifications,
+  type NotificationItem,
+} from '@/domains/notifications';
 
-type NotifType = 'ride' | 'promo' | 'system' | 'safety';
-
-interface AppNotification {
-  id: string;
-  type: NotifType;
-  icon: keyof typeof Feather.glyphMap;
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-  rideId?: string;
-}
-
-const TYPE_ICON_COLOR: Record<NotifType, string> = {
+const TYPE_ICON_COLOR: Record<NotificationItem['type'], string> = {
   ride: APPLE_SYSTEM_BLUE_HEX.light,
   promo: '#FFB800',
   system: '#007AFF',
@@ -60,27 +51,11 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function getDayBucket(time: string): 'today' | 'yesterday' | 'previous' {
-  const notificationDate = new Date(time);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfNotificationDay = new Date(
-    notificationDate.getFullYear(),
-    notificationDate.getMonth(),
-    notificationDate.getDate(),
-  ).getTime();
-  const diffDays = Math.floor((startOfToday - startOfNotificationDay) / 86400000);
-
-  if (diffDays <= 0) return 'today';
-  if (diffDays === 1) return 'yesterday';
-  return 'previous';
-}
-
-function buildRideNotifications(rideHistory: { id: string; destination?: { address?: string }; agreedFare?: number; completedAt?: string }[]): AppNotification[] {
+function buildRideNotifications(rideHistory: { id: string; destination?: { address?: string }; agreedFare?: number; completedAt?: string }[]): NotificationItem[] {
   return rideHistory.slice(0, 5).map(ride => ({
     id: `ride_${ride.id}`,
     type: 'ride' as const,
-    icon: 'check-circle' as const,
+    icon: 'check-circle',
     title: 'Ride completed',
     message: `Your ride to ${ride.destination?.address ?? 'destination'} was completed. Fare: ${ride.agreedFare?.toLocaleString() ?? '—'} RWF`,
     time: ride.completedAt ?? new Date().toISOString(),
@@ -103,7 +78,7 @@ function buildDriverNotifications({
   pendingRequest: Ride | null;
   rideHistory: Ride[];
   rideCredits: number;
-}): AppNotification[] {
+}): NotificationItem[] {
   const tripNotifications = rideHistory
     .filter(ride => ride.status === 'completed' && ride.driverId === driverId)
     .slice(0, 5)
@@ -118,7 +93,7 @@ function buildDriverNotifications({
       rideId: ride.id,
     }));
 
-  const liveTripNotifications: AppNotification[] = [];
+  const liveTripNotifications: NotificationItem[] = [];
   if (pendingRequest) {
     liveTripNotifications.push({
       id: `driver_request_${pendingRequest.id}`,
@@ -159,7 +134,7 @@ function buildDriverNotifications({
     };
   });
 
-  const creditNotifications: AppNotification[] = [];
+  const creditNotifications: NotificationItem[] = [];
   if (rideCredits <= 5) {
     creditNotifications.push({
       id: `driver_low_credits_${rideCredits}`,
@@ -177,7 +152,7 @@ function buildDriverNotifications({
   return [...liveTripNotifications, ...creditNotifications, ...packageNotifications, ...tripNotifications];
 }
 
-const STATIC_NOTIFICATIONS: AppNotification[] = [
+const STATIC_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'safety_1',
     type: 'safety',
@@ -244,31 +219,14 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
-  const { currentRide, pendingRequest, rideHistory, loadHistory } = useRide();
-  const { entitlement, isLoading: isEntitlementLoading, totalAvailableRides } = useDriverEntitlement();
+  const { loadHistory } = useRide();
   const { showToast } = useToast();
+  const { notifications, unreadCount, refreshNotifications, markNotificationRead, markNotificationUnread, markAllNotificationsRead } = useNotifications();
   const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const readStateRef = useRef<NotificationReadState>({ read: new Set(), unread: new Set() });
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    const start = Date.now();
-    try {
-      await loadHistory();
-    } finally {
-      const elapsed = Date.now() - start;
-      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
-      const remaining = minDuration - elapsed;
-      if (remaining > 0) {
-        await new Promise((resolve) => setTimeout(resolve, remaining));
-      }
-      setIsRefreshing(false);
-    }
-  }, [loadHistory]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [swipeResetKey, setSwipeResetKey] = useState(0);
   const swipeRefs = useRef<Record<string, Swipeable | null>>({});
   const openRowId = useRef<string | null>(null);
@@ -276,80 +234,77 @@ export default function NotificationsScreen() {
   const horizontalListPadding = spacing[28];
   const halfCardSwipeThreshold = Math.max(sizes.iconButton.md, (screenWidth - horizontalListPadding) / 2);
 
-  useEffect(() => {
-    loadNotificationReadState().then(state => {
-      readStateRef.current = state;
-      const modeNotifications = driverMode
-        ? buildDriverNotifications({
-            currentRide,
-            driverId: user?.id,
-            entitlement,
-            pendingRequest,
-            rideHistory,
-            rideCredits: isEntitlementLoading ? Number.POSITIVE_INFINITY : totalAvailableRides,
-          })
-        : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(rideHistory)];
-      const merged = modeNotifications
-        .map(n => {
-          if (state.unread.has(n.id)) return { ...n, read: false };
-          if (state.read.has(n.id)) return { ...n, read: true };
-          return n;
-        })
-        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setNotifications(merged);
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await loadHistory();
+      await refreshNotifications();
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise(resolve => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [loadHistory, refreshNotifications]);
+
+  const visibleNotifications = useMemo(
+    () => notifications.filter(notification => !dismissedIds.has(notification.id)),
+    [dismissedIds, notifications],
+  );
+
+  const todayNotifications = useMemo(
+    () => visibleNotifications.filter(notification => getNotificationDayBucket(notification.time) === 'today'),
+    [visibleNotifications],
+  );
+  const yesterdayNotifications = useMemo(
+    () => visibleNotifications.filter(notification => getNotificationDayBucket(notification.time) === 'yesterday'),
+    [visibleNotifications],
+  );
+  const previousNotifications = useMemo(
+    () => visibleNotifications.filter(notification => getNotificationDayBucket(notification.time) === 'previous'),
+    [visibleNotifications],
+  );
+
+  const closeAllRows = useCallback((exceptId?: string) => {
+    Object.entries(swipeRefs.current).forEach(([rowId, row]) => {
+      if (!row || rowId === exceptId) return;
+      row.close();
     });
-  }, [currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideHistory, totalAvailableRides, user?.id]);
+  }, []);
 
+  const markRead = useCallback(async (id: string) => {
+    await markNotificationRead(id);
+  }, [markNotificationRead]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-  const todayNotifications = notifications.filter(n => getDayBucket(n.time) === 'today');
-  const yesterdayNotifications = notifications.filter(n => getDayBucket(n.time) === 'yesterday');
-  const previousNotifications = notifications.filter(n => getDayBucket(n.time) === 'previous');
-
-  const markAllRead = () => {
-    const hadUnread = notifications.some(n => !n.read);
-    if (!hadUnread) return;
-    Haptics.selectionAsync();
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    const newState: NotificationReadState = {
-      read: new Set(updated.map(n => n.id)),
-      unread: new Set(),
-    };
-    readStateRef.current = newState;
-    void saveNotificationReadState(newState);
-    setNotifications(updated);
-    showToast('All notifications marked as read');
-  };
-
-  const markRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    const newState = { read: new Set(readStateRef.current.read), unread: new Set(readStateRef.current.unread) };
-    newState.read.add(id);
-    newState.unread.delete(id);
-    readStateRef.current = newState;
-    void saveNotificationReadState(newState);
-  };
-  const toggleReadState = (id: string) => {
-    const item = notifications.find(n => n.id === id);
+  const toggleReadState = useCallback(async (id: string) => {
+    const item = notifications.find(notification => notification.id === id);
     if (!item) return;
-    const nextRead = !item.read;
+    await (item.read ? markNotificationUnread(id) : markNotificationRead(id));
+    showToast(item.read ? 'Marked as unread' : 'Marked as read', item.read ? 'info' : 'success');
+  }, [markNotificationRead, markNotificationUnread, notifications, showToast]);
+
+  const markAllRead = useCallback(async () => {
+    if (unreadCount <= 0) return;
     Haptics.selectionAsync();
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: nextRead } : n));
-    const newState = { read: new Set(readStateRef.current.read), unread: new Set(readStateRef.current.unread) };
-    if (nextRead) { newState.read.add(id); newState.unread.delete(id); }
-    else { newState.unread.add(id); newState.read.delete(id); }
-    readStateRef.current = newState;
-    void saveNotificationReadState(newState);
-    showToast(nextRead ? 'Marked as read' : 'Marked as unread', nextRead ? 'success' : 'info');
-  };
+    await markAllNotificationsRead();
+    showToast('All notifications marked as read');
+  }, [markAllNotificationsRead, showToast, unreadCount]);
 
-  const deleteNotification = (id: string) => {
+  const deleteNotification = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setDismissedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     showToast('Notification deleted', 'error');
-  };
+  }, [showToast]);
 
-  const confirmDeleteNotification = (id: string) => {
+  const confirmDeleteNotification = useCallback((id: string) => {
     Alert.alert(
       'Delete notification',
       'Are you sure you want to delete this notification?',
@@ -362,17 +317,10 @@ export default function NotificationsScreen() {
       ],
       { cancelable: true },
     );
-  };
+  }, [deleteNotification]);
 
-  const closeAllRows = (exceptId?: string) => {
-    Object.entries(swipeRefs.current).forEach(([rowId, row]) => {
-      if (!row || rowId === exceptId) return;
-      row.close();
-    });
-  };
-
-  const renderItem = (item: AppNotification) => {
-    const accentColor = item.icon === 'check-circle' ? colors.foreground : TYPE_ICON_COLOR[item.type];
+  const renderItem = (item: NotificationItem) => {
+    const accentColor = item.icon === 'check-circle' ? colors.foreground : getNotificationAccentColor(item.type);
 
     return (
       <Swipeable
@@ -398,15 +346,13 @@ export default function NotificationsScreen() {
           autoSwipeLockRef.current[item.id] = undefined;
         }}
         onSwipeableOpen={(direction) => {
-          // direction 'left' = swiped right (reveals mail / read toggle)
-          // direction 'right' = swiped left (reveals delete)
           if (direction === 'left') {
             if (autoSwipeLockRef.current[item.id] === 'read') return;
             autoSwipeLockRef.current[item.id] = 'read';
             swipeRefs.current[item.id]?.close();
             openRowId.current = null;
             setSwipeResetKey(prev => prev + 1);
-            toggleReadState(item.id);
+            void toggleReadState(item.id);
             return;
           }
           if (direction === 'right') {
@@ -432,7 +378,7 @@ export default function NotificationsScreen() {
                 swipeRefs.current[item.id]?.close();
                 openRowId.current = null;
                 setSwipeResetKey(prev => prev + 1);
-                toggleReadState(item.id);
+                void toggleReadState(item.id);
               }}
               accessibilityRole="button"
               accessibilityLabel={item.read ? 'Mark notification unread' : 'Mark notification read'}
@@ -477,7 +423,7 @@ export default function NotificationsScreen() {
             },
           ]}
           onPress={() => {
-            markRead(item.id);
+            void markRead(item.id);
             if (item.type === 'ride' && item.rideId && item.icon === 'check-circle') {
               router.push(`/ride-detail?rideId=${item.rideId}` as any);
             } else if (item.title === 'Ride package activated') {
@@ -515,7 +461,7 @@ export default function NotificationsScreen() {
     );
   };
 
-  const renderSection = (title: string, items: AppNotification[]) => (
+  const renderSection = (title: string, items: NotificationItem[]) => (
     <>
       <AppText variant="label" style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</AppText>
       {items.length === 0 ? (
@@ -533,17 +479,19 @@ export default function NotificationsScreen() {
     </>
   );
 
+  const derivedUnreadCount = unreadCount > 0 ? unreadCount : notifications.filter(notification => !notification.read).length;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <GlassHeader
         title="Notifications"
-        titleAccessory={unreadCount > 0 && (
+        titleAccessory={derivedUnreadCount > 0 && (
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <AppText variant="badge" style={styles.badgeText}>{unreadCount}</AppText>
+            <AppText variant="badge" style={styles.badgeText}>{derivedUnreadCount}</AppText>
           </View>
         )}
-        right={unreadCount > 0 ? (
-          <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
+        right={derivedUnreadCount > 0 ? (
+          <TouchableOpacity onPress={() => { void markAllRead(); }} style={styles.markAllBtn}>
             <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
           </TouchableOpacity>
         ) : (
@@ -556,13 +504,13 @@ export default function NotificationsScreen() {
         contentContainerStyle={[
           styles.list,
           { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
-          notifications.length === 0 && { flex: 1 },
+          visibleNotifications.length === 0 && { flex: 1 },
         ]}
         onRefresh={handleRefresh}
         refreshing={isRefreshing}
         refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
-        {notifications.length === 0 ? (
+        {visibleNotifications.length === 0 ? (
           <EmptyState color={colors.primaryHex} driverMode={driverMode} mutedColor={colors.mutedForeground} />
         ) : (
           <>

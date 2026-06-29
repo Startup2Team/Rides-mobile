@@ -19,8 +19,9 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { DocumentUploadSection } from '@/components/driver-onboarding/DocumentUploadSection';
 import { useAuth } from '@/context/AuthContext';
-import { appendDriverVehicle, buildDriverVehicleFromApplication, getVehicleById, resubmitDriverVehicleApplication } from '@/domain/driverVehicles';
+import { appendDriverVehicle, buildDriverVehicleFromApplication, resubmitDriverVehicleApplication } from '@/domain/driverVehicles';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
+import { useVehicle } from '@/domains/vehicle';
 import { useColors } from '@/hooks/useColors';
 import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocumentUpload';
 import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM, type DocFaces, type DocumentKey, type DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
@@ -52,7 +53,7 @@ const REQUIRED_PHOTO_LABELS: Record<VehiclePhotoKey, string> = {
   inside: 'Vehicle Inside Photo',
 };
 
-function buildVehicleUploadDraftFromSource(source?: ReturnType<typeof getVehicleById>) {
+function buildVehicleUploadDraftFromSource(source?: ReturnType<typeof useVehicle>) {
   const docs = source?.documents;
   if (!docs) return INITIAL_DRIVER_DOCUMENTS;
   return {
@@ -63,7 +64,7 @@ function buildVehicleUploadDraftFromSource(source?: ReturnType<typeof getVehicle
   } satisfies Record<DocumentKey, DocFaces>;
 }
 
-function createVehicleFormFromSource(source?: ReturnType<typeof getVehicleById>) {
+function createVehicleFormFromSource(source?: ReturnType<typeof useVehicle>) {
   return source
     ? {
         ...INITIAL_DRIVER_ONBOARDING_FORM,
@@ -117,7 +118,7 @@ export default function DriverAddVehicleScreen() {
   const { driverProfile, user, saveDriverProfile } = useAuth();
   const params = useLocalSearchParams<{ sourceVehicleId?: string }>();
   const sourceVehicleId = typeof params.sourceVehicleId === 'string' ? params.sourceVehicleId : null;
-  const sourceVehicle = getVehicleById(driverProfile, sourceVehicleId);
+  const sourceVehicle = useVehicle(sourceVehicleId);
   const { form, setForm, update } = useDriverOnboardingForm();
   const { docs, setDocs, takeDocumentPhoto } = useDriverDocumentUpload(() => undefined);
   const nationalId = driverProfile?.nationalId ?? sourceVehicle?.documents?.nationalId.documentNumber ?? '';
@@ -136,9 +137,17 @@ export default function DriverAddVehicleScreen() {
   const vehiclePlaceholders = getVehicleBrandModelPlaceholders(form.vehicleType);
 
   React.useEffect(() => {
+    if (!sourceVehicle) return;
     const nextForm = createVehicleFormFromSource(sourceVehicle ?? undefined);
     setForm(current => ({ ...current, ...nextForm, nationalId }));
     setDocs(buildVehicleUploadDraftFromSource(sourceVehicle ?? undefined));
+    setBrand(sourceVehicle.brand ?? '');
+    setModel(sourceVehicle.model ?? '');
+    setManufactureYear(sourceVehicle.manufactureYear?.toString() ?? '');
+    setVehiclePhotos({
+      outside: sourceVehicle.photos?.outside ?? null,
+      inside: sourceVehicle.photos?.inside ?? null,
+    });
   }, [nationalId, setDocs, setForm, sourceVehicle]);
 
   const pickVehiclePhoto = async (key: VehiclePhotoKey) => {

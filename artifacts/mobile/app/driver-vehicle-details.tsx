@@ -16,7 +16,7 @@ import {
   type GalleryImage,
 } from '@/components/ImageGalleryPreview';
 import { useAuth } from '@/context/AuthContext';
-import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
+import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
 import {
   getAuthorizationComplianceMessage,
   getAuthorizationComplianceStatus,
@@ -28,6 +28,7 @@ import {
 } from '@/domain/vehicleCompliance';
 import { submitVehicleDocumentUpdate as submitVerificationVehicleDocumentUpdate } from '@/domain/verificationSubmissions';
 import { useColors } from '@/hooks/useColors';
+import { useVehicle } from '@/domains/vehicle';
 import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDocumentSet } from '@/types';
 import { parseDateDdMmYyyy } from '@/utils/dateUtils';
 import { isValidImageAsset } from '@/utils/documentValidation';
@@ -67,7 +68,7 @@ export default function DriverVehicleDetailsScreen() {
   const params = useLocalSearchParams<{ vehicleId?: string; updateDocument?: string }>();
   const vehicleId = typeof params.vehicleId === 'string' ? params.vehicleId : null;
   const requestedUpdateDocument = typeof params.updateDocument === 'string' ? params.updateDocument : null;
-  const vehicle = getVehicleById(driverProfile, vehicleId);
+  const vehicle = useVehicle(vehicleId);
   const [previewTarget, setPreviewTarget] = React.useState<PreviewTarget>(null);
   const [updateTarget, setUpdateTarget] = React.useState<UpdateTarget | null>(null);
   const [draftDocuments, setDraftDocuments] = React.useState<DriverVehicleDocumentSet | null>(null);
@@ -693,7 +694,7 @@ function PreviewThumbnail({
   );
 }
 
-function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>; vehicle: NonNullable<ReturnType<typeof getVehicleById>> }) {
+function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>; vehicle: NonNullable<ReturnType<typeof useVehicle>> }) {
   if (vehicle.status === 'approved') {
     return (
       <View style={[styles.statusBox, { borderColor: colors.successHex, backgroundColor: colors.successHex + '12' }]}>

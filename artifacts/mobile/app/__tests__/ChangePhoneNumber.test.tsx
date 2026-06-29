@@ -56,11 +56,15 @@ jest.mock('@/components/GlassHeader', () => {
 });
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ updateUser: mockUpdateUser, user: { phone: '+250788000000' } }),
+  useAuth: () => ({ user: { phone: '+250788000000' } }),
 }));
 
 jest.mock('@/context/ToastContext', () => ({
   useToast: () => ({ showToast: mockShowToast }),
+}));
+
+jest.mock('@/domains/profile', () => ({
+  useProfileActions: () => ({ updateUser: mockUpdateUser }),
 }));
 
 describe('ChangePhoneNumberScreen', () => {

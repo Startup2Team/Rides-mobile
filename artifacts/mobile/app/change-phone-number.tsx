@@ -20,6 +20,7 @@ import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useProfileActions } from '@/domains/profile';
 import { useColors } from '@/hooks/useColors';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 import { typography } from '@/constants/typography';
@@ -30,7 +31,8 @@ export default function ChangePhoneNumberScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { updateUser, user } = useAuth();
+  const { user } = useAuth();
+  const { updateUser } = useProfileActions();
   const { showToast } = useToast();
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState('');

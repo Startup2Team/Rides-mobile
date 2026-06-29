@@ -38,14 +38,14 @@ import {
 } from '@/constants/homeDriverCta';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
-import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 import { getDriverApplicationAction } from '@/utils/driverVerification';
 import type { DriverVerificationStatus } from '@/types';
 import { typography } from '@/constants/typography';
 import { zIndex } from '@/constants/zIndex';
 import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
 
 const AVATAR_SIZE = sizes.iconButton.md;
 const CTA_AVATAR_SIZE = sizes.iconButton.sm;
@@ -83,7 +83,7 @@ export type HomeTopHeaderProps = {
 /** Shared caption size for CTA label and compact location line. */
 const HEADER_CAPTION_TEXT = {
   ...typography.caption,
-    fontFamily: typography.title.fontFamily,
+  fontFamily: typography.title.fontFamily,
   lineHeight: 16,
 };
 
@@ -100,11 +100,11 @@ export function HomeTopHeader({
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
   const { driverProfile, switchMode } = useAuth();
-  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const { profileImage, refreshProfileImage } = useProfilePhotoActions(driverProfile?.profileImage ?? null);
   const [messageIndex, setMessageIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+  const { data: unreadNotificationCount = 0 } = useUnreadNotificationCountQuery();
   const messageOpacity = useSharedValue(1);
   const rotationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageIndexRef = useRef(0);
@@ -166,26 +166,16 @@ export function HomeTopHeader({
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, [canSwitchToDriverMode]);
 
-  useEffect(() => {
-    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
-  }, [driverProfile?.profileImage]);
-
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
-      void loadNotificationReadState().then(state => {
-        if (active) setHasUnreadNotifications(state.unread.size > 0);
-      });
       switchModeAvatarSlide.setValue(0);
       setIsSwitchingMode(false);
-      return () => {
-        active = false;
-      };
-    }, [driverProfile?.profileImage, switchModeAvatarSlide]),
+    }, [switchModeAvatarSlide]),
   );
+
+  useEffect(() => {
+    void refreshProfileImage().catch(() => {});
+  }, [driverProfile?.profileImage, refreshProfileImage]);
 
   useFocusEffect(
     useCallback(() => {
@@ -476,7 +466,7 @@ export function HomeTopHeader({
         accessibilityLabel="Notifications"
       >
         <Feather name="bell" size={icons.size.lg} color={colors.foreground} />
-        {hasUnreadNotifications && (
+        {unreadNotificationCount > 0 && (
           <View
             style={[
               styles.notifBadge,

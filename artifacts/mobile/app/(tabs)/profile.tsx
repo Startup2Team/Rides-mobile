@@ -1,5 +1,5 @@
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
   Alert,
   Image,
@@ -16,15 +16,14 @@ import { SymbolView } from 'expo-symbols';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@/context/AuthContext';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
 import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { ImageGalleryPreview } from '@/components/ImageGalleryPreview';
+import { useProfile } from '@/domains/profile';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { AppText } from '@/components/AppText';
@@ -96,8 +95,8 @@ export default function ProfileScreen() {
   const isDark = scheme === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile, switchMode } = useAuth();
-  const { profileImage, setProfileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
+  const { user, driverProfile, switchMode, profile } = useProfile();
+  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
@@ -105,23 +104,11 @@ export default function ProfileScreen() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const separatorColor = isDark ? 'rgba(84,84,88,0.65)' : 'rgba(60,60,67,0.29)';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
-  const profileInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
-  const nameParts = user?.name ? user.name.trim().split(/\s+/) : [];
+  const profileInitial = profile?.fullName?.trim()?.[0]?.toUpperCase() ?? user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
+  const nameParts = profile?.fullName ? profile.fullName.trim().split(/\s+/) : user?.name ? user.name.trim().split(/\s+/) : [];
   const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase() : '';
   const lastName = nameParts.slice(1).join(' ').toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data);
-      });
-      return () => {
-        active = false;
-      };
-    }, [setProfileImage]),
-  );
 
   const handleSwitchToDriver = () => {
     if (canAccessDriverMode(driverProfile)) {

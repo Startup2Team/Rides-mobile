@@ -51,10 +51,10 @@ import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
-import { loadNotificationReadState } from '@/persistence/notificationPersistence';
-import { getApprovedDriverVehicles } from '@/domain/driverVehicles';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
+import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
 import {
   formatDistanceToPickup,
   formatRequestLocation,
@@ -139,13 +139,13 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>('standard');
-  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
+  const { profileImage } = useProfilePhotoActions(driverProfile?.profileImage ?? null);
   const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
   const [licenseBlockVehicle, setLicenseBlockVehicle] = useState<Pick<DriverVehicleProfile, 'id' | 'vehicleType' | 'plateNumber'> | null>(null);
+  const { data: unreadNotificationCount = 0 } = useUnreadNotificationCountQuery();
 
   const timers = useScreenTimerManager();
   const adCarouselRef = useRef<ScrollView>(null);
@@ -162,6 +162,7 @@ export default function DriverDashboard() {
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+  const { vehicles } = useVehicles();
 
   const clearAdLoopReset = useCallback(() => {
     if (adLoopResetRef.current) {
@@ -200,39 +201,25 @@ export default function DriverDashboard() {
   const isOnline = driverProfile?.isOnline === true;
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const activeVehicleEntitlement = getVehicleEntitlement(entitlement, activeVehicle);
-  const approvedVehicles = getApprovedDriverVehicles(driverProfile);
+  const approvedVehicles = vehicles.filter(vehicle => vehicle.status === 'approved');
 
   useEffect(() => {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, []);
 
-  useEffect(() => {
-    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
-  }, [driverProfile?.profileImage]);
-
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
       void loadStoredDriverRatings().then(stored => {
         if (active) {
           setRatingSummary(user?.id ? getDriverRatingSummary(stored.data ?? [], user.id) : EMPTY_RATING_SUMMARY);
         }
       });
-      void loadNotificationReadState().then(state => {
-        if (!active) return;
-        const credits = getActiveRideCredits(activeVehicleEntitlement);
-        const hasUnread = Boolean(pendingRequest) || (!isEntitlementLoading && credits <= 5 && !state.read.has(`driver_low_credits_${credits}`)) || state.unread.size > 0;
-        setHasUnreadNotifications(hasUnread);
-      });
       return () => {
         active = false;
       };
 
-
-    }, [activeVehicleEntitlement, driverProfile?.profileImage, isEntitlementLoading, pendingRequest, user?.id]),
+    }, [user?.id]),
   );
 
   // Location
@@ -737,7 +724,7 @@ export default function DriverDashboard() {
                 accessibilityLabel="Notifications"
               >
                 <Feather name="bell" size={icons.semantic.row} color={colors.foreground} />
-                {hasUnreadNotifications && (
+        {unreadNotificationCount > 0 && (
                   <View
                     style={[
                       styles.notifDot,
