@@ -111,6 +111,7 @@ describe('ride lifecycle contracts', () => {
       destination: { address: 'Kigali', latitude: -1.95, longitude: 30.06 },
       updatedAt: '2026-06-29T10:00:00.000Z',
       sequenceNumber: 1,
+      projection: { appliedEventIds: ['event-1'] },
     };
     const history: RideHistoryReadModel = {
       ...active,
@@ -124,6 +125,7 @@ describe('ride lifecycle contracts', () => {
       pickup: active.pickup,
       destination: active.destination,
       sequenceNumber: 2,
+      projection: { appliedEventIds: ['event-2'] },
     };
 
     expect(active.rideId).toBe('ride-1');
@@ -133,8 +135,8 @@ describe('ride lifecycle contracts', () => {
 
   test('projector and command handler blueprints are exported but not wired', () => {
     expect(activeRideProjector.id).toBe('ride.activeRideProjector');
-    expect(rideHistoryProjector.eventTypes).toContain('ride.completed');
-    expect(driverRequestProjector.eventTypes).toContain('ride.driver.offered');
+    expect(rideHistoryProjector.eventTypes).toBe('*');
+    expect(driverRequestProjector.eventTypes).toBe('*');
     expect(rideCommandFlow).toEqual([
       'ui',
       'command_creator',

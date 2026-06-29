@@ -101,15 +101,17 @@ Read model contracts are defined in `domains/ride/readModels.ts`:
 
 Active ride state must eventually be rebuildable from the ride event stream. Ride history and driver request views should be projector-owned read models.
 
-## Projector Blueprint
+## Projectors
 
-Projector scaffolds are defined in `domains/ride/projectors/`:
+Ride projectors are implemented and tested as pure transformation functions in `domains/ride/projectors/`:
 
 - `activeRideProjector`
 - `rideHistoryProjector`
 - `driverRequestProjector`
 
-These projectors are not registered in production in Phase 9A. They are safe blueprints for Phase 9B and later.
+They transform ride domain events into read models, ignore stale sequence numbers, track applied event ids, and avoid mutating their inputs.
+
+These projectors are not registered in the runtime app flow yet. The current RideProvider mock lifecycle remains the active behavior. The next phase should register these projectors with the Domain Event Platform in parallel/shadow mode so projected state can be compared against the existing RideProvider state without changing the user experience.
 
 ## Future Command Flow
 
@@ -148,4 +150,4 @@ Current ride buttons continue to call the existing RideProvider behavior.
 
 ## Runtime Guardrail
 
-Phase 9A is contract-only. The existing mock lifecycle remains the runtime source of truth until a later phase explicitly migrates behavior behind tests and rollout controls.
+Phase 9C keeps the existing mock lifecycle as the runtime source of truth. Ride projectors are implemented and tested, but they are not wired into UI, RideProvider, navigation, matching, negotiation, payment, driver flows, packages, repositories, or realtime behavior.

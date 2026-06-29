@@ -54,7 +54,7 @@ The dispatcher is the boundary that keeps event handling consistent:
 
 Projectors register with an id and either a list of event types or `*`. Multiple projectors can consume the same event. Projectors may expose `reset()` so future replay workflows can rebuild read models.
 
-No ride, payment, notification, or profile projector is implemented in this phase.
+Ride read-model projectors are now implemented and tested in `domains/ride/projectors/` as pure functions. They are not registered with the runtime event platform yet. The next ride lifecycle phase should register them in parallel/shadow mode before any production behavior is migrated.
 
 ## Event Bus
 

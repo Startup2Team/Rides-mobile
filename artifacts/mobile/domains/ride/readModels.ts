@@ -37,6 +37,10 @@ export interface RideFareSnapshot {
   finalizedAt?: string | null;
 }
 
+export interface RideProjectionMetadata {
+  appliedEventIds: string[];
+}
+
 export interface ActiveRideReadModel {
   rideId: string;
   status: RideStatus;
@@ -48,11 +52,12 @@ export interface ActiveRideReadModel {
   fare?: RideFareSnapshot | null;
   updatedAt: string;
   sequenceNumber: number;
+  projection: RideProjectionMetadata;
 }
 
 export interface RideHistoryReadModel {
   rideId: string;
-  status: Extract<RideStatus, 'completed' | 'cancelled' | 'timeout' | 'rating_submitted'>;
+  status: RideStatus;
   customer: RideParticipant;
   driver?: RideParticipant | null;
   pickup: RideLocationSnapshot;
@@ -61,7 +66,13 @@ export interface RideHistoryReadModel {
   requestedAt: string;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  paymentId?: string | null;
+  paymentAuthorizedAt?: string | null;
+  paymentCompletedAt?: string | null;
+  rating?: number | null;
+  ratingSubmittedAt?: string | null;
   sequenceNumber: number;
+  projection: RideProjectionMetadata;
 }
 
 export interface DriverRideRequestReadModel {
@@ -73,4 +84,5 @@ export interface DriverRideRequestReadModel {
   offeredFare?: RideFareSnapshot | null;
   expiresAt?: string | null;
   sequenceNumber: number;
+  projection: RideProjectionMetadata;
 }
