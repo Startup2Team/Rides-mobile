@@ -1,3 +1,4 @@
+export * from './bootstrapShadowRideProjection';
 export * from './RideShadowInspector';
 export * from './shadowComparator';
 export * from './shadowMetrics';

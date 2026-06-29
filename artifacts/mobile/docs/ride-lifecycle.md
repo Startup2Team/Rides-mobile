@@ -150,4 +150,22 @@ Current ride buttons continue to call the existing RideProvider behavior.
 
 ## Runtime Guardrail
 
-Phase 9D keeps the existing mock lifecycle as the runtime source of truth. Ride projectors can run in shadow mode for diagnostics, but they are not wired into UI, RideProvider state updates, navigation, matching, negotiation, payment, driver flows, packages, repositories, or realtime behavior.
+Phase 9D keeps the existing mock lifecycle as the runtime source of truth. Phase 9E starts shadow projection automatically in dev/test only, but RideProvider still owns runtime state. Shadow projectors are not wired into UI, RideProvider state updates, navigation, matching, negotiation, payment, driver flows, packages, repositories, or realtime behavior.
+
+## Phase 9E Bootstrap
+
+The app root now boots shadow projection from a controlled lifecycle hook. That bootstrap:
+
+- runs only when `ENABLE_SHADOW_RIDE_PROJECTION` is enabled
+- never starts in production
+- stays idempotent under Fast Refresh and repeated test imports
+- emits diagnostics only
+
+Graduation criteria before any projected read model can drive UI:
+
+- shadow active ride parity is stable
+- shadow history parity is stable
+- shadow driver request parity is stable
+- replay results match live processing
+- no unwanted RideProvider or Query cache mutation is observed
+- production gating is still explicitly disabled

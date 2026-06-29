@@ -25,6 +25,9 @@ export class ObservabilityRideShadowTelemetry implements RideShadowTelemetry {
 
   recordReplay(count: number) {
     observability.metrics.counter('ride.shadow_projection.replay', count);
+    observability.logger.info('RideShadowReplayCompleted', {
+      eventCount: count,
+    });
   }
 }
 

@@ -54,7 +54,7 @@ The dispatcher is the boundary that keeps event handling consistent:
 
 Projectors register with an id and either a list of event types or `*`. Multiple projectors can consume the same event. Projectors may expose `reset()` so future replay workflows can rebuild read models.
 
-Ride read-model projectors are implemented and tested in `domains/ride/projectors/` as pure functions. Phase 9D adds a shadow projection manager that can register ride projectors with an event platform registry for diagnostics only. Runtime ride behavior is still owned by RideProvider.
+Ride read-model projectors are implemented and tested in `domains/ride/projectors/` as pure functions. Phase 9D adds a shadow projection manager that can register ride projectors with an event platform registry for diagnostics only. Phase 9E boots that shadow projection in dev/test only from the app lifecycle. Runtime ride behavior is still owned by RideProvider.
 
 ## Event Bus
 

@@ -61,6 +61,10 @@ import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
+import {
+  bootstrapShadowRideProjection,
+  stopShadowRideProjection,
+} from '@/domains/ride/shadow';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -127,6 +131,13 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const scheme = useColorScheme();
+
+  useEffect(() => {
+    bootstrapShadowRideProjection();
+    return () => {
+      stopShadowRideProjection();
+    };
+  }, []);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? '#0A0A0A' : '#F5F5F5');

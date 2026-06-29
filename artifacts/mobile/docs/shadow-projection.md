@@ -1,6 +1,6 @@
 # Shadow Ride Projection
 
-Phase 9D registers ride read-model projectors in shadow mode only. The existing `RideProvider` remains the production source of truth.
+Phase 9D registers ride read-model projectors in shadow mode only. Phase 9E boots that shadow projection automatically in dev/test only. The existing `RideProvider` remains the production source of truth.
 
 ## Purpose
 
@@ -43,6 +43,15 @@ No persistence is used.
 
 When disabled, the manager does not register projectors and ignores events.
 
+## Bootstrap
+
+Phase 9E adds `bootstrapShadowRideProjection()` and wires it from the app root lifecycle.
+
+- The bootstrap runs only in dev/test when the feature flag is enabled.
+- The bootstrap is idempotent and protects against duplicate Fast Refresh registration.
+- `stopShadowRideProjection()` and `resetShadowRideProjection()` are available for tests and local diagnostics.
+- Production never starts shadow projection.
+
 ## Comparison Rules
 
 The comparator checks semantic fields only:
@@ -78,6 +87,8 @@ The event name is `RideProjectionMismatch`.
 
 The manager can replay ride events from the in-memory event store through the shadow projectors. Replay rebuilds shadow models, then can optionally compare them with a supplied production snapshot.
 
+Replay completion is emitted through observability so dev/test runs can track how much shadow traffic is being processed.
+
 ## Graduation Criteria
 
 Before replacing any runtime behavior, shadow projection should run long enough to prove:
@@ -91,3 +102,9 @@ Before replacing any runtime behavior, shadow projection should run long enough 
 - backend event ordering and idempotency are proven
 
 The next phase should run this manager in a controlled app lifecycle hook while still keeping RideProvider as the production source of truth.
+Phase 9E already does that bootstrap in dev/test only. Graduation to any UI-driven read model should require:
+
+- sustained zero- or explainable-divergence across active rides
+- replay parity with live events
+- no surprise query or provider mutations
+- production gating remains off until the migration is explicitly approved
