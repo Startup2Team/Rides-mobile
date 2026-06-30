@@ -191,3 +191,7 @@ Phase 10D shadow-wires the lowest-risk ride actions into that command pipeline:
 The live action still runs first and remains authoritative. The shadow command
 is diagnostic-only, never enqueues, never calls repositories, and never
 changes navigation, matching, negotiation, payment, or package behavior.
+
+Phase 10E expands the same shadow wiring to driver accept and decline ride
+commands. The live driver flow still runs first, and the shadow command path
+is only for diagnostics and parity checks.

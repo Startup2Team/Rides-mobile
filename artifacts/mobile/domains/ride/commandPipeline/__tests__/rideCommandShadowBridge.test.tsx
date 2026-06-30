@@ -68,18 +68,39 @@ describe('rideCommandShadowBridge', () => {
 
   test.each([
     ['request', 'shadowWireRequestRideCommand', {
+      actorId: 'user-1',
+      actorRole: 'customer',
       rideId: 'ride-1',
       pickup: { address: 'Kimironko', latitude: -1.9, longitude: 30.1 },
       destination: { address: 'Kigali', latitude: -1.95, longitude: 30.06 },
       vehicleType: 'moto',
     }],
     ['cancel', 'shadowWireCancelRideCommand', {
+      actorId: 'user-1',
+      actorRole: 'customer',
       rideId: 'ride-2',
       reason: 'customer_before_acceptance',
       note: null,
     }],
-    ['submit rating', 'shadowWireSubmitRatingCommand', {
+    ['accept', 'shadowWireAcceptRideCommand', {
+      actorId: 'driver-1',
+      actorRole: 'driver',
       rideId: 'ride-3',
+      driverId: 'driver-1',
+      vehicleId: 'vehicle-1',
+      acceptedFare: 4200,
+    }],
+    ['decline', 'shadowWireDeclineRideCommand', {
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      rideId: 'ride-4',
+      driverId: 'driver-1',
+      reason: 'busy',
+    }],
+    ['submit rating', 'shadowWireSubmitRatingCommand', {
+      actorId: 'user-1',
+      actorRole: 'customer',
+      rideId: 'ride-5',
       rating: 5,
       comment: 'Great ride',
       ratedUserId: 'driver-1',
@@ -90,8 +111,6 @@ describe('rideCommandShadowBridge', () => {
 
     shadowWire({
       ...payload,
-      actorId: 'user-1',
-      actorRole: 'customer',
       correlationId: 'correlation-1',
       timestamp: '2026-06-30T10:00:00.000Z',
       capabilitySnapshot: null,
@@ -100,8 +119,8 @@ describe('rideCommandShadowBridge', () => {
     expect(mockProcessRideCommand).toHaveBeenCalledTimes(1);
     const [command, context] = mockProcessRideCommand.mock.calls[0];
     expect(command).toEqual(expect.objectContaining({
-      actorId: 'user-1',
-      actorRole: 'customer',
+      actorId: payload.actorId,
+      actorRole: payload.actorRole,
       correlationId: 'correlation-1',
       idempotencyKey: expect.any(String),
       timestamp: '2026-06-30T10:00:00.000Z',

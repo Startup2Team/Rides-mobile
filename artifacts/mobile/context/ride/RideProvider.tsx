@@ -56,7 +56,9 @@ import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext
 import { useOptionalAuth } from '@/context/AuthContext';
 import { getEligibleOnlineSessionVehicle } from './rideSession';
 import {
+  shadowWireAcceptRideCommand,
   shadowWireCancelRideCommand,
+  shadowWireDeclineRideCommand,
   shadowWireRequestRideCommand,
 } from '@/domains/ride/commandPipeline';
 
@@ -386,11 +388,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [driverEntitlement, timers]);
 
   const acceptRideRequest = useCallback(() => {
-    if (!pendingRequestRef.current) return;
-    timers.startSession();
     const request = pendingRequestRef.current;
+    if (!request) return;
+    timers.startSession();
     const initialMessages = buildInitialNegotiationMessages(request.pickup, request.destination);
     const sessionVehicle = getEligibleOnlineSessionVehicle(auth?.driverProfile, driverEntitlement?.entitlement, request.requestedVehicleType ?? request.vehicleType);
+    const actorId = auth?.user?.id ?? 'local_user';
     setCurrentRide({
       ...request,
       status: 'negotiating',
@@ -399,11 +402,40 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       matchedVehicleType: request.matchedVehicleType ?? sessionVehicle?.vehicleType,
     });
     setPendingRequest(null);
-  }, [auth?.driverProfile, driverEntitlement?.entitlement, timers]);
+    try {
+      shadowWireAcceptRideCommand({
+        rideId: request.id,
+        driverId: actorId,
+        vehicleId: sessionVehicle?.id ?? request.matchedVehicleId ?? null,
+        acceptedFare: request.agreedFare ?? request.suggestedFare ?? null,
+        actorId,
+        actorRole: 'driver',
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.accept', error, { rideId: request.id });
+    }
+  }, [auth?.driverProfile, auth?.user?.id, driverEntitlement?.entitlement, rideCommandCapabilitySnapshot, timers]);
 
   const declineRideRequest = useCallback(() => {
+    const request = pendingRequestRef.current;
     setPendingRequest(null);
-  }, []);
+    if (request) {
+      const actorId = auth?.user?.id ?? 'local_user';
+      try {
+        shadowWireDeclineRideCommand({
+          rideId: request.id,
+          driverId: actorId,
+          reason: null,
+          actorId,
+          actorRole: 'driver',
+          capabilitySnapshot: rideCommandCapabilitySnapshot,
+        });
+      } catch (error) {
+        reportOperationalFailure('ride.shadow.decline', error, { rideId: request.id });
+      }
+    }
+  }, [auth?.user?.id, rideCommandCapabilitySnapshot]);
 
   const simulateIncomingRideRequest = useCallback(() => {
     if (pendingRequestRef.current) return;

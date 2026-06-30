@@ -56,3 +56,7 @@ diagnostics only. The live RideProvider path still executes first, and the
 shadow path must fail closed without affecting runtime behavior. The cutover
 flag stays disabled until the projected path is proven safe under readiness
 and parity checks.
+
+Phase 10E extends the same diagnostics-only pattern to driver accept and
+decline. These actions remain live-first, with shadow commands recorded only
+when the command pipeline is enabled in non-production modes.

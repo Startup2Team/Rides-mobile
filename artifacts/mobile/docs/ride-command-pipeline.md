@@ -66,3 +66,22 @@ package-related behavior remain unwired.
 
 Rollback is immediate: disable `ENABLE_RIDE_COMMAND_PIPELINE` or keep the
 pipeline in disabled mode and the app continues to use RideProvider only.
+
+## Phase 10E Shadow Wiring
+
+Driver accept and decline actions are now shadow-wired as well:
+
+- accept ride
+- decline ride
+
+The live driver action still runs first. The shadow command path remains
+diagnostic-only, never enqueues, never calls repositories, and fails closed
+without interrupting the live flow.
+
+Still unwired:
+
+- start ride
+- complete ride
+- payment actions
+- package credit deduction
+- negotiation finalization

@@ -1,8 +1,8 @@
 import { observability } from '@/observability/context/observabilityContext';
 import type { CapabilitySnapshot } from '@/capabilities';
 import type { RideLocation, VehicleType } from '@/types';
-import { createRequestRideCommand, createCancelRideCommand, createSubmitRatingCommand } from '../commandCreators';
-import type { CancelRidePayload, RideActorRole, RequestRidePayload, SubmitRatingPayload } from '../commands';
+import { createAcceptRideCommand, createRequestRideCommand, createCancelRideCommand, createDeclineRideCommand, createSubmitRatingCommand } from '../commandCreators';
+import type { AcceptRidePayload, CancelRidePayload, DeclineRidePayload, RideActorRole, RequestRidePayload, SubmitRatingPayload } from '../commands';
 import { processRideCommand } from './rideCommandPipeline';
 import { ENABLE_RIDE_COMMAND_ENQUEUE, ENABLE_RIDE_COMMAND_PIPELINE, RIDE_COMMAND_PIPELINE_MODE } from './rideCommandTypes';
 
@@ -23,6 +23,14 @@ export interface RideShadowRequestRideInput extends RideCommandShadowBridgeConte
 }
 
 export interface RideShadowCancelRideInput extends RideCommandShadowBridgeContext, CancelRidePayload {
+  rideId: string;
+}
+
+export interface RideShadowAcceptRideInput extends RideCommandShadowBridgeContext, AcceptRidePayload {
+  rideId: string;
+}
+
+export interface RideShadowDeclineRideInput extends RideCommandShadowBridgeContext, DeclineRidePayload {
   rideId: string;
 }
 
@@ -168,6 +176,37 @@ export function shadowWireCancelRideCommand(input: RideShadowCancelRideInput) {
     timestamp: context.timestamp,
   });
   shadowProcess('cancelRide', 'ride.cancel', command, context.capabilitySnapshot);
+}
+
+export function shadowWireAcceptRideCommand(input: RideShadowAcceptRideInput) {
+  const context = resolveContext(input);
+  const command = createAcceptRideCommand({
+    rideId: input.rideId,
+    driverId: input.driverId,
+    vehicleId: input.vehicleId ?? null,
+    acceptedFare: input.acceptedFare ?? null,
+  }, {
+    actorId: context.actorId,
+    actorRole: 'driver',
+    correlationId: context.correlationId,
+    timestamp: context.timestamp,
+  });
+  shadowProcess('acceptRide', 'ride.accept', command, context.capabilitySnapshot);
+}
+
+export function shadowWireDeclineRideCommand(input: RideShadowDeclineRideInput) {
+  const context = resolveContext(input);
+  const command = createDeclineRideCommand({
+    rideId: input.rideId,
+    driverId: input.driverId,
+    reason: input.reason ?? null,
+  }, {
+    actorId: context.actorId,
+    actorRole: 'driver',
+    correlationId: context.correlationId,
+    timestamp: context.timestamp,
+  });
+  shadowProcess('declineRide', 'ride.decline', command, context.capabilitySnapshot);
 }
 
 export function shadowWireSubmitRatingCommand(input: RideShadowSubmitRatingInput) {
