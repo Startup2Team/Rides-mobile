@@ -10,5 +10,6 @@ export * from './readModels';
 export { rideHistoryRepository, type RideHistoryOptions } from './repository';
 export * from './sequence';
 export * from './shadow';
+export * from './transactions';
 export type * from './commands';
 export type { Ride } from './types';
