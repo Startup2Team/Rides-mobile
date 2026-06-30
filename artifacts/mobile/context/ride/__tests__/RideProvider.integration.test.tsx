@@ -19,6 +19,8 @@ import type { RideLocation } from '@/types';
 
 let mockAuthDriverProfile: any = null;
 let mockDriverEntitlement: any = null;
+const mockShadowWireRequestRideCommand = jest.fn();
+const mockShadowWireCancelRideCommand = jest.fn();
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
@@ -30,6 +32,20 @@ jest.mock('@/context/AuthContext', () => ({
 
 jest.mock('@/context/DriverEntitlementContext', () => ({
   useOptionalDriverEntitlement: () => mockDriverEntitlement,
+}));
+
+jest.mock('@/capabilities', () => ({
+  resolveCapabilities: () => ({
+    capabilities: {},
+    state: {},
+    mode: 'customer',
+  }),
+}));
+
+jest.mock('@/domains/ride/commandPipeline', () => ({
+  shadowWireRequestRideCommand: (...args: unknown[]) => mockShadowWireRequestRideCommand(...args),
+  shadowWireCancelRideCommand: (...args: unknown[]) => mockShadowWireCancelRideCommand(...args),
+  shadowWireSubmitRatingCommand: jest.fn(),
 }));
 
 const pickup: RideLocation = {
@@ -80,6 +96,8 @@ describe('RideProvider lifecycle orchestration', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0);
     mockAuthDriverProfile = null;
     mockDriverEntitlement = null;
+    mockShadowWireRequestRideCommand.mockReset();
+    mockShadowWireCancelRideCommand.mockReset();
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -101,6 +119,7 @@ describe('RideProvider lifecycle orchestration', () => {
     await act(async () => {
       await result.current.createRide(pickup, destination, 'moto', destination.address);
     });
+    expect(mockShadowWireRequestRideCommand).toHaveBeenCalledTimes(1);
 
     const createdRideId = result.current.currentRide?.id;
     expect(result.current.currentRide).toEqual(expect.objectContaining({
@@ -219,6 +238,7 @@ describe('RideProvider lifecycle orchestration', () => {
     const cancelledRideId = result.current.currentRide?.id;
 
     act(() => result.current.cancelRide());
+    expect(mockShadowWireCancelRideCommand).toHaveBeenCalledTimes(1);
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       id: cancelledRideId,
       status: 'cancelled',
@@ -237,6 +257,29 @@ describe('RideProvider lifecycle orchestration', () => {
     expect(result.current.currentRide).toBeNull();
     expect(result.current.rideHistory).toEqual([]);
     expect(await loadRideHistory()).toBeNull();
+  });
+
+  test('shadow wiring failure does not block ride creation or cancellation', async () => {
+    mockShadowWireRequestRideCommand.mockImplementationOnce(() => {
+      throw new Error('shadow request failed');
+    });
+    mockShadowWireCancelRideCommand.mockImplementationOnce(() => {
+      throw new Error('shadow cancel failed');
+    });
+
+    const { result } = renderRideProvider();
+
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'searching',
+    }));
+
+    act(() => result.current.cancelRide());
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'cancelled',
+    }));
   });
 
   test('guarded invalid transitions do not replace or advance active ride state', async () => {

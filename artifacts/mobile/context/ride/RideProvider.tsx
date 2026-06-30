@@ -17,6 +17,7 @@ import {
 } from '@/types';
 import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 import { RideContextType } from './rideTypes';
+import { resolveCapabilities, type CapabilitySnapshot } from '@/capabilities';
 import { calcDistance, calcFare } from './rideFare';
 import {
   buildInitialDriverOffer,
@@ -54,6 +55,10 @@ import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { useOptionalAuth } from '@/context/AuthContext';
 import { getEligibleOnlineSessionVehicle } from './rideSession';
+import {
+  shadowWireCancelRideCommand,
+  shadowWireRequestRideCommand,
+} from '@/domains/ride/commandPipeline';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -84,6 +89,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const timers = timerManagerRef.current;
   currentRideRef.current = currentRide;
   pendingRequestRef.current = pendingRequest;
+  const rideCommandCapabilitySnapshot = useMemo<CapabilitySnapshot>(() => ({
+    ...resolveCapabilities({
+      user: auth?.user ?? null,
+      driverProfile: auth?.driverProfile ?? null,
+      driverEntitlement: driverEntitlement?.entitlement ?? null,
+      vehicles: auth?.driverProfile?.vehicles ?? [],
+      mode: auth?.user?.mode ?? null,
+    }),
+    mode: auth?.user?.mode ?? null,
+  }), [auth?.driverProfile, auth?.user, driverEntitlement?.entitlement]);
 
   const clearSearchTimers = useCallback(() => {
     timers.clearTimeout(matchDriverTimeoutRef.current);
@@ -222,6 +237,19 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     };
 
     const displayDestText = destText.trim() || destination.address?.trim() || '';
+    try {
+      shadowWireRequestRideCommand({
+        rideId: ride.id,
+        pickup,
+        destination,
+        vehicleType,
+        actorId: auth?.user?.id ?? 'local_user',
+        actorRole: 'customer',
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.request', error, { rideId: ride.id });
+    }
     setCancelledSearchDraft(cloneBookingDraft(pickup, destination, vehicleType, displayDestText));
 
     isMatchingPausedRef.current = false;
@@ -230,7 +258,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     clearSearchTimers();
     setCurrentRide(ride);
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
-  }, [clearSearchTimers, scheduleDriverMatch, timers]);
+  }, [auth?.user?.id, clearSearchTimers, rideCommandCapabilitySnapshot, scheduleDriverMatch, timers]);
 
   const cancelRide = useCallback(() => {
     const session = timers.endSession();
@@ -241,11 +269,31 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     driverIntervalRef.current = null;
     setDriverLocation(null);
     setRestoreBookingOnHomeFocus(true);
+    const currentRideSnapshot = currentRideRef.current;
+    try {
+      if (currentRideSnapshot) {
+        const reason = currentRideSnapshot.status === 'searching' || currentRideSnapshot.status === 'driver_assigned' || currentRideSnapshot.status === 'negotiating'
+          ? 'customer_before_acceptance'
+          : 'customer_after_acceptance';
+        shadowWireCancelRideCommand({
+          rideId: currentRideSnapshot.id,
+          reason,
+          note: null,
+          actorId: auth?.user?.id ?? currentRideSnapshot.customerId ?? 'local_user',
+          actorRole: auth?.user?.mode === 'driver' ? 'driver' : 'customer',
+          capabilitySnapshot: rideCommandCapabilitySnapshot,
+        });
+      }
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.cancel', error, {
+        rideId: currentRideSnapshot?.id ?? 'unknown',
+      });
+    }
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
     timers.scheduleTimeout(() => {
       setCurrentRide(prev => prev?.status === 'cancelled' ? null : prev);
     }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
-  }, [clearSearchTimers, timers]);
+  }, [auth?.user?.id, auth?.user?.mode, clearSearchTimers, rideCommandCapabilitySnapshot, timers]);
 
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => addCustomerCounterOffer(prev, amount));

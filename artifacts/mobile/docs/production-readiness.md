@@ -50,3 +50,9 @@ Phase 10 should only start after these gates are green and the migration plan is
 Phase 10A is the gated dual-read step; Phase 10B should only begin after the dual-read diagnostics remain clean under normal and replayed lifecycle traffic.
 
 Phase 10C adds command-pipeline validation and offline-mutation previews in dry-run or shadow mode only. Production remains disabled until the command pipeline proves stable beside the live RideProvider path.
+
+Phase 10D shadow-wires selected live ride actions into the pipeline for
+diagnostics only. The live RideProvider path still executes first, and the
+shadow path must fail closed without affecting runtime behavior. The cutover
+flag stays disabled until the projected path is proven safe under readiness
+and parity checks.

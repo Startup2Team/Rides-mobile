@@ -49,3 +49,20 @@ and continue using RideProvider exactly as before.
 Phase 10D should connect selected actions behind explicit feature flags only
 after the command pipeline, dual-read layer, and readiness gates stay green
 under shadow traffic.
+
+## Phase 10D Shadow Wiring
+
+Selected ride actions are now shadow-wired into the pipeline from the live
+action layer:
+
+- request ride
+- cancel ride
+- submit rating
+
+These shadow commands are created alongside the real RideProvider flow. They
+do not enqueue, do not call repositories, and never block the real action if
+the shadow path fails. Actions such as start ride, complete ride, payment, and
+package-related behavior remain unwired.
+
+Rollback is immediate: disable `ENABLE_RIDE_COMMAND_PIPELINE` or keep the
+pipeline in disabled mode and the app continues to use RideProvider only.

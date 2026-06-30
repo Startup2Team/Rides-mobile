@@ -181,3 +181,13 @@ Phase 10A adds a live-vs-projected comparison layer, but the UI still consumes l
 Phase 10B adds a projection coordinator above that comparison layer. It selects and compares ride read models for diagnostics only, while RideProvider remains the live source for runtime UI behavior.
 
 Phase 10C adds a ride command pipeline that validates and classifies ride commands in dry-run or shadow mode only. It does not route UI actions yet and does not change RideProvider state transitions.
+
+Phase 10D shadow-wires the lowest-risk ride actions into that command pipeline:
+
+- request ride
+- cancel ride
+- submit rating
+
+The live action still runs first and remains authoritative. The shadow command
+is diagnostic-only, never enqueues, never calls repositories, and never
+changes navigation, matching, negotiation, payment, or package behavior.
