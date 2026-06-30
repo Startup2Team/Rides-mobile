@@ -62,6 +62,7 @@ export interface BookingRepository {
 export interface RideRepository {
   appendRideHistory(completed: Ride): Promise<void>;
   loadRideHistory(): Promise<Ride[] | null>;
+  getRideDetail(rideId: string): Promise<Ride | null>;
   clearRideHistory(): Promise<void>;
 }
 
@@ -110,7 +111,9 @@ export interface PaymentRepository {
   listPaymentMethods(): Promise<PaymentMethod[]>;
   savePaymentMethods(methods: PaymentMethod[]): Promise<void>;
   addPaymentMethod(method: PaymentMethod): Promise<void>;
+  updatePaymentMethod(methodId: string, updates: Partial<PaymentMethod>): Promise<void>;
   removePaymentMethod(methodId: string): Promise<void>;
+  setDefaultPaymentMethod(methodId: string): Promise<void>;
 }
 
 export interface SearchRepository {

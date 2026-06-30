@@ -16,7 +16,26 @@ export {
   useUnreadNotificationCountQuery,
 } from './useNotificationsQuery';
 export { usePackagesQuery } from './usePackagesQuery';
-export { usePaymentMethodsQuery } from './usePaymentMethodsQuery';
+export {
+  useActivatePackageMutation,
+  useAvailablePackageOffersQuery,
+  useCreatePackagePurchaseMutation,
+  useDeductRideCreditMutation,
+  useDriverEntitlementsQuery,
+  useDriverPackagePurchasesQuery,
+  usePackageCampaignsQuery,
+  usePackageCatalogQuery,
+  useUpdatePackagePurchaseStatusMutation,
+} from './usePackagesQuery';
+export {
+  useAddPaymentMethodMutation,
+  useBillingProfileQuery,
+  useDefaultPaymentMethodQuery,
+  useDeletePaymentMethodMutation,
+  usePaymentMethodsQuery,
+  useSetDefaultPaymentMethodMutation,
+  useUpdatePaymentMethodMutation,
+} from './usePaymentMethodsQuery';
 export {
   useProfileQuery,
   useProfilePhotoQuery,
@@ -24,7 +43,7 @@ export {
   useUpdateProfileMutation,
   useUpdateProfilePhotoMutation,
 } from './useProfileQuery';
-export { useRideHistoryQuery } from './useRideHistoryQuery';
+export { useRideDetailQuery, useRideHistoryQuery } from './useRideHistoryQuery';
 export { useReverseGeocodeQuery } from './useReverseGeocodeQuery';
 export {
   useAddSavedLocationMutation,

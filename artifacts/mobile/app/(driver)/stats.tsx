@@ -16,7 +16,6 @@ import {
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
 } from '@/domain/driverRidePackages';
-import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
@@ -25,6 +24,7 @@ import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -34,7 +34,7 @@ export default function DriverStats() {
   const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
-  const { rideHistory, loadHistory } = useRide();
+  const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -42,7 +42,7 @@ export default function DriverStats() {
     setIsRefreshing(true);
     const start = Date.now();
     try {
-      await loadHistory();
+      await refetchRideHistory();
       const storedRatings = await loadStoredDriverRatings();
       const summary = user?.id ? getDriverRatingSummary(storedRatings.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
       setRatingSummary(summary);
@@ -55,11 +55,7 @@ export default function DriverStats() {
       }
       setIsRefreshing(false);
     }
-  }, [loadHistory, user?.id]);
-
-  React.useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+  }, [refetchRideHistory, user?.id]);
 
   React.useEffect(() => {
     let cancelled = false;

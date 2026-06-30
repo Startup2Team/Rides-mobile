@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Platform,
   Pressable,
@@ -11,7 +11,6 @@ import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
-import { useRide } from '@/context/RideContext';
 import { Ride, VEHICLE_LABELS } from '@/types';
 import { StatusChip } from '@/components/StatusChip';
 import { RouteTimeline } from '@/components/RouteTimeline';
@@ -22,6 +21,7 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
+import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 
 /** Matches card horizontal padding — space before calendar / after RWF. */
 const CARD_CONTENT_INSET = semanticSpacing.cardPadding;
@@ -131,14 +131,14 @@ export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { rideHistory, loadHistory } = useRide();
+  const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     const start = Date.now();
     try {
-      await loadHistory();
+      await refetchRideHistory();
     } finally {
       const elapsed = Date.now() - start;
       const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
@@ -148,9 +148,7 @@ export default function HistoryScreen() {
       }
       setIsRefreshing(false);
     }
-  }, [loadHistory]);
-
-  useEffect(() => { loadHistory(); }, []);
+  }, [refetchRideHistory]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

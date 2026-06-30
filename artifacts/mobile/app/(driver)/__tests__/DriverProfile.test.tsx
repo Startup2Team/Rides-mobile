@@ -143,6 +143,13 @@ jest.mock('@/context/RideContext', () => ({
   }),
 }));
 
+jest.mock('@/query/hooks/useRideHistoryQuery', () => ({
+  useRideHistoryQuery: () => ({
+    data: [],
+    refetch: jest.fn(() => Promise.resolve({ data: [] })),
+  }),
+}));
+
 jest.mock('@/persistence/profilePersistence', () => ({
   loadStoredProfileImage: jest.fn(() => Promise.resolve({ data: null })),
 }));

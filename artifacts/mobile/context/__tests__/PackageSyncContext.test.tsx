@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { AppState } from 'react-native';
@@ -49,11 +50,21 @@ function repository(options: { failRefresh?: boolean; emptyCache?: boolean } = {
 }
 
 describe('PackageSyncProvider', () => {
+  function wrapperFor(offerSourceRepository: PackageOfferSourceRepository) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
+      </QueryClientProvider>
+    );
+    return { client, wrapper };
+  }
+
   test('loads cache immediately and exposes an offline warning when refresh fails', async () => {
     const offerSourceRepository = repository({ failRefresh: true });
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
-    );
+    const { wrapper } = wrapperFor(offerSourceRepository);
     const { result } = renderHook(() => usePackageSync(), { wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -68,9 +79,7 @@ describe('PackageSyncProvider', () => {
       return { remove: jest.fn() };
     });
     const offerSourceRepository = repository();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
-    );
+    const { wrapper } = wrapperFor(offerSourceRepository);
     renderHook(() => usePackageSync(), { wrapper });
     await waitFor(() => expect(offerSourceRepository.refreshOfferSource).toHaveBeenCalledTimes(1));
 
@@ -85,9 +94,7 @@ describe('PackageSyncProvider', () => {
 
   test('manual refresh updates repositories without clearing existing catalog', async () => {
     const offerSourceRepository = repository();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
-    );
+    const { wrapper } = wrapperFor(offerSourceRepository);
     const { result } = renderHook(() => usePackageSync(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -101,9 +108,7 @@ describe('PackageSyncProvider', () => {
 
   test('does not expose a partial generation when refresh fails without cache', async () => {
     const offerSourceRepository = repository({ failRefresh: true, emptyCache: true });
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <PackageSyncProvider offerSourceRepository={offerSourceRepository}>{children}</PackageSyncProvider>
-    );
+    const { wrapper } = wrapperFor(offerSourceRepository);
     const { result } = renderHook(() => usePackageSync(), { wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));

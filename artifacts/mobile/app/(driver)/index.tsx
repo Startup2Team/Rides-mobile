@@ -55,6 +55,7 @@ import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
+import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 import {
   formatDistanceToPickup,
   formatRequestLocation,
@@ -129,12 +130,11 @@ export default function DriverDashboard() {
   const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const {
     pendingRequest,
-    rideHistory,
-    loadHistory,
     simulateIncomingRideRequest,
     acceptRideRequest,
     declineRideRequest,
   } = useRide();
+  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
 
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
@@ -249,10 +249,6 @@ export default function DriverDashboard() {
   }, []);
 
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
-
-  useEffect(() => {
     positionAdCarouselAtStart();
   }, [positionAdCarouselAtStart]);
 
@@ -290,6 +286,9 @@ export default function DriverDashboard() {
     };
     clearRequestTimers();
     requestSessionRef.current = timers.startSession();
+    if (!driverProfile) {
+      return clearRequestTimers;
+    }
     if (!isOnline) {
       slideAnim.setValue(300);
       setCountdown(15);
@@ -315,14 +314,14 @@ export default function DriverDashboard() {
       }, 1000, session);
     }, 5000, session);
     return clearRequestTimers;
-  }, [declineRideRequest, isOnline, simulateIncomingRideRequest, slideAnim, timers]);
+  }, [declineRideRequest, driverProfile, isOnline, simulateIncomingRideRequest, slideAnim, timers]);
 
   const confirmDecline = () => {
     timers.clearInterval(countdownRef.current);
     countdownRef.current = null;
+    declineRideRequest();
     Animated.timing(slideAnim, { toValue: 300, duration: duration.modal, useNativeDriver: true }).start(() => {
       setCountdown(15);
-      declineRideRequest();
     });
     if (driverProfile) saveDriverProfile({ ...driverProfile, dailyDeclines: (driverProfile.dailyDeclines ?? 0) + 1 });
   };

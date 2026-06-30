@@ -1,10 +1,11 @@
 import { QueryClient } from '@tanstack/react-query';
+import { instrumentQueryClient } from '@/observability/performance/instrumentation';
 
 const DEFAULT_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 
 export function createAppQueryClient() {
-  return new QueryClient({
+  return instrumentQueryClient(new QueryClient({
     defaultOptions: {
       queries: {
         retry: 2,
@@ -24,7 +25,7 @@ export function createAppQueryClient() {
         networkMode: 'online',
       },
     },
-  });
+  }));
 }
 
 export const queryClient = createAppQueryClient();

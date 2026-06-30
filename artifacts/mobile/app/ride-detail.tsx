@@ -18,10 +18,10 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
-import { useRide } from '@/context/RideContext';
 import { RideLocation, VEHICLE_LABELS } from '@/types';
 import { AppText } from '@/components/AppText';
 import { typography } from '@/constants/typography';
+import { useRideDetailQuery } from '@/query/hooks/useRideHistoryQuery';
 
 function formatRideDate(value: string) {
   return new Date(value).toLocaleDateString('en-RW', {
@@ -123,13 +123,8 @@ export default function RideDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { rideId } = useLocalSearchParams<{ rideId: string }>();
-  const { rideHistory, loadHistory } = useRide();
-
-  React.useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
-
-  const ride = rideHistory.find(r => r.id === rideId) ?? null;
+  const rideDetailQuery = useRideDetailQuery(rideId);
+  const ride = rideDetailQuery.data ?? null;
 
   if (!ride) {
     return (

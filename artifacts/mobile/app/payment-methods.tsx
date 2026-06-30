@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -21,7 +21,6 @@ import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { BRAND_GREEN_HEX } from '@/constants/systemColors';
 
-import { loadStoredPaymentMethods, saveStoredPaymentMethods } from '@/persistence/paymentPersistence';
 import type { PaymentMethod, PaymentProvider } from '@/types';
 import { typography } from '@/constants/typography';
 import { duration } from '@/constants/motion';
@@ -29,6 +28,12 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import {
+  useAddPaymentMethodMutation,
+  useDeletePaymentMethodMutation,
+  usePaymentMethodsQuery,
+  useSetDefaultPaymentMethodMutation,
+} from '@/query/hooks/usePaymentMethodsQuery';
 
 const PROVIDER_META: Record<PaymentProvider, { name: string; color: string; icon: string }> = {
   mtn: { name: 'MTN Mobile Money', color: '#FFCC00', icon: 'smartphone' },
@@ -77,26 +82,18 @@ export default function PaymentMethodsScreen() {
     mtn: '7xxxxxxxx',
     airtel: '7xxxxxxxx',
   };
-  const [methods, setMethods] = useState<PaymentMethod[]>(DEFAULT_METHODS);
+  const methodsQuery = usePaymentMethodsQuery();
+  const addPaymentMethod = useAddPaymentMethodMutation();
+  const deletePaymentMethod = useDeletePaymentMethodMutation();
+  const setDefaultPaymentMethod = useSetDefaultPaymentMethodMutation();
+  const methods = methodsQuery.data && methodsQuery.data.length > 0 ? methodsQuery.data : DEFAULT_METHODS;
   const [adding, setAdding] = useState<PaymentProvider | null>(null);
   const [phoneInput, setPhoneInput] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadStoredPaymentMethods().then(stored => {
-      if (stored.data) setMethods(stored.data);
-    });
-  }, []);
-
-  const persist = async (updated: PaymentMethod[]) => {
-    setMethods(updated);
-    await saveStoredPaymentMethods(updated);
-  };
-
   const handleSetDefault = async (id: string) => {
     if (methods.find(m => m.id === id)?.isDefault) return;
-    const updated = methods.map(m => ({ ...m, isDefault: m.id === id }));
-    await persist(updated);
+    await setDefaultPaymentMethod.mutateAsync(id);
     showToast('Default payment updated', 'info');
   };
 
@@ -110,7 +107,7 @@ export default function PaymentMethodsScreen() {
       {
         text: 'Remove',
         onPress: async () => {
-          await persist(methods.filter(m => m.id !== id));
+          await deletePaymentMethod.mutateAsync(id);
           showToast('Payment method removed', 'error');
         },
       },
@@ -136,7 +133,7 @@ export default function PaymentMethodsScreen() {
       phoneNumber: normalizedPhone,
       isDefault: methods.length === 0,
     };
-    await persist([...methods, newMethod]);
+    await addPaymentMethod.mutateAsync(newMethod);
     setSaving(false);
     setAdding(null);
     setPhoneInput('');

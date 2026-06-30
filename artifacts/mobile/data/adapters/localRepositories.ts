@@ -100,6 +100,11 @@ export class LocalRideRepository implements RideRepository {
     return (await localRideDataSource.loadRideHistory()) ?? null;
   }
 
+  async getRideDetail(rideId: string) {
+    const history = (await this.loadRideHistory()) ?? [];
+    return history.find(ride => ride.id === rideId) ?? null;
+  }
+
   async clearRideHistory() {
     return undefined;
   }
@@ -285,9 +290,19 @@ export class LocalPaymentRepository implements PaymentRepository {
     await this.savePaymentMethods([method, ...methods.filter(item => item.id !== method.id)]);
   }
 
+  async updatePaymentMethod(methodId: string, updates: Partial<PaymentMethod>) {
+    const methods = await this.listPaymentMethods();
+    await this.savePaymentMethods(methods.map(method => method.id === methodId ? { ...method, ...updates, id: method.id } : method));
+  }
+
   async removePaymentMethod(methodId: string) {
     const methods = await this.listPaymentMethods();
     await this.savePaymentMethods(methods.filter(method => method.id !== methodId));
+  }
+
+  async setDefaultPaymentMethod(methodId: string) {
+    const methods = await this.listPaymentMethods();
+    await this.savePaymentMethods(methods.map(method => ({ ...method, isDefault: method.id === methodId })));
   }
 }
 

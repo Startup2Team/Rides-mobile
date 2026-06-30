@@ -535,6 +535,11 @@ Error behavior:
 Idempotency expectations:
 - purchase and activation must be idempotent
 
+Package domain note:
+- catalog and campaigns are now query-backed through TanStack Query
+- entitlements and purchase history are query-backed through the package domain facade
+- PackageSyncContext and DriverEntitlementContext remain compatibility layers for now
+
 ### 4.8 `NotificationRepository.ts`
 
 Responsibility:
@@ -599,7 +604,11 @@ Examples:
 - `savedLocationKeys.list(userId)`
 - `rideKeys.history(userId)`
 - `driverKeys.vehicles(driverId)`
-- `packageKeys.catalog(vehicleType)`
+- `packageKeys.catalog()`
+- `packageKeys.campaigns()`
+- `packageKeys.entitlements(driverId)`
+- `packageKeys.purchases(driverId)`
+- `packageKeys.offers(driverId, vehicleType)`
 - `notificationKeys.list(userId)`
 
 Key rules:
@@ -618,6 +627,7 @@ Use `useQuery` for:
 - notifications
 - package catalog
 - package campaigns
+- package entitlements and purchases
 
 Use `useMutation` for:
 - profile update
@@ -1264,6 +1274,15 @@ Phase 8B.4 moves driver vehicles onto the query layer.
 - `useDriverVehicleQuery(vehicleId)` is the single vehicle detail read layer
 - add/update/delete/primary-selection mutations update the repository, optimistically update the cache, and then invalidate the driver vehicle queries
 - `AuthContext` remains the compatibility bridge while vehicle screens migrate to the query layer
+
+Phase 8B.5 moves driver packages and entitlements onto the query layer.
+
+- `domains/packages/` is the package domain entry point
+- `usePackageCatalogQuery()` and `usePackageCampaignsQuery()` are the package generation read layers
+- `useDriverEntitlementsQuery(driverId)` and `useDriverPackagePurchasesQuery(driverId)` are the entitlement and purchase read layers
+- `useAvailablePackageOffersQuery(driverId, vehicleType)` derives the active package offers from catalog, campaigns, and entitlement state
+- package purchase, activation, and credit mutations keep the current local economics while updating the repository and query cache
+- `PackageSyncContext` and `DriverEntitlementContext` remain compatibility bridges while package screens migrate to the query layer
 
 ## 13. Domain-First Direction
 
