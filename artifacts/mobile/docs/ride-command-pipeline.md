@@ -95,3 +95,17 @@ non-blocking.
 
 `Complete Ride` is still intentionally unwired because it is the next command
 that introduces financial effects and needs a separate readiness step.
+
+## Phase 10H Shadow Wiring
+
+`Complete Ride` is now shadow-wired through the ride transaction boundary
+before the diagnostics-only command bridge sees it.
+
+The live completion flow still runs first. The transaction layer validates the
+shadow command, produces a preview, and emits a financial-effects summary.
+That summary is metadata only and does not execute settlement, payment,
+package credit deduction, driver earnings, receipts, promotions, loyalty,
+referrals, analytics, or notifications.
+
+`Complete Ride` still does not enqueue, does not call repositories, and does
+not change runtime ride behavior.

@@ -102,7 +102,7 @@ export function createStartRideCommand(payload: StartRidePayload, options: RideC
 
 export function createCompleteRideCommand(payload: CompleteRidePayload, options: RideCommandCreatorOptions): CompleteRideCommand {
   assertValue(payload.completedAt, 'completedAt is required');
-  return createCommand('complete', payload, options, ['driver']);
+  return createCommand('complete', payload, options, ['driver', 'system']);
 }
 
 export function createSubmitRatingCommand(payload: SubmitRatingPayload, options: RideCommandCreatorOptions): SubmitRatingCommand {

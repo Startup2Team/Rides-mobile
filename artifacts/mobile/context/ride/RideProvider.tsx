@@ -59,12 +59,13 @@ import { getEligibleOnlineSessionVehicle } from './rideSession';
 import {
   shadowWireAcceptRideCommand,
   shadowWireCancelRideCommand,
+  shadowWireCompleteRideCommand,
   shadowWireDeclineRideCommand,
   shadowWireRequestRideCommand,
   shadowWireStartRideCommand,
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
-import { createStartRideCommand } from '@/domains/ride/commandCreators';
+import { createCompleteRideCommand, createStartRideCommand } from '@/domains/ride/commandCreators';
 import { rideTransactionBoundary } from '@/domains/ride/transactions';
 import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionPhase, RideStatus as RideProjectionStatus } from '@/domains/ride/readModels';
 
@@ -376,6 +377,115 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function recordCompleteRideTransactionTelemetry(
+    preview: ReturnType<typeof rideTransactionBoundary.preview>,
+    result: ReturnType<typeof rideTransactionBoundary.evaluate>,
+    command: ReturnType<typeof createCompleteRideCommand>,
+  ) {
+    observability.metrics.counter('ride.complete_transaction.preview', 1, {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+    });
+    observability.logger.info('RideCompleteTransactionPreview', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      commandType: result.commandType,
+      status: result.state,
+      financialPreviewMode: preview?.financialPreview?.mode ?? null,
+    });
+
+    if (preview?.financialPreview) {
+      observability.metrics.counter('ride.complete_transaction.financial_preview', 1, {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+      });
+      observability.logger.info('RideCompleteTransactionFinancialPreview', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+        effects: preview.financialPreview.effects.map(effect => effect.name),
+        notes: preview.financialPreview.notes,
+      });
+    }
+
+    if (result.accepted) {
+      observability.metrics.counter('ride.complete_transaction.accepted', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.info('RideCompleteTransactionAccepted', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+      return;
+    }
+
+    observability.metrics.counter('ride.complete_transaction.rejected', 1, {
+      rideId: command.payload.rideId,
+    });
+    observability.logger.warn('RideCompleteTransactionRejected', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      reason: result.reason,
+    });
+
+    if (result.orderingViolation) {
+      observability.metrics.counter('ride.complete_transaction.ordering_violation', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideCompleteTransactionOrderingViolation', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.duplicate) {
+      observability.metrics.counter('ride.complete_transaction.duplicate_detected', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideCompleteTransactionDuplicateDetected', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.reason === 'capability-denied') {
+      observability.metrics.counter('ride.complete_transaction.capability_denied', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideCompleteTransactionCapabilityDenied', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+  }
+
   const clearCancelledSearchDraft = useCallback(() => {
     setCancelledSearchDraft(null);
     setRestoreBookingOnHomeFocus(false);
@@ -576,6 +686,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     source: 'customer' | 'driver' = 'customer',
     driverIdentity?: { driverId?: string; driverName?: string; vehicleId?: string; vehicleType?: VehicleType },
   ) => {
+    const currentRideSnapshot = currentRideRef.current;
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
@@ -605,7 +716,51 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       return null;
     });
     setDriverLocation(null);
-  }, [driverEntitlement, timers]);
+    if (!currentRideSnapshot) return;
+    const completedAt = new Date().toISOString();
+    const actorRole = source === 'driver' ? 'driver' : 'system';
+    const actorId = source === 'driver'
+      ? auth?.user?.id ?? driverIdentity?.driverId ?? currentRideSnapshot.driverId ?? currentRideSnapshot.driver?.id ?? 'local_user'
+      : auth?.user?.id ?? currentRideSnapshot.customerId ?? 'local_user';
+    try {
+      const command = createCompleteRideCommand({
+        rideId: currentRideSnapshot.id,
+        completedAt,
+        location: null,
+        distanceKm: null,
+        durationSeconds: null,
+      }, {
+        actorId,
+        actorRole,
+        correlationId: createRideCorrelationId(),
+        timestamp: completedAt,
+      });
+      const transactionPreview = rideTransactionBoundary.preview(command, {
+        currentRide: buildStartRideTransactionRide(currentRideSnapshot),
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+      const transactionResult = rideTransactionBoundary.evaluate(command, {
+        currentRide: buildStartRideTransactionRide(currentRideSnapshot),
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+      recordCompleteRideTransactionTelemetry(transactionPreview, transactionResult, command);
+      shadowWireCompleteRideCommand({
+        command,
+        rideId: currentRideSnapshot.id,
+        completedAt,
+        location: null,
+        distanceKm: null,
+        durationSeconds: null,
+        actorId: command.actorId,
+        actorRole,
+        correlationId: command.correlationId,
+        timestamp: command.timestamp,
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.complete', error, { rideId: currentRideSnapshot.id });
+    }
+  }, [auth?.user?.id, driverEntitlement, rideCommandCapabilitySnapshot, timers]);
 
   const acceptRideRequest = useCallback(() => {
     const request = pendingRequestRef.current;

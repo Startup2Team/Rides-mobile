@@ -1,6 +1,6 @@
 import type { PendingMutationPriority, RetryPolicy } from '@/offline';
 import type { RideLifecycleCommand, StartRideCommand, CompleteRideCommand } from '../commands';
-import type { RideTransactionCommandType, RideTransactionPreview, RideTransactionRollbackPlan, RideTransactionRollbackContext, RideTransactionState } from './transactionTypes';
+import type { RideTransactionCommandType, RideTransactionFinancialPreview, RideTransactionPreview, RideTransactionRollbackPlan, RideTransactionRollbackContext, RideTransactionState } from './transactionTypes';
 
 export const RIDE_TRANSACTION_COMMAND_TYPES: readonly RideTransactionCommandType[] = ['ride.start', 'ride.complete'];
 
@@ -59,6 +59,31 @@ export function getRideTransactionNextPhase(commandType: RideTransactionCommandT
   return commandType === 'ride.start' ? 'active' : 'closed';
 }
 
+export function createRideTransactionFinancialPreview(
+  commandType: RideTransactionCommandType,
+): RideTransactionFinancialPreview | null {
+  if (commandType !== 'ride.complete') return null;
+  return {
+    mode: 'preview',
+    effects: [
+      { name: 'fare-settlement', mode: 'preview', description: 'Fare settlement would be prepared.' },
+      { name: 'payment-authorization', mode: 'preview', description: 'Payment authorization would be evaluated.' },
+      { name: 'package-credit-deduction', mode: 'preview', description: 'Package credit deduction would be evaluated.' },
+      { name: 'driver-earnings', mode: 'preview', description: 'Driver earnings would be calculated.' },
+      { name: 'customer-receipt', mode: 'preview', description: 'Customer receipt would be prepared.' },
+      { name: 'promotions', mode: 'preview', description: 'Promotions would be evaluated.' },
+      { name: 'loyalty-rewards', mode: 'preview', description: 'Loyalty rewards would be evaluated.' },
+      { name: 'referral-rewards', mode: 'preview', description: 'Referral rewards would be evaluated.' },
+      { name: 'analytics', mode: 'preview', description: 'Analytics events would be emitted.' },
+      { name: 'notifications', mode: 'preview', description: 'Notifications would be prepared.' },
+    ],
+    notes: [
+      'Preview only. No repository writes are performed.',
+      'Preview only. No payment or earnings execution is performed.',
+    ],
+  };
+}
+
 export function createRideTransactionRollbackPlan(
   transactionId: string,
   rideId: string,
@@ -105,6 +130,7 @@ export function createRideTransactionPreview<TCommand extends RideLifecycleComma
     expiresAt: new Date(options.now.getTime() + getRideTransactionExpiryMs()).toISOString(),
     payload: command.payload,
     rollbackPlan: createRideTransactionRollbackPlan(transactionId, payload.rideId, commandType, options.hooks ?? []),
+    financialPreview: createRideTransactionFinancialPreview(commandType),
   };
 }
 

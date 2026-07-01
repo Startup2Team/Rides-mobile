@@ -104,6 +104,15 @@ describe('rideCommandShadowBridge', () => {
       startedAt: '2026-06-30T10:02:00.000Z',
       location: null,
     }],
+    ['complete', 'shadowWireCompleteRideCommand', {
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      rideId: 'ride-7',
+      completedAt: '2026-06-30T10:12:00.000Z',
+      location: null,
+      distanceKm: 8.4,
+      durationSeconds: 900,
+    }],
     ['submit rating', 'shadowWireSubmitRatingCommand', {
       actorId: 'user-1',
       actorRole: 'customer',

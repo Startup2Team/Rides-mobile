@@ -60,3 +60,8 @@ and parity checks.
 Phase 10E extends the same diagnostics-only pattern to driver accept and
 decline. These actions remain live-first, with shadow commands recorded only
 when the command pipeline is enabled in non-production modes.
+
+Phase 10H adds shadow validation for `Complete Ride` through the transaction
+boundary. The live completion flow remains authoritative, and the new
+financial preview stays metadata-only until the later settlement migration
+phase is approved and gated.

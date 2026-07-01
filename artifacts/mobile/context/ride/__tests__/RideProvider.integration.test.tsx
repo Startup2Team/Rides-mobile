@@ -24,6 +24,7 @@ const mockShadowWireCancelRideCommand = jest.fn();
 const mockShadowWireAcceptRideCommand = jest.fn();
 const mockShadowWireDeclineRideCommand = jest.fn();
 const mockShadowWireStartRideCommand = jest.fn();
+const mockShadowWireCompleteRideCommand = jest.fn();
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
@@ -57,6 +58,7 @@ jest.mock('@/domains/ride/commandPipeline', () => ({
   shadowWireAcceptRideCommand: (...args: unknown[]) => mockShadowWireAcceptRideCommand(...args),
   shadowWireDeclineRideCommand: (...args: unknown[]) => mockShadowWireDeclineRideCommand(...args),
   shadowWireStartRideCommand: (...args: unknown[]) => mockShadowWireStartRideCommand(...args),
+  shadowWireCompleteRideCommand: (...args: unknown[]) => mockShadowWireCompleteRideCommand(...args),
   shadowWireSubmitRatingCommand: jest.fn(),
 }));
 
@@ -113,6 +115,7 @@ describe('RideProvider lifecycle orchestration', () => {
     mockShadowWireAcceptRideCommand.mockReset();
     mockShadowWireDeclineRideCommand.mockReset();
     mockShadowWireStartRideCommand.mockReset();
+    mockShadowWireCompleteRideCommand.mockReset();
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -205,6 +208,7 @@ describe('RideProvider lifecycle orchestration', () => {
     act(() => result.current.completeRide());
     expect(result.current.currentRide).toBeNull();
     expect(result.current.driverLocation).toBeNull();
+    expect(mockShadowWireCompleteRideCommand).toHaveBeenCalledTimes(1);
     expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
       id: createdRideId,
       status: 'completed',
@@ -531,6 +535,8 @@ describe('RideProvider lifecycle orchestration', () => {
       vehicleId: 'driver-vehicle:moto:rad-001-a',
       vehicleType: 'moto',
     }));
+
+    expect(mockShadowWireCompleteRideCommand).toHaveBeenCalledTimes(1);
 
     await waitFor(() => expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
       driverId: 'driver-1',

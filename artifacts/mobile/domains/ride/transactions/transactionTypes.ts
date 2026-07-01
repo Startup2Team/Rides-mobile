@@ -40,6 +40,18 @@ export interface RideTransactionRollbackPlan {
   hooks: string[];
 }
 
+export interface RideTransactionFinancialPreviewEffect {
+  name: string;
+  mode: 'preview';
+  description: string;
+}
+
+export interface RideTransactionFinancialPreview {
+  mode: 'preview';
+  effects: RideTransactionFinancialPreviewEffect[];
+  notes: string[];
+}
+
 export interface RideTransactionPreview<TCommand extends RideLifecycleCommand = RideLifecycleCommand> {
   transactionId: string;
   rideId: string;
@@ -59,6 +71,7 @@ export interface RideTransactionPreview<TCommand extends RideLifecycleCommand = 
   expiresAt: string | null;
   payload: TCommand['payload'];
   rollbackPlan: RideTransactionRollbackPlan;
+  financialPreview: RideTransactionFinancialPreview | null;
 }
 
 export interface RideTransactionBoundaryContext {

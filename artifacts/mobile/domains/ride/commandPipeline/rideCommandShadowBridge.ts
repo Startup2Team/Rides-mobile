@@ -2,7 +2,8 @@ import { observability } from '@/observability/context/observabilityContext';
 import type { CapabilitySnapshot } from '@/capabilities';
 import type { RideLocation, VehicleType } from '@/types';
 import { createAcceptRideCommand, createRequestRideCommand, createCancelRideCommand, createDeclineRideCommand, createStartRideCommand, createSubmitRatingCommand } from '../commandCreators';
-import type { AcceptRidePayload, CancelRidePayload, DeclineRidePayload, RideActorRole, RequestRidePayload, StartRideCommand, StartRidePayload, SubmitRatingPayload } from '../commands';
+import { createCompleteRideCommand } from '../commandCreators';
+import type { AcceptRidePayload, CancelRidePayload, CompleteRideCommand, CompleteRidePayload, DeclineRidePayload, RideActorRole, RequestRidePayload, StartRideCommand, StartRidePayload, SubmitRatingPayload } from '../commands';
 import { processRideCommand } from './rideCommandPipeline';
 import { ENABLE_RIDE_COMMAND_ENQUEUE, ENABLE_RIDE_COMMAND_PIPELINE, RIDE_COMMAND_PIPELINE_MODE } from './rideCommandTypes';
 
@@ -39,6 +40,11 @@ export interface RideShadowStartRideInput extends RideCommandShadowBridgeContext
   command?: StartRideCommand;
 }
 
+export interface RideShadowCompleteRideInput extends RideCommandShadowBridgeContext, CompleteRidePayload {
+  rideId: string;
+  command?: CompleteRideCommand;
+}
+
 export interface RideShadowSubmitRatingInput extends RideCommandShadowBridgeContext, SubmitRatingPayload {
   rideId: string;
 }
@@ -58,6 +64,7 @@ function recordBridgeTelemetry(
   action: string,
   commandType: string | null,
   details: {
+    actorId?: string | null;
     actorRole?: RideActorRole | null;
     correlationId?: string | null;
     idempotencyKey?: string | null;
@@ -71,6 +78,7 @@ function recordBridgeTelemetry(
   const logContext = {
     action,
     commandType: commandType ?? 'unknown',
+    actorId: details.actorId ?? null,
     actorRole: details.actorRole ?? 'customer',
     correlationId: details.correlationId ?? null,
     idempotencyKey: details.idempotencyKey ?? null,
@@ -85,6 +93,7 @@ function recordBridgeTelemetry(
 
 function shadowProcess<TCommand extends {
   commandId: string;
+  actorId: string;
   correlationId: string;
   idempotencyKey: string;
   actorRole: RideActorRole;
@@ -97,6 +106,7 @@ function shadowProcess<TCommand extends {
   if (!isShadowBridgeActive()) {
     recordBridgeTelemetry('skipped', action, commandType, {
       actorRole: null,
+      actorId: command.actorId,
       correlationId: command.correlationId,
       idempotencyKey: command.idempotencyKey,
       reason: 'disabled',
@@ -106,6 +116,7 @@ function shadowProcess<TCommand extends {
 
   recordBridgeTelemetry('created', action, commandType, {
     actorRole: command.actorRole ?? 'customer',
+    actorId: command.actorId ?? 'local_user',
     correlationId: command.correlationId,
     idempotencyKey: command.idempotencyKey,
   });
@@ -222,11 +233,28 @@ export function shadowWireStartRideCommand(input: RideShadowStartRideInput) {
     location: input.location ?? null,
   }, {
     actorId: context.actorId,
-    actorRole: 'driver',
+    actorRole: context.actorRole,
     correlationId: context.correlationId,
     timestamp: context.timestamp,
   });
   shadowProcess('startRide', 'ride.start', command, context.capabilitySnapshot);
+}
+
+export function shadowWireCompleteRideCommand(input: RideShadowCompleteRideInput) {
+  const context = resolveContext(input);
+  const command = input.command ?? createCompleteRideCommand({
+    rideId: input.rideId,
+    completedAt: input.completedAt,
+    location: input.location ?? null,
+    distanceKm: input.distanceKm ?? null,
+    durationSeconds: input.durationSeconds ?? null,
+  }, {
+    actorId: context.actorId,
+    actorRole: context.actorRole,
+    correlationId: context.correlationId,
+    timestamp: context.timestamp,
+  });
+  shadowProcess('completeRide', 'ride.complete', command, context.capabilitySnapshot);
 }
 
 export function shadowWireSubmitRatingCommand(input: RideShadowSubmitRatingInput) {

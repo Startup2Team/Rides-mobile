@@ -171,6 +171,11 @@ describe('ride command creators and event factories', () => {
       actorRole: 'driver',
       idFactory: () => 'complete-command',
     }))).toMatchObject({ commandId: 'complete-command' });
+    expect(createCompleteRideCommand({ rideId: 'ride-1', completedAt: '2026-06-29T10:30:00.000Z' }, commandOptions({
+      actorId: 'system',
+      actorRole: 'system',
+      idFactory: () => 'system-complete-command',
+    }))).toMatchObject({ commandId: 'system-complete-command', actorRole: 'system' });
     expect(createSubmitRatingCommand({ rideId: 'ride-1', rating: 5 }, commandOptions({
       actorId: 'driver-1',
       actorRole: 'driver',

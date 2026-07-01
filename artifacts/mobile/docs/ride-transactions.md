@@ -29,6 +29,13 @@ flow. The boundary validates the command, produces the preview, and only then
 allows the diagnostics-only command bridge to observe it. `Complete Ride`
 remains intentionally separate because it introduces financial effects.
 
+Phase 10H extends the same pattern to `Complete Ride`. The live completion flow
+still runs first, then the transaction boundary validates the shadow command,
+builds a preview, and emits a financial-effects summary that stays preview-only.
+The preview lists settlement, authorization, package credit deduction, earnings,
+receipt, promotion, loyalty, referral, analytics, and notification surfaces
+without executing any of them.
+
 The current mock ride flow can still be treated as `system`-initiated when no
 approved driver context is available. That compatibility mapping keeps the live
 behavior unchanged while the transaction layer is introduced.

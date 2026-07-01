@@ -225,6 +225,62 @@ describe('ride transaction boundary', () => {
     expect(result.validation.issues.some(issue => issue.code === 'invalid-phase')).toBe(true);
   });
 
+  test('creates a preview for complete ride with financial preview metadata', () => {
+    const telemetry = new MemoryRideTransactionTelemetry();
+    const boundary = new RideTransactionBoundary({
+      telemetry,
+      now: () => new Date('2026-06-30T10:13:00.000Z'),
+    });
+
+    const result = boundary.evaluate(completeCommand(), {
+      currentRide: buildRide('started', 'active'),
+      capabilitySnapshot: capabilitySnapshot(),
+      commandSequenceNumber: 9,
+      lastSequenceNumber: 8,
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      accepted: true,
+      state: 'Accepted',
+      commandType: 'ride.complete',
+      preview: expect.objectContaining({
+        state: 'Pending',
+        statusAfter: 'completed',
+        phaseAfter: 'closed',
+        financialPreview: expect.objectContaining({
+          mode: 'preview',
+          effects: expect.arrayContaining([
+            expect.objectContaining({ name: 'fare-settlement' }),
+            expect.objectContaining({ name: 'payment-authorization' }),
+            expect.objectContaining({ name: 'package-credit-deduction' }),
+          ]),
+        }),
+      }),
+    }));
+  });
+
+  test('rejects duplicate complete commands', () => {
+    const boundary = new RideTransactionBoundary();
+    const command = completeCommand();
+    const context = {
+      currentRide: buildRide('started', 'active'),
+      capabilitySnapshot: capabilitySnapshot(),
+      commandSequenceNumber: 9,
+      lastSequenceNumber: 8,
+    };
+
+    expect(boundary.evaluate(command, context)).toEqual(expect.objectContaining({
+      accepted: true,
+    }));
+    const duplicate = boundary.evaluate(command, context);
+    expect(duplicate).toEqual(expect.objectContaining({
+      accepted: false,
+      duplicate: true,
+      state: 'Rejected',
+    }));
+    expect(duplicate.validation.issues.some(issue => issue.code === 'duplicate-command')).toBe(true);
+  });
+
   test('rejects duplicate idempotency keys', () => {
     const boundary = new RideTransactionBoundary();
     const command = startCommand();

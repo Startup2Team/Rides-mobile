@@ -205,3 +205,9 @@ it introduces settlement and payment-adjacent concerns.
 The current mock lifecycle can still enter `Start Ride` through a system
 compatibility actor when there is no approved driver session available. That
 keeps the live flow intact while the transaction boundary is introduced.
+
+Phase 10H extends the same diagnostics-only treatment to `Complete Ride`. The
+live completion flow still owns runtime state, and the transaction boundary
+only produces a shadow preview plus a financial-effects summary. Those
+financial surfaces remain preview-only and do not trigger settlement,
+authorization, package credits, earnings, or notifications yet.

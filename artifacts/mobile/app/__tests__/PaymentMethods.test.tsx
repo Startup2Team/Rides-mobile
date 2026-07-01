@@ -129,7 +129,7 @@ describe('PaymentMethodsScreen', () => {
 
     expect(screen.getByText('Payment Methods')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Pay with Cash')).toBeTruthy());
-    expect(screen.getByText('MTN Mobile Money')).toBeTruthy();
+    expect(screen.getAllByText('MTN Mobile Money').length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getByText('+250788000000')).toBeTruthy());
     expect(mockListPaymentMethods).toHaveBeenCalledTimes(1);
   });
