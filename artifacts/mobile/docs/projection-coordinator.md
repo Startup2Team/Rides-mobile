@@ -78,3 +78,9 @@ can use the projected history read model only when
 `ENABLE_PROJECTED_RIDE_DETAIL_CANARY` and `USE_PROJECTED_RIDE_READ_MODEL` are
 both enabled. If projection, comparison, or mapping fails, ride detail falls
 back to the live repository result immediately.
+
+Phase 11C adds centralized canary health and parity reporting. The
+projection coordinator remains the live/projected selection layer, while the
+canary-health module tracks semantic parity and readiness for the history and
+detail canaries. It does not change selection behavior and it does not enable
+active ride cutover.

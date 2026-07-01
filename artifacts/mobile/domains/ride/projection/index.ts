@@ -1,4 +1,5 @@
 export * from './projectionCoordinator';
+export * from '../canary';
 export * from './historyCanary';
 export * from './rideDetailCanary';
 export * from './projectionMetrics';

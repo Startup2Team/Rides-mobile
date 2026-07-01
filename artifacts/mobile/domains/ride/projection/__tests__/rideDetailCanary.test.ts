@@ -1,6 +1,8 @@
 import { observability } from '@/observability/context/observabilityContext';
 import { resetObservabilityForTests } from '@/observability/context/observabilityContext';
 import type { Ride } from '@/types';
+import { getCanaryHealthReport } from '../../canary/canaryReport';
+import { resetRideCanaryHealthForTests } from '../../canary/canaryHealth';
 import { rideProjectionCoordinator } from '../projectionCoordinator';
 import { resolveProjectedRideDetail } from '../rideDetailCanary';
 import type { RideShadowSnapshot } from '../../shadow/shadowTypes';
@@ -70,6 +72,7 @@ function createShadowSnapshot(projectedRideHistory: RideShadowSnapshot['shadowRi
 describe('ride detail canary', () => {
   beforeEach(() => {
     resetObservabilityForTests();
+    resetRideCanaryHealthForTests();
     rideProjectionCoordinator.reset();
     jest.restoreAllMocks();
   });
@@ -124,6 +127,7 @@ describe('ride detail canary', () => {
       agreedFare: 10000,
       completedAt: '2026-06-08T09:22:00.000Z',
     });
+    expect(getCanaryHealthReport().canaries.detail.comparisonCount).toBe(1);
     expect(live.pickup.address).toBe('Pickup');
     expect(observability.metrics.getPoints().map(point => point.name)).toEqual(expect.arrayContaining([
       'ride.detail.canary.enabled',

@@ -1,6 +1,8 @@
 import { observability } from '@/observability/context/observabilityContext';
 import { resetObservabilityForTests } from '@/observability/context/observabilityContext';
 import type { Ride } from '@/types';
+import { getCanaryHealthReport } from '../../canary/canaryReport';
+import { resetRideCanaryHealthForTests } from '../../canary/canaryHealth';
 import { rideProjectionCoordinator } from '../projectionCoordinator';
 import { resolveProjectedRideHistory } from '../historyCanary';
 import type { RideShadowSnapshot } from '../../shadow/shadowTypes';
@@ -43,6 +45,7 @@ function createShadowSnapshot(projectedRideHistory: RideShadowSnapshot['shadowRi
 describe('ride history canary', () => {
   beforeEach(() => {
     resetObservabilityForTests();
+    resetRideCanaryHealthForTests();
     jest.restoreAllMocks();
   });
 
@@ -75,7 +78,7 @@ describe('ride history canary', () => {
       destination: { latitude: -1.95, longitude: 30.07, address: 'Destination' },
       fare: { amount: 10000, currency: 'RWF', source: 'final' as const, finalizedAt: '2026-06-08T09:22:00.000Z' },
       requestedAt: '2026-06-08T09:00:00.000Z',
-      completedAt: '2026-06-08T09:22:00.000Z',
+      completedAt: '2026-06-08T09:25:00.000Z',
       paymentAuthorizedAt: '2026-06-08T09:21:00.000Z',
       paymentCompletedAt: '2026-06-08T09:23:00.000Z',
       paymentId: 'payment-1',
@@ -120,20 +123,25 @@ describe('ride history canary', () => {
     expect(result.history[0]).toMatchObject({
       id: 'ride-1',
       status: 'completed',
-      completedAt: '2026-06-08T09:22:00.000Z',
+      completedAt: '2026-06-08T09:25:00.000Z',
       agreedFare: 10000,
       customerName: 'Customer One',
     });
-    expect(observability.metrics.getPoints().map(point => point.name)).toEqual([
+    expect(getCanaryHealthReport().canaries.history.comparisonCount).toBe(1);
+    expect(observability.metrics.getPoints().map(point => point.name)).toEqual(expect.arrayContaining([
       'ride.history.canary.enabled',
       'ride.history.comparison',
+      'ride.canary.history.comparison',
+      'ride.canary.readiness.updated',
       'ride.history.source_selected',
-    ]);
-    expect(observability.logger.getLogs().map(log => log.message)).toEqual([
+    ]));
+    expect(observability.logger.getLogs().map(log => log.message)).toEqual(expect.arrayContaining([
       'RideHistoryCanaryEnabled',
       'RideHistoryComparison',
+      'RideHistoryParitySuccess',
+      'RideCanaryReadinessUpdated',
       'RideHistorySourceSelected',
-    ]);
+    ]));
   });
 
   test('falls back to live history when projected history is unavailable', () => {

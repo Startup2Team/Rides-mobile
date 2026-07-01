@@ -1,5 +1,10 @@
 import { observability } from '@/observability/context/observabilityContext';
 import type { Ride } from '@/types';
+import {
+  recordRideCanaryFallback,
+  recordRideCanaryProjectionUnavailable,
+  recordRideHistoryParity,
+} from '../canary/canaryHealth';
 import type { RideDualReadComparison } from '../dualRead/rideDualReadTypes';
 import type { RideHistoryReadModel } from '../readModels';
 import { rideShadowProjectionManager } from '../shadow/shadowProjectionManager';
@@ -89,6 +94,12 @@ export function resolveProjectedRideHistory(
       mismatch: Boolean(comparison?.mismatch),
     });
 
+    if (!projectedHistory) {
+      recordRideCanaryProjectionUnavailable('history');
+    } else {
+      recordRideHistoryParity(liveHistory, mergeRideHistory(liveHistory, projectedHistory));
+    }
+
     if (comparison?.mismatch) {
       observability.metrics.counter('ride.history.mismatch', 1);
       observability.logger.warn('RideHistoryMismatch', {
@@ -110,6 +121,7 @@ export function resolveProjectedRideHistory(
         source: 'live',
       });
       observability.metrics.counter('ride.history.fallback', 1);
+      recordRideCanaryFallback('history', !projectedHistory ? 'projected-unavailable' : 'comparison-failure');
       observability.logger.info('RideHistoryFallback', {
         userId,
         reason: !projectedHistory ? 'projected-unavailable' : 'comparison-failure',
@@ -147,6 +159,8 @@ export function resolveProjectedRideHistory(
       source: 'live',
     });
     observability.metrics.counter('ride.history.fallback', 1);
+    recordRideCanaryProjectionUnavailable('history');
+    recordRideCanaryFallback('history', 'projection-error');
     observability.logger.warn('RideHistoryFallback', {
       userId,
       reason: 'projection-error',

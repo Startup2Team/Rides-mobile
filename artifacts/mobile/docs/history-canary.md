@@ -43,4 +43,9 @@ History canary runs emit:
 - comparison
 - mismatch
 
+Phase 11C adds centralized health tracking for history parity. The canary now
+updates the shared canary-health store with comparison, fallback, and
+availability counts, and it contributes to `getCanaryHealthReport()` and
+`isReadyForActiveRideCanary()`.
+
 These diagnostics are informational only and do not affect UI behavior.

@@ -83,3 +83,9 @@ environment until history parity and rollback criteria are explicitly approved.
 Phase 11B makes ride detail the second canary behind another disabled flag.
 Ride detail remains live-first and immediately falls back if comparison or
 mapping fails. Active ride stays live-only.
+
+Phase 11C adds centralized canary health and parity reporting. The health
+report becomes the gate for deciding whether the projected read-model canaries
+are ready for any later active-ride migration. Active ride remains disabled
+until the history and detail canaries satisfy the readiness thresholds with
+zero unresolved mapping failures and stable fallback rates.

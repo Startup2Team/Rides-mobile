@@ -44,4 +44,9 @@ Ride detail canary runs emit:
 - mismatch
 - mapping failure
 
+Phase 11C adds centralized health tracking for detail parity. The canary now
+updates the shared canary-health store with comparison, fallback, availability,
+and mapping-failure counts, and it contributes to
+`getCanaryHealthReport()` and `isReadyForActiveRideCanary()`.
+
 These diagnostics are informational only and do not affect UI behavior.

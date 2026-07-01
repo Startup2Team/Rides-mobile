@@ -1,6 +1,7 @@
 export * from './commandHandlers';
 export * from './commandCreators';
 export * from './commandPipeline';
+export * from './canary';
 export * from './events';
 export * from './eventFactories';
 export * from './idempotency';

@@ -1,5 +1,11 @@
 import { observability } from '@/observability/context/observabilityContext';
 import type { Ride } from '@/types';
+import {
+  recordRideCanaryFallback,
+  recordRideCanaryMappingFailure,
+  recordRideCanaryProjectionUnavailable,
+  recordRideDetailParity,
+} from '../canary/canaryHealth';
 import type { RideDualReadComparison } from '../dualRead/rideDualReadTypes';
 import { compareRideHistory } from '../dualRead/rideDualReadComparator';
 import { createRideDualReadComparison } from '../dualRead/rideDualReadTypes';
@@ -64,6 +70,7 @@ export function resolveProjectedRideDetail(
       observability.metrics.counter('ride.detail.source_selected', 1, { source: 'live' });
       observability.logger.info('RideDetailSourceSelected', { rideId, source: 'live' });
       observability.metrics.counter('ride.detail.fallback', 1);
+      recordRideCanaryFallback('detail', 'live-detail-unavailable');
       observability.logger.info('RideDetailFallback', { rideId, reason: 'live-detail-unavailable' });
       return {
         source: 'live',
@@ -102,6 +109,15 @@ export function resolveProjectedRideDetail(
       mismatch: Boolean(comparison?.mismatch),
     });
 
+    if (!projectedRide) {
+      recordRideCanaryProjectionUnavailable('detail');
+    }
+
+    if (projectedRide) {
+      const mappedPreview = mapProjectedRideHistoryEntry(liveRide, projectedRide);
+      recordRideDetailParity(liveRide, mappedPreview);
+    }
+
     if (comparison?.mismatch) {
       observability.metrics.counter('ride.detail.mismatch', 1);
       observability.logger.warn('RideDetailMismatch', {
@@ -119,6 +135,7 @@ export function resolveProjectedRideDetail(
       observability.metrics.counter('ride.detail.source_selected', 1, { source: 'live' });
       observability.logger.info('RideDetailSourceSelected', { rideId, source: 'live' });
       observability.metrics.counter('ride.detail.fallback', 1);
+      recordRideCanaryFallback('detail', !projectedRide ? 'projected-unavailable' : 'comparison-failure');
       observability.logger.info('RideDetailFallback', {
         rideId,
         reason: !projectedRide ? 'projected-unavailable' : 'comparison-failure',
@@ -145,6 +162,7 @@ export function resolveProjectedRideDetail(
     };
   } catch (error) {
     observability.metrics.counter('ride.detail.mapping_failure', 1);
+    recordRideCanaryMappingFailure('detail', 'mapping-failure', error);
     observability.logger.warn('RideDetailMappingFailure', {
       rideId,
       error: error instanceof Error ? error.message : String(error),
@@ -152,6 +170,7 @@ export function resolveProjectedRideDetail(
     observability.metrics.counter('ride.detail.source_selected', 1, { source: 'live' });
     observability.logger.info('RideDetailSourceSelected', { rideId, source: 'live' });
     observability.metrics.counter('ride.detail.fallback', 1);
+    recordRideCanaryFallback('detail', 'mapping-failure');
     observability.logger.info('RideDetailFallback', {
       rideId,
       reason: 'mapping-failure',
