@@ -62,3 +62,44 @@ export function emitRideCanaryReadinessTelemetry(record: { ready: boolean; reaso
     reason: record.reason,
   });
 }
+
+export function emitRideActiveRideComparisonTelemetry(record: { projectedAvailable: boolean; stale: boolean; reason: string | null }) {
+  observability.metrics.counter('ride.active.comparison', 1, {
+    projectedAvailable: String(record.projectedAvailable),
+    stale: String(record.stale),
+  });
+  observability.logger.info('RideActiveRideComparison', record);
+}
+
+export function emitRideActiveRideMismatchTelemetry(record: { fieldDiffCount: number }) {
+  observability.metrics.counter('ride.active.mismatch', 1);
+  observability.logger.warn('RideActiveRideMismatch', record);
+}
+
+export function emitRideActiveRideFallbackTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.fallback', 1, { reason: record.reason });
+  observability.logger.info('RideActiveRideFallback', record);
+}
+
+export function emitRideActiveRideProjectionStaleTelemetry(record: { reason: string; sequenceNumber: number; updatedAt: string }) {
+  observability.metrics.counter('ride.active.projection_stale', 1, { reason: record.reason });
+  observability.logger.warn('RideActiveRideProjectionStale', record);
+}
+
+export function emitRideActiveRideReadinessDeniedTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.canary.readiness_denied', 1, { reason: record.reason });
+  observability.logger.info('RideActiveRideReadinessDenied', record);
+}
+
+export function emitRideActiveRideSourceSelectedTelemetry(record: { source: 'live' | 'projected' }) {
+  observability.metrics.counter('ride.active.source_selected', 1, { source: record.source });
+  observability.logger.info('RideActiveRideSourceSelected', record);
+}
+
+export function emitRideActiveRideMappingFailureTelemetry(record: { reason: string; error?: unknown }) {
+  observability.metrics.counter('ride.active.mapping_failure', 1, { reason: record.reason });
+  observability.logger.warn('RideActiveRideMappingFailure', {
+    reason: record.reason,
+    error: record.error instanceof Error ? record.error.message : record.error ?? null,
+  });
+}

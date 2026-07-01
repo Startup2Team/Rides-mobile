@@ -6,6 +6,7 @@ import type { RideProjectionSelectionResult } from './projectionSelection';
 export const ENABLE_RIDE_PROJECTION_COORDINATION = process.env.NODE_ENV !== 'production';
 export const ENABLE_PROJECTED_HISTORY_CANARY = process.env.ENABLE_PROJECTED_HISTORY_CANARY === 'true';
 export const ENABLE_PROJECTED_RIDE_DETAIL_CANARY = process.env.ENABLE_PROJECTED_RIDE_DETAIL_CANARY === 'true';
+export const ENABLE_PROJECTED_ACTIVE_RIDE_CANARY = process.env.ENABLE_PROJECTED_ACTIVE_RIDE_CANARY === 'true';
 
 export type RideProjectionSelectionKind = 'LIVE' | 'PROJECTED' | 'SHADOW_ONLY' | 'UNAVAILABLE';
 
@@ -15,6 +16,7 @@ export interface RideProjectionFeatureFlags {
   useProjectedRideReadModel: boolean;
   enableProjectedHistoryCanary: boolean;
   enableProjectedRideDetailCanary: boolean;
+  enableProjectedActiveRideCanary: boolean;
 }
 
 export interface RideProjectionLiveSnapshot {

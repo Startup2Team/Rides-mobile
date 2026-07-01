@@ -64,3 +64,8 @@ Phase 11B adds ride detail as the second canary. It follows the same live-first
 rule, compares projected detail against the live repository result, and falls
 back immediately if the projected model cannot be selected, compared, or
 mapped safely.
+
+Phase 11D adds projected Active Ride as a shadow canary only. It is the
+highest-risk read model and remains live-only for UI behavior. The projected
+result is compared and monitored, then discarded unless a future cutover flag
+is explicitly approved.

@@ -57,7 +57,8 @@ thresholds:
 - no unresolved projection errors
 
 The helper is intentionally conservative. Active ride remains disabled until
-the projected read models stay stable under these checks.
+the projected read models stay stable under these checks. Phase 11D uses this
+gate before the projected Active Ride canary is even considered.
 
 ## Observability
 
@@ -69,5 +70,8 @@ The health layer emits telemetry for:
 - detail parity mismatch
 - canary fallback
 - canary readiness updated
+
+Phase 11D adds Active Ride shadow diagnostics on top of this health report.
+The readiness signal still comes from the history/detail canaries.
 
 These diagnostics are informational only.

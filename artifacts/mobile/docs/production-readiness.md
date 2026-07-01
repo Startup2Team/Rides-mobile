@@ -89,3 +89,9 @@ report becomes the gate for deciding whether the projected read-model canaries
 are ready for any later active-ride migration. Active ride remains disabled
 until the history and detail canaries satisfy the readiness thresholds with
 zero unresolved mapping failures and stable fallback rates.
+
+Phase 11D adds the projected Active Ride shadow canary. It stays behind a
+disabled flag, is gated by the readiness report, and must reject stale or
+incomplete projections immediately. Active Ride remains live-only until a
+future phase proves the shadow canary is stable enough for any cutover
+discussion.

@@ -84,3 +84,8 @@ projection coordinator remains the live/projected selection layer, while the
 canary-health module tracks semantic parity and readiness for the history and
 detail canaries. It does not change selection behavior and it does not enable
 active ride cutover.
+
+Phase 11D introduces the projected Active Ride canary in shadow mode. The
+active ride projection is still discarded for UI behavior, and readiness gates
+must pass before it is even considered. The coordinator remains a diagnostics
+layer only.

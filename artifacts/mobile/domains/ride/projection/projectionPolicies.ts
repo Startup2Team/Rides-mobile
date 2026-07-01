@@ -1,5 +1,6 @@
 import { ENABLE_RIDE_DUAL_READ, USE_PROJECTED_RIDE_READ_MODEL } from '../dualRead/rideDualReadTypes';
 import {
+  ENABLE_PROJECTED_ACTIVE_RIDE_CANARY,
   ENABLE_PROJECTED_HISTORY_CANARY,
   ENABLE_PROJECTED_RIDE_DETAIL_CANARY,
   type RideProjectionFeatureFlags,
@@ -24,6 +25,7 @@ export function getRideProjectionFeatureFlags(): RideProjectionFeatureFlags {
     useProjectedRideReadModel: USE_PROJECTED_RIDE_READ_MODEL,
     enableProjectedHistoryCanary: ENABLE_PROJECTED_HISTORY_CANARY,
     enableProjectedRideDetailCanary: ENABLE_PROJECTED_RIDE_DETAIL_CANARY,
+    enableProjectedActiveRideCanary: ENABLE_PROJECTED_ACTIVE_RIDE_CANARY,
   };
 }
 
