@@ -7,6 +7,7 @@ Phase 10A adds a gated dual-read layer for ride read models. It computes project
 - Live runtime source remains `RideProvider`
 - Projected read models are diagnostics-only
 - `USE_PROJECTED_RIDE_READ_MODEL` is intentionally `false` everywhere
+- `ENABLE_PROJECTED_HISTORY_CANARY` is intentionally `false` everywhere
 - `ENABLE_RIDE_DUAL_READ` is `true` in dev/test and `false` in production
 
 ## Adapter
@@ -52,3 +53,8 @@ Projected ride models can only drive UI after all of the following are true:
 - replay stays deterministic
 - no query cache or RideProvider mutation is observed
 - rollback remains a one-step switch back to live source
+
+Phase 11A starts the rollout with ride history only. The history canary stays
+disabled by default and falls back to the live repository result immediately if
+the projected model is unavailable or the comparison fails. Active ride and
+driver-facing read models remain live-only.

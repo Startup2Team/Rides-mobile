@@ -71,3 +71,11 @@ request, cancel, accept, decline, start, complete, and submit rating. The
 tests confirm that the live flow still runs, the shadow command pipeline and
 transaction boundary stay diagnostics-only, and no enqueue or repository
 behavior is introduced ahead of any read-model cutover.
+
+Phase 11A makes ride history the first projected read model behind a disabled
+canary. The projected path stays diagnostics-only until parity remains stable
+and rollback behavior is proven across history-specific comparison failures and
+projection unavailability.
+
+`ENABLE_PROJECTED_HISTORY_CANARY` stays disabled by default in every
+environment until history parity and rollback criteria are explicitly approved.

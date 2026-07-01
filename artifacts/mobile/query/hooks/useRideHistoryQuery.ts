@@ -1,4 +1,5 @@
 import { rideHistoryRepository } from '@/domains/ride';
+import { resolveProjectedRideHistory } from '@/domains/ride/projection/historyCanary';
 import { rideKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';
@@ -8,7 +9,10 @@ export function useRideHistoryQuery(userId?: string | null) {
 
   return usePolicyQuery(queryPolicies.rideHistory, {
     queryKey: rideKeys.history(resolvedUserId),
-    queryFn: async () => rideHistoryRepository.listRideHistory({ userId: resolvedUserId }),
+    queryFn: async () => {
+      const liveHistory = await rideHistoryRepository.listRideHistory({ userId: resolvedUserId });
+      return resolveProjectedRideHistory(liveHistory, resolvedUserId).history;
+    },
   });
 }
 

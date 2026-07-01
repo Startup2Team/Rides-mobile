@@ -4,6 +4,7 @@ import type { RideDualReadComparison, RideReadModelSource } from '../dualRead/ri
 import type { RideProjectionSelectionResult } from './projectionSelection';
 
 export const ENABLE_RIDE_PROJECTION_COORDINATION = process.env.NODE_ENV !== 'production';
+export const ENABLE_PROJECTED_HISTORY_CANARY = process.env.ENABLE_PROJECTED_HISTORY_CANARY === 'true';
 
 export type RideProjectionSelectionKind = 'LIVE' | 'PROJECTED' | 'SHADOW_ONLY' | 'UNAVAILABLE';
 
@@ -11,6 +12,7 @@ export interface RideProjectionFeatureFlags {
   enableProjectionCoordination: boolean;
   enableDualRead: boolean;
   useProjectedRideReadModel: boolean;
+  enableProjectedHistoryCanary: boolean;
 }
 
 export interface RideProjectionLiveSnapshot {
