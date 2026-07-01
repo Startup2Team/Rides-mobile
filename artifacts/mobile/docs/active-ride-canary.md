@@ -7,10 +7,20 @@ customer and driver experience.
 ## Flags
 
 - `ENABLE_PROJECTED_ACTIVE_RIDE_CANARY` defaults to `false` everywhere
-- `USE_PROJECTED_RIDE_READ_MODEL` remains `false` everywhere
+- `USE_PROJECTED_RIDE_READ_MODEL` defaults to `false` and must be enabled
+  explicitly in dev/test before the canary can run
 
 Both flags must be enabled before the projected Active Ride path can even be
 considered.
+
+## Bootstrap
+
+Phase 11E adds a dev/test-only bootstrap that starts Active Ride diagnostics
+automatically when both flags are enabled. The bootstrap runs from the app
+lifecycle path beside the shadow projection bootstrap, registers a periodic
+diagnostics loop, and cleans up its timer during Fast Refresh and tests.
+
+Production never starts this loop.
 
 ## Behavior
 
@@ -49,3 +59,7 @@ The canary emits telemetry for:
 - active ride source selected
 
 These diagnostics do not change the UI.
+
+The diagnostics loop remains shadow-only. The live RideProvider state still
+drives the application, and the canary falls back immediately when readiness
+fails, projection is unavailable, or semantic comparison does not match.

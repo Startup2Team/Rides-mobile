@@ -100,11 +100,13 @@ export function resolveProjectedActiveRide(
 
   if (!canaryEnabled || !useProjectedRideReadModel) {
     emitRideActiveRideReadinessDeniedTelemetry({ reason: 'feature-disabled' });
+    emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
+    emitRideActiveRideFallbackTelemetry({ reason: 'feature-disabled' });
     return {
       source: 'live',
       activeRide: liveRide,
       projectedAvailable: false,
-      fallback: false,
+      fallback: true,
       comparison: null,
       stale: false,
       readinessDenied: true,
@@ -113,11 +115,13 @@ export function resolveProjectedActiveRide(
 
   if (!isReadyForActiveRideCanary()) {
     emitRideActiveRideReadinessDeniedTelemetry({ reason: 'health-gate' });
+    emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
+    emitRideActiveRideFallbackTelemetry({ reason: 'health-gate' });
     return {
       source: 'live',
       activeRide: liveRide,
       projectedAvailable: false,
-      fallback: false,
+      fallback: true,
       comparison: null,
       stale: false,
       readinessDenied: true,

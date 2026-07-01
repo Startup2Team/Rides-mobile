@@ -1,5 +1,6 @@
 export * from './projectionCoordinator';
 export * from '../canary';
+export * from './bootstrapActiveRideCanary';
 export * from './activeRideCanary';
 export * from './activeRideReadModelMapper';
 export * from './historyCanary';

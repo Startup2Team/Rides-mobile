@@ -95,3 +95,9 @@ disabled flag, is gated by the readiness report, and must reject stale or
 incomplete projections immediately. Active Ride remains live-only until a
 future phase proves the shadow canary is stable enough for any cutover
 discussion.
+
+Phase 11E boots the Active Ride canary diagnostics automatically in dev/test
+only. Production remains disabled, the diagnostics loop is timer-based and
+shadow-only, and the UI continues to read from RideProvider. Readiness gates
+must still pass before any later rollout phase can consider a projected
+Active Ride source.

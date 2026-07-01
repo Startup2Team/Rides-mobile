@@ -74,4 +74,9 @@ The health layer emits telemetry for:
 Phase 11D adds Active Ride shadow diagnostics on top of this health report.
 The readiness signal still comes from the history/detail canaries.
 
+Phase 11E starts the Active Ride diagnostics loop in dev/test only, but it
+still depends on this readiness signal. When readiness is not met, the canary
+remains on live RideProvider state and records fallback telemetry instead of
+changing runtime behavior.
+
 These diagnostics are informational only.

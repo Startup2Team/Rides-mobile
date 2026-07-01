@@ -89,3 +89,8 @@ Phase 11D introduces the projected Active Ride canary in shadow mode. The
 active ride projection is still discarded for UI behavior, and readiness gates
 must pass before it is even considered. The coordinator remains a diagnostics
 layer only.
+
+Phase 11E boots the Active Ride canary diagnostics from the app lifecycle in
+dev/test only. The bootstrap schedules periodic comparison and fallback checks
+but never changes UI selection or production behavior. Production still stays
+on live RideProvider snapshots only.

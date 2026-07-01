@@ -61,11 +61,9 @@ import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
-import {
-  bootstrapShadowRideProjection,
-  stopShadowRideProjection,
-} from '@/domains/ride/shadow';
+import { bootstrapShadowRideProjection, stopShadowRideProjection } from '@/domains/ride/shadow';
 import { RideDualReadDiagnostics } from '@/domains/ride/dualRead';
+import { ActiveRideCanaryDiagnosticsBootstrapper as RideActiveRideCanaryDiagnosticsBootstrapper } from '@/domains/ride/projection';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -174,6 +172,7 @@ export default function RootLayout() {
               <DriverEntitlementProvider>
                 <RideProvider>
                   <RideDualReadDiagnostics />
+                  <RideActiveRideCanaryDiagnosticsBootstrapper />
                   <ToastProvider>
                     <SavedLocationsProvider>
                       <MapPickerProvider>
