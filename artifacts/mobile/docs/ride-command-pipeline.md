@@ -109,3 +109,24 @@ referrals, analytics, or notifications.
 
 `Complete Ride` still does not enqueue, does not call repositories, and does
 not change runtime ride behavior.
+
+## Phase 10I End-to-End Verification
+
+The ride lifecycle command path now has an end-to-end diagnostic suite before
+any UI read-model cutover:
+
+- request ride
+- cancel ride
+- accept ride
+- decline ride
+- start ride
+- complete ride
+- submit rating
+
+The suite verifies that the live RideProvider or screen flow still executes,
+the shadow command is created with idempotency and correlation metadata, the
+pipeline accepts or rejects the command correctly, the transaction boundary
+validates start and complete transitions, and the shadow path never enqueues
+or blocks the live action.
+
+Projected and shadow read models remain diagnostics-only.

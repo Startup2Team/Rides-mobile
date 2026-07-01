@@ -65,3 +65,9 @@ Phase 10H adds shadow validation for `Complete Ride` through the transaction
 boundary. The live completion flow remains authoritative, and the new
 financial preview stays metadata-only until the later settlement migration
 phase is approved and gated.
+
+Phase 10I adds end-to-end verification across every ride lifecycle action:
+request, cancel, accept, decline, start, complete, and submit rating. The
+tests confirm that the live flow still runs, the shadow command pipeline and
+transaction boundary stay diagnostics-only, and no enqueue or repository
+behavior is introduced ahead of any read-model cutover.

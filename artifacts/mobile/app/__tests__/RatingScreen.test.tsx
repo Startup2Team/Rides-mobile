@@ -4,7 +4,7 @@ import RatingScreen from '../rating';
 
 const mockCompleteRide = jest.fn();
 const mockNavigateToCustomerHomeAfterCompletion = jest.fn();
-const mockShadowWireSubmitRatingCommand = jest.fn();
+const mockProcessRideCommand = jest.fn();
 const mockSaveDriverRatingOnce = jest.fn();
 
 jest.mock('react-native', () => {
@@ -83,9 +83,13 @@ jest.mock('@/context/RideContext', () => ({
   }),
 }));
 
-jest.mock('@/domains/ride/commandPipeline', () => ({
-  shadowWireSubmitRatingCommand: (...args: unknown[]) => mockShadowWireSubmitRatingCommand(...args),
-}));
+jest.mock('@/domains/ride/commandPipeline/rideCommandPipeline', () => {
+  const actual = jest.requireActual('@/domains/ride/commandPipeline/rideCommandPipeline');
+  return {
+    ...actual,
+    processRideCommand: (...args: unknown[]) => mockProcessRideCommand(...args),
+  };
+});
 
 jest.mock('@/hooks/useColors', () => ({
   useColors: () => ({
@@ -139,6 +143,10 @@ jest.mock('@/observability/monitoring', () => ({
 describe('RatingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockProcessRideCommand.mockImplementation((...args: unknown[]) => {
+      const actual = jest.requireActual('@/domains/ride/commandPipeline/rideCommandPipeline') as typeof import('@/domains/ride/commandPipeline/rideCommandPipeline');
+      return actual.processRideCommand(...(args as Parameters<typeof actual.processRideCommand>));
+    });
   });
 
   test('submits rating through the real screen flow and shadow-wires the command', async () => {
@@ -149,13 +157,23 @@ describe('RatingScreen', () => {
     await waitFor(() => expect(screen.getByLabelText('OK')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('OK'));
 
-    await waitFor(() => expect(mockShadowWireSubmitRatingCommand).toHaveBeenCalledTimes(1));
-    expect(mockShadowWireSubmitRatingCommand).toHaveBeenCalledWith(expect.objectContaining({
-      rideId: 'ride-1',
-      rating: 5,
-      ratedUserId: 'driver-1',
+    await waitFor(() => expect(mockProcessRideCommand).toHaveBeenCalledTimes(1));
+    const [command, context] = mockProcessRideCommand.mock.calls[0];
+    expect(command).toEqual(expect.objectContaining({
+      commandId: expect.any(String),
+      idempotencyKey: expect.any(String),
+      correlationId: expect.any(String),
       actorId: 'customer-1',
       actorRole: 'customer',
+      timestamp: expect.any(String),
+      payload: expect.objectContaining({
+        rideId: 'ride-1',
+        rating: 5,
+        ratedUserId: 'driver-1',
+      }),
+    }));
+    expect(context).toEqual(expect.objectContaining({
+      mode: 'shadow',
     }));
     await waitFor(() => expect(mockSaveDriverRatingOnce).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockCompleteRide).toHaveBeenCalledTimes(1));

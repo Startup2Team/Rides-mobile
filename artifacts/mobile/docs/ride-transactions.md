@@ -73,3 +73,20 @@ This boundary is the handoff point for future coordination with:
 
 The live RideProvider flow remains authoritative until a later migration phase
 explicitly cuts over.
+
+## Phase 10I Verification
+
+The transaction boundary is now covered by the end-to-end ride command
+verification suite. The suite checks that:
+
+- `Start Ride` is validated through the boundary before the shadow command is
+  observed
+- `Complete Ride` is validated through the boundary before the financial
+  preview is emitted
+- the live ride flow still executes first
+- the shadow path stays diagnostics-only
+- no enqueue, repository, or backend interaction is introduced by the
+  boundary itself
+
+The boundary remains a readiness layer until a later migration phase explicitly
+cuts over runtime ride state.
