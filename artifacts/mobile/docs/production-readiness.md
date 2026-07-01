@@ -79,3 +79,7 @@ projection unavailability.
 
 `ENABLE_PROJECTED_HISTORY_CANARY` stays disabled by default in every
 environment until history parity and rollback criteria are explicitly approved.
+
+Phase 11B makes ride detail the second canary behind another disabled flag.
+Ride detail remains live-first and immediately falls back if comparison or
+mapping fails. Active ride stays live-only.

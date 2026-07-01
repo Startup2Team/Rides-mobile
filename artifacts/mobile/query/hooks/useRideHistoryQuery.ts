@@ -1,5 +1,6 @@
 import { rideHistoryRepository } from '@/domains/ride';
 import { resolveProjectedRideHistory } from '@/domains/ride/projection/historyCanary';
+import { resolveProjectedRideDetail } from '@/domains/ride/projection/rideDetailCanary';
 import { rideKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';
@@ -19,7 +20,11 @@ export function useRideHistoryQuery(userId?: string | null) {
 export function useRideDetailQuery(rideId: string | null | undefined) {
   return usePolicyQuery(queryPolicies.rideHistory, {
     queryKey: rideKeys.detail(rideId ?? 'unknown'),
-    queryFn: async () => rideId ? rideHistoryRepository.getRideDetail(rideId) : null,
+    queryFn: async () => {
+      if (!rideId) return null;
+      const liveRide = await rideHistoryRepository.getRideDetail(rideId);
+      return resolveProjectedRideDetail(liveRide, rideId).detail;
+    },
     enabled: Boolean(rideId),
   });
 }

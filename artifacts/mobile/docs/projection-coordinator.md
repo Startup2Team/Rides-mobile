@@ -72,3 +72,9 @@ and fall back to live history immediately if projection is unavailable or the
 history comparison fails. Active ride, driver dashboard, and the rest of the
 app remain on live data. The new canary flag is disabled by default in all
 environments.
+
+Phase 11B adds a detail-only canary with the same rollback rules. Ride detail
+can use the projected history read model only when
+`ENABLE_PROJECTED_RIDE_DETAIL_CANARY` and `USE_PROJECTED_RIDE_READ_MODEL` are
+both enabled. If projection, comparison, or mapping fails, ride detail falls
+back to the live repository result immediately.

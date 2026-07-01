@@ -7,6 +7,7 @@ import type { RideShadowSnapshot } from '../shadow/shadowTypes';
 import { rideProjectionCoordinator } from './projectionCoordinator';
 import { ENABLE_PROJECTED_HISTORY_CANARY } from './projectionTypes';
 import { USE_PROJECTED_RIDE_READ_MODEL } from '../dualRead/rideDualReadTypes';
+import { mapProjectedRideHistoryEntry } from './rideReadModelCanaryMappers';
 
 export interface RideHistoryCanaryOptions {
   canaryEnabled?: boolean;
@@ -22,86 +23,15 @@ export interface RideHistoryCanaryResult {
   comparison: RideDualReadComparison | null;
 }
 
-function mergeRideHistoryEntry(liveRide: Ride | undefined, projectedRide: RideHistoryReadModel): Ride {
-  return {
-    id: projectedRide.rideId,
-    customerId: projectedRide.customer.userId,
-    customerName: projectedRide.customer.displayName ?? liveRide?.customerName,
-    customerPhone: liveRide?.customerPhone,
-    customerImage: liveRide?.customerImage,
-    customerRating: liveRide?.customerRating,
-    driverId: projectedRide.driver?.userId ?? liveRide?.driverId,
-    driverName: projectedRide.driver?.displayName ?? liveRide?.driverName,
-    driver: liveRide?.driver,
-    vehicleType: liveRide?.vehicleType ?? 'moto',
-    vehicleId: liveRide?.vehicleId,
-    requestedVehicleType: liveRide?.requestedVehicleType,
-    matchedVehicleType: liveRide?.matchedVehicleType,
-    matchedVehicleId: liveRide?.matchedVehicleId,
-    pickup: {
-      ...liveRide?.pickup,
-      address: projectedRide.pickup.address,
-      latitude: projectedRide.pickup.latitude,
-      longitude: projectedRide.pickup.longitude,
-    },
-    destination: {
-      ...liveRide?.destination,
-      address: projectedRide.destination.address,
-      latitude: projectedRide.destination.latitude,
-      longitude: projectedRide.destination.longitude,
-    },
-    status: normalizeProjectedRideStatus(projectedRide.status),
-    distance: liveRide?.distance ?? 0,
-    duration: liveRide?.duration ?? 0,
-    suggestedFare: liveRide?.suggestedFare ?? projectedRide.fare?.amount ?? 0,
-    agreedFare: projectedRide.fare?.amount ?? liveRide?.agreedFare,
-    negotiation: liveRide?.negotiation ?? [],
-    createdAt: projectedRide.requestedAt ?? liveRide?.createdAt ?? projectedRide.completedAt ?? '1970-01-01T00:00:00.000Z',
-    completedAt: projectedRide.completedAt ?? liveRide?.completedAt,
-    arrivedAt: liveRide?.arrivedAt,
-    waitStartedAt: liveRide?.waitStartedAt,
-  };
-}
-
-function normalizeProjectedRideStatus(status: RideHistoryReadModel['status']): Ride['status'] {
-  switch (status) {
-    case 'draft':
-    case 'requested':
-    case 'matching':
-      return 'searching';
-    case 'offered':
-      return 'negotiating';
-    case 'accepted':
-      return 'confirmed';
-    case 'driver_en_route':
-      return 'arriving';
-    case 'driver_arrived':
-      return 'arrived';
-    case 'started':
-      return 'in_progress';
-    case 'fare_finalized':
-    case 'payment_authorized':
-    case 'payment_completed':
-    case 'rating_submitted':
-    case 'completed':
-      return 'completed';
-    case 'cancelled':
-    case 'timeout':
-      return 'cancelled';
-    default:
-      return 'searching';
-  }
-}
-
 function mergeRideHistory(liveHistory: Ride[], projectedHistory: RideHistoryReadModel[]) {
   const liveById = new Map(liveHistory.map(ride => [ride.id, ride]));
   const merged = liveHistory.map(ride => {
     const projected = projectedHistory.find(entry => entry.rideId === ride.id);
-    return projected ? mergeRideHistoryEntry(ride, projected) : ride;
+    return projected ? mapProjectedRideHistoryEntry(ride, projected) : ride;
   });
   const extras = projectedHistory
     .filter(entry => !liveById.has(entry.rideId))
-    .map(entry => mergeRideHistoryEntry(undefined, entry));
+    .map(entry => mapProjectedRideHistoryEntry(undefined, entry));
 
   return [...merged, ...extras];
 }

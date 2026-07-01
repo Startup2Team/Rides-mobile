@@ -20,6 +20,7 @@ before.
   current screens do not need to change
 - rollback is immediate: if projection is unavailable, comparison fails, or the
   canary is disabled, history falls back to the live repository result
+- ride detail canary comes later and still remains live-fallback safe
 
 ## Rollout Order
 
@@ -28,8 +29,9 @@ History is intentionally the first projected read model.
 Suggested rollout order:
 
 1. Ride History canary
-2. other ride read-model surfaces with no active lifecycle responsibility
-3. active ride and driver-facing read models only after parity remains stable
+2. Ride Detail canary
+3. other ride read-model surfaces with no active lifecycle responsibility
+4. active ride and driver-facing read models only after parity remains stable
 
 ## Diagnostics
 
