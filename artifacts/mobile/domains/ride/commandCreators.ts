@@ -97,7 +97,7 @@ export function createDeclineRideCommand(payload: DeclineRidePayload, options: R
 
 export function createStartRideCommand(payload: StartRidePayload, options: RideCommandCreatorOptions): StartRideCommand {
   assertValue(payload.startedAt, 'startedAt is required');
-  return createCommand('start', payload, options, ['driver']);
+  return createCommand('start', payload, options, ['driver', 'system']);
 }
 
 export function createCompleteRideCommand(payload: CompleteRidePayload, options: RideCommandCreatorOptions): CompleteRideCommand {

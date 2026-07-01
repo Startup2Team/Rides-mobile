@@ -97,6 +97,13 @@ describe('rideCommandShadowBridge', () => {
       driverId: 'driver-1',
       reason: 'busy',
     }],
+    ['start', 'shadowWireStartRideCommand', {
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      rideId: 'ride-6',
+      startedAt: '2026-06-30T10:02:00.000Z',
+      location: null,
+    }],
     ['submit rating', 'shadowWireSubmitRatingCommand', {
       actorId: 'user-1',
       actorRole: 'customer',

@@ -23,6 +23,7 @@ const mockShadowWireRequestRideCommand = jest.fn();
 const mockShadowWireCancelRideCommand = jest.fn();
 const mockShadowWireAcceptRideCommand = jest.fn();
 const mockShadowWireDeclineRideCommand = jest.fn();
+const mockShadowWireStartRideCommand = jest.fn();
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
@@ -55,6 +56,7 @@ jest.mock('@/domains/ride/commandPipeline', () => ({
   shadowWireCancelRideCommand: (...args: unknown[]) => mockShadowWireCancelRideCommand(...args),
   shadowWireAcceptRideCommand: (...args: unknown[]) => mockShadowWireAcceptRideCommand(...args),
   shadowWireDeclineRideCommand: (...args: unknown[]) => mockShadowWireDeclineRideCommand(...args),
+  shadowWireStartRideCommand: (...args: unknown[]) => mockShadowWireStartRideCommand(...args),
   shadowWireSubmitRatingCommand: jest.fn(),
 }));
 
@@ -110,6 +112,7 @@ describe('RideProvider lifecycle orchestration', () => {
     mockShadowWireCancelRideCommand.mockReset();
     mockShadowWireAcceptRideCommand.mockReset();
     mockShadowWireDeclineRideCommand.mockReset();
+    mockShadowWireStartRideCommand.mockReset();
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -197,6 +200,7 @@ describe('RideProvider lifecycle orchestration', () => {
 
     act(() => result.current.startJourney());
     expect(result.current.currentRide?.status).toBe('in_progress');
+    expect(mockShadowWireStartRideCommand).toHaveBeenCalledTimes(1);
 
     act(() => result.current.completeRide());
     expect(result.current.currentRide).toBeNull();
@@ -433,6 +437,7 @@ describe('RideProvider lifecycle orchestration', () => {
 
     act(() => result.current.startJourney());
     expect(result.current.currentRide).toBe(activeRide);
+    expect(mockShadowWireStartRideCommand).not.toHaveBeenCalled();
 
     act(() => result.current.sendDriverOffer(0));
     expect(result.current.currentRide).toBe(activeRide);

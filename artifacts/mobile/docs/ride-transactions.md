@@ -24,6 +24,15 @@ The boundary currently:
 - exposes rollback-plan metadata for future compensation hooks
 - emits diagnostics and telemetry only
 
+Phase 10G shadow-wires `Start Ride` through this boundary in the live driver
+flow. The boundary validates the command, produces the preview, and only then
+allows the diagnostics-only command bridge to observe it. `Complete Ride`
+remains intentionally separate because it introduces financial effects.
+
+The current mock ride flow can still be treated as `system`-initiated when no
+approved driver context is available. That compatibility mapping keeps the live
+behavior unchanged while the transaction layer is introduced.
+
 It does not:
 
 - execute ride commands

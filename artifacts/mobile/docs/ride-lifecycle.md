@@ -195,3 +195,13 @@ changes navigation, matching, negotiation, payment, or package behavior.
 Phase 10E expands the same shadow wiring to driver accept and decline ride
 commands. The live driver flow still runs first, and the shadow command path
 is only for diagnostics and parity checks.
+
+Phase 10G adds `Start Ride` to the diagnostics path through the transaction
+boundary. The live ride still transitions the same way it does today; the
+transaction boundary only validates the shadow command and passes it to the
+command bridge when accepted. `Complete Ride` remains unwired for now because
+it introduces settlement and payment-adjacent concerns.
+
+The current mock lifecycle can still enter `Start Ride` through a system
+compatibility actor when there is no approved driver session available. That
+keeps the live flow intact while the transaction boundary is introduced.

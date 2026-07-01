@@ -15,6 +15,7 @@ import {
   RideStatus,
   VehicleType,
 } from '@/types';
+import { observability } from '@/observability/context/observabilityContext';
 import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 import { RideContextType } from './rideTypes';
 import { resolveCapabilities, type CapabilitySnapshot } from '@/capabilities';
@@ -60,7 +61,12 @@ import {
   shadowWireCancelRideCommand,
   shadowWireDeclineRideCommand,
   shadowWireRequestRideCommand,
+  shadowWireStartRideCommand,
 } from '@/domains/ride/commandPipeline';
+import { createRideCorrelationId } from '@/domains/ride/idempotency';
+import { createStartRideCommand } from '@/domains/ride/commandCreators';
+import { rideTransactionBoundary } from '@/domains/ride/transactions';
+import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionPhase, RideStatus as RideProjectionStatus } from '@/domains/ride/readModels';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -193,6 +199,182 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const updateStatus = (status: RideStatus, extra?: Partial<Ride>) => {
     setCurrentRide(prev => prev ? { ...prev, status, ...extra } : null);
   };
+
+  function buildTransactionParticipant(
+    userId: string | undefined,
+    role: RideParticipant['role'],
+    displayName?: string | null,
+  ): RideParticipant {
+    return {
+      userId: userId ?? 'local_user',
+      role,
+      ...(displayName ? { displayName } : {}),
+    };
+  }
+
+  function toTransactionRideStatus(status: RideStatus): RideProjectionStatus {
+    switch (status) {
+      case 'arrived':
+        return 'driver_arrived';
+      case 'in_progress':
+        return 'started';
+      case 'completed':
+        return 'completed';
+      case 'cancelled':
+        return 'cancelled';
+      case 'confirmed':
+        return 'accepted';
+      case 'arriving':
+        return 'driver_en_route';
+      case 'driver_assigned':
+        return 'matching';
+      case 'negotiating':
+        return 'offered';
+      case 'searching':
+      default:
+        return 'matching';
+    }
+  }
+
+  function toTransactionRidePhase(status: RideStatus): RideProjectionPhase {
+    switch (status) {
+      case 'in_progress':
+        return 'active';
+      case 'completed':
+      case 'cancelled':
+        return 'closed';
+      case 'arrived':
+      case 'confirmed':
+        return 'accepted';
+      case 'arriving':
+        return 'accepted';
+      case 'searching':
+      case 'driver_assigned':
+      case 'negotiating':
+      default:
+        return 'matching';
+    }
+  }
+
+  function buildStartRideTransactionRide(ride: Ride): ActiveRideReadModel {
+    return {
+      rideId: ride.id,
+      status: toTransactionRideStatus(ride.status),
+      phase: toTransactionRidePhase(ride.status),
+      customer: buildTransactionParticipant(ride.customerId, 'customer', ride.customerName ?? 'Customer'),
+      driver: ride.driverId || ride.driverName
+        ? buildTransactionParticipant(ride.driverId ?? ride.driver?.id ?? 'local_user', 'driver', ride.driverName ?? ride.driver?.name ?? null)
+        : null,
+      pickup: {
+        address: ride.pickup.address ?? '',
+        latitude: ride.pickup.latitude,
+        longitude: ride.pickup.longitude,
+        capturedAt: ride.createdAt,
+      },
+      destination: {
+        address: ride.destination.address ?? '',
+        latitude: ride.destination.latitude,
+        longitude: ride.destination.longitude,
+        capturedAt: ride.createdAt,
+      },
+      fare: typeof ride.agreedFare === 'number'
+        ? {
+            amount: ride.agreedFare,
+            currency: 'RWF',
+            source: 'negotiated',
+            finalizedAt: ride.status === 'completed' ? ride.completedAt ?? ride.createdAt : null,
+          }
+        : {
+            amount: ride.suggestedFare,
+            currency: 'RWF',
+            source: 'estimate',
+            finalizedAt: null,
+          },
+      updatedAt: ride.completedAt ?? ride.arrivedAt ?? ride.createdAt,
+      sequenceNumber: 1,
+      projection: {
+        appliedEventIds: [],
+      },
+    };
+  }
+
+  function recordStartRideTransactionTelemetry(
+    result: ReturnType<typeof rideTransactionBoundary.evaluate>,
+    command: ReturnType<typeof createStartRideCommand>,
+  ) {
+    observability.metrics.counter('ride.start_transaction.preview', 1, {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+    });
+    observability.logger.info('RideStartTransactionPreview', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      commandType: result.commandType,
+      status: result.state,
+    });
+
+    if (result.accepted) {
+      observability.metrics.counter('ride.start_transaction.accepted', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.info('RideStartTransactionAccepted', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+      return;
+    }
+
+    observability.metrics.counter('ride.start_transaction.rejected', 1, {
+      rideId: command.payload.rideId,
+    });
+    observability.logger.warn('RideStartTransactionRejected', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      reason: result.reason,
+    });
+
+    if (result.orderingViolation) {
+      observability.metrics.counter('ride.start_transaction.ordering_violation', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideStartTransactionOrderingViolation', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.duplicate) {
+      observability.metrics.counter('ride.start_transaction.duplicate_detected', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideStartTransactionDuplicateDetected', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.reason === 'capability-denied') {
+      observability.metrics.counter('ride.start_transaction.capability_denied', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideStartTransactionCapabilityDenied', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+  }
 
   const clearCancelledSearchDraft = useCallback(() => {
     setCancelledSearchDraft(null);
@@ -345,12 +527,50 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [timers]);
 
   const startJourney = useCallback(() => {
+    const currentRideSnapshot = currentRideRef.current;
+    const startedAt = new Date().toISOString();
     setCurrentRide(startRideJourney);
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = timers.scheduleInterval(() => {
       setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
     }, JOURNEY_TRACKING_INTERVAL_MS);
-  }, [timers]);
+    if (!currentRideSnapshot) return;
+    const actorRole = auth?.user?.mode === 'driver' && rideCommandCapabilitySnapshot.state.isApprovedDriver
+      ? 'driver'
+      : 'system';
+    try {
+      const command = createStartRideCommand({
+        rideId: currentRideSnapshot.id,
+        startedAt,
+        location: null,
+      }, {
+        actorId: auth?.user?.id ?? currentRideSnapshot.driverId ?? currentRideSnapshot.driver?.id ?? 'local_user',
+        actorRole,
+        correlationId: createRideCorrelationId(),
+        timestamp: startedAt,
+      });
+      const transactionResult = rideTransactionBoundary.evaluate(command, {
+        currentRide: buildStartRideTransactionRide(currentRideSnapshot),
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+      recordStartRideTransactionTelemetry(transactionResult, command);
+      if (transactionResult.accepted) {
+        shadowWireStartRideCommand({
+          command,
+          rideId: currentRideSnapshot.id,
+          startedAt,
+          location: null,
+          actorId: command.actorId,
+          actorRole,
+          correlationId: command.correlationId,
+          timestamp: command.timestamp,
+          capabilitySnapshot: rideCommandCapabilitySnapshot,
+        });
+      }
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.start', error, { rideId: currentRideSnapshot.id });
+    }
+  }, [auth?.user?.id, rideCommandCapabilitySnapshot, timers]);
 
   const completeRide = useCallback((
     source: 'customer' | 'driver' = 'customer',

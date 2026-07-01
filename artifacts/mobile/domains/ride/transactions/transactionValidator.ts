@@ -115,6 +115,10 @@ function validateCapability(command: RideLifecycleCommand, context: RideTransact
   const commandType = getRideTransactionCommandType(command);
   if (!commandType) return;
 
+  if (command.actorRole === 'system') {
+    return;
+  }
+
   if (command.actorRole !== 'driver') {
     addIssue(issues, 'actorRole', 'driver actor role is required', 'capability-denied');
     return;

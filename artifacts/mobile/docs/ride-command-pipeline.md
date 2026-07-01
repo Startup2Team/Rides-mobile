@@ -85,3 +85,13 @@ Still unwired:
 - payment actions
 - package credit deduction
 - negotiation finalization
+
+## Phase 10G Shadow Wiring
+
+`Start Ride` is now shadow-wired through the ride transaction boundary before
+the diagnostics-only command bridge sees it. The live driver flow still runs
+first. The transaction layer validates the preview and the shadow path remains
+non-blocking.
+
+`Complete Ride` is still intentionally unwired because it is the next command
+that introduces financial effects and needs a separate readiness step.

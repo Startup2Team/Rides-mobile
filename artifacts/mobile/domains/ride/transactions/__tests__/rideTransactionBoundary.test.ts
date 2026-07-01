@@ -40,6 +40,21 @@ function capabilitySnapshot(): CapabilitySnapshot {
   };
 }
 
+function pendingDriverCapabilitySnapshot(): CapabilitySnapshot {
+  const snapshot = capabilitySnapshot();
+  return {
+    ...snapshot,
+    capabilities: {
+      ...snapshot.capabilities,
+      canDrive: false,
+    },
+    state: {
+      ...snapshot.state,
+      isApprovedDriver: false,
+    },
+  };
+}
+
 function buildRide(status: ActiveRideReadModel['status'], phase: ActiveRideReadModel['phase']): ActiveRideReadModel {
   return {
     rideId: 'ride-1',
@@ -145,6 +160,20 @@ describe('ride transaction boundary', () => {
       commandType: 'ride.start',
       accepted: true,
     }));
+  });
+
+  test('rejects pending driver capability for start ride', () => {
+    const boundary = new RideTransactionBoundary();
+    const result = boundary.evaluate(startCommand(), {
+      currentRide: buildRide('driver_arrived', 'accepted'),
+      capabilitySnapshot: pendingDriverCapabilitySnapshot(),
+      commandSequenceNumber: 7,
+      lastSequenceNumber: 6,
+    });
+
+    expect(result.accepted).toBe(false);
+    expect(result.validation.issues.some(issue => issue.code === 'capability-denied')).toBe(true);
+    expect(result.reason).toBe('capability-denied');
   });
 
   test('rejects duplicate commands', () => {

@@ -176,6 +176,11 @@ describe('ride command creators and event factories', () => {
       actorRole: 'driver',
       idFactory: () => 'rating-command',
     }))).toMatchObject({ commandId: 'rating-command' });
+    expect(createStartRideCommand({ rideId: 'ride-1', startedAt: '2026-06-29T10:05:00.000Z' }, commandOptions({
+      actorId: 'system',
+      actorRole: 'system',
+      idFactory: () => 'system-start-command',
+    }))).toMatchObject({ commandId: 'system-start-command', actorRole: 'system' });
   });
 
   test('correlation IDs flow from command to event', () => {

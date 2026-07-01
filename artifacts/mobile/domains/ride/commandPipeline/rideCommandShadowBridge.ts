@@ -1,8 +1,8 @@
 import { observability } from '@/observability/context/observabilityContext';
 import type { CapabilitySnapshot } from '@/capabilities';
 import type { RideLocation, VehicleType } from '@/types';
-import { createAcceptRideCommand, createRequestRideCommand, createCancelRideCommand, createDeclineRideCommand, createSubmitRatingCommand } from '../commandCreators';
-import type { AcceptRidePayload, CancelRidePayload, DeclineRidePayload, RideActorRole, RequestRidePayload, SubmitRatingPayload } from '../commands';
+import { createAcceptRideCommand, createRequestRideCommand, createCancelRideCommand, createDeclineRideCommand, createStartRideCommand, createSubmitRatingCommand } from '../commandCreators';
+import type { AcceptRidePayload, CancelRidePayload, DeclineRidePayload, RideActorRole, RequestRidePayload, StartRideCommand, StartRidePayload, SubmitRatingPayload } from '../commands';
 import { processRideCommand } from './rideCommandPipeline';
 import { ENABLE_RIDE_COMMAND_ENQUEUE, ENABLE_RIDE_COMMAND_PIPELINE, RIDE_COMMAND_PIPELINE_MODE } from './rideCommandTypes';
 
@@ -32,6 +32,11 @@ export interface RideShadowAcceptRideInput extends RideCommandShadowBridgeContex
 
 export interface RideShadowDeclineRideInput extends RideCommandShadowBridgeContext, DeclineRidePayload {
   rideId: string;
+}
+
+export interface RideShadowStartRideInput extends RideCommandShadowBridgeContext, StartRidePayload {
+  rideId: string;
+  command?: StartRideCommand;
 }
 
 export interface RideShadowSubmitRatingInput extends RideCommandShadowBridgeContext, SubmitRatingPayload {
@@ -207,6 +212,21 @@ export function shadowWireDeclineRideCommand(input: RideShadowDeclineRideInput) 
     timestamp: context.timestamp,
   });
   shadowProcess('declineRide', 'ride.decline', command, context.capabilitySnapshot);
+}
+
+export function shadowWireStartRideCommand(input: RideShadowStartRideInput) {
+  const context = resolveContext(input);
+  const command = input.command ?? createStartRideCommand({
+    rideId: input.rideId,
+    startedAt: input.startedAt,
+    location: input.location ?? null,
+  }, {
+    actorId: context.actorId,
+    actorRole: 'driver',
+    correlationId: context.correlationId,
+    timestamp: context.timestamp,
+  });
+  shadowProcess('startRide', 'ride.start', command, context.capabilitySnapshot);
 }
 
 export function shadowWireSubmitRatingCommand(input: RideShadowSubmitRatingInput) {
