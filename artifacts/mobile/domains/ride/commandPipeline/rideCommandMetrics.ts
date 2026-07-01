@@ -88,4 +88,3 @@ export class MemoryRideCommandTelemetry implements RideCommandTelemetry {
 export function createRideCommandDiagnosticRecord<T extends RideCommandDiagnosticRecord>(record: T) {
   return record;
 }
-

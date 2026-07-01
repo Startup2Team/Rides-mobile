@@ -70,4 +70,3 @@ export class MemoryRideProjectionTelemetry implements RideProjectionTelemetry {
     this.records = [...this.records, record];
   }
 }
-

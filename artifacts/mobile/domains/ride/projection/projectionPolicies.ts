@@ -53,4 +53,3 @@ export function selectRideProjectionSource(input: RideProjectionPolicyInput): Ri
     ? { source: 'PROJECTED', reason: 'projected-cutover-enabled' }
     : { source: 'UNAVAILABLE', reason: 'projected-unavailable' };
 }
-

@@ -23,4 +23,3 @@ export function createRideProjectionSelection(input: RideProjectionSelectionInpu
     forcedLive: Boolean(input.forceLive),
   };
 }
-
