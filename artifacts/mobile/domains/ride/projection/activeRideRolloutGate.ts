@@ -8,6 +8,7 @@ import {
   emitRideActiveRideRolloutGateEvaluatedTelemetry,
   emitRideActiveRideSustainedParityWindowUpdatedTelemetry,
 } from '../canary/canaryMetrics';
+import { recordActiveRideCanaryRollback } from './activeRideCanaryStability';
 
 export interface ActiveRideRolloutGateThresholds {
   minimumComparisonCount: number;
@@ -289,6 +290,7 @@ export function getActiveRideRolloutStatus(): ActiveRideRolloutGateStatus {
 export function disableProjectedActiveRide(reason = 'manual-disable') {
   activeRideRolloutGateState.disabled = true;
   activeRideRolloutGateState.lastReason = reason;
+  recordActiveRideCanaryRollback(reason);
   emitRideActiveRideHardRollbackTriggeredTelemetry({ reason });
   return getActiveRideRolloutStatus();
 }
@@ -297,6 +299,7 @@ export function forceActiveRideLiveSource(reason = 'manual-force-live') {
   activeRideRolloutGateState.disabled = true;
   activeRideRolloutGateState.forcedLive = true;
   activeRideRolloutGateState.lastReason = reason;
+  recordActiveRideCanaryRollback(reason);
   rideProjectionCoordinator.rollbackToLive();
   emitRideActiveRideHardRollbackTriggeredTelemetry({ reason });
   return getActiveRideRolloutStatus();

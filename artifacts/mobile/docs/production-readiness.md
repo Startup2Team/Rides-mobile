@@ -113,3 +113,8 @@ Phase 11G is the first live UI cutover. It only exposes the read-only Active
 Ride summary surface to projected data, and every other operational surface
 continues to use the live RideProvider state. Any fallback, staleness, or gate
 failure returns the UI to live reads immediately.
+
+Phase 11H adds the stability gate around that first summary canary. It does
+not expand the UI surface. The next surface remains blocked until the
+stability window, fallback rate, mismatch history, and rollback count all stay
+within the strict thresholds.

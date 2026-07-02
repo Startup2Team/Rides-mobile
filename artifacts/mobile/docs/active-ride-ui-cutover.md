@@ -3,6 +3,9 @@
 Phase 11G allows a minimal Active Ride UI surface to read from the projected
 Active Ride model when every gate passes.
 
+Phase 11H adds a stability gate around that first canary. It does not expand
+the UI surface. It only decides whether a later surface may be considered.
+
 ## Cutover Surface
 
 Only the read-only summary strip is projected for now:
@@ -47,3 +50,7 @@ Rollback is immediate. When the live source is forced:
 This phase is intentionally narrow. The next rollout stage should expand only
 after the summary surface stays stable and the remaining live-only surfaces are
 still untouched.
+
+Phase 11H keeps the current surface unchanged and requires the stability gate
+to remain healthy before any additional read-only Active Ride surface is
+approved.

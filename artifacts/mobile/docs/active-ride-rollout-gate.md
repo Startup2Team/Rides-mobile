@@ -70,3 +70,6 @@ the dual-read coordinator all stay in place ahead of it.
 
 Phase 11G uses this gate to decide whether the read-only Active Ride summary
 surface may use projected data. The gate still blocks any broader cutover.
+
+Phase 11H keeps that surface unchanged and adds a stability gate that must
+stay healthy before any additional Active Ride surface can be considered.

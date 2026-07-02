@@ -5,6 +5,7 @@ export * from './activeRideCanary';
 export * from './activeRideRolloutGate';
 export * from './activeRideUiModel';
 export * from './activeRideReadModelMapper';
+export * from './activeRideCanaryStability';
 export * from './historyCanary';
 export * from './rideDetailCanary';
 export * from './projectionMetrics';
