@@ -7,6 +7,8 @@ import {
   validatePackageCampaigns,
   type DriverRidePackageCampaign,
 } from '@/domain/driverRideCampaigns';
+import { hasApi } from '@/services/api/config';
+import { fetchPackageCampaignsApi, fetchPackageCatalogApi } from '@/services/api/packages';
 import {
   loadPackageCampaignCache,
   loadPackageCatalogCache,
@@ -59,6 +61,12 @@ export class MockPackageCatalogBackendAdapter implements PackageCatalogBackendAd
   }
 }
 
+export class ApiPackageCatalogBackendAdapter implements PackageCatalogBackendAdapter {
+  async fetchPackages() {
+    return fetchPackageCatalogApi();
+  }
+}
+
 export class MockPackageCampaignBackendAdapter implements PackageCampaignBackendAdapter {
   constructor(private readonly campaigns: DriverRidePackageCampaign[] = []) {}
 
@@ -67,6 +75,12 @@ export class MockPackageCampaignBackendAdapter implements PackageCampaignBackend
       data: this.campaigns.map(campaign => ({ ...campaign })),
       sourceVersion: 'mock-campaigns-v1',
     };
+  }
+}
+
+export class ApiPackageCampaignBackendAdapter implements PackageCampaignBackendAdapter {
+  async fetchCampaigns() {
+    return fetchPackageCampaignsApi();
   }
 }
 
@@ -171,6 +185,13 @@ export class CachedPackageOfferSourceRepository implements PackageOfferSourceRep
   }
 }
 
-export const packageCatalogRepository = new CachedPackageCatalogRepository();
-export const packageCampaignRepository = new CachedPackageCampaignRepository();
-export const packageOfferSourceRepository = new CachedPackageOfferSourceRepository();
+export const packageCatalogRepository = new CachedPackageCatalogRepository(
+  hasApi ? new ApiPackageCatalogBackendAdapter() : new MockPackageCatalogBackendAdapter(),
+);
+export const packageCampaignRepository = new CachedPackageCampaignRepository(
+  hasApi ? new ApiPackageCampaignBackendAdapter() : new MockPackageCampaignBackendAdapter(),
+);
+export const packageOfferSourceRepository = new CachedPackageOfferSourceRepository(
+  hasApi ? new ApiPackageCatalogBackendAdapter() : new MockPackageCatalogBackendAdapter(),
+  hasApi ? new ApiPackageCampaignBackendAdapter() : new MockPackageCampaignBackendAdapter(),
+);
