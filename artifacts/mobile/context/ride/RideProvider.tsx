@@ -54,6 +54,17 @@ import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { useOptionalAuth } from '@/context/AuthContext';
 import { getEligibleOnlineSessionVehicle } from './rideSession';
+import { hasApi } from '@/services/api/config';
+import {
+  cancelRideApi,
+  createRideApi,
+  getActiveRideApi,
+  getRideApi,
+  mergeApiRideIntoLocal,
+} from '@/services/api/rides';
+
+const API_RIDE_POLL_MS = 3000;
+const API_RIDE_TERMINAL_STATUSES: RideStatus[] = ['completed', 'cancelled'];
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -203,8 +214,43 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
     const dist = calcDistance(pickup, destination);
     const fare = calcFare(vehicleType, dist);
+    const displayDestText = destText.trim() || destination.address?.trim() || '';
 
-      const ride: Ride = {
+    setCancelledSearchDraft(cloneBookingDraft(pickup, destination, vehicleType, displayDestText));
+
+    isMatchingPausedRef.current = false;
+    setIsMatchingPaused(false);
+    timers.startSession();
+    clearSearchTimers();
+
+    if (hasApi && auth?.user?.id) {
+      try {
+        const created = await createRideApi({
+          pickup,
+          destination,
+          vehicleType,
+          initialFare: fare,
+          distanceKm: parseFloat(dist.toFixed(2)),
+          idempotencyKey: generateRideId(),
+        });
+        const ride = await getRideApi(created.ride_id, auth.user.id);
+        const initialMessages = buildInitialNegotiationMessages(pickup, destination);
+        setCurrentRide({
+          ...ride,
+          negotiation: initialMessages,
+          duration: Math.round(dist * 3 + 5),
+        });
+        if (ride.driver) {
+          setDriverLocation(ride.driver.location);
+        }
+      } catch (error) {
+        reportOperationalFailure('ride.create.api', error);
+        timers.endSession();
+      }
+      return;
+    }
+
+    const ride: Ride = {
       id: generateRideId(),
       customerId: 'local_user',
       customerName: 'Customer',
@@ -221,18 +267,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
-    const displayDestText = destText.trim() || destination.address?.trim() || '';
-    setCancelledSearchDraft(cloneBookingDraft(pickup, destination, vehicleType, displayDestText));
-
-    isMatchingPausedRef.current = false;
-    setIsMatchingPaused(false);
-    timers.startSession();
-    clearSearchTimers();
     setCurrentRide(ride);
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
-  }, [clearSearchTimers, scheduleDriverMatch, timers]);
+  }, [auth?.user?.id, clearSearchTimers, scheduleDriverMatch, timers]);
 
   const cancelRide = useCallback(() => {
+    const rideId = currentRideRef.current?.id;
+    if (hasApi && rideId) {
+      void cancelRideApi(rideId).catch(error => {
+        reportOperationalFailure('ride.cancel.api', error, { rideId });
+      });
+    }
     const session = timers.endSession();
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
@@ -373,13 +418,51 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    if (currentRide?.status === 'confirmed') {
-      const timer = timers.scheduleTimeout(() => {
-        updateStatus('arriving');
-        startLiveTracking();
-      }, CONFIRMED_RIDE_START_DELAY_MS);
-      return () => timers.clearTimeout(timer);
-    }
+    if (!hasApi || !auth?.user?.id) return;
+    let cancelled = false;
+    void getActiveRideApi(auth.user.id)
+      .then(ride => {
+        if (cancelled || currentRideRef.current || !ride) return;
+        setCurrentRide(ride);
+        if (ride.driver) setDriverLocation(ride.driver.location);
+      })
+      .catch(() => {
+        /* no active ride */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth?.user?.id]);
+
+  React.useEffect(() => {
+    if (!hasApi || !auth?.user?.id || !currentRide?.id) return;
+    if (API_RIDE_TERMINAL_STATUSES.includes(currentRide.status)) return;
+
+    const rideId = currentRide.id;
+    const customerId = auth.user.id;
+    const interval = setInterval(() => {
+      void getRideApi(rideId, customerId)
+        .then(next => {
+          setCurrentRide(prev => mergeApiRideIntoLocal(prev, next));
+          if (next.driver) {
+            setDriverLocation(next.driver.location);
+          }
+        })
+        .catch(error => {
+          reportOperationalFailure('ride.poll.api', error, { rideId });
+        });
+    }, API_RIDE_POLL_MS);
+
+    return () => clearInterval(interval);
+  }, [auth?.user?.id, currentRide?.id, currentRide?.status]);
+
+  React.useEffect(() => {
+    if (hasApi || currentRide?.status !== 'confirmed') return;
+    const timer = timers.scheduleTimeout(() => {
+      updateStatus('arriving');
+      startLiveTracking();
+    }, CONFIRMED_RIDE_START_DELAY_MS);
+    return () => timers.clearTimeout(timer);
   }, [currentRide?.status === 'confirmed', startLiveTracking, timers]);
 
   React.useEffect(() => () => {
