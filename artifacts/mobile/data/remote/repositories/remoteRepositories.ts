@@ -149,7 +149,7 @@ function createRemoteAuthRepository(client?: BackendClient): AuthRepository {
   };
 }
 
-function createRemoteProfileRepository(client?: BackendClient): ProfileRepository {
+function createRemoteProfileRepositoryStub(client?: BackendClient): ProfileRepository {
   return {
     async getProfileImage() {
       void client;
@@ -372,7 +372,7 @@ function createRemoteMapRepository(client?: BackendClient): MapRepository {
 }
 
 export const remoteAuthRepository = createRemoteAuthRepository();
-export const remoteProfileRepository = createRemoteProfileRepository();
+export const remoteProfileRepository = createRemoteProfileRepositoryStub();
 export const remoteBookingRepository = createRemoteBookingRepository();
 export const remoteRideRepository = createRemoteRideRepository();
 export const remoteSavedLocationsRepository = createRemoteSavedLocationsRepository();
@@ -407,7 +407,6 @@ export {
   createRemoteNotificationRepository,
   createRemotePackageRepository,
   createRemotePaymentRepository,
-  createRemoteProfileRepository,
   createRemoteRideRepository,
   createRemoteSavedLocationsRepository,
   createRemoteSearchRepository,
@@ -416,4 +415,5 @@ export {
   executeShadowRemote,
   logRemoteRepositoryAttempt,
   createSavedLocationsShadowRepository,
+  createRemoteProfileRepositoryStub,
 };

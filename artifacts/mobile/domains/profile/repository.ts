@@ -19,3 +19,4 @@ export const profileRepository: ProfileRepository = {
 };
 
 export type { ProfileRepository } from '@/data/repositories/interfaces';
+export { createRemoteProfileRepository, createProfileShadowRepository } from '@/data/remote/repositories/RemoteProfileRepository';

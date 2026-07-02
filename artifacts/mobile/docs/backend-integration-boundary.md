@@ -31,6 +31,11 @@ Phase 12C makes saved locations the first real remote repository prototype.
 Its shadow execution is still diagnostics-only, and the app continues to read
 the local repository result as authoritative.
 
+Phase 12D adds the same prototype path for the shared profile repository.
+The remote profile path can now be exercised in `SHADOW_REMOTE` mode for
+diagnostics, but the local profile result still wins and the app behavior stays
+unchanged.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

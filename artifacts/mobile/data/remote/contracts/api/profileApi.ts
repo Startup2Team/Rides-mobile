@@ -12,6 +12,7 @@ export interface GetProfileResponseDto extends ApiEnvelope<ProfileDto> {}
 export interface UpdateProfileRequestDto extends ApiIdempotencyMetadata {
   displayName?: string | null;
   phoneNumber?: string | null;
+  photoUrl?: string | null;
 }
 
 export interface UpdateProfileResponseDto extends ApiEnvelope<ProfileDto> {}

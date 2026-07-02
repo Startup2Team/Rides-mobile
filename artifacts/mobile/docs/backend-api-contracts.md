@@ -170,3 +170,8 @@ The backend resolver progresses through these stages:
 Saved locations is the first repository to gain a concrete remote prototype.
 It can run in `SHADOW_REMOTE` mode for diagnostics while local remains the
 authoritative source of truth.
+
+Profile is the second repository to gain a concrete remote prototype.
+The shared identity contract can be exercised in `SHADOW_REMOTE` mode for
+diagnostics, while local profile persistence remains authoritative and the
+current customer/driver one-account model stays unchanged.

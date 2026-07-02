@@ -53,6 +53,11 @@ Current source files outside this domain:
 - `app/change-phone-number.tsx`
 - `app/driver-onboarding.tsx`
 
+Remote prototype:
+- `RemoteProfileRepository` can run in `SHADOW_REMOTE` mode for diagnostics
+- local profile storage remains authoritative
+- the shared identity still stays one account across customer and driver projections
+
 Compatibility layer:
 - `AuthContext` still owns the live app session and role switching
 - `useProfilePhotoActions` still exists as a wrapper
