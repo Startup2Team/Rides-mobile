@@ -15,6 +15,7 @@ import {
   emitRideActiveRideSourceSelectedTelemetry,
 } from '../canary/canaryMetrics';
 import { mapProjectedActiveRideReadModel } from './activeRideReadModelMapper';
+import { evaluateActiveRideRolloutGate } from './activeRideRolloutGate';
 import { ENABLE_PROJECTED_ACTIVE_RIDE_CANARY } from './projectionTypes';
 import { USE_PROJECTED_RIDE_READ_MODEL } from '../dualRead/rideDualReadTypes';
 
@@ -136,6 +137,17 @@ export function resolveProjectedActiveRide(
 
   const shadowSnapshot = options.shadowSnapshot ?? rideShadowProjectionManager.getSnapshot();
   if (!shadowSnapshot.enabled || !shadowSnapshot.running) {
+    evaluateActiveRideRolloutGate({
+      canaryEnabled,
+      useProjectedRideReadModel,
+      projectedAvailable: false,
+      fallback: true,
+      stale: false,
+      matched: false,
+      mappingFailure: false,
+      unresolvedProjectionError: false,
+      comparisonTimestamp: null,
+    });
     emitRideActiveRideComparisonTelemetry({
       projectedAvailable: false,
       stale: false,
@@ -158,6 +170,18 @@ export function resolveProjectedActiveRide(
     const projectedRide = mapProjectedActiveRideReadModel(liveRide, shadowSnapshot.shadowActiveRide);
     const projectedAvailable = Boolean(projectedRide);
     const staleness = detectStaleness(liveRide, projectedRide, shadowSnapshot);
+    const comparison = projectedRide ? (compareActiveRide(liveRide, projectedRide) ?? []) : null;
+    const rolloutStatus = evaluateActiveRideRolloutGate({
+      canaryEnabled,
+      useProjectedRideReadModel,
+      projectedAvailable,
+      fallback: !projectedRide || staleness.stale || Boolean(comparison && comparison.length > 0),
+      stale: staleness.stale,
+      matched: Boolean(comparison && comparison.length === 0),
+      mappingFailure: false,
+      unresolvedProjectionError: false,
+      comparisonTimestamp: projectedRide?.updatedAt ?? null,
+    });
 
     emitRideActiveRideComparisonTelemetry({
       projectedAvailable,
@@ -192,17 +216,30 @@ export function resolveProjectedActiveRide(
         activeRide: liveRide,
         projectedAvailable: true,
         fallback: true,
-        comparison: compareActiveRide(liveRide, projectedRide),
+        comparison,
         stale: true,
         readinessDenied: false,
       };
     }
 
-    const comparison = compareActiveRide(liveRide, projectedRide);
-    if (comparison.length > 0) {
+    if (comparison && comparison.length > 0) {
       emitRideActiveRideMismatchTelemetry({ fieldDiffCount: comparison.length });
       emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
       emitRideActiveRideFallbackTelemetry({ reason: 'comparison-failure' });
+      return {
+        source: 'live',
+        activeRide: liveRide,
+        projectedAvailable: true,
+        fallback: true,
+        comparison,
+        stale: false,
+        readinessDenied: false,
+      };
+    }
+
+    if (!rolloutStatus.eligible) {
+      emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
+      emitRideActiveRideFallbackTelemetry({ reason: `rollout-${rolloutStatus.reason}` });
       return {
         source: 'live',
         activeRide: liveRide,
@@ -226,6 +263,17 @@ export function resolveProjectedActiveRide(
     };
   } catch (error) {
     emitRideActiveRideMappingFailureTelemetry({ reason: 'mapping-failure', error });
+    evaluateActiveRideRolloutGate({
+      canaryEnabled,
+      useProjectedRideReadModel,
+      projectedAvailable: false,
+      fallback: true,
+      stale: false,
+      matched: false,
+      mappingFailure: true,
+      unresolvedProjectionError: true,
+      comparisonTimestamp: null,
+    });
     emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
     emitRideActiveRideFallbackTelemetry({ reason: 'mapping-failure' });
     return {

@@ -103,3 +103,58 @@ export function emitRideActiveRideMappingFailureTelemetry(record: { reason: stri
     error: record.error instanceof Error ? record.error.message : record.error ?? null,
   });
 }
+
+export function emitRideActiveRideRolloutGateEvaluatedTelemetry(record: { eligible: boolean; reason: string }) {
+  observability.metrics.counter('ride.active.rollout.gate.evaluated', 1, {
+    eligible: String(record.eligible),
+    reason: record.reason,
+  });
+  observability.logger.info('RideActiveRideRolloutGateEvaluated', record);
+}
+
+export function emitRideActiveRideRolloutGateApprovedTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.rollout.gate.approved', 1, {
+    reason: record.reason,
+  });
+  observability.logger.info('RideActiveRideRolloutGateApproved', record);
+}
+
+export function emitRideActiveRideRolloutGateDeniedTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.rollout.gate.denied', 1, {
+    reason: record.reason,
+  });
+  observability.logger.warn('RideActiveRideRolloutGateDenied', record);
+}
+
+export function emitRideActiveRideHardRollbackTriggeredTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.rollout.hard_rollback', 1, {
+    reason: record.reason,
+  });
+  observability.logger.warn('RideActiveRideHardRollbackTriggered', record);
+}
+
+export function emitRideActiveRideProductionGuardBlockedTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.rollout.production_guard_blocked', 1, {
+    reason: record.reason,
+  });
+  observability.logger.warn('RideActiveRideProductionGuardBlocked', record);
+}
+
+export function emitRideActiveRideSustainedParityWindowUpdatedTelemetry(record: {
+  comparisonCount: number;
+  mismatchCount: number;
+  fallbackCount: number;
+  stalenessCount: number;
+  mappingFailureCount: number;
+  unresolvedProjectionErrorCount: number;
+}) {
+  observability.metrics.counter('ride.active.rollout.window_updated', 1, {
+    comparisonCount: String(record.comparisonCount),
+    mismatchCount: String(record.mismatchCount),
+    fallbackCount: String(record.fallbackCount),
+    stalenessCount: String(record.stalenessCount),
+    mappingFailureCount: String(record.mappingFailureCount),
+    unresolvedProjectionErrorCount: String(record.unresolvedProjectionErrorCount),
+  });
+  observability.logger.info('RideActiveRideSustainedParityWindowUpdated', record);
+}

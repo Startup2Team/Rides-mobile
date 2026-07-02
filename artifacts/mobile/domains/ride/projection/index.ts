@@ -2,6 +2,7 @@ export * from './projectionCoordinator';
 export * from '../canary';
 export * from './bootstrapActiveRideCanary';
 export * from './activeRideCanary';
+export * from './activeRideRolloutGate';
 export * from './activeRideReadModelMapper';
 export * from './historyCanary';
 export * from './rideDetailCanary';

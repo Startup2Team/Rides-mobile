@@ -80,3 +80,8 @@ remains on live RideProvider state and records fallback telemetry instead of
 changing runtime behavior.
 
 These diagnostics are informational only.
+
+Phase 11F adds a separate active-ride rollout gate on top of this health
+report. Even when canary health is green, projected Active Ride stays blocked
+until the sustained parity window and the explicit production guard both pass.
+The health report is necessary but not sufficient for any future UI cutover.

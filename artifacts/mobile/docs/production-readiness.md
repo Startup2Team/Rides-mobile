@@ -101,3 +101,10 @@ only. Production remains disabled, the diagnostics loop is timer-based and
 shadow-only, and the UI continues to read from RideProvider. Readiness gates
 must still pass before any later rollout phase can consider a projected
 Active Ride source.
+
+Phase 11F adds the explicit active-ride rollout gate and hard rollback
+controls. Even with healthy parity reports and a running canary, projected
+Active Ride remains blocked unless the sustained parity window and production
+guard both pass. `forceActiveRideLiveSource()` remains the fast rollback path
+and does not mutate `RideProvider`, clear query cache state, or require a
+restart.

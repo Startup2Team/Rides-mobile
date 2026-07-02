@@ -94,3 +94,9 @@ Phase 11E boots the Active Ride canary diagnostics from the app lifecycle in
 dev/test only. The bootstrap schedules periodic comparison and fallback checks
 but never changes UI selection or production behavior. Production still stays
 on live RideProvider snapshots only.
+
+Phase 11F adds the active-ride rollout gate in front of any future UI cutover.
+The coordinator can now report whether projected Active Ride is eligible, but
+the app still stays on live RideProvider source unless the sustained parity
+window and production guard both allow the rollout. Hard rollback controls can
+force the coordinator back to live source immediately.

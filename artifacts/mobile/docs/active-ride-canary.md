@@ -47,6 +47,11 @@ Active Ride comes after history, detail, and their health checks because it is
 the most operationally sensitive ride read model. It should remain disabled
 until the readiness gate and parity reports stay healthy for a sustained period.
 
+Phase 11F adds a separate rollout gate in front of any future UI use. The
+canary can now be healthy without being rollout-eligible. Even when parity is
+stable, the production guard still blocks projected Active Ride unless the
+explicit rollout flag is opened.
+
 ## Diagnostics
 
 The canary emits telemetry for:
@@ -63,3 +68,7 @@ These diagnostics do not change the UI.
 The diagnostics loop remains shadow-only. The live RideProvider state still
 drives the application, and the canary falls back immediately when readiness
 fails, projection is unavailable, or semantic comparison does not match.
+
+Phase 11F keeps that same fallback behavior but adds a hard gate that must pass
+before projected Active Ride can ever be considered for UI use. The gate stays
+blocked by default.

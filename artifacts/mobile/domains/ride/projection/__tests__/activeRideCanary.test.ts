@@ -1,8 +1,48 @@
 import { observability, resetObservabilityForTests } from '@/observability/context/observabilityContext';
 import type { Ride } from '@/types';
 import { recordRideDetailParity, recordRideHistoryParity, resetRideCanaryHealthForTests } from '../../canary/canaryHealth';
+import {
+  resetActiveRideRolloutGateForTests,
+  seedActiveRideRolloutGateForTests,
+} from '../activeRideRolloutGate';
 import { resolveProjectedActiveRide } from '../activeRideCanary';
 import type { RideShadowSnapshot } from '../../shadow/shadowTypes';
+
+const originalNodeEnv = process.env.NODE_ENV;
+const originalEnableProjectedActiveRideCanary = process.env.ENABLE_PROJECTED_ACTIVE_RIDE_CANARY;
+const originalUseProjectedRideReadModel = process.env.USE_PROJECTED_RIDE_READ_MODEL;
+const originalAllowProjectedActiveRideUi = process.env.ALLOW_PROJECTED_ACTIVE_RIDE_UI;
+const environment = process.env as Record<string, string | undefined>;
+
+function setRolloutEnvironment(allowed: boolean) {
+  environment.ALLOW_PROJECTED_ACTIVE_RIDE_UI = String(allowed);
+}
+
+function restoreEnvironment() {
+  if (originalNodeEnv === undefined) {
+    delete environment.NODE_ENV;
+  } else {
+    environment.NODE_ENV = originalNodeEnv;
+  }
+
+  if (originalEnableProjectedActiveRideCanary === undefined) {
+    delete environment.ENABLE_PROJECTED_ACTIVE_RIDE_CANARY;
+  } else {
+    environment.ENABLE_PROJECTED_ACTIVE_RIDE_CANARY = originalEnableProjectedActiveRideCanary;
+  }
+
+  if (originalUseProjectedRideReadModel === undefined) {
+    delete environment.USE_PROJECTED_RIDE_READ_MODEL;
+  } else {
+    environment.USE_PROJECTED_RIDE_READ_MODEL = originalUseProjectedRideReadModel;
+  }
+
+  if (originalAllowProjectedActiveRideUi === undefined) {
+    delete environment.ALLOW_PROJECTED_ACTIVE_RIDE_UI;
+  } else {
+    environment.ALLOW_PROJECTED_ACTIVE_RIDE_UI = originalAllowProjectedActiveRideUi;
+  }
+}
 
 function createLiveRide(overrides: Partial<Ride> = {}): Ride {
   return {
@@ -90,7 +130,13 @@ describe('projected active ride canary', () => {
   beforeEach(() => {
     resetObservabilityForTests();
     resetRideCanaryHealthForTests();
+    resetActiveRideRolloutGateForTests();
+    setRolloutEnvironment(false);
     jest.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    restoreEnvironment();
   });
 
   test('returns live active ride when feature is disabled', () => {
@@ -204,6 +250,21 @@ describe('projected active ride canary', () => {
     const live = createLiveRide();
     recordRideHistoryParity([live], [live]);
     recordRideDetailParity(live, live);
+    setRolloutEnvironment(true);
+    seedActiveRideRolloutGateForTests({
+      startedAt: '2026-06-08T09:10:00.000Z',
+      lastUpdatedAt: '2026-06-08T09:21:00.000Z',
+      comparisonCount: 24,
+      projectedAvailableCount: 24,
+      mismatchCount: 0,
+      fallbackCount: 0,
+      stalenessCount: 0,
+      mappingFailureCount: 0,
+      unresolvedProjectionErrorCount: 0,
+      disabled: false,
+      forcedLive: false,
+      lastReason: 'rollout-approved',
+    });
 
     const result = resolveProjectedActiveRide(live, {
       canaryEnabled: true,
@@ -222,6 +283,8 @@ describe('projected active ride canary', () => {
     });
     expect(observability.logger.getLogs().map(log => log.message)).toEqual(expect.arrayContaining([
       'RideActiveRideComparison',
+      'RideActiveRideRolloutGateEvaluated',
+      'RideActiveRideRolloutGateApproved',
       'RideActiveRideSourceSelected',
     ]));
   });
