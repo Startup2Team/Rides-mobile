@@ -19,6 +19,14 @@ export interface ListPaymentMethodsResponseDto extends ApiEnvelope<{ items: Paym
 export interface GetDefaultPaymentMethodResponseDto extends ApiEnvelope<PaymentMethodDto | null> {}
 export interface GetBillingProfileResponseDto extends ApiEnvelope<BillingProfileDto> {}
 
+export interface PaymentMethodsMutationResponseDto extends ApiEnvelope<{
+  items?: PaymentMethodDto[];
+  method?: PaymentMethodDto | null;
+  defaultPaymentMethod?: PaymentMethodDto | null;
+  billingProfile?: BillingProfileDto | null;
+  deleted?: boolean;
+}> {}
+
 export interface AddPaymentMethodRequestDto extends ApiIdempotencyMetadata {
   provider: string;
   label: string;
@@ -73,3 +81,4 @@ export interface PaymentApiContract {
 }
 
 export const AddPaymentMethodRequestDto = {} as AddPaymentMethodRequestDto;
+export const PaymentMethodsMutationResponseDto = {} as PaymentMethodsMutationResponseDto;

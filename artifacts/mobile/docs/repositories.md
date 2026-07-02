@@ -70,6 +70,8 @@ Each domain has a single repository contract.
   - payment methods
   - default payment method updates
   - payment method metadata updates
+  - billing profile projection
+  - local-authoritative method storage until backend payment truth exists
 
 - `SearchRepository`
   - search history
@@ -174,6 +176,13 @@ Phase 12G adds the same remote prototype path for packages and entitlements.
 - `SHADOW_REMOTE` runs the remote path only for diagnostics
 - local package economics, purchase history, balance, and credit deduction remain authoritative for current UI behavior
 - because this domain touches driver credits and payment-linked flows, the rollout path remains conservative and should only advance after extra financial safeguards are in place
+
+Phase 12H adds the same remote prototype path for payment methods and billing preferences.
+
+- `RemotePaymentRepository` maps payment-method list, default, billing-profile, create, update, delete, and default-selection DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local payment methods remain authoritative for current UI behavior
+- payment execution, settlement, refunds, wallet balance, and transaction truth remain future work and must stay out of this prototype
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 

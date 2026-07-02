@@ -56,6 +56,15 @@ stays unchanged. Because this domain touches driver credits and payment-linked
 flows, the package rollout path stays more conservative than the other
 repositories.
 
+Phase 12H adds the same prototype path for payment methods and billing
+preferences.
+The remote payment method list, default method, billing profile, create,
+update, delete, and default-selection paths can now be exercised in
+`SHADOW_REMOTE` mode for diagnostics, but local payment methods remain
+authoritative and the current UI behavior stays unchanged. Payment execution,
+capture, settlement, refunds, wallet balance, and transaction truth remain out
+of scope for this phase and must stay separate from the prototype.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

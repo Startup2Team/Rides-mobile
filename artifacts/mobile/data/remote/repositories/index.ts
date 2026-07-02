@@ -5,3 +5,8 @@ export {
   createPackageShadowRepository,
   createRemotePackageRepositoryPrototype,
 } from './RemotePackageRepository';
+export {
+  RemotePaymentRepository,
+  createPaymentShadowRepository,
+  createRemotePaymentRepositoryPrototype,
+} from './RemotePaymentRepository';

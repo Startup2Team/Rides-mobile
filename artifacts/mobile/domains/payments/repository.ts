@@ -97,3 +97,9 @@ export const paymentsRepository = {
     return next;
   },
 };
+
+export {
+  RemotePaymentRepository,
+  createPaymentShadowRepository,
+  createRemotePaymentRepositoryPrototype,
+} from '@/data/remote/repositories/RemotePaymentRepository';

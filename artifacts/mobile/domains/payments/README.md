@@ -31,6 +31,13 @@ Current query-backed read models:
 - `useDefaultPaymentMethodQuery()` reads the default method projection through `PaymentRepository`
 - `useBillingProfileQuery()` derives billing preferences from repository-backed payment methods
 
+Prototype remote repository:
+- `RemotePaymentRepository` is the sixth remote repository prototype
+- it can exercise payment-method list/default/billing-profile and payment-method CRUD/default-selection DTOs in `SHADOW_REMOTE`
+- local payment methods remain authoritative
+- payment execution, capture, refunds, settlement, wallet balance, and transaction truth stay out of scope
+- the rollout path remains conservative because these flows are financially sensitive
+
 Future migration plan:
 - move payment rules into `domains/payments`
 - keep writes behind `PaymentRepository`

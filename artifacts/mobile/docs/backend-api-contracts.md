@@ -83,6 +83,12 @@ selection changes are introduced here.
 - `POST /v1/payments/capture`
 - `POST /v1/payments/refunds` in a future phase
 
+Phase 12H treats payment methods and billing preferences as the sixth remote
+repository prototype. Only the method list, default method, billing profile,
+and payment-method CRUD/default-selection contracts are in scope. Payment
+authorization, capture, settlement, refunds, wallet balance, and transaction
+truth stay out of scope for this phase.
+
 ### Notifications
 
 - `GET /v1/notifications`
@@ -203,3 +209,10 @@ deduction contracts can be exercised in `SHADOW_REMOTE` mode for diagnostics,
 while local package economics and credit state remain authoritative. Because
 this domain touches driver balance and payment-linked flows, rollout should
 remain more conservative than the earlier repository prototypes.
+
+Payment methods and billing preferences are the sixth repository to gain a
+concrete remote prototype. The method list, default method, billing profile,
+create, update, delete, and default-selection contracts can be exercised in
+`SHADOW_REMOTE` mode for diagnostics, while local payment methods remain
+authoritative. Payment execution and transaction truth stay future backend
+work, and this prototype must not be used to infer settlement behavior.

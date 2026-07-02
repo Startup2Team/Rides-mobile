@@ -32,6 +32,7 @@ describe('backend api contracts', () => {
     expect(api.UpdatePackagePurchaseStatusRequestDto).toBeDefined();
     expect(api.ActivatePackageRequestDto).toBeDefined();
     expect(api.DeductCreditRequestDto).toBeDefined();
+    expect(api.PaymentMethodsMutationResponseDto).toBeDefined();
     expect(api.ApiIdempotencyMetadata).toBeDefined();
   });
 
@@ -40,14 +41,21 @@ describe('backend api contracts', () => {
     expect(typeof mappers.domainToDtoRide).toBe('function');
     expect(typeof mappers.errorToRepositoryFailureRide).toBe('function');
     expect(typeof mappers.dtoToDomainPayment).toBe('function');
+    expect(typeof mappers.dtoToDomainPaymentMethod).toBe('function');
+    expect(typeof mappers.dtoToDomainBillingProfile).toBe('function');
     expect(typeof mappers.dtoToDomainPackageCatalogEntry).toBe('function');
     expect(typeof mappers.dtoToDomainPackageCampaign).toBe('function');
     expect(typeof mappers.dtoToDomainPackageEntitlement).toBe('function');
     expect(typeof mappers.dtoToDomainPackagePurchase).toBe('function');
+    expect(typeof mappers.domainToAddPaymentMethodDto).toBe('function');
+    expect(typeof mappers.domainToUpdatePaymentMethodDto).toBe('function');
+    expect(typeof mappers.domainToDeletePaymentMethodDto).toBe('function');
+    expect(typeof mappers.domainToSetDefaultPaymentMethodDto).toBe('function');
     expect(typeof mappers.domainToCreatePackagePurchaseDto).toBe('function');
     expect(typeof mappers.domainToUpdatePackagePurchaseStatusDto).toBe('function');
     expect(typeof mappers.domainToActivatePackageDto).toBe('function');
     expect(typeof mappers.domainToDeductCreditDto).toBe('function');
+    expect(typeof mappers.errorToRepositoryFailurePayment).toBe('function');
     expect(typeof mappers.errorToRepositoryFailurePackage).toBe('function');
   });
 
@@ -79,6 +87,31 @@ describe('backend api contracts', () => {
 
     expect(requestRide.actorRole).toBe('customer');
     expect(addPaymentMethod.idempotencyKey).toContain('payment:add');
+  });
+
+  test('payment write dtos preserve idempotency correlation and actor metadata', () => {
+    const updatePaymentMethod: api.UpdatePaymentMethodRequestDto = {
+      methodId: 'mtn_1',
+      label: 'Personal MTN',
+      phoneNumber: '788000000',
+      isDefault: false,
+      idempotencyKey: 'payment:update:1',
+      correlationId: 'corr-2b',
+      actorId: 'user-1',
+      actorRole: 'customer',
+      clientTimestamp: '2026-07-02T10:00:00.000Z',
+    };
+    const defaultPaymentMethod: api.SetDefaultPaymentMethodRequestDto = {
+      methodId: 'mtn_1',
+      idempotencyKey: 'payment:default:1',
+      correlationId: 'corr-2c',
+      actorId: 'user-1',
+      actorRole: 'customer',
+      clientTimestamp: '2026-07-02T10:00:00.000Z',
+    };
+
+    expect(updatePaymentMethod.actorRole).toBe('customer');
+    expect(defaultPaymentMethod.methodId).toBe('mtn_1');
   });
 
   test('package write dtos preserve idempotency correlation and actor metadata', () => {
