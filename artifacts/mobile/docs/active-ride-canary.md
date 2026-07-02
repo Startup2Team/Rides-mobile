@@ -72,3 +72,7 @@ fails, projection is unavailable, or semantic comparison does not match.
 Phase 11F keeps that same fallback behavior but adds a hard gate that must pass
 before projected Active Ride can ever be considered for UI use. The gate stays
 blocked by default.
+
+Phase 11G uses the canary result for the first live UI read-only surface. That
+surface is intentionally narrow: it only renders the summary strip, while the
+map, actions, and lifecycle remain live-only.

@@ -108,3 +108,8 @@ Active Ride remains blocked unless the sustained parity window and production
 guard both pass. `forceActiveRideLiveSource()` remains the fast rollback path
 and does not mutate `RideProvider`, clear query cache state, or require a
 restart.
+
+Phase 11G is the first live UI cutover. It only exposes the read-only Active
+Ride summary surface to projected data, and every other operational surface
+continues to use the live RideProvider state. Any fallback, staleness, or gate
+failure returns the UI to live reads immediately.

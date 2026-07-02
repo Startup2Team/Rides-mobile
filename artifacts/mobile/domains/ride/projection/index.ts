@@ -3,6 +3,7 @@ export * from '../canary';
 export * from './bootstrapActiveRideCanary';
 export * from './activeRideCanary';
 export * from './activeRideRolloutGate';
+export * from './activeRideUiModel';
 export * from './activeRideReadModelMapper';
 export * from './historyCanary';
 export * from './rideDetailCanary';

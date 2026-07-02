@@ -100,3 +100,9 @@ The coordinator can now report whether projected Active Ride is eligible, but
 the app still stays on live RideProvider source unless the sustained parity
 window and production guard both allow the rollout. Hard rollback controls can
 force the coordinator back to live source immediately.
+
+Phase 11G uses that gate for a minimal read-only UI cutover. Only the Active
+Ride summary surface may read projected data, while map, actions, navigation,
+and other operational surfaces remain live-only. The coordinator still falls
+back immediately when the projected model is stale, unavailable, or blocked
+by any rollout condition.

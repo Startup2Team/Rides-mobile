@@ -67,3 +67,6 @@ The gate emits telemetry for:
 Active Ride remains the last ride read model to be considered for cutover. The
 history and detail canaries, their health reports, the shadow projection, and
 the dual-read coordinator all stay in place ahead of it.
+
+Phase 11G uses this gate to decide whether the read-only Active Ride summary
+surface may use projected data. The gate still blocks any broader cutover.

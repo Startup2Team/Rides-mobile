@@ -158,3 +158,51 @@ export function emitRideActiveRideSustainedParityWindowUpdatedTelemetry(record: 
   });
   observability.logger.info('RideActiveRideSustainedParityWindowUpdated', record);
 }
+
+export function emitRideActiveRideUiSourceSelectedTelemetry(record: {
+  source: 'live' | 'projected';
+  reason: string;
+}) {
+  observability.metrics.counter('ride.active.ui.source_selected', 1, {
+    source: record.source,
+    reason: record.reason,
+  });
+  observability.logger.info('RideActiveRideUiSourceSelected', record);
+}
+
+export function emitRideActiveRideUiProjectedEnabledTelemetry(record: {
+  source: 'projected';
+  reason: string;
+}) {
+  observability.metrics.counter('ride.active.ui.projected_enabled', 1, {
+    reason: record.reason,
+  });
+  observability.logger.info('RideActiveRideUiProjectedEnabled', record);
+}
+
+export function emitRideActiveRideUiLiveFallbackTelemetry(record: {
+  reason: string;
+}) {
+  observability.metrics.counter('ride.active.ui.live_fallback', 1, {
+    reason: record.reason,
+  });
+  observability.logger.info('RideActiveRideUiLiveFallback', record);
+}
+
+export function emitRideActiveRideUiRollbackUsedTelemetry(record: {
+  reason: string;
+}) {
+  observability.metrics.counter('ride.active.ui.rollback_used', 1, {
+    reason: record.reason,
+  });
+  observability.logger.warn('RideActiveRideUiRollbackUsed', record);
+}
+
+export function emitRideActiveRideUiProjectionBlockedByGateTelemetry(record: {
+  reason: string;
+}) {
+  observability.metrics.counter('ride.active.ui.projection_blocked_by_gate', 1, {
+    reason: record.reason,
+  });
+  observability.logger.warn('RideActiveRideUiProjectionBlockedByGate', record);
+}
