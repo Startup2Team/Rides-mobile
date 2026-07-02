@@ -6,6 +6,9 @@ Active Ride model when every gate passes.
 Phase 11H adds a stability gate around that first canary. It does not expand
 the UI surface. It only decides whether a later surface may be considered.
 
+Phase 11I adds a monitoring report over the same canary. The report is
+developer-facing only and does not change the current cutover surface.
+
 ## Cutover Surface
 
 Only the read-only summary strip is projected for now:
@@ -54,3 +57,6 @@ still untouched.
 Phase 11H keeps the current surface unchanged and requires the stability gate
 to remain healthy before any additional read-only Active Ride surface is
 approved.
+
+Phase 11I keeps the UI unchanged and exposes a report that summarizes the
+health of the canary for operational review.

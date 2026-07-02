@@ -52,3 +52,7 @@ The next rollout stage should still start conservatively. The map, route,
 action buttons, payment, completion, package, and driver dashboard surfaces
 remain live-only until the stability gate has stayed clean over a sustained
 window.
+
+Phase 11I adds a developer-facing canary report on top of this gate. The
+report turns the stability snapshot into a rollout recommendation, but it does
+not change the UI cutover.

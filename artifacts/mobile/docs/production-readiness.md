@@ -118,3 +118,8 @@ Phase 11H adds the stability gate around that first summary canary. It does
 not expand the UI surface. The next surface remains blocked until the
 stability window, fallback rate, mismatch history, and rollback count all stay
 within the strict thresholds.
+
+Phase 11I adds a developer-facing monitoring report over the same canary. The
+report is used to decide whether the next surface should remain blocked,
+require investigation, or stay ready for a later expansion step. It still does
+not expand the UI.
