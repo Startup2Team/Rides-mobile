@@ -61,9 +61,12 @@ selection changes are introduced here.
 
 - `GET /v1/packages/catalog`
 - `GET /v1/packages/campaigns`
+- `GET /v1/packages/offer-source`
+- `GET /v1/packages/offers`
 - `GET /v1/packages/entitlements`
 - `GET /v1/packages/purchases`
 - `POST /v1/packages/purchases`
+- `PATCH /v1/packages/purchases/{transactionId}/status`
 - `POST /v1/packages/purchases/{purchaseId}/activate`
 - `POST /v1/packages/credits/deduct`
 
@@ -107,6 +110,9 @@ selection changes are introduced here.
   can mutate server state.
 - Read DTOs are shaped to mirror domain read models closely enough for safe
   mapping without leaking transport details into the UI.
+- Packages additionally define offer-source, available-offers, purchase-status,
+  activation, and credit-deduction DTOs so the remote prototype can exercise
+  the full balance and entitlement contract without changing local authority.
 
 ## Mapper Strategy
 
@@ -189,3 +195,11 @@ The list, detail, add, update, delete, and primary-selection contracts can be
 exercised in `SHADOW_REMOTE` mode for diagnostics, while local driver profile
 state remains authoritative and the current UI stays unchanged. Vehicle
 verification and approval remain backend-owned in the future rollout model.
+
+Packages and entitlements are the fifth repository to gain a concrete remote
+prototype. The catalog, campaigns, offer source, available offers,
+entitlements, purchases, purchase-status updates, activation, and credit
+deduction contracts can be exercised in `SHADOW_REMOTE` mode for diagnostics,
+while local package economics and credit state remain authoritative. Because
+this domain touches driver balance and payment-linked flows, rollout should
+remain more conservative than the earlier repository prototypes.

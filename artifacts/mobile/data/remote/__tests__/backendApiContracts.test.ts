@@ -10,6 +10,28 @@ describe('backend api contracts', () => {
     expect(api.VehicleDto).toBeDefined();
     expect(api.GetVehicleRequestDto).toBeDefined();
     expect(api.AddVehicleRequestDto).toBeDefined();
+    expect(api.PackageCatalogItemDto).toBeDefined();
+    expect(api.PackageCampaignDto).toBeDefined();
+    expect(api.PackageOfferDto).toBeDefined();
+    expect(api.PackageEntitlementDto).toBeDefined();
+    expect(api.PackageOfferSourceDto).toBeDefined();
+    expect(api.PackageOfferSourceResponseDto).toBeDefined();
+    expect(api.PackagePurchaseResponseDto).toBeDefined();
+    expect(api.PackageMutationResponseDto).toBeDefined();
+    expect(api.PackageCatalogResponseDto).toBeDefined();
+    expect(api.PackageCampaignResponseDto).toBeDefined();
+    expect(api.PackageAvailableOffersResponseDto).toBeDefined();
+    expect(api.GetPackageEntitlementResponseDto).toBeDefined();
+    expect(api.PackageCatalogRequestDto).toBeDefined();
+    expect(api.PackageCampaignRequestDto).toBeDefined();
+    expect(api.PackageOfferSourceRequestDto).toBeDefined();
+    expect(api.PackageAvailableOffersRequestDto).toBeDefined();
+    expect(api.PackageEntitlementRequestDto).toBeDefined();
+    expect(api.PackagePurchaseListRequestDto).toBeDefined();
+    expect(api.CreatePackagePurchaseRequestDto).toBeDefined();
+    expect(api.UpdatePackagePurchaseStatusRequestDto).toBeDefined();
+    expect(api.ActivatePackageRequestDto).toBeDefined();
+    expect(api.DeductCreditRequestDto).toBeDefined();
     expect(api.ApiIdempotencyMetadata).toBeDefined();
   });
 
@@ -18,6 +40,15 @@ describe('backend api contracts', () => {
     expect(typeof mappers.domainToDtoRide).toBe('function');
     expect(typeof mappers.errorToRepositoryFailureRide).toBe('function');
     expect(typeof mappers.dtoToDomainPayment).toBe('function');
+    expect(typeof mappers.dtoToDomainPackageCatalogEntry).toBe('function');
+    expect(typeof mappers.dtoToDomainPackageCampaign).toBe('function');
+    expect(typeof mappers.dtoToDomainPackageEntitlement).toBe('function');
+    expect(typeof mappers.dtoToDomainPackagePurchase).toBe('function');
+    expect(typeof mappers.domainToCreatePackagePurchaseDto).toBe('function');
+    expect(typeof mappers.domainToUpdatePackagePurchaseStatusDto).toBe('function');
+    expect(typeof mappers.domainToActivatePackageDto).toBe('function');
+    expect(typeof mappers.domainToDeductCreditDto).toBe('function');
+    expect(typeof mappers.errorToRepositoryFailurePackage).toBe('function');
   });
 
   test('write dtos preserve idempotency and correlation metadata', () => {
@@ -48,6 +79,47 @@ describe('backend api contracts', () => {
 
     expect(requestRide.actorRole).toBe('customer');
     expect(addPaymentMethod.idempotencyKey).toContain('payment:add');
+  });
+
+  test('package write dtos preserve idempotency correlation and actor metadata', () => {
+    const createPurchase: api.CreatePackagePurchaseRequestDto = {
+      packageId: 'growth',
+      packageVersion: 'v1',
+      packageName: 'Growth Package',
+      offerId: 'offer-1',
+      vehicleId: 'vehicle-1',
+      vehicleType: 'moto',
+      provider: 'mtn',
+      phoneNumber: '0781234567',
+      amount: 2_000,
+      pricePaid: 2_000,
+      ridesGranted: 60,
+      bonusRidesGranted: 15,
+      campaignId: 'camp-1',
+      campaignName: 'Launch Sale',
+      campaignType: 'global',
+      campaignStatus: 'active',
+      idempotencyKey: 'package:create:1',
+      correlationId: 'corr-7',
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      clientTimestamp: '2026-07-02T10:00:00.000Z',
+    };
+    const deductCredit: api.DeductCreditRequestDto = {
+      rideId: 'ride-1',
+      vehicleId: 'vehicle-1',
+      vehicleType: 'moto',
+      credits: 1,
+      packageActivationId: 'activation-1',
+      idempotencyKey: 'package:deduct:1',
+      correlationId: 'corr-8',
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      clientTimestamp: '2026-07-02T10:30:00.000Z',
+    };
+
+    expect(createPurchase.actorRole).toBe('driver');
+    expect(deductCredit.rideId).toBe('ride-1');
   });
 
   test('vehicle api dtos preserve actor model and transport metadata', () => {

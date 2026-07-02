@@ -35,6 +35,17 @@ Future migration plan:
 - move remaining package screens to read from the query/domain hooks directly
 - replace compatibility contexts once all callers are migrated
 - introduce backend truth behind the repository boundary without changing screen code
+- keep the remote package prototype in `SHADOW_REMOTE` until the credit and
+  payment-linked safeguards are proven
+
+Remote prototype status:
+- `RemotePackageRepository` exists as the fifth concrete remote repository
+  prototype
+- it can exercise catalog, campaigns, offer source, offers, entitlement,
+  purchase, activation, and credit-deduction DTOs in `SHADOW_REMOTE`
+- local package economics remain authoritative until a later rollout phase
+- payment truth is still future work and must stay outside this domain until
+  the backend/payment boundary is explicitly ready
 
 Ownership:
 - repository: `packageRepository` plus entitlement storage helpers

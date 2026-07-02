@@ -61,6 +61,7 @@ Each domain has a single repository contract.
   - campaigns
   - offer source cache
   - entitlement and purchase history access through the package domain facade
+  - package balance and credit rules remain local-authoritative for now
 
 - `NotificationRepository`
   - notification read state
@@ -166,6 +167,13 @@ Phase 12F adds the same remote prototype path for driver vehicles.
 - `SHADOW_REMOTE` runs the remote path only for diagnostics
 - local driver-profile-backed vehicle truth remains authoritative for current UI behavior
 - the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
+Phase 12G adds the same remote prototype path for packages and entitlements.
+
+- `RemotePackageRepository` maps catalog, campaign, offer-source, available-offer, entitlement, purchase, activation, and credit-deduction DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local package economics, purchase history, balance, and credit deduction remain authoritative for current UI behavior
+- because this domain touches driver credits and payment-linked flows, the rollout path remains conservative and should only advance after extra financial safeguards are in place
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 

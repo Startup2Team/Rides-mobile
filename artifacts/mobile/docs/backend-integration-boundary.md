@@ -47,6 +47,15 @@ paths can now be exercised in `SHADOW_REMOTE` mode for diagnostics, but local
 driver profile state remains authoritative and the current UI behavior stays
 unchanged.
 
+Phase 12G adds the same prototype path for packages and entitlements.
+The remote package catalog, campaigns, available offers, entitlement,
+purchases, activation, and credit-deduction paths can now be exercised in
+`SHADOW_REMOTE` mode for diagnostics, but local package economics, credit
+state, and purchase history remain authoritative and the current UI behavior
+stays unchanged. Because this domain touches driver credits and payment-linked
+flows, the package rollout path stays more conservative than the other
+repositories.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the
