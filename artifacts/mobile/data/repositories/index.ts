@@ -1,3 +1,18 @@
+import {
+  authRepository,
+  bookingRepository,
+  driverRepository,
+  mapRepository,
+  notificationRepository,
+  packageRepository,
+  paymentRepository,
+  profileRepository,
+  rideRepository,
+  savedLocationsRepository,
+  searchRepository,
+} from '@/data/adapters/localRepositories';
+import { vehicleRepository } from '@/data/adapters/remoteVehicleRepository';
+
 export {
   authRepository,
   bookingRepository,
@@ -11,7 +26,7 @@ export {
   savedLocationsRepository,
   searchRepository,
   vehicleRepository,
-} from '@/data/adapters/localRepositories';
+};
 export type {
   AuthRepository,
   BookingRepository,

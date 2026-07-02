@@ -2,6 +2,9 @@ export type StorageClassification = 'sensitive' | 'internal' | 'cacheable';
 
 export const STORAGE_KEYS = {
   user: '@rides_user',
+  accessToken: '@rides_access_token',
+  refreshToken: '@rides_refresh_token',
+  deviceId: '@rides_device_id',
   driverProfile: '@rides_driver_profile',
   driverOnboardingDraft: '@rides_driver_onboarding_draft',
   driverDocuments: '@rides_driver_documents',
@@ -27,6 +30,9 @@ export const STORAGE_KEYS = {
 export const STORAGE_CLASSIFICATION = {
   sensitive: [
     STORAGE_KEYS.user,
+    STORAGE_KEYS.accessToken,
+    STORAGE_KEYS.refreshToken,
+    STORAGE_KEYS.deviceId,
     STORAGE_KEYS.driverProfile,
     STORAGE_KEYS.driverOnboardingDraft,
     STORAGE_KEYS.driverDocuments,
