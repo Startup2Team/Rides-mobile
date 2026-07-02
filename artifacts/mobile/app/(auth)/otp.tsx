@@ -16,6 +16,8 @@ import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { hasApi } from '@/services/api/config';
+import { sendOtp, verifyOtp } from '@/services/api/auth';
 
 export default function OTPScreen() {
   const colors = useColors();
@@ -58,18 +60,35 @@ export default function OTPScreen() {
       return;
     }
     setVerifying(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
-    await login({
-      id,
-      name: name ?? phone ?? 'User',
-      phone: phone ?? '',
-      email: email ?? undefined,
-      mode: 'customer',
-      isDriver: false,
-      createdAt: new Date().toISOString(),
-    });
-    navigateToCustomerHomeAfterCompletion(router);
+    setError('');
+    try {
+      if (hasApi) {
+        const user = await verifyOtp({
+          phone: phone ?? '',
+          otp: entered,
+          name: name ?? undefined,
+          email: email ?? undefined,
+        });
+        await login(user);
+      } else {
+        await new Promise(r => setTimeout(r, 1500));
+        const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        await login({
+          id,
+          name: name ?? phone ?? 'User',
+          phone: phone ?? '',
+          email: email ?? undefined,
+          mode: 'customer',
+          isDriver: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      navigateToCustomerHomeAfterCompletion(router);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification failed. Try again.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -130,10 +149,17 @@ export default function OTPScreen() {
 
       {expiryTimer <= 0 ? (
         <TouchableOpacity
-          onPress={() => {
+          onPress={async () => {
             setCode(Array(otpLength).fill(''));
             setError('');
             setExpiryTimer(OTP_VALIDITY_SECONDS);
+            if (hasApi && phone) {
+              try {
+                await sendOtp({ phone, fullName: name ?? undefined, email: email ?? undefined });
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not resend code');
+              }
+            }
           }}
           style={styles.resend}
         >

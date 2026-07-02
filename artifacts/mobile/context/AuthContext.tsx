@@ -17,6 +17,9 @@ import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
+import { hasApi } from '@/services/api/config';
+import { logoutApi } from '@/services/api/auth';
+import { loadTokens } from '@/services/api/tokenStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -49,10 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadStoredData = async () => {
     try {
-      const [storedUser, storedDriverProfile] = await Promise.all([
+      const [storedUser, storedDriverProfile, tokens] = await Promise.all([
         loadStoredUser(),
         loadStoredDriverProfile(),
+        hasApi ? loadTokens() : Promise.resolve(null),
       ]);
+      if (hasApi && !tokens?.accessToken) {
+        setUser(null);
+        setDriverProfile(null);
+        return;
+      }
       if (storedUser.data) setUser(storedUser.data);
       if (storedDriverProfile.data) setDriverProfile(storedDriverProfile.data);
     } catch {
@@ -68,6 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    if (hasApi) {
+      await logoutApi();
+    }
     setUser(null);
     setDriverProfile(null);
     await clearSensitiveStorage();

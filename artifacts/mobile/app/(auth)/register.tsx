@@ -24,6 +24,8 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { hasApi } from '@/services/api/config';
+import { sendOtp } from '@/services/api/auth';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -73,21 +75,32 @@ export default function RegisterScreen() {
     return e;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const e = validate();
     if (Object.keys(e).length) {
       setErrors(e);
       return;
     }
 
-    router.push({
-      pathname: '/(auth)/otp',
-      params: {
-        phone: `${selectedCountry.dialCode}${form.phone.replace(/\D/g, '')}`,
-        name: form.name.trim(),
-        mode: 'register',
-      },
-    });
+    const fullPhone = `${selectedCountry.dialCode}${form.phone.replace(/\D/g, '')}`;
+    try {
+      if (hasApi) {
+        await sendOtp({
+          phone: fullPhone,
+          fullName: form.name.trim(),
+        });
+      }
+      router.push({
+        pathname: '/(auth)/otp',
+        params: {
+          phone: fullPhone,
+          name: form.name.trim(),
+          mode: 'register',
+        },
+      });
+    } catch (err) {
+      setErrors({ phone: err instanceof Error ? err.message : 'Could not send verification code' });
+    }
   };
 
   return (

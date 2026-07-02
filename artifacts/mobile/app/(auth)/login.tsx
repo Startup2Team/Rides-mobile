@@ -22,6 +22,8 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { hasApi } from '@/services/api/config';
+import { sendOtp } from '@/services/api/auth';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: 'ðŸ‡·ðŸ‡¼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -49,16 +51,24 @@ export default function LoginScreen() {
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountrySheet, setShowCountrySheet] = useState(false);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (phone.replace(/\D/g, '').length < selectedCountry.minLength) {
       setError('Enter a valid phone number');
       return;
     }
     setError('');
-    router.push({
-      pathname: '/(auth)/otp',
-      params: { phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`, mode: 'login' },
-    });
+    const fullPhone = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
+    try {
+      if (hasApi) {
+        await sendOtp({ phone: fullPhone });
+      }
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone: fullPhone, mode: 'login' },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send verification code');
+    }
   };
 
   return (
