@@ -64,6 +64,7 @@ import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerifi
 import { bootstrapShadowRideProjection, stopShadowRideProjection } from '@/domains/ride/shadow';
 import { RideDualReadDiagnostics } from '@/domains/ride/dualRead';
 import { ActiveRideCanaryDiagnosticsBootstrapper as RideActiveRideCanaryDiagnosticsBootstrapper } from '@/domains/ride/projection';
+import { RideCanaryInspector, isRideCanaryInspectorVisible } from '@/domains/ride/projection/debug';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -173,6 +174,7 @@ export default function RootLayout() {
                 <RideProvider>
                   <RideDualReadDiagnostics />
                   <RideActiveRideCanaryDiagnosticsBootstrapper />
+                  {isRideCanaryInspectorVisible() ? <RideCanaryInspector /> : null}
                   <ToastProvider>
                     <SavedLocationsProvider>
                       <MapPickerProvider>

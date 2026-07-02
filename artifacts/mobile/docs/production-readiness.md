@@ -123,3 +123,7 @@ Phase 11I adds a developer-facing monitoring report over the same canary. The
 report is used to decide whether the next surface should remain blocked,
 require investigation, or stay ready for a later expansion step. It still does
 not expand the UI.
+
+Phase 11J adds the hidden Ride Canary Inspector for development and QA. It is
+diagnostics-only, invisible in production, and does not change RideProvider or
+query cache behavior.

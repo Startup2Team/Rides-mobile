@@ -35,3 +35,7 @@ The report is informational. It helps the team decide whether the current
 Active Ride canary has stayed healthy long enough to justify the next
 read-only surface. Until the recommendation is `ready_for_next_surface`, the
 current UI cutover remains the only projected surface.
+
+The developer-only Ride Canary Inspector reads this report together with the
+history, detail, and active ride canary diagnostics. It is QA and
+development-only and does not change production UI behavior.
