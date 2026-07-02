@@ -31,6 +31,12 @@ Current behavior:
 - read-state persistence uses the existing `notification_read_state_v1` payload
 - query hooks wrap the repository and keep the current visual behavior intact
 
+Remote prototype:
+- `RemoteNotificationRepository` can run in `SHADOW_REMOTE` mode for diagnostics
+- local notification state remains authoritative
+- the backend feed is still future work and does not affect current UI behavior
+- realtime notification events remain future work
+
 Future migration plan:
 - move the feed source to backend or event projections later
 - keep read-state compatibility until transport and sync are ready

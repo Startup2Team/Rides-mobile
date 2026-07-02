@@ -190,3 +190,5 @@ export async function getUnreadNotificationCount(input: NotificationFeedContext)
 export function getNotificationAccentColor(type: NotificationItem['type']) {
   return TYPE_ICON_COLOR[type];
 }
+
+export { createRemoteNotificationRepositoryPrototype, createNotificationShadowRepository } from '@/data/remote/repositories/RemoteNotificationRepository';

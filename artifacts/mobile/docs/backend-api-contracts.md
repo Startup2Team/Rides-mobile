@@ -175,3 +175,9 @@ Profile is the second repository to gain a concrete remote prototype.
 The shared identity contract can be exercised in `SHADOW_REMOTE` mode for
 diagnostics, while local profile persistence remains authoritative and the
 current customer/driver one-account model stays unchanged.
+
+Notifications are the third repository to gain a concrete remote prototype.
+The feed, unread count, mark read/unread, mark-all-read, and clear contracts
+can be exercised in `SHADOW_REMOTE` mode for diagnostics, while local
+notification state remains authoritative and the current notification UI stays
+unchanged.

@@ -153,6 +153,13 @@ Phase 12D adds the same remote prototype path for shared profile identity.
 - local profile persistence remains authoritative for current UI behavior
 - the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
 
+Phase 12E adds the same remote prototype path for notifications.
+
+- `RemoteNotificationRepository` maps notification feed and read-state DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local notification persistence remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection

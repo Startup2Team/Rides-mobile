@@ -287,7 +287,7 @@ function createRemotePackageRepository(client?: BackendClient): PackageRepositor
   };
 }
 
-function createRemoteNotificationRepository(client?: BackendClient): NotificationRepository {
+function createRemoteNotificationRepositoryStub(client?: BackendClient): NotificationRepository {
   return {
     async getReadState() {
       void client;
@@ -379,7 +379,7 @@ export const remoteSavedLocationsRepository = createRemoteSavedLocationsReposito
 export const remoteDriverRepository = createRemoteDriverRepository();
 export const remoteVehicleRepository = createRemoteVehicleRepository();
 export const remotePackageRepository = createRemotePackageRepository();
-export const remoteNotificationRepository = createRemoteNotificationRepository();
+export const remoteNotificationRepository = createRemoteNotificationRepositoryStub();
 export const remotePaymentRepository = createRemotePaymentRepository();
 export const remoteSearchRepository = createRemoteSearchRepository();
 export const remoteMapRepository = createRemoteMapRepository();
@@ -404,7 +404,6 @@ export {
   createRemoteBookingRepository,
   createRemoteDriverRepository,
   createRemoteMapRepository,
-  createRemoteNotificationRepository,
   createRemotePackageRepository,
   createRemotePaymentRepository,
   createRemoteRideRepository,
@@ -416,4 +415,5 @@ export {
   logRemoteRepositoryAttempt,
   createSavedLocationsShadowRepository,
   createRemoteProfileRepositoryStub,
+  createRemoteNotificationRepositoryStub,
 };

@@ -36,6 +36,11 @@ The remote profile path can now be exercised in `SHADOW_REMOTE` mode for
 diagnostics, but the local profile result still wins and the app behavior stays
 unchanged.
 
+Phase 12E adds the same prototype path for notifications.
+The remote notification feed and read-state path can now be exercised in
+`SHADOW_REMOTE` mode for diagnostics, but local notification state remains
+authoritative and the current UI behavior stays unchanged.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the
