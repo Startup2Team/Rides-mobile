@@ -31,10 +31,12 @@ selection changes are introduced here.
 ### Vehicles
 
 - `GET /v1/vehicles`
+- `GET /v1/vehicles/{vehicleId}`
 - `POST /v1/vehicles`
 - `PATCH /v1/vehicles/{vehicleId}`
 - `DELETE /v1/vehicles/{vehicleId}`
 - `PATCH /v1/vehicles/{vehicleId}/primary`
+- `POST /v1/vehicles/primary`
 
 ### Saved Locations
 
@@ -181,3 +183,9 @@ The feed, unread count, mark read/unread, mark-all-read, and clear contracts
 can be exercised in `SHADOW_REMOTE` mode for diagnostics, while local
 notification state remains authoritative and the current notification UI stays
 unchanged.
+
+Driver vehicles are the fourth repository to gain a concrete remote prototype.
+The list, detail, add, update, delete, and primary-selection contracts can be
+exercised in `SHADOW_REMOTE` mode for diagnostics, while local driver profile
+state remains authoritative and the current UI stays unchanged. Vehicle
+verification and approval remain backend-owned in the future rollout model.

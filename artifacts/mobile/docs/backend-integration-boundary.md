@@ -41,6 +41,12 @@ The remote notification feed and read-state path can now be exercised in
 `SHADOW_REMOTE` mode for diagnostics, but local notification state remains
 authoritative and the current UI behavior stays unchanged.
 
+Phase 12F adds the same prototype path for driver vehicles.
+The remote vehicle list, detail, add, update, delete, and primary-selection
+paths can now be exercised in `SHADOW_REMOTE` mode for diagnostics, but local
+driver profile state remains authoritative and the current UI behavior stays
+unchanged.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

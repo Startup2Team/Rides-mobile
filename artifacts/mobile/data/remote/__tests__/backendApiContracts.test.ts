@@ -7,6 +7,9 @@ describe('backend api contracts', () => {
     expect(api.RequestRideRequestDto).toBeDefined();
     expect(api.AddPaymentMethodRequestDto).toBeDefined();
     expect(api.SubmitDriverApplicationRequestDto).toBeDefined();
+    expect(api.VehicleDto).toBeDefined();
+    expect(api.GetVehicleRequestDto).toBeDefined();
+    expect(api.AddVehicleRequestDto).toBeDefined();
     expect(api.ApiIdempotencyMetadata).toBeDefined();
   });
 
@@ -45,6 +48,32 @@ describe('backend api contracts', () => {
 
     expect(requestRide.actorRole).toBe('customer');
     expect(addPaymentMethod.idempotencyKey).toContain('payment:add');
+  });
+
+  test('vehicle api dtos preserve actor model and transport metadata', () => {
+    const addVehicle: api.AddVehicleRequestDto = {
+      vehicleType: 'moto',
+      plateNumber: 'RAB 123A',
+      licenseNumber: 'LIC-123',
+      model: 'Bajaj',
+      brand: 'TVS',
+      idempotencyKey: 'vehicle:add:1',
+      correlationId: 'corr-5',
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      clientTimestamp: '2026-07-02T10:00:00.000Z',
+    };
+    const setPrimary: api.SetPrimaryVehicleRequestDto = {
+      vehicleId: 'vehicle-1',
+      idempotencyKey: 'vehicle:primary:1',
+      correlationId: 'corr-6',
+      actorId: 'driver-1',
+      actorRole: 'driver',
+      clientTimestamp: '2026-07-02T10:00:00.000Z',
+    };
+
+    expect(addVehicle.actorRole).toBe('driver');
+    expect(setPrimary.vehicleId).toBe('vehicle-1');
   });
 
   test('ride api dtos preserve actor model for lifecycle writes', () => {

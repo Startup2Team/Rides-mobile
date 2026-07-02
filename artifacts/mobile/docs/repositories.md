@@ -160,6 +160,13 @@ Phase 12E adds the same remote prototype path for notifications.
 - local notification persistence remains authoritative for current UI behavior
 - the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
 
+Phase 12F adds the same remote prototype path for driver vehicles.
+
+- `RemoteVehicleRepository` maps vehicle list, detail, create/update/delete, and primary-selection DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local driver-profile-backed vehicle truth remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection
