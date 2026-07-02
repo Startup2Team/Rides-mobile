@@ -3,7 +3,7 @@ import type { Ride } from '@/types';
 import type { ShadowFieldDiff, RideProjectionMismatch } from '../shadow/shadowTypes';
 
 export const ENABLE_RIDE_DUAL_READ = process.env.NODE_ENV !== 'production';
-export const USE_PROJECTED_RIDE_READ_MODEL = false;
+export const USE_PROJECTED_RIDE_READ_MODEL = process.env.USE_PROJECTED_RIDE_READ_MODEL === 'true';
 
 export type RideReadModelSource = 'live' | 'projected';
 

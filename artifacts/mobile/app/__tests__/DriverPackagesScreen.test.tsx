@@ -365,20 +365,21 @@ describe('DriverPackagesScreen', () => {
   });
 
   test('shows campaign values when a promotion is active', () => {
-    mockGetActiveDriverRideCampaigns.mockReturnValue([{
+    mockCampaigns = [{
       campaignId: 'world-cup',
       campaignName: 'World Cup',
       campaignType: 'global',
       status: 'active',
       startDate: '2026-06-01T00:00:00.000Z',
-      endDate: '2026-07-01T00:00:00.000Z',
+      endDate: '2026-07-31T00:00:00.000Z',
       createdAt: '2026-06-01T00:00:00.000Z',
       description: 'Temporary promotion',
       packageIds: ['growth'],
       priceRwf: 1_500,
       ridesGranted: 40,
       bonusRidesGranted: 5,
-    }]);
+    }];
+    mockGetActiveDriverRideCampaigns.mockReturnValue(mockCampaigns);
 
     render(<DriverPackagesScreen />);
 

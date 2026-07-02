@@ -50,6 +50,7 @@ export interface ActiveRideReadModel {
   pickup: RideLocationSnapshot;
   destination: RideLocationSnapshot;
   fare?: RideFareSnapshot | null;
+  etaMinutes?: number | null;
   updatedAt: string;
   sequenceNumber: number;
   projection: RideProjectionMetadata;

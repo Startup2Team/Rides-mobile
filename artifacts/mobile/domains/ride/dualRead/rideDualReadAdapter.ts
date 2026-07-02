@@ -1,27 +1,32 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useRide } from '@/context/RideContext';
+import { observability } from '@/observability/context/observabilityContext';
 import type { Ride } from '@/types';
 import type { ActiveRideReadModel, DriverRideRequestReadModel, RideHistoryReadModel } from '../readModels';
 import { rideShadowProjectionManager } from '../shadow/shadowProjectionManager';
 import type { RideShadowSnapshot } from '../shadow/shadowTypes';
-import { compareActiveRide, compareDriverRequests, compareRideDualReadModels, compareRideHistory } from './rideDualReadComparator';
-import { recordRideDualReadTelemetry } from './rideDualReadMetrics';
+import { resolveProjectedActiveRide } from '../projection/activeRideCanary';
+import { createActiveRideUiSummary, mapProjectedActiveRideToRideLike } from '../projection/activeRideUiModel';
 import {
-  ENABLE_RIDE_DUAL_READ,
-  USE_PROJECTED_RIDE_READ_MODEL,
-  type RideDualReadLiveSnapshot,
-  type RideDualReadProjectedSnapshot,
-  type RideDualReadSlice,
-  type RideDualReadSnapshot,
-  type RideReadModelSource,
+  rideProjectionCoordinator,
+  useProjectionCoordinator,
+} from '../projection';
+import type {
+  RideDualReadLiveSnapshot,
+  RideDualReadProjectedSnapshot,
+  RideDualReadSlice,
+  RideDualReadSnapshot,
+  RideReadModelSource,
 } from './rideDualReadTypes';
+import { ENABLE_RIDE_DUAL_READ, USE_PROJECTED_RIDE_READ_MODEL } from './rideDualReadTypes';
+import type { ActiveRideUiSummary } from '../projection/activeRideUiModel';
 
-let liveReadModelForced = false;
-
-function normalizeDriverRequests(live: Ride | Ride[] | null | undefined) {
-  if (Array.isArray(live)) return live;
-  if (!live) return [];
-  return [live];
+export interface ActiveRideUiReadModelSlice extends Omit<RideDualReadSlice<Ride | null, ActiveRideReadModel | null>, 'comparison'> {
+  selected: Ride | null;
+  summary: ActiveRideUiSummary;
+  fallback: boolean;
+  readinessDenied: boolean;
+  comparison: ReturnType<typeof resolveProjectedActiveRide>['comparison'];
 }
 
 export function getLiveActiveRide(live: Ride | null | undefined) {
@@ -40,8 +45,8 @@ export function getProjectedRideHistory(snapshot: RideShadowSnapshot | null | un
   return [...(snapshot?.shadowRideHistory ?? [])];
 }
 
-export function getLiveDriverRequests(live: Ride | Ride[] | null | undefined) {
-  return normalizeDriverRequests(live);
+export function getLiveDriverRequests(live: Ride[] | null | undefined) {
+  return live ?? [];
 }
 
 export function getProjectedDriverRequests(snapshot: RideShadowSnapshot | null | undefined) {
@@ -49,14 +54,13 @@ export function getProjectedDriverRequests(snapshot: RideShadowSnapshot | null |
 }
 
 export function getReadModelSource(options: { projectedAvailable?: boolean } = {}): RideReadModelSource {
-  if (liveReadModelForced) return 'live';
-  if (!ENABLE_RIDE_DUAL_READ) return 'live';
-  if (!USE_PROJECTED_RIDE_READ_MODEL) return 'live';
-  return options.projectedAvailable ? 'projected' : 'live';
+  return rideProjectionCoordinator.resolveSelection(Boolean(options.projectedAvailable)).source === 'PROJECTED'
+    ? 'projected'
+    : 'live';
 }
 
 export function forceLiveRideReadModel() {
-  liveReadModelForced = true;
+  rideProjectionCoordinator.rollbackToLive();
   return 'live' as const;
 }
 
@@ -67,62 +71,130 @@ export function assertProjectedReadDisabledInProduction() {
   return true;
 }
 
-export function createRideDualReadSnapshot(
-  live: RideDualReadLiveSnapshot,
-  shadowSnapshot: RideShadowSnapshot | null | undefined,
-): RideDualReadSnapshot {
-  const projectedAvailable = Boolean(shadowSnapshot?.enabled && shadowSnapshot?.running);
-  const projected: RideDualReadProjectedSnapshot | null = projectedAvailable
-    ? {
-        activeRide: getProjectedActiveRide(shadowSnapshot),
-        rideHistory: getProjectedRideHistory(shadowSnapshot),
-        driverRequests: getProjectedDriverRequests(shadowSnapshot),
-      }
-    : null;
-
-  return {
-    enabled: ENABLE_RIDE_DUAL_READ,
-    source: getReadModelSource({ projectedAvailable }),
-    projectedAvailable,
-    live: {
-      activeRide: getLiveActiveRide(live.activeRide),
-      rideHistory: getLiveRideHistory(live.rideHistory),
-      driverRequests: getLiveDriverRequests(live.driverRequests),
-    },
-    projected,
-    comparison: ENABLE_RIDE_DUAL_READ && projectedAvailable
-      ? compareRideDualReadModels(live, projected)
-      : null,
-  };
-}
-
-export function useRideReadModel(): RideDualReadSnapshot {
-  const ride = useRide();
-  const shadowSnapshot = rideShadowProjectionManager.getSnapshot();
-
-  const snapshot = useMemo(() => createRideDualReadSnapshot({
-    activeRide: ride.currentRide,
-    rideHistory: ride.rideHistory,
-    driverRequests: ride.pendingRequest ? [ride.pendingRequest] : [],
-  }, shadowSnapshot), [ride.currentRide, ride.rideHistory, ride.pendingRequest, shadowSnapshot]);
-
-  useEffect(() => {
-    if (!ENABLE_RIDE_DUAL_READ) return;
-    recordRideDualReadTelemetry(snapshot);
-  }, [snapshot]);
-
-  return snapshot;
-}
-
-export function useActiveRideReadModel(): RideDualReadSlice<Ride | null, ActiveRideReadModel | null> {
-  const snapshot = useRideReadModel();
+function mapProjectionSnapshot(snapshot: ReturnType<typeof useProjectionCoordinator>): RideDualReadSnapshot {
   return {
     enabled: snapshot.enabled,
     source: snapshot.source,
     projectedAvailable: snapshot.projectedAvailable,
-    live: snapshot.live.activeRide,
-    projected: snapshot.projected?.activeRide ?? null,
+    live: snapshot.live,
+    projected: snapshot.projected,
     comparison: snapshot.comparison,
+  };
+}
+
+export function createRideDualReadSnapshot(
+  live: RideDualReadLiveSnapshot,
+  shadowSnapshot: RideShadowSnapshot | null | undefined,
+): RideDualReadSnapshot {
+  return mapProjectionSnapshot(rideProjectionCoordinator.createSnapshot(live, shadowSnapshot));
+}
+
+export function useRideReadModel(): RideDualReadSnapshot {
+  const snapshot = useProjectionCoordinator();
+  return useMemo(() => mapProjectionSnapshot(snapshot), [snapshot]);
+}
+
+export function useActiveRideReadModel(): ActiveRideUiReadModelSlice {
+  const ride = useRide();
+  const shadowSnapshot = rideShadowProjectionManager.getSnapshot();
+  const canaryEnabled = process.env.ENABLE_PROJECTED_ACTIVE_RIDE_CANARY === 'true';
+  const useProjectedRideReadModel = process.env.USE_PROJECTED_RIDE_READ_MODEL === 'true';
+  const canaryResult = useMemo(() => resolveProjectedActiveRide(ride.currentRide, {
+    canaryEnabled,
+    useProjectedRideReadModel,
+    shadowSnapshot,
+  }), [ride.currentRide, shadowSnapshot, canaryEnabled, useProjectedRideReadModel]);
+
+  const selectedRide = useMemo(() => (
+    canaryResult.source === 'projected'
+      ? mapProjectedActiveRideToRideLike(ride.currentRide, canaryResult.activeRide as ActiveRideReadModel | null)
+      : ride.currentRide
+  ), [canaryResult.activeRide, canaryResult.source, ride.currentRide]);
+
+  const summary = useMemo(() => createActiveRideUiSummary(
+    selectedRide,
+    canaryResult.source === 'projected' ? canaryResult.activeRide as ActiveRideReadModel | null : null,
+    canaryResult.source,
+  ), [canaryResult.activeRide, canaryResult.source, selectedRide]);
+
+  const telemetryRef = useRef<string | null>(null);
+  useEffect(() => {
+    const telemetryKey = [
+      canaryResult.source,
+      canaryResult.fallback ? 'fallback' : 'selected',
+      canaryResult.stale ? 'stale' : 'fresh',
+      canaryResult.readinessDenied ? 'denied' : 'ready',
+      summary.phaseLabel,
+      summary.statusLabel,
+    ].join('|');
+
+    if (telemetryRef.current === telemetryKey) return;
+    telemetryRef.current = telemetryKey;
+
+    observability.metrics.counter('ride.active.ui.source_selected', 1, {
+      source: canaryResult.source,
+      fallback: String(canaryResult.fallback),
+    });
+    observability.logger.info('RideActiveRideUiSourceSelected', {
+      source: canaryResult.source,
+      fallback: canaryResult.fallback,
+      stale: canaryResult.stale,
+      readinessDenied: canaryResult.readinessDenied,
+    });
+
+    if (canaryResult.source === 'projected') {
+      observability.metrics.counter('ride.active.ui.projected_enabled', 1);
+      observability.logger.info('RideActiveRideUiProjectedEnabled', {
+        source: canaryResult.source,
+        phaseLabel: summary.phaseLabel,
+      });
+      return;
+    }
+
+    observability.metrics.counter('ride.active.ui.live_fallback', 1, {
+      reason: canaryResult.readinessDenied ? 'readiness-denied' : canaryResult.stale ? 'stale' : canaryResult.fallback ? 'fallback' : 'live',
+    });
+    observability.logger.info('RideActiveRideUiLiveFallback', {
+      source: canaryResult.source,
+      reason: canaryResult.readinessDenied ? 'readiness-denied' : canaryResult.stale ? 'stale' : canaryResult.fallback ? 'fallback' : 'live',
+    });
+
+    if (rideProjectionCoordinator.isLiveForced()) {
+      observability.metrics.counter('ride.active.ui.rollback_used', 1);
+      observability.logger.warn('RideActiveRideUiRollbackUsed', {
+        source: canaryResult.source,
+      });
+    }
+
+    const blockedByGate =
+      canaryEnabled
+      && useProjectedRideReadModel
+      && canaryResult.source === 'live'
+      && canaryResult.projectedAvailable
+      && !canaryResult.stale
+      && (!canaryResult.comparison || canaryResult.comparison.length === 0)
+      && !canaryResult.readinessDenied;
+
+    if (blockedByGate) {
+      observability.metrics.counter('ride.active.ui.projection_blocked_by_gate', 1);
+      observability.logger.warn('RideActiveRideUiProjectionBlockedByGate', {
+        source: canaryResult.source,
+        reason: 'rollout-gate-blocked',
+      });
+    }
+  }, [canaryResult.comparison, canaryResult.fallback, canaryResult.projectedAvailable, canaryResult.readinessDenied, canaryResult.source, canaryResult.stale, canaryEnabled, selectedRide, summary.phaseLabel, summary.statusLabel, useProjectedRideReadModel]);
+
+  return {
+    enabled: ENABLE_RIDE_DUAL_READ,
+    source: canaryResult.source,
+    projectedAvailable: canaryResult.projectedAvailable,
+    live: ride.currentRide,
+    projected: canaryResult.activeRide && canaryResult.source === 'projected' ? canaryResult.activeRide as ActiveRideReadModel : null,
+    comparison: canaryResult.comparison,
+    selected: selectedRide,
+    summary,
+    fallback: canaryResult.fallback,
+    readinessDenied: canaryResult.readinessDenied,
   };
 }
 

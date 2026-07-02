@@ -23,6 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { type DriverRatingStars } from '@/domain/driverWallet';
+import { shadowWireSubmitRatingCommand } from '@/domains/ride/commandPipeline';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { buildLocalDriverRating, saveDriverRatingOnce } from '@/persistence/driverRatingPersistence';
 import { typography } from '@/constants/typography';
@@ -143,6 +144,19 @@ export default function RatingScreen() {
     if (ratingSavedRef.current || stars < 1 || stars > 5) return;
     const driverId = ratedRide?.driverId ?? ratedRide?.driver?.id;
     if (!ratedRide?.id || !driverId) return;
+
+    try {
+      shadowWireSubmitRatingCommand({
+        rideId: ratedRide.id,
+        rating: stars,
+        comment: review || null,
+        ratedUserId: driverId,
+        actorId: user?.id ?? ratedRide.customerId ?? 'local_user',
+        actorRole: user?.mode === 'driver' ? 'driver' : 'customer',
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.rating', error, { rideId: ratedRide.id, driverId });
+    }
 
     try {
       await saveDriverRatingOnce(buildLocalDriverRating({

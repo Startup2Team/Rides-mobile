@@ -1,12 +1,16 @@
 export * from './commandHandlers';
 export * from './commandCreators';
+export * from './commandPipeline';
+export * from './canary';
 export * from './events';
 export * from './eventFactories';
 export * from './idempotency';
 export * from './projectors';
+export * from './projection';
 export * from './readModels';
 export { rideHistoryRepository, type RideHistoryOptions } from './repository';
 export * from './sequence';
 export * from './shadow';
+export * from './transactions';
 export type * from './commands';
 export type { Ride } from './types';

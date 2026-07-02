@@ -138,7 +138,7 @@ describe('package query layer', () => {
         campaignType: 'global',
         status: 'active',
         startDate: '2026-06-29T00:00:00.000Z',
-        endDate: '2026-06-30T00:00:00.000Z',
+        endDate: '2026-07-30T00:00:00.000Z',
         createdAt: '2026-06-29T00:00:00.000Z',
         description: 'Discounted package',
         packageIds: ['growth'],

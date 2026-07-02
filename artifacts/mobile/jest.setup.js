@@ -91,3 +91,59 @@ jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(() => Promise.resolve()),
   selectionAsync: jest.fn(() => Promise.resolve()),
 }));
+
+jest.mock('expo-location', () => ({
+  Accuracy: {
+    Balanced: 1,
+    High: 2,
+  },
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted' })),
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted' })),
+  getCurrentPositionAsync: jest.fn(async () => ({
+    coords: {
+      latitude: -1.9441,
+      longitude: 30.0619,
+      accuracy: 10,
+      altitude: null,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null,
+    },
+    timestamp: Date.now(),
+  })),
+  reverseGeocodeAsync: jest.fn(async () => ([{
+    city: 'Kigali',
+    region: 'Kigali City',
+    street: 'KN 4 Ave',
+    name: 'Kigali',
+  }])),
+  watchPositionAsync: jest.fn(async (_options, callback) => {
+    callback({
+      coords: {
+        latitude: -1.9441,
+        longitude: 30.0619,
+        accuracy: 10,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+      },
+      timestamp: Date.now(),
+    });
+    return { remove: jest.fn() };
+  }),
+}));
+
+jest.mock('@/constants/savedLocations', () => ({
+  SAVED_LOCATIONS_KEY: '@rides_saved_locations',
+  SAVE_LOCATION_LABELS: ['Home', 'Work', 'School', 'Church', 'Market', 'Other'],
+  SAVE_LABEL_WIDTHS: {
+    Home: 48,
+    Work: 48,
+    School: 56,
+    Church: 56,
+    Market: 56,
+    Other: 56,
+  },
+  MAX_SAVED_LOCATIONS: 20,
+}));

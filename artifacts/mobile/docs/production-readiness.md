@@ -48,3 +48,68 @@ Before projected ride models can drive UI:
 
 Phase 10 should only start after these gates are green and the migration plan is explicitly approved.
 Phase 10A is the gated dual-read step; Phase 10B should only begin after the dual-read diagnostics remain clean under normal and replayed lifecycle traffic.
+
+Phase 10C adds command-pipeline validation and offline-mutation previews in dry-run or shadow mode only. Production remains disabled until the command pipeline proves stable beside the live RideProvider path.
+
+Phase 10D shadow-wires selected live ride actions into the pipeline for
+diagnostics only. The live RideProvider path still executes first, and the
+shadow path must fail closed without affecting runtime behavior. The cutover
+flag stays disabled until the projected path is proven safe under readiness
+and parity checks.
+
+Phase 10E extends the same diagnostics-only pattern to driver accept and
+decline. These actions remain live-first, with shadow commands recorded only
+when the command pipeline is enabled in non-production modes.
+
+Phase 10H adds shadow validation for `Complete Ride` through the transaction
+boundary. The live completion flow remains authoritative, and the new
+financial preview stays metadata-only until the later settlement migration
+phase is approved and gated.
+
+Phase 10I adds end-to-end verification across every ride lifecycle action:
+request, cancel, accept, decline, start, complete, and submit rating. The
+tests confirm that the live flow still runs, the shadow command pipeline and
+transaction boundary stay diagnostics-only, and no enqueue or repository
+behavior is introduced ahead of any read-model cutover.
+
+Phase 11A makes ride history the first projected read model behind a disabled
+canary. The projected path stays diagnostics-only until parity remains stable
+and rollback behavior is proven across history-specific comparison failures and
+projection unavailability.
+
+`ENABLE_PROJECTED_HISTORY_CANARY` stays disabled by default in every
+environment until history parity and rollback criteria are explicitly approved.
+
+Phase 11B makes ride detail the second canary behind another disabled flag.
+Ride detail remains live-first and immediately falls back if comparison or
+mapping fails. Active ride stays live-only.
+
+Phase 11C adds centralized canary health and parity reporting. The health
+report becomes the gate for deciding whether the projected read-model canaries
+are ready for any later active-ride migration. Active ride remains disabled
+until the history and detail canaries satisfy the readiness thresholds with
+zero unresolved mapping failures and stable fallback rates.
+
+Phase 11D adds the projected Active Ride shadow canary. It stays behind a
+disabled flag, is gated by the readiness report, and must reject stale or
+incomplete projections immediately. Active Ride remains live-only until a
+future phase proves the shadow canary is stable enough for any cutover
+discussion.
+
+Phase 11E boots the Active Ride canary diagnostics automatically in dev/test
+only. Production remains disabled, the diagnostics loop is timer-based and
+shadow-only, and the UI continues to read from RideProvider. Readiness gates
+must still pass before any later rollout phase can consider a projected
+Active Ride source.
+
+Phase 11F adds the explicit active-ride rollout gate and hard rollback
+controls. Even with healthy parity reports and a running canary, projected
+Active Ride remains blocked unless the sustained parity window and production
+guard both pass. `forceActiveRideLiveSource()` remains the fast rollback path
+and does not mutate `RideProvider`, clear query cache state, or require a
+restart.
+
+Phase 11G is the first live UI cutover. It only exposes the read-only Active
+Ride summary surface to projected data, and every other operational surface
+continues to use the live RideProvider state. Any fallback, staleness, or gate
+failure returns the UI to live reads immediately.

@@ -15,8 +15,10 @@ import {
   RideStatus,
   VehicleType,
 } from '@/types';
+import { observability } from '@/observability/context/observabilityContext';
 import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 import { RideContextType } from './rideTypes';
+import { resolveCapabilities, type CapabilitySnapshot } from '@/capabilities';
 import { calcDistance, calcFare } from './rideFare';
 import {
   buildInitialDriverOffer,
@@ -54,6 +56,18 @@ import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { useOptionalAuth } from '@/context/AuthContext';
 import { getEligibleOnlineSessionVehicle } from './rideSession';
+import {
+  shadowWireAcceptRideCommand,
+  shadowWireCancelRideCommand,
+  shadowWireCompleteRideCommand,
+  shadowWireDeclineRideCommand,
+  shadowWireRequestRideCommand,
+  shadowWireStartRideCommand,
+} from '@/domains/ride/commandPipeline';
+import { createRideCorrelationId } from '@/domains/ride/idempotency';
+import { createCompleteRideCommand, createStartRideCommand } from '@/domains/ride/commandCreators';
+import { rideTransactionBoundary } from '@/domains/ride/transactions';
+import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionPhase, RideStatus as RideProjectionStatus } from '@/domains/ride/readModels';
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -84,6 +98,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const timers = timerManagerRef.current;
   currentRideRef.current = currentRide;
   pendingRequestRef.current = pendingRequest;
+  const rideCommandCapabilitySnapshot = useMemo<CapabilitySnapshot>(() => ({
+    ...resolveCapabilities({
+      user: auth?.user ?? null,
+      driverProfile: auth?.driverProfile ?? null,
+      driverEntitlement: driverEntitlement?.entitlement ?? null,
+      vehicles: auth?.driverProfile?.vehicles ?? [],
+      mode: auth?.user?.mode ?? null,
+    }),
+    mode: auth?.user?.mode ?? null,
+  }), [auth?.driverProfile, auth?.user, driverEntitlement?.entitlement]);
 
   const clearSearchTimers = useCallback(() => {
     timers.clearTimeout(matchDriverTimeoutRef.current);
@@ -177,6 +201,291 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setCurrentRide(prev => prev ? { ...prev, status, ...extra } : null);
   };
 
+  function buildTransactionParticipant(
+    userId: string | undefined,
+    role: RideParticipant['role'],
+    displayName?: string | null,
+  ): RideParticipant {
+    return {
+      userId: userId ?? 'local_user',
+      role,
+      ...(displayName ? { displayName } : {}),
+    };
+  }
+
+  function toTransactionRideStatus(status: RideStatus): RideProjectionStatus {
+    switch (status) {
+      case 'arrived':
+        return 'driver_arrived';
+      case 'in_progress':
+        return 'started';
+      case 'completed':
+        return 'completed';
+      case 'cancelled':
+        return 'cancelled';
+      case 'confirmed':
+        return 'accepted';
+      case 'arriving':
+        return 'driver_en_route';
+      case 'driver_assigned':
+        return 'matching';
+      case 'negotiating':
+        return 'offered';
+      case 'searching':
+      default:
+        return 'matching';
+    }
+  }
+
+  function toTransactionRidePhase(status: RideStatus): RideProjectionPhase {
+    switch (status) {
+      case 'in_progress':
+        return 'active';
+      case 'completed':
+      case 'cancelled':
+        return 'closed';
+      case 'arrived':
+      case 'confirmed':
+        return 'accepted';
+      case 'arriving':
+        return 'accepted';
+      case 'searching':
+      case 'driver_assigned':
+      case 'negotiating':
+      default:
+        return 'matching';
+    }
+  }
+
+  function buildStartRideTransactionRide(ride: Ride): ActiveRideReadModel {
+    return {
+      rideId: ride.id,
+      status: toTransactionRideStatus(ride.status),
+      phase: toTransactionRidePhase(ride.status),
+      customer: buildTransactionParticipant(ride.customerId, 'customer', ride.customerName ?? 'Customer'),
+      driver: ride.driverId || ride.driverName
+        ? buildTransactionParticipant(ride.driverId ?? ride.driver?.id ?? 'local_user', 'driver', ride.driverName ?? ride.driver?.name ?? null)
+        : null,
+      pickup: {
+        address: ride.pickup.address ?? '',
+        latitude: ride.pickup.latitude,
+        longitude: ride.pickup.longitude,
+        capturedAt: ride.createdAt,
+      },
+      destination: {
+        address: ride.destination.address ?? '',
+        latitude: ride.destination.latitude,
+        longitude: ride.destination.longitude,
+        capturedAt: ride.createdAt,
+      },
+      fare: typeof ride.agreedFare === 'number'
+        ? {
+            amount: ride.agreedFare,
+            currency: 'RWF',
+            source: 'negotiated',
+            finalizedAt: ride.status === 'completed' ? ride.completedAt ?? ride.createdAt : null,
+          }
+        : {
+            amount: ride.suggestedFare,
+            currency: 'RWF',
+            source: 'estimate',
+            finalizedAt: null,
+          },
+      updatedAt: ride.completedAt ?? ride.arrivedAt ?? ride.createdAt,
+      sequenceNumber: 1,
+      projection: {
+        appliedEventIds: [],
+      },
+    };
+  }
+
+  function recordStartRideTransactionTelemetry(
+    result: ReturnType<typeof rideTransactionBoundary.evaluate>,
+    command: ReturnType<typeof createStartRideCommand>,
+  ) {
+    observability.metrics.counter('ride.start_transaction.preview', 1, {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+    });
+    observability.logger.info('RideStartTransactionPreview', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      commandType: result.commandType,
+      status: result.state,
+    });
+
+    if (result.accepted) {
+      observability.metrics.counter('ride.start_transaction.accepted', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.info('RideStartTransactionAccepted', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+      return;
+    }
+
+    observability.metrics.counter('ride.start_transaction.rejected', 1, {
+      rideId: command.payload.rideId,
+    });
+    observability.logger.warn('RideStartTransactionRejected', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      reason: result.reason,
+    });
+
+    if (result.orderingViolation) {
+      observability.metrics.counter('ride.start_transaction.ordering_violation', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideStartTransactionOrderingViolation', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.duplicate) {
+      observability.metrics.counter('ride.start_transaction.duplicate_detected', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideStartTransactionDuplicateDetected', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.reason === 'capability-denied') {
+      observability.metrics.counter('ride.start_transaction.capability_denied', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideStartTransactionCapabilityDenied', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+  }
+
+  function recordCompleteRideTransactionTelemetry(
+    preview: ReturnType<typeof rideTransactionBoundary.preview>,
+    result: ReturnType<typeof rideTransactionBoundary.evaluate>,
+    command: ReturnType<typeof createCompleteRideCommand>,
+  ) {
+    observability.metrics.counter('ride.complete_transaction.preview', 1, {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+    });
+    observability.logger.info('RideCompleteTransactionPreview', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      commandType: result.commandType,
+      status: result.state,
+      financialPreviewMode: preview?.financialPreview?.mode ?? null,
+    });
+
+    if (preview?.financialPreview) {
+      observability.metrics.counter('ride.complete_transaction.financial_preview', 1, {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+      });
+      observability.logger.info('RideCompleteTransactionFinancialPreview', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+        effects: preview.financialPreview.effects.map(effect => effect.name),
+        notes: preview.financialPreview.notes,
+      });
+    }
+
+    if (result.accepted) {
+      observability.metrics.counter('ride.complete_transaction.accepted', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.info('RideCompleteTransactionAccepted', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+      return;
+    }
+
+    observability.metrics.counter('ride.complete_transaction.rejected', 1, {
+      rideId: command.payload.rideId,
+    });
+    observability.logger.warn('RideCompleteTransactionRejected', {
+      rideId: command.payload.rideId,
+      commandId: command.commandId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      correlationId: command.correlationId,
+      idempotencyKey: command.idempotencyKey,
+      reason: result.reason,
+    });
+
+    if (result.orderingViolation) {
+      observability.metrics.counter('ride.complete_transaction.ordering_violation', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideCompleteTransactionOrderingViolation', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.duplicate) {
+      observability.metrics.counter('ride.complete_transaction.duplicate_detected', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideCompleteTransactionDuplicateDetected', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+
+    if (result.reason === 'capability-denied') {
+      observability.metrics.counter('ride.complete_transaction.capability_denied', 1, {
+        rideId: command.payload.rideId,
+      });
+      observability.logger.warn('RideCompleteTransactionCapabilityDenied', {
+        rideId: command.payload.rideId,
+        commandId: command.commandId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        correlationId: command.correlationId,
+        idempotencyKey: command.idempotencyKey,
+      });
+    }
+  }
+
   const clearCancelledSearchDraft = useCallback(() => {
     setCancelledSearchDraft(null);
     setRestoreBookingOnHomeFocus(false);
@@ -222,6 +531,19 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     };
 
     const displayDestText = destText.trim() || destination.address?.trim() || '';
+    try {
+      shadowWireRequestRideCommand({
+        rideId: ride.id,
+        pickup,
+        destination,
+        vehicleType,
+        actorId: auth?.user?.id ?? 'local_user',
+        actorRole: 'customer',
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.request', error, { rideId: ride.id });
+    }
     setCancelledSearchDraft(cloneBookingDraft(pickup, destination, vehicleType, displayDestText));
 
     isMatchingPausedRef.current = false;
@@ -230,7 +552,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     clearSearchTimers();
     setCurrentRide(ride);
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
-  }, [clearSearchTimers, scheduleDriverMatch, timers]);
+  }, [auth?.user?.id, clearSearchTimers, rideCommandCapabilitySnapshot, scheduleDriverMatch, timers]);
 
   const cancelRide = useCallback(() => {
     const session = timers.endSession();
@@ -241,11 +563,31 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     driverIntervalRef.current = null;
     setDriverLocation(null);
     setRestoreBookingOnHomeFocus(true);
+    const currentRideSnapshot = currentRideRef.current;
+    try {
+      if (currentRideSnapshot) {
+        const reason = currentRideSnapshot.status === 'searching' || currentRideSnapshot.status === 'driver_assigned' || currentRideSnapshot.status === 'negotiating'
+          ? 'customer_before_acceptance'
+          : 'customer_after_acceptance';
+        shadowWireCancelRideCommand({
+          rideId: currentRideSnapshot.id,
+          reason,
+          note: null,
+          actorId: auth?.user?.id ?? currentRideSnapshot.customerId ?? 'local_user',
+          actorRole: auth?.user?.mode === 'driver' ? 'driver' : 'customer',
+          capabilitySnapshot: rideCommandCapabilitySnapshot,
+        });
+      }
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.cancel', error, {
+        rideId: currentRideSnapshot?.id ?? 'unknown',
+      });
+    }
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
     timers.scheduleTimeout(() => {
       setCurrentRide(prev => prev?.status === 'cancelled' ? null : prev);
     }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
-  }, [clearSearchTimers, timers]);
+  }, [auth?.user?.id, auth?.user?.mode, clearSearchTimers, rideCommandCapabilitySnapshot, timers]);
 
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => addCustomerCounterOffer(prev, amount));
@@ -295,17 +637,56 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [timers]);
 
   const startJourney = useCallback(() => {
+    const currentRideSnapshot = currentRideRef.current;
+    const startedAt = new Date().toISOString();
     setCurrentRide(startRideJourney);
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = timers.scheduleInterval(() => {
       setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
     }, JOURNEY_TRACKING_INTERVAL_MS);
-  }, [timers]);
+    if (!currentRideSnapshot) return;
+    const actorRole = auth?.user?.mode === 'driver' && rideCommandCapabilitySnapshot.state.isApprovedDriver
+      ? 'driver'
+      : 'system';
+    try {
+      const command = createStartRideCommand({
+        rideId: currentRideSnapshot.id,
+        startedAt,
+        location: null,
+      }, {
+        actorId: auth?.user?.id ?? currentRideSnapshot.driverId ?? currentRideSnapshot.driver?.id ?? 'local_user',
+        actorRole,
+        correlationId: createRideCorrelationId(),
+        timestamp: startedAt,
+      });
+      const transactionResult = rideTransactionBoundary.evaluate(command, {
+        currentRide: buildStartRideTransactionRide(currentRideSnapshot),
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+      recordStartRideTransactionTelemetry(transactionResult, command);
+      if (transactionResult.accepted) {
+        shadowWireStartRideCommand({
+          command,
+          rideId: currentRideSnapshot.id,
+          startedAt,
+          location: null,
+          actorId: command.actorId,
+          actorRole,
+          correlationId: command.correlationId,
+          timestamp: command.timestamp,
+          capabilitySnapshot: rideCommandCapabilitySnapshot,
+        });
+      }
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.start', error, { rideId: currentRideSnapshot.id });
+    }
+  }, [auth?.user?.id, rideCommandCapabilitySnapshot, timers]);
 
   const completeRide = useCallback((
     source: 'customer' | 'driver' = 'customer',
     driverIdentity?: { driverId?: string; driverName?: string; vehicleId?: string; vehicleType?: VehicleType },
   ) => {
+    const currentRideSnapshot = currentRideRef.current;
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
@@ -335,14 +716,59 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       return null;
     });
     setDriverLocation(null);
-  }, [driverEntitlement, timers]);
+    if (!currentRideSnapshot) return;
+    const completedAt = new Date().toISOString();
+    const actorRole = source === 'driver' ? 'driver' : 'system';
+    const actorId = source === 'driver'
+      ? auth?.user?.id ?? driverIdentity?.driverId ?? currentRideSnapshot.driverId ?? currentRideSnapshot.driver?.id ?? 'local_user'
+      : auth?.user?.id ?? currentRideSnapshot.customerId ?? 'local_user';
+    try {
+      const command = createCompleteRideCommand({
+        rideId: currentRideSnapshot.id,
+        completedAt,
+        location: null,
+        distanceKm: null,
+        durationSeconds: null,
+      }, {
+        actorId,
+        actorRole,
+        correlationId: createRideCorrelationId(),
+        timestamp: completedAt,
+      });
+      const transactionPreview = rideTransactionBoundary.preview(command, {
+        currentRide: buildStartRideTransactionRide(currentRideSnapshot),
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+      const transactionResult = rideTransactionBoundary.evaluate(command, {
+        currentRide: buildStartRideTransactionRide(currentRideSnapshot),
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+      recordCompleteRideTransactionTelemetry(transactionPreview, transactionResult, command);
+      shadowWireCompleteRideCommand({
+        command,
+        rideId: currentRideSnapshot.id,
+        completedAt,
+        location: null,
+        distanceKm: null,
+        durationSeconds: null,
+        actorId: command.actorId,
+        actorRole,
+        correlationId: command.correlationId,
+        timestamp: command.timestamp,
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.complete', error, { rideId: currentRideSnapshot.id });
+    }
+  }, [auth?.user?.id, driverEntitlement, rideCommandCapabilitySnapshot, timers]);
 
   const acceptRideRequest = useCallback(() => {
-    if (!pendingRequestRef.current) return;
-    timers.startSession();
     const request = pendingRequestRef.current;
+    if (!request) return;
+    timers.startSession();
     const initialMessages = buildInitialNegotiationMessages(request.pickup, request.destination);
     const sessionVehicle = getEligibleOnlineSessionVehicle(auth?.driverProfile, driverEntitlement?.entitlement, request.requestedVehicleType ?? request.vehicleType);
+    const actorId = auth?.user?.id ?? 'local_user';
     setCurrentRide({
       ...request,
       status: 'negotiating',
@@ -351,11 +777,40 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       matchedVehicleType: request.matchedVehicleType ?? sessionVehicle?.vehicleType,
     });
     setPendingRequest(null);
-  }, [auth?.driverProfile, driverEntitlement?.entitlement, timers]);
+    try {
+      shadowWireAcceptRideCommand({
+        rideId: request.id,
+        driverId: actorId,
+        vehicleId: sessionVehicle?.id ?? request.matchedVehicleId ?? null,
+        acceptedFare: request.agreedFare ?? request.suggestedFare ?? null,
+        actorId,
+        actorRole: 'driver',
+        capabilitySnapshot: rideCommandCapabilitySnapshot,
+      });
+    } catch (error) {
+      reportOperationalFailure('ride.shadow.accept', error, { rideId: request.id });
+    }
+  }, [auth?.driverProfile, auth?.user?.id, driverEntitlement?.entitlement, rideCommandCapabilitySnapshot, timers]);
 
   const declineRideRequest = useCallback(() => {
+    const request = pendingRequestRef.current;
     setPendingRequest(null);
-  }, []);
+    if (request) {
+      const actorId = auth?.user?.id ?? 'local_user';
+      try {
+        shadowWireDeclineRideCommand({
+          rideId: request.id,
+          driverId: actorId,
+          reason: null,
+          actorId,
+          actorRole: 'driver',
+          capabilitySnapshot: rideCommandCapabilitySnapshot,
+        });
+      } catch (error) {
+        reportOperationalFailure('ride.shadow.decline', error, { rideId: request.id });
+      }
+    }
+  }, [auth?.user?.id, rideCommandCapabilitySnapshot]);
 
   const simulateIncomingRideRequest = useCallback(() => {
     if (pendingRequestRef.current) return;
