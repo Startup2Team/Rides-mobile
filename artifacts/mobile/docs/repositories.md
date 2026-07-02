@@ -139,6 +139,13 @@ Phase 7F adds the first domain boundary under `domains/saved-locations/`.
 - `hooks/useSavedLocations.ts` now forwards through the domain entry point
 - the context remains the compatibility layer until a later TanStack Query migration
 
+Phase 12C adds the first real remote repository prototype for saved locations.
+
+- `RemoteSavedLocationsRepository` maps saved-location DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection

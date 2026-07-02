@@ -166,3 +166,7 @@ The backend resolver progresses through these stages:
 `SHADOW_REMOTE` records remote diagnostics without affecting the UI.
 `HYBRID` can mix local and remote sources with fallback behavior.
 `REMOTE` is reserved for a future migration phase.
+
+Saved locations is the first repository to gain a concrete remote prototype.
+It can run in `SHADOW_REMOTE` mode for diagnostics while local remains the
+authoritative source of truth.

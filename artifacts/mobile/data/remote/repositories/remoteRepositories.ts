@@ -15,6 +15,7 @@ import type {
 import { observability } from '@/observability/context/observabilityContext';
 import { createBackendUnavailableError } from '../contracts/backendErrors';
 import type { BackendClient } from '../client/backendClient';
+import { createRemoteSavedLocationsRepository as createRemoteSavedLocationsRepositoryImpl, createSavedLocationsShadowRepository } from './RemoteSavedLocationsRepository';
 
 type RepoName =
   | 'auth'
@@ -204,28 +205,7 @@ function createRemoteRideRepository(client?: BackendClient): RideRepository {
 }
 
 function createRemoteSavedLocationsRepository(client?: BackendClient): SavedLocationsRepository {
-  return {
-    async listSavedLocations() {
-      void client;
-      return rejectUnavailable('savedLocations', 'listSavedLocations');
-    },
-    async replaceSavedLocations() {
-      void client;
-      return rejectUnavailable('savedLocations', 'replaceSavedLocations');
-    },
-    async saveLocation() {
-      void client;
-      return rejectUnavailable('savedLocations', 'saveLocation');
-    },
-    async removeSavedLocation() {
-      void client;
-      return rejectUnavailable('savedLocations', 'removeSavedLocation');
-    },
-    async clearSavedLocations() {
-      void client;
-      return rejectUnavailable('savedLocations', 'clearSavedLocations');
-    },
-  };
+  return createRemoteSavedLocationsRepositoryImpl({ client });
 }
 
 function createRemoteDriverRepository(client?: BackendClient): DriverRepository {
@@ -435,4 +415,5 @@ export {
   executeHybrid,
   executeShadowRemote,
   logRemoteRepositoryAttempt,
+  createSavedLocationsShadowRepository,
 };

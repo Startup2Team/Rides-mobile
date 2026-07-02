@@ -23,6 +23,13 @@ Future migration plan:
 - move query reads to TanStack Query in a later phase without changing the public domain API
 - keep repository boundary in `SavedLocationsRepository`
 
+Phase 12C adds the first remote repository prototype for this domain.
+
+- `RemoteSavedLocationsRepository` can run in `SHADOW_REMOTE` diagnostics mode
+- the local repository remains authoritative for all current UI paths
+- the remote response is observed for telemetry only and does not affect state
+- the expected rollout path is `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
 Ownership:
 - repository: `SavedLocationsRepository`
 - store: none yet

@@ -27,6 +27,10 @@ Shadow remote mode runs the local repository first, then executes the remote
 path for diagnostics only. The remote result is ignored. Telemetry records
 latency, result, fallback, and response shape without affecting the UI.
 
+Phase 12C makes saved locations the first real remote repository prototype.
+Its shadow execution is still diagnostics-only, and the app continues to read
+the local repository result as authoritative.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the
