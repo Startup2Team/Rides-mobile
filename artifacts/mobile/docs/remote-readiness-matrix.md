@@ -120,3 +120,15 @@ domain may become a future HYBRID candidate.
 - `ready_for_hybrid_candidate` means the domain has enough healthy staging
   data to review for a future HYBRID rollout
 - production guard blocks keep the report `blocked` for that domain
+
+## Phase 13D Update
+
+The staging health snapshot is the developer and CI surface for reading the
+same readiness data in a reviewable form.
+
+- `scripts/report-staging-shadow-health.js` does not contact the backend
+- JSON export and output-file writing are available for CI capture
+- strict mode only fails on blocked or failing snapshot status
+- the default command is safe when no staging data exists
+- this snapshot helps the team decide when a domain is ready for HYBRID
+  candidate review

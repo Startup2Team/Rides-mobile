@@ -6,6 +6,9 @@ have real staging shadow integration.
 This is diagnostics only. It does not change repository source selection, UI,
 navigation, auth, or session behavior.
 
+Phase 13D adds a safe snapshot layer and CLI report so developers and CI can
+review the same readiness data without contacting the backend.
+
 ## What It Measures
 
 The report aggregates per-domain counters for:
@@ -23,6 +26,36 @@ The report aggregates per-domain counters for:
 - last error category
 
 The report is memory only. It does not persist to storage.
+
+The snapshot wraps the in-memory report with:
+
+- `generatedAt`
+- `domainsIncluded`
+- per-domain status, recommendation, and score
+- blockers and warnings
+- metrics summary
+- overall status and overall recommendation
+
+## CLI Snapshot
+
+Run the snapshot from the mobile workspace:
+
+```bash
+pnpm.cmd --dir artifacts/mobile run report:staging-health
+```
+
+Useful flags:
+
+- `--json` prints JSON to stdout
+- `--output <path>` writes the JSON snapshot to disk
+- `--strict` exits non-zero when the snapshot is failing or blocked
+- `--help` prints usage
+
+Default behavior is CI-safe. If there is no shadow data yet, the snapshot is
+`idle` with `collect_data` and the command exits `0`.
+
+The command never contacts the backend. It only reads the in-memory health
+module.
 
 ## Included Domains
 
@@ -96,3 +129,9 @@ blocked configuration issues.
 Future domains can start emitting health events with a new domain string.
 Nothing in the core report needs to change as long as the domain records the
 same event categories.
+
+## CI Use
+
+Use the snapshot command in CI or local developer workflows to review whether a
+domain is approaching HYBRID candidacy. Use `--strict` only when you want the
+job to fail on `failing` or `blocked` health.

@@ -175,6 +175,17 @@ Phase 13C adds the staging shadow health report.
 - the report is the diagnostics surface used to decide when a staging-shadow
   domain may become a future HYBRID candidate
 
+Phase 13D adds the developer and CI snapshot path.
+
+- `data/remote/staging/health/stagingShadowHealthSnapshot.ts` wraps the
+  in-memory report into a reviewable snapshot
+- `scripts/report-staging-shadow-health.js` prints the snapshot without
+  contacting the backend
+- the CLI supports JSON export, output-file writing, and strict-mode failure
+  gating for blocked or failing health only
+- this remains diagnostics-only and does not alter runtime source selection or
+  authority
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the
