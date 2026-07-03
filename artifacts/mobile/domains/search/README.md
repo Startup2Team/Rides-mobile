@@ -26,3 +26,12 @@ Ownership:
 - store: `searchStore`
 - query: future geocode/suggestion hooks
 - events: search-query-changed, suggestion-selected
+
+Remote prototype:
+- Phase 12L adds `RemoteSearchRepository` for `SHADOW_REMOTE` diagnostics.
+- Local/Mapbox search behavior remains authoritative.
+- Remote results never replace visible suggestions and never mutate saved
+  locations or navigation.
+- Comparisons are semantic and tolerate ranking differences.
+- Telemetry must not include raw address queries or exact home/saved-location
+  addresses.

@@ -25,3 +25,14 @@ export {
   createDriverShadowRepository,
   createRemoteDriverRepositoryPrototype,
 } from './RemoteDriverRepository';
+export {
+  RemoteSearchRepository,
+  createRemoteSearchRepositoryPrototype,
+  createSearchShadowRepository,
+} from './RemoteSearchRepository';
+export {
+  RemoteMapRepository,
+  createMapShadowRepository,
+  createRemoteMapRepositoryPrototype,
+} from './RemoteMapRepository';
+export * from './searchMapComparisonPolicy';

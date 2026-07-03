@@ -102,6 +102,27 @@ response shape, mismatch category, and masked phone suffix, but it must not
 contain OTP codes, raw access tokens, raw refresh tokens, full phone numbers,
 session secrets, or device secrets.
 
+Phase 12L adds remote search and map repository prototypes.
+Remote place search, autocomplete, place detail, reverse geocoding, route
+estimate/preview, distance/duration estimate, and fare-preview paths can now be
+exercised in `SHADOW_REMOTE` diagnostics mode. The current local/Mapbox path
+remains authoritative. Remote search results never replace visible search
+results, remote routes never replace visible Mapbox routes, and fare-preview
+responses never become final pricing truth.
+
+Search and map comparisons are tolerance-based. Search diagnostics compare safe
+semantic fields such as result count, normalized names, categories, and
+approximate coordinate parity. Map diagnostics compare route availability,
+distance and duration deltas, coordinate parity, transport type, and fare
+preview deltas within explicit tolerances. Small expected routing differences
+must not be treated as critical mismatches.
+
+Search/map telemetry is sanitized. It may include query length, result count,
+operation, latency, distance/duration buckets, coarse coordinate buckets, and
+mismatch category. It must not include exact home/saved-location addresses, raw
+search query text, full route geometry, precise movement history, Mapbox
+tokens, access tokens, or backend secrets.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

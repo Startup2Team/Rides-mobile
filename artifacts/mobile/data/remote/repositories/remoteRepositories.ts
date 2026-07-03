@@ -19,6 +19,8 @@ import { createRemoteSavedLocationsRepository as createRemoteSavedLocationsRepos
 import { createRemoteRideRepositoryPrototype } from './RemoteRideRepository';
 import { createRemoteDriverRepositoryPrototype } from './RemoteDriverRepository';
 import { createRemoteAuthRepositoryPrototype } from './RemoteAuthRepository';
+import { createRemoteSearchRepositoryPrototype } from './RemoteSearchRepository';
+import { createRemoteMapRepositoryPrototype } from './RemoteMapRepository';
 
 type RepoName =
   | 'auth'
@@ -290,33 +292,11 @@ function createRemotePaymentRepository(client?: BackendClient): PaymentRepositor
 }
 
 function createRemoteSearchRepository(client?: BackendClient): SearchRepository {
-  return {
-    async search() {
-      void client;
-      return rejectUnavailable('search', 'search');
-    },
-    async saveRecentQuery() {
-      void client;
-      return rejectUnavailable('search', 'saveRecentQuery');
-    },
-    async loadRecentQueries() {
-      void client;
-      return rejectUnavailable('search', 'loadRecentQueries');
-    },
-    async clearRecentQueries() {
-      void client;
-      return rejectUnavailable('search', 'clearRecentQueries');
-    },
-  };
+  return createRemoteSearchRepositoryPrototype({ client });
 }
 
 function createRemoteMapRepository(client?: BackendClient): MapRepository {
-  return {
-    async reverseGeocode() {
-      void client;
-      return rejectUnavailable('map', 'reverseGeocode');
-    },
-  };
+  return createRemoteMapRepositoryPrototype({ client });
 }
 
 export const remoteAuthRepository = createRemoteAuthRepository();

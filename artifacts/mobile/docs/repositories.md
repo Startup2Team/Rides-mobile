@@ -82,9 +82,11 @@ Each domain has a single repository contract.
 - `SearchRepository`
   - search history
   - search suggestions
+  - place search/autocomplete/detail diagnostics prototype
 
 - `MapRepository`
   - reverse geocoding and map lookup helpers
+  - route/distance/duration/fare-preview diagnostics prototype
 
 ## Dependency Rules
 
@@ -217,6 +219,17 @@ Phase 12K adds the remote prototype path for auth.
 - remote tokens and session responses are ignored and must not mutate token persistence or the current app session
 - telemetry is sanitized and must not emit OTP codes, raw access tokens, raw refresh tokens, full phone numbers, session secrets, or device secrets
 - the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`, with HYBRID/REMOTE reserved until backend auth authority and token persistence are explicitly designed
+
+Phase 12L adds remote prototype paths for search and map.
+
+- `RemoteSearchRepository` maps place search, autocomplete, place detail, and reverse-geocode DTOs into existing `GeocodeSuggestion` / location shapes
+- `RemoteMapRepository` maps reverse geocode, route estimate/preview, distance, duration, and fare-preview DTOs into existing route/location preview shapes
+- `createSearchShadowRepository` and `createMapShadowRepository` run local first and remote diagnostics second only when explicitly configured
+- current local/Mapbox search, route rendering, booking, matching, navigation, and pricing behavior remain authoritative
+- search comparisons use semantic overlap and tolerate ranking differences
+- map comparisons use explicit coordinate, distance, duration, and fare-preview tolerances
+- fare estimates are preview-only and must not become final fare truth
+- telemetry must not include raw address queries, exact saved/home addresses, full route geometry, precise movement history, Mapbox tokens, access tokens, or backend secrets
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 

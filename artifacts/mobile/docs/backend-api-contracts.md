@@ -124,9 +124,24 @@ truth stay out of scope for this phase.
 ### Search and Map
 
 - `GET /v1/search/autocomplete`
+- `POST /v1/search/places`
+- `GET /v1/search/places/{placeId}`
+- `POST /v1/search/reverse-geocode`
 - `GET /v1/maps/reverse-geocode`
+- `POST /v1/maps/reverse-geocode`
 - `GET /v1/maps/route-estimate`
+- `POST /v1/maps/route-estimate`
+- `POST /v1/maps/route-preview`
+- `POST /v1/maps/distance-estimate`
+- `POST /v1/maps/duration-estimate`
 - `GET /v1/maps/fare-estimate`
+- `POST /v1/maps/fare-estimate`
+
+Phase 12L treats search and map as remote repository prototypes in
+`SHADOW_REMOTE`. Current Mapbox/local search, geocoding, route rendering,
+booking, matching, navigation, and pricing behavior remain authoritative.
+Backend map/search authority is future work. Fare estimates are preview-only
+and must not be treated as final fare truth.
 
 ### Admin Review
 
@@ -155,6 +170,13 @@ truth stay out of scope for this phase.
   refresh, logout, and current-session reads. Token values stay at the remote
   repository boundary during this prototype and do not change mobile token
   persistence.
+- Search DTOs carry query metadata, place identity, display names, approximate
+  coordinates, category/type, city/district, and relevance metadata for
+  semantic diagnostics. Raw address queries should not be emitted through
+  telemetry.
+- Map DTOs carry route estimate/preview data, distance, duration, route bounds,
+  optional geometry references, transport type, estimate timestamps, and
+  fare-preview metadata. Full route geometry must not be logged by diagnostics.
 
 ## Mapper Strategy
 
@@ -288,3 +310,11 @@ behavior remains authoritative. Backend support for a non-delivery OTP
 diagnostics endpoint is required before shadow OTP validation can be enabled.
 Shadow auth telemetry must not emit OTP codes, raw tokens, full phone numbers,
 session secrets, refresh tokens, access tokens, or device secrets.
+
+Search and Map are the tenth repository prototypes. Place search,
+autocomplete, place detail, reverse geocoding, route estimates/previews,
+distance/duration estimates, and fare-preview contracts can be exercised in
+`SHADOW_REMOTE` diagnostics mode. Local/Mapbox behavior remains authoritative.
+Comparisons are tolerance-based: search uses semantic overlap instead of exact
+ranking equality, and map diagnostics allow coordinate, distance, duration, and
+fare-preview drift. Fake backend transport is automated-test-only.
