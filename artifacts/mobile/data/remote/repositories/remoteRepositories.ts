@@ -18,6 +18,7 @@ import type { BackendClient } from '../client/backendClient';
 import { createRemoteSavedLocationsRepository as createRemoteSavedLocationsRepositoryImpl, createSavedLocationsShadowRepository } from './RemoteSavedLocationsRepository';
 import { createRemoteRideRepositoryPrototype } from './RemoteRideRepository';
 import { createRemoteDriverRepositoryPrototype } from './RemoteDriverRepository';
+import { createRemoteAuthRepositoryPrototype } from './RemoteAuthRepository';
 
 type RepoName =
   | 'auth'
@@ -127,28 +128,7 @@ function summarizeShape(value: unknown) {
 }
 
 function createRemoteAuthRepository(client?: BackendClient): AuthRepository {
-  return {
-    async getCurrentUser() {
-      void client;
-      return rejectUnavailable('auth', 'getCurrentUser');
-    },
-    async saveCurrentUser() {
-      void client;
-      return rejectUnavailable('auth', 'saveCurrentUser');
-    },
-    async getDriverProfile() {
-      void client;
-      return rejectUnavailable('auth', 'getDriverProfile');
-    },
-    async saveDriverProfile() {
-      void client;
-      return rejectUnavailable('auth', 'saveDriverProfile');
-    },
-    async clearSession() {
-      void client;
-      return rejectUnavailable('auth', 'clearSession');
-    },
-  };
+  return createRemoteAuthRepositoryPrototype({ client });
 }
 
 function createRemoteProfileRepositoryStub(client?: BackendClient): ProfileRepository {

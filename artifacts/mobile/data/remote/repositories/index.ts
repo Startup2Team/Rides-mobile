@@ -1,6 +1,11 @@
 export * from './remoteRepositories';
 export * from './RemoteProfileRepository';
 export {
+  RemoteAuthRepository,
+  createAuthShadowRepository,
+  createRemoteAuthRepositoryPrototype,
+} from './RemoteAuthRepository';
+export {
   RemotePackageRepository,
   createPackageShadowRepository,
   createRemotePackageRepositoryPrototype,

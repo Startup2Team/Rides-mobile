@@ -88,6 +88,20 @@ sanitized to safe semantic categories only and must not contain national ID,
 DOB, license number, MoMo pay code, phone number, document contents, raw
 document URLs, or signed URLs.
 
+Phase 12K adds the remote auth repository prototype.
+OTP dry-run, OTP verification, session refresh, logout, and current-session
+paths can now be exercised in `SHADOW_REMOTE` diagnostics mode, but local
+auth/session behavior remains authoritative. Shadow auth must never trigger a
+real SMS-producing OTP endpoint. Remote `requestOtp` diagnostics must use a
+backend non-delivery dry-run endpoint or fail closed as unavailable/not
+implemented. Remote tokens and session responses are ignored and never mutate
+`AuthContext` or token persistence.
+
+Auth telemetry is sanitized. It may identify the repository operation, latency,
+response shape, mismatch category, and masked phone suffix, but it must not
+contain OTP codes, raw access tokens, raw refresh tokens, full phone numbers,
+session secrets, or device secrets.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

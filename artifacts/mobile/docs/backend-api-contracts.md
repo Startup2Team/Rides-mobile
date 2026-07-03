@@ -9,9 +9,17 @@ selection changes are introduced here.
 ### Auth
 
 - `POST /v1/auth/otp/request`
+- `POST /v1/auth/otp/request-dry-run`
 - `POST /v1/auth/otp/verify`
 - `POST /v1/auth/session/refresh`
+- `GET /v1/auth/session/current`
 - `POST /v1/auth/logout`
+
+Phase 12K treats auth as a remote repository prototype in `SHADOW_REMOTE`.
+The current local session and `AuthContext` remain authoritative. Shadow OTP
+requests must use the non-delivery dry-run diagnostics endpoint only. The
+mobile app must not call the real SMS-producing OTP request endpoint as a
+shadow side effect.
 
 ### Profile
 
@@ -143,6 +151,10 @@ truth stay out of scope for this phase.
   metadata, upload/reference keys, and clarification messages explicit at the
   backend boundary. Raw document bytes and base64 payloads are not part of these
   DTOs.
+- Auth DTOs cover OTP dry-run request metadata, OTP verification, session
+  refresh, logout, and current-session reads. Token values stay at the remote
+  repository boundary during this prototype and do not change mobile token
+  persistence.
 
 ## Mapper Strategy
 
@@ -268,3 +280,11 @@ driver onboarding state and current approval behavior remain authoritative.
 Document telemetry must be sanitized and must not include national ID, DOB,
 license number, MoMo pay code, phone number, document contents, or sensitive
 document URLs.
+
+Auth is the ninth repository to gain a concrete remote prototype. OTP dry-run,
+OTP verification, session refresh, logout, and current-session contracts can be
+exercised in `SHADOW_REMOTE` diagnostics mode, while local auth/session
+behavior remains authoritative. Backend support for a non-delivery OTP
+diagnostics endpoint is required before shadow OTP validation can be enabled.
+Shadow auth telemetry must not emit OTP codes, raw tokens, full phone numbers,
+session secrets, refresh tokens, access tokens, or device secrets.

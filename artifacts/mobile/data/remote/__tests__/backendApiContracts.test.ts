@@ -5,6 +5,11 @@ import { repositoryResolver } from '../adapters';
 describe('backend api contracts', () => {
   test('api contract modules export dto definitions', () => {
     expect(api.RequestRideRequestDto).toBeDefined();
+    expect(api.RequestOtpRequestDto).toBeDefined();
+    expect(api.VerifyOtpRequestDto).toBeDefined();
+    expect(api.RefreshSessionRequestDto).toBeDefined();
+    expect(api.LogoutRequestDto).toBeDefined();
+    expect(api.CurrentSessionResponseDto).toBeDefined();
     expect(api.AddPaymentMethodRequestDto).toBeDefined();
     expect(api.SubmitDriverApplicationRequestDto).toBeDefined();
     expect(api.VehicleDto).toBeDefined();
@@ -38,6 +43,12 @@ describe('backend api contracts', () => {
 
   test('mapper modules export dto/domain/error contracts', () => {
     expect(typeof mappers.dtoToDomainRide).toBe('function');
+    expect(typeof mappers.domainToRequestOtpDto).toBe('function');
+    expect(typeof mappers.domainToVerifyOtpDto).toBe('function');
+    expect(typeof mappers.dtoToDomainAuthSession).toBe('function');
+    expect(typeof mappers.domainToRefreshSessionDto).toBe('function');
+    expect(typeof mappers.domainToLogoutDto).toBe('function');
+    expect(typeof mappers.errorToRepositoryFailureAuth).toBe('function');
     expect(typeof mappers.domainToDtoRide).toBe('function');
     expect(typeof mappers.errorToRepositoryFailureRide).toBe('function');
     expect(typeof mappers.dtoToDomainPayment).toBe('function');

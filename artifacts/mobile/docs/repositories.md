@@ -26,6 +26,8 @@ Each domain has a single repository contract.
   - current user
   - driver profile
   - session boundary
+  - OTP/session remote prototype in diagnostics mode
+  - local session remains authoritative
 
 - `ProfileRepository`
   - shared user identity
@@ -205,6 +207,16 @@ Phase 12J adds the remote prototype path for driver onboarding and driver applic
 - mobile cannot approve, reject, force verification, or manufacture verified status
 - driver document contracts are metadata/reference-only and must not carry raw bytes or base64 document data
 - telemetry is sanitized to safe semantic categories and must not emit national ID, DOB, license number, MoMo pay code, phone number, document contents, document URLs, or signed URLs
+
+Phase 12K adds the remote prototype path for auth.
+
+- `RemoteAuthRepository` maps OTP dry-run request, OTP verify, session refresh, logout, and current-session DTOs through the backend boundary
+- `createAuthShadowRepository` runs local first and remote diagnostics second only when explicitly configured
+- local auth/session state, `AuthContext`, navigation, and phone verification behavior remain authoritative
+- shadow `requestOtp` must use a backend dry-run/non-delivery diagnostics endpoint and must never call the real SMS-producing OTP request endpoint
+- remote tokens and session responses are ignored and must not mutate token persistence or the current app session
+- telemetry is sanitized and must not emit OTP codes, raw access tokens, raw refresh tokens, full phone numbers, session secrets, or device secrets
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`, with HYBRID/REMOTE reserved until backend auth authority and token persistence are explicitly designed
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
