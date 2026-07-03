@@ -39,6 +39,8 @@ Each domain has a single repository contract.
 - `RideRepository`
   - ride history
   - ride append/replay boundaries
+  - read-only active/history/detail remote prototype in diagnostics mode
+  - lifecycle mutations remain local/live-provider controlled
 
 - `SavedLocationsRepository`
   - saved place CRUD
@@ -183,6 +185,14 @@ Phase 12H adds the same remote prototype path for payment methods and billing pr
 - `SHADOW_REMOTE` runs the remote path only for diagnostics
 - local payment methods remain authoritative for current UI behavior
 - payment execution, settlement, refunds, wallet balance, and transaction truth remain future work and must stay out of this prototype
+
+Phase 12I adds the first read-only remote prototype path for rides.
+
+- `RemoteRideRepository` maps active ride, ride history, and ride detail DTOs through the backend boundary
+- active ride responses stay in the active ride read-model shape, while history and detail responses map back into the existing `Ride` domain/UI shape
+- `createRideReadOnlyShadowRepository` runs remote reads only after local reads and ignores remote results for UI/state
+- local/live-provider ride lifecycle behavior remains authoritative
+- request, cancel, accept, decline, start, complete, matching, negotiation, payment, package credit deduction, and realtime ride events remain future work and must stay out of this prototype
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 

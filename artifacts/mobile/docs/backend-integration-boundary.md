@@ -65,6 +65,14 @@ authoritative and the current UI behavior stays unchanged. Payment execution,
 capture, settlement, refunds, wallet balance, and transaction truth remain out
 of scope for this phase and must stay separate from the prototype.
 
+Phase 12I adds the first ride remote repository prototype as read-only.
+The remote active ride, ride history, and ride detail paths can now be exercised
+in `SHADOW_REMOTE` mode for diagnostics, but local/live-provider ride lifecycle
+state remains authoritative and the current UI behavior stays unchanged. Ride
+request, cancel, accept, decline, start, complete, matching, negotiation,
+payment, package credit deduction, and realtime ride events remain out of scope
+for this phase.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

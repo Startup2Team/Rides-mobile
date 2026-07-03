@@ -57,6 +57,12 @@ selection changes are introduced here.
 - `GET /v1/rides/history`
 - `GET /v1/rides/{rideId}`
 
+Phase 12I treats rides as a read-only remote repository prototype. Only active
+ride, ride history, and ride detail reads are exercised in `SHADOW_REMOTE`.
+Ride request, cancel, accept, decline, start, complete, payment, matching,
+negotiation, package credit deduction, and realtime ride events remain future
+work and stay on the existing local/live-provider path.
+
 ### Packages
 
 - `GET /v1/packages/catalog`
@@ -119,6 +125,9 @@ truth stay out of scope for this phase.
 - Packages additionally define offer-source, available-offers, purchase-status,
   activation, and credit-deduction DTOs so the remote prototype can exercise
   the full balance and entitlement contract without changing local authority.
+- Ride read DTOs map active ride read models directly and map ride history/detail
+  responses back into the existing `Ride` UI/domain shape. Ride write DTOs remain
+  contract-only until lifecycle mutation ownership moves backend-side.
 
 ## Mapper Strategy
 
@@ -216,3 +225,10 @@ create, update, delete, and default-selection contracts can be exercised in
 `SHADOW_REMOTE` mode for diagnostics, while local payment methods remain
 authoritative. Payment execution and transaction truth stay future backend
 work, and this prototype must not be used to infer settlement behavior.
+
+Rides are the seventh repository to gain a concrete remote prototype. Active
+ride, ride history, and ride detail reads can be exercised in `SHADOW_REMOTE`
+mode for diagnostics, while local/live-provider ride lifecycle behavior remains
+authoritative. Ride lifecycle mutations, matching, negotiation, payment,
+package credit deduction, and realtime ride-event integration remain future
+work.

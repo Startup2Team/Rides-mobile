@@ -16,6 +16,7 @@ import { observability } from '@/observability/context/observabilityContext';
 import { createBackendUnavailableError } from '../contracts/backendErrors';
 import type { BackendClient } from '../client/backendClient';
 import { createRemoteSavedLocationsRepository as createRemoteSavedLocationsRepositoryImpl, createSavedLocationsShadowRepository } from './RemoteSavedLocationsRepository';
+import { createRemoteRideRepositoryPrototype } from './RemoteRideRepository';
 
 type RepoName =
   | 'auth'
@@ -184,24 +185,7 @@ function createRemoteBookingRepository(client?: BackendClient): BookingRepositor
 }
 
 function createRemoteRideRepository(client?: BackendClient): RideRepository {
-  return {
-    async appendRideHistory() {
-      void client;
-      return rejectUnavailable('ride', 'appendRideHistory');
-    },
-    async loadRideHistory() {
-      void client;
-      return rejectUnavailable('ride', 'loadRideHistory');
-    },
-    async getRideDetail() {
-      void client;
-      return rejectUnavailable('ride', 'getRideDetail');
-    },
-    async clearRideHistory() {
-      void client;
-      return rejectUnavailable('ride', 'clearRideHistory');
-    },
-  };
+  return createRemoteRideRepositoryPrototype({ client });
 }
 
 function createRemoteSavedLocationsRepository(client?: BackendClient): SavedLocationsRepository {

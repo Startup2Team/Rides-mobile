@@ -10,3 +10,8 @@ export {
   createPaymentShadowRepository,
   createRemotePaymentRepositoryPrototype,
 } from './RemotePaymentRepository';
+export {
+  RemoteRideRepository,
+  createRemoteRideRepositoryPrototype,
+  createRideReadOnlyShadowRepository,
+} from './RemoteRideRepository';
