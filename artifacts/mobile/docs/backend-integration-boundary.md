@@ -205,7 +205,21 @@ Phase 13F adds baseline comparison.
 - this supports HYBRID review by making readiness drift visible before rollout
   posture changes
 - score-drop sensitivity is configurable through
-  `STAGING_HEALTH_SCORE_DROP_THRESHOLD`
+`STAGING_HEALTH_SCORE_DROP_THRESHOLD`
+
+Phase 13G adds the HYBRID candidate review gate.
+
+- `data/remote/readiness/hybridCandidateGate.ts` reads the same diagnostics
+  data but does not change repository source selection
+- `savedLocations` and `profile` can be reviewed as HYBRID candidates only
+  after the metrics, docs, guardrail checks, and a human approval record all
+  line up
+- the checked-in approval file defaults both domains to unapproved
+- HYBRID candidate status is not the same as enabling `HYBRID` mode in the
+  resolver
+
+See [`hybrid-candidate-review.md`](./hybrid-candidate-review.md) for the
+review workflow and approval semantics.
 
 ## Migration Strategy
 

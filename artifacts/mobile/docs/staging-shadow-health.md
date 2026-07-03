@@ -196,3 +196,35 @@ Treat these as regressions in strict mode:
 To update the baseline, first review the archived CI JSON and the code or
 policy change that caused the difference. Only replace the committed baseline
 when the new default state is intentionally accepted.
+
+## HYBRID Candidate Review Gate
+
+The HYBRID candidate review gate sits on top of the staging shadow health
+data. It does not enable `HYBRID` mode. It only decides whether a domain is
+eligible to be reviewed as a future HYBRID candidate.
+
+The gate reads:
+
+- the staging shadow snapshot
+- the remote readiness matrix
+- the committed sanitized baseline
+- the production guard audit
+- the checked-in approval file
+
+The checked-in approval file defaults both domains to unapproved:
+
+- `docs/approvals/hybrid-candidates.json`
+
+The gate requires all of the following before it can approve a domain:
+
+- the readiness matrix recommends `hybrid_candidate`
+- staging shadow health recommends `ready_for_hybrid_candidate`
+- the baseline comparison has no strict regression
+- the production guard audit passes
+- shadow write safety is documented
+- rollback path is documented
+- telemetry sanitization is documented
+- a human approval record is present and not expired
+
+Default output is safe. A domain with no staging shadow data stays
+`not_reviewed`, and the approval file does not auto-approve anything.

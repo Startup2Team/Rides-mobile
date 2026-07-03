@@ -91,18 +91,6 @@ function asDomainMap(snapshot) {
   return new Map((snapshot.domains ?? []).map(domain => [domain.domain, domain]));
 }
 
-function compareRank(currentValue, baselineValue, orderMap) {
-  const currentRank = orderMap[currentValue];
-  const baselineRank = orderMap[baselineValue];
-  if (typeof currentRank !== 'number' || typeof baselineRank !== 'number') {
-    return { changed: currentValue !== baselineValue, regression: false };
-  }
-  return {
-    changed: currentRank !== baselineRank,
-    regression: currentRank > baselineRank,
-  };
-}
-
 function recommendationRegression(currentValue, baselineValue) {
   if (baselineValue === 'ready_for_hybrid_candidate') {
     return ['continue_shadow', 'investigate', 'blocked'].includes(currentValue);
@@ -117,6 +105,27 @@ function recommendationRegression(currentValue, baselineValue) {
     return currentValue === 'blocked';
   }
   return currentValue === 'blocked';
+}
+
+function statusRegression(currentValue, baselineValue) {
+  if (currentValue === baselineValue) {
+    return false;
+  }
+
+  switch (baselineValue) {
+    case 'idle':
+      return currentValue === 'failing' || currentValue === 'blocked';
+    case 'healthy':
+      return currentValue === 'degraded' || currentValue === 'failing' || currentValue === 'blocked';
+    case 'degraded':
+      return currentValue === 'failing' || currentValue === 'blocked';
+    case 'failing':
+      return currentValue === 'blocked';
+    case 'blocked':
+      return false;
+    default:
+      return false;
+  }
 }
 
 function compareSnapshots(current, baseline, options = {}) {
@@ -138,7 +147,9 @@ function compareSnapshots(current, baseline, options = {}) {
     }
   };
 
-  compareField('overallStatus', current.overallStatus, baseline.overallStatus, compareRank(current.overallStatus, baseline.overallStatus, statusOrder));
+  compareField('overallStatus', current.overallStatus, baseline.overallStatus, {
+    regression: statusRegression(current.overallStatus, baseline.overallStatus),
+  });
   compareField('overallRecommendation', current.overallRecommendation, baseline.overallRecommendation, {
     regression: recommendationRegression(current.overallRecommendation, baseline.overallRecommendation),
   });
@@ -155,14 +166,8 @@ function compareSnapshots(current, baseline, options = {}) {
       continue;
     }
 
-    const statusCheck = compareRank(currentDomain.status, baselineDomain.status, statusOrder);
     compareField(`domain:${domainName}:status`, currentDomain.status, baselineDomain.status, {
-      regression:
-        statusCheck.regression ||
-        (baselineDomain.status === 'idle' && currentDomain.status === 'failing') ||
-        (baselineDomain.status === 'idle' && currentDomain.status === 'blocked') ||
-        (baselineDomain.status === 'healthy' && ['degraded', 'failing', 'blocked'].includes(currentDomain.status)) ||
-        (baselineDomain.status === 'degraded' && ['failing', 'blocked'].includes(currentDomain.status)),
+      regression: statusRegression(currentDomain.status, baselineDomain.status),
     });
 
     compareField(`domain:${domainName}:recommendation`, currentDomain.recommendation, baselineDomain.recommendation, {

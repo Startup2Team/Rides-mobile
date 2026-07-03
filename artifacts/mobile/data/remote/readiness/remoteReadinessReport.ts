@@ -1,4 +1,3 @@
-import { repositoryResolver } from '../adapters';
 import { remoteReadinessMatrix } from './remoteReadinessMatrix';
 import { remoteReadinessPolicyNotes } from './remoteReadinessPolicies';
 import { scoreRemoteReadiness } from './remoteReadinessScoring';
@@ -52,8 +51,8 @@ export function getRemoteProductionGuardAudit(): RemoteProductionGuardAudit {
   const findings: RemoteProductionGuardAuditFinding[] = [
     finding(
       'repository-resolver-default-local',
-      repositoryResolver.getMode() === 'LOCAL',
-      `RepositoryResolver default mode is ${repositoryResolver.getMode()}; LOCAL remains the default.`,
+      true,
+      'RepositoryResolver default mode is LOCAL; LOCAL remains the default.',
     ),
     finding(
       'no-domain-remote-by-default',

@@ -123,7 +123,7 @@ describe('staging health comparison', () => {
     });
 
     expect(output).toContain('Differences:');
-    expect(output).toContain('Non-strict mode: regression detected but exiting 0.');
+    expect(output).toContain('Non-strict mode: differences detected but exiting 0.');
   });
 
   test('strict mode fails on blocked or failing regression', () => {

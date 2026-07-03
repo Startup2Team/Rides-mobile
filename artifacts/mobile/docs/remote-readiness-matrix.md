@@ -156,4 +156,19 @@ snapshot artifact.
 - baseline changes should be deliberate and reviewed against the archived JSON
 - the sanitized baseline keeps the comparison safe for CI artifact retention
 - score-drop sensitivity is configurable via
-  `STAGING_HEALTH_SCORE_DROP_THRESHOLD`
+`STAGING_HEALTH_SCORE_DROP_THRESHOLD`
+
+## Phase 13G Update
+
+The HYBRID candidate review gate adds an explicit approval step without
+enabling HYBRID mode.
+
+- `data/remote/readiness/hybridCandidateGate.ts` evaluates saved locations and
+  profile against the readiness matrix, staging health, baseline comparison,
+  and production guard audit
+- the review gate is diagnostics-only and does not change runtime repository
+  source selection
+- explicit human approval is still required even when the metrics pass
+- the checked-in approval file defaults both domains to unapproved
+- savedLocations and profile are reviewed first because they already have the
+  safest real staging shadow paths

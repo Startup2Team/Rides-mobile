@@ -367,3 +367,14 @@ Phase 8B.7 extends it into payment methods:
 - the payments domain owns method metadata, default method selection, and billing preference projections
 - `PaymentRepository` remains the source boundary
 - transaction truth remains future backend work
+
+Phase 13G adds the HYBRID candidate review gate.
+
+- `data/remote/readiness/hybridCandidateGate.ts` stays in the repository
+  boundary and does not change runtime source selection
+- the gate only reviews `savedLocations` and `profile`
+- explicit human approval is required before a domain can be marked
+  `approved_for_hybrid_candidate`
+- the checked-in approval file defaults both domains to unapproved
+- HYBRID candidate status is not the same as enabling `HYBRID` mode in the
+  resolver

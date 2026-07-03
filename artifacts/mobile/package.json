@@ -12,6 +12,7 @@
     "serve": "node server/serve.js",
     "report:staging-health": "node scripts/report-staging-shadow-health.js",
     "compare:staging-health": "node scripts/compare-staging-health.js",
+    "review:hybrid-candidates": "node scripts/review-hybrid-candidates.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand",
     "check:typography": "node scripts/check-typography.js",
