@@ -135,3 +135,27 @@ same event categories.
 Use the snapshot command in CI or local developer workflows to review whether a
 domain is approaching HYBRID candidacy. Use `--strict` only when you want the
 job to fail on `failing` or `blocked` health.
+
+## CI Archiving
+
+The mobile CI workflow uploads the snapshot JSON as a GitHub Actions artifact
+named `staging-shadow-health-report`.
+
+The artifact contains the file:
+
+- `artifacts/mobile/staging-health-report.json`
+
+Download it from the run summary in GitHub Actions. The JSON is safe to compare
+across runs because it contains only the snapshot fields and sanitized health
+metrics.
+
+Use the JSON to compare:
+
+- overall status and recommendation
+- per-domain status and recommendation
+- score trends
+- blockers and warnings
+- summary counts and latency
+
+`idle` / `collect_data` is not a failure. It means the domain has not collected
+shadow data yet, which is the expected default for a clean CI run.

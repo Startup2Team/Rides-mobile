@@ -186,6 +186,15 @@ Phase 13D adds the developer and CI snapshot path.
 - this remains diagnostics-only and does not alter runtime source selection or
   authority
 
+Phase 13E adds CI artifact archiving.
+
+- the mobile CI workflow uploads
+  `artifacts/mobile/staging-health-report.json` as the GitHub Actions artifact
+  named `staging-shadow-health-report`
+- the archived JSON is sanitized and contains no backend calls or secrets
+- the default `idle` / `collect_data` state is expected and is not a failure
+- the artifact can be compared across runs to review readiness trendlines
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

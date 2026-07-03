@@ -132,3 +132,15 @@ same readiness data in a reviewable form.
 - the default command is safe when no staging data exists
 - this snapshot helps the team decide when a domain is ready for HYBRID
   candidate review
+
+## Phase 13E Update
+
+The CI workflow archives the JSON snapshot so the team can compare readiness
+over time.
+
+- the artifact is named `staging-shadow-health-report`
+- the archived file is `artifacts/mobile/staging-health-report.json`
+- the JSON is sanitized and safe to review offline
+- `idle` / `collect_data` is the baseline, not a failure
+- trend comparison should focus on status, recommendation, score, blockers,
+  warnings, and summary metrics

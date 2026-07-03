@@ -54,11 +54,22 @@ jobs:
             git diff --check HEAD^ HEAD
           fi
 
+      - name: Generate staging shadow health snapshot
+        run: pnpm --dir artifacts/mobile run report:staging-health -- --json --output artifacts/mobile/staging-health-report.json
+
       - name: Run mobile tests
         run: pnpm --filter @workspace/mobile test
 
       - name: Run mobile typecheck
         run: pnpm --filter @workspace/mobile typecheck
+
+      - name: Upload staging shadow health snapshot
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-shadow-health-report
+          path: artifacts/mobile/staging-health-report.json
+          if-no-files-found: error
 
   mobile-release-validation:
     name: Production export and Android config
