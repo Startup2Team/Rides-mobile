@@ -3,8 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const ts = require('typescript');
 
-const projectRoot = path.resolve(__dirname, '..');
-const healthModulePath = path.join(projectRoot, 'data', 'remote', 'staging', 'health', 'stagingShadowHealthSnapshot.ts');
+const packageRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const healthModulePath = path.join(packageRoot, 'data', 'remote', 'staging', 'health', 'stagingShadowHealthSnapshot.ts');
 
 function installTypeScriptRequireHook() {
   require.extensions['.ts'] = (module, filename) => {
@@ -80,7 +81,7 @@ function printHelp() {
 }
 
 function writeOutputFile(outputPath, content) {
-  const resolvedPath = path.resolve(projectRoot, outputPath);
+  const resolvedPath = path.resolve(repoRoot, outputPath);
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
   fs.writeFileSync(resolvedPath, content, 'utf8');
   return resolvedPath;

@@ -159,3 +159,40 @@ Use the JSON to compare:
 
 `idle` / `collect_data` is not a failure. It means the domain has not collected
 shadow data yet, which is the expected default for a clean CI run.
+
+## Baseline Comparison
+
+The committed sanitized baseline lives at:
+
+- `docs/baselines/staging-health-baseline.json`
+
+Compare the current artifact against that file to catch regressions before
+HYBRID review.
+
+Example:
+
+```bash
+pnpm.cmd --dir artifacts/mobile run compare:staging-health -- --current artifacts/mobile/staging-health-report.json --baseline artifacts/mobile/docs/baselines/staging-health-baseline.json
+```
+
+Non-strict comparison warns on differences and exits `0`. Strict comparison
+turns regressions into a non-zero exit code.
+
+Score-drop sensitivity is controlled by the comparison tool's configured
+threshold. The default is 10 points, and CI can override it with the
+`STAGING_HEALTH_SCORE_DROP_THRESHOLD` environment variable when a branch needs
+different sensitivity.
+
+Treat these as regressions in strict mode:
+
+- `healthy` -> `degraded`, `failing`, or `blocked`
+- `degraded` -> `failing` or `blocked`
+- `idle` / `collect_data` -> `failing` or `blocked`
+- `ready_for_hybrid_candidate` -> `continue_shadow`, `investigate`, or
+  `blocked`
+- new blockers
+- score drops beyond the configured threshold
+
+To update the baseline, first review the archived CI JSON and the code or
+policy change that caused the difference. Only replace the committed baseline
+when the new default state is intentionally accepted.

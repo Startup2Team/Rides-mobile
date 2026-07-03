@@ -57,12 +57,6 @@ jobs:
       - name: Generate staging shadow health snapshot
         run: pnpm --dir artifacts/mobile run report:staging-health -- --json --output artifacts/mobile/staging-health-report.json
 
-      - name: Run mobile tests
-        run: pnpm --filter @workspace/mobile test
-
-      - name: Run mobile typecheck
-        run: pnpm --filter @workspace/mobile typecheck
-
       - name: Upload staging shadow health snapshot
         uses: actions/upload-artifact@v4
         if: always()
@@ -70,6 +64,15 @@ jobs:
           name: staging-shadow-health-report
           path: artifacts/mobile/staging-health-report.json
           if-no-files-found: error
+
+      - name: Compare staging shadow health snapshot against baseline
+        run: pnpm --dir artifacts/mobile run compare:staging-health -- --current artifacts/mobile/staging-health-report.json --baseline artifacts/mobile/docs/baselines/staging-health-baseline.json
+
+      - name: Run mobile tests
+        run: pnpm --filter @workspace/mobile test
+
+      - name: Run mobile typecheck
+        run: pnpm --filter @workspace/mobile typecheck
 
   mobile-release-validation:
     name: Production export and Android config

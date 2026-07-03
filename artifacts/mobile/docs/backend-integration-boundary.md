@@ -195,6 +195,18 @@ Phase 13E adds CI artifact archiving.
 - the default `idle` / `collect_data` state is expected and is not a failure
 - the artifact can be compared across runs to review readiness trendlines
 
+Phase 13F adds baseline comparison.
+
+- `scripts/compare-staging-health.js` compares the archived snapshot against
+  the sanitized committed baseline
+- non-strict mode warns on differences and exits `0`
+- strict mode fails on regressions, new blockers, and large score drops
+- the baseline is sanitized and only captures the expected safe default state
+- this supports HYBRID review by making readiness drift visible before rollout
+  posture changes
+- score-drop sensitivity is configurable through
+  `STAGING_HEALTH_SCORE_DROP_THRESHOLD`
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

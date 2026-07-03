@@ -144,3 +144,16 @@ over time.
 - `idle` / `collect_data` is the baseline, not a failure
 - trend comparison should focus on status, recommendation, score, blockers,
   warnings, and summary metrics
+
+## Phase 13F Update
+
+The committed baseline gives the team a stable comparison point for the
+snapshot artifact.
+
+- the baseline file is `docs/baselines/staging-health-baseline.json`
+- non-strict comparison warns without failing the normal CI path
+- strict comparison is for HYBRID review branches and readiness gating
+- baseline changes should be deliberate and reviewed against the archived JSON
+- the sanitized baseline keeps the comparison safe for CI artifact retention
+- score-drop sensitivity is configurable via
+  `STAGING_HEALTH_SCORE_DROP_THRESHOLD`
