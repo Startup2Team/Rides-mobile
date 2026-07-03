@@ -26,6 +26,12 @@ export interface RemoteProfileRepositoryOptions {
   transportLabel?: 'remote' | 'shadow_remote' | 'hybrid';
 }
 
+export interface ProfileShadowRepositoryOptions {
+  localRepository: ProfileRepository;
+  remoteRepository: RemoteProfileRepository;
+  shadowWritesEnabled?: boolean;
+}
+
 function summarizeShape(value: unknown) {
   if (Array.isArray(value)) return `array:${value.length}`;
   if (value === null) return 'null';
@@ -46,22 +52,17 @@ function extractProfileSemantics(profile: UserProfile | null | undefined) {
   };
 }
 
-function hasSemanticMismatch(local: unknown, remote: unknown) {
-  if (local === remote) return false;
-  if (typeof local !== typeof remote) return true;
-  if (local && remote && typeof local === 'object' && typeof remote === 'object') {
-    return JSON.stringify(local) !== JSON.stringify(remote);
-  }
-  return local !== remote;
-}
-
 function recordTelemetry(
-  event: 'profile remote shadow request' | 'profile remote shadow success' | 'profile remote shadow failure',
+  event: 'profile remote shadow request' | 'profile remote shadow success' | 'profile remote shadow failure' | 'profile staging shadow request' | 'profile staging shadow success' | 'profile staging shadow failure' | 'profile staging shadow skipped' | 'profile semantic mismatch',
   context: {
     method: string;
     latencyMs: number;
     responseShape: string;
     transport: 'remote' | 'shadow_remote' | 'hybrid';
+    statusClass?: string;
+    mismatchCategory?: string;
+    fieldCategory?: string;
+    correlationId?: string;
     error?: unknown;
   },
 ) {
@@ -80,8 +81,81 @@ function recordTelemetry(
     transport: context.transport,
     latencyMs: context.latencyMs,
     responseShape: context.responseShape,
+    statusClass: context.statusClass,
+    mismatchCategory: context.mismatchCategory,
+    fieldCategory: context.fieldCategory,
+    correlationId: context.correlationId,
     error: context.error instanceof Error ? context.error.name : undefined,
   });
+}
+
+function emitProfileStagingTelemetry(
+  event: 'profile staging shadow request' | 'profile staging shadow success' | 'profile staging shadow failure' | 'profile staging shadow skipped' | 'profile semantic mismatch',
+  context: {
+    method: string;
+    latencyMs?: number;
+    statusClass?: string;
+    mismatchCategory?: string;
+    fieldCategory?: string;
+    correlationId?: string;
+    error?: unknown;
+  },
+) {
+  observability.metrics.counter('profile.staging.shadow', 1, {
+    method: context.method,
+    event,
+    statusClass: context.statusClass ?? 'none',
+    mismatchCategory: context.mismatchCategory ?? 'none',
+    fieldCategory: context.fieldCategory ?? 'none',
+  });
+  if (typeof context.latencyMs === 'number') {
+    observability.metrics.histogram('profile.staging.shadow.latency_ms', context.latencyMs, {
+      method: context.method,
+      event,
+    });
+  }
+  observability.logger.info('ProfileStagingShadow', {
+    event,
+    method: context.method,
+    latencyMs: context.latencyMs,
+    statusClass: context.statusClass,
+    mismatchCategory: context.mismatchCategory,
+    fieldCategory: context.fieldCategory,
+    correlationId: context.correlationId,
+    error: context.error instanceof Error ? context.error.name : undefined,
+  });
+}
+
+function extractStatusClass(error: unknown) {
+  if (error && typeof error === 'object' && 'status' in error) {
+    const status = (error as { status?: number }).status;
+    if (typeof status === 'number' && Number.isFinite(status)) {
+      return `${Math.floor(status / 100)}xx`;
+    }
+  }
+  return 'none';
+}
+
+function classifyProfileSemantics(profile: UserProfile | null | undefined) {
+  if (!profile) return { exists: false, displayName: 'missing', language: 'missing', photo: 'missing', phone: 'missing' as const };
+  return {
+    exists: true,
+    displayName: profile.fullName.trim() ? 'present' : 'missing',
+    language: profile.preferredLanguage?.trim() ? 'present' : 'missing',
+    photo: profile.profilePhoto?.uri?.trim() ? 'present' : 'missing',
+    phone: profile.phoneNumber.trim() ? 'present' : 'missing',
+  };
+}
+
+function classifyProfileMismatch(local: UserProfile | null | undefined, remote: UserProfile | null | undefined) {
+  const localSemantics = classifyProfileSemantics(local);
+  const remoteSemantics = classifyProfileSemantics(remote);
+  if (localSemantics.exists !== remoteSemantics.exists) return 'existence';
+  if (localSemantics.displayName !== remoteSemantics.displayName) return 'display_name';
+  if (localSemantics.language !== remoteSemantics.language) return 'language';
+  if (localSemantics.photo !== remoteSemantics.photo) return 'photo';
+  if (localSemantics.phone !== remoteSemantics.phone) return 'phone';
+  return null;
 }
 
 function toRepositoryFailure(method: string, error: unknown): BackendError {
@@ -179,6 +253,10 @@ export class RemoteProfileRepository implements ProfileRepository {
       const request = domainToDtoProfile(normalizeProfileUpdate(current, updates), metadata);
       const response = await this.client.patch<UpdateProfileResponseDto>('/v1/profile/me', {
         body: request,
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       return dtoToDomainProfile(response.data.data, current ?? null);
     });
@@ -199,6 +277,10 @@ export class RemoteProfileRepository implements ProfileRepository {
       const photoDto = domainToProfilePhotoDto(uri, metadata);
       const response = await this.client.post<UploadProfilePhotoResponseDto>('/v1/profile/me/photo', {
         body: photoDto,
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       const profile = current ?? null;
       if (response.data?.data?.photoUrl) {
@@ -219,6 +301,10 @@ export class RemoteProfileRepository implements ProfileRepository {
       const request = changePhoneRequestToDto(phoneNumber, otp, metadata);
       const response = await this.client.patch<ChangePhoneResponseDto>('/v1/profile/me/phone', {
         body: request,
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       return dtoToDomainProfile(response.data.data, current ?? null);
     });
@@ -247,6 +333,10 @@ export class RemoteProfileRepository implements ProfileRepository {
       );
       const response = await this.client.patch<UpdateProfileResponseDto>('/v1/profile/me', {
         body: request,
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       return dtoToDomainProfile(response.data.data, current ?? null);
     });
@@ -282,6 +372,10 @@ export class RemoteProfileRepository implements ProfileRepository {
           clientTimestamp: new Date().toISOString(),
           photoUrl: null,
         },
+        headers: {
+          'X-Correlation-Id': 'profile:photo:remove',
+          'X-Idempotency-Key': 'profile:photo:remove',
+        },
       });
     });
   }
@@ -291,76 +385,233 @@ export function createRemoteProfileRepository(options: RemoteProfileRepositoryOp
   return new RemoteProfileRepository(options);
 }
 
-export function createProfileShadowRepository(options: {
-  localRepository: ProfileRepository;
-  remoteRepository: RemoteProfileRepository;
-}) {
-  const { localRepository, remoteRepository } = options;
+export function createProfileShadowRepository(options: ProfileShadowRepositoryOptions) {
+  const { localRepository, remoteRepository, shadowWritesEnabled = true } = options;
 
-  return {
-    async getProfileImage() {
-      const local = await localRepository.getProfileImage();
-      try {
-        const remote = await remoteRepository.getProfileImage();
-        if (hasSemanticMismatch(local, remote)) {
-          observability.metrics.counter('profile.remote.shape_mismatch', 1, { method: 'getProfileImage' });
-          observability.logger.warn('ProfileRemoteShadowMismatch', {
-            method: 'getProfileImage',
-            localShape: summarizeShape(local),
-            remoteShape: summarizeShape(remote),
-          });
-        }
-      } catch (error) {
-        observability.logger.warn('ProfileRemoteShadowFailure', {
-          method: 'getProfileImage',
-          error: error instanceof Error ? error.name : 'unknown',
+  async function shadowRead<T>(method: string, local: () => Promise<T>, remote: () => Promise<T>, compare: (localValue: T, remoteValue: T) => string | null) {
+    const localStartedAt = Date.now();
+    const localValue = await local();
+    emitProfileStagingTelemetry('profile staging shadow request', {
+      method,
+      latencyMs: Date.now() - localStartedAt,
+      fieldCategory: 'read',
+    });
+    const remoteStartedAt = Date.now();
+    try {
+      const remoteValue = await remote();
+      const mismatchCategory = compare(localValue, remoteValue);
+      emitProfileStagingTelemetry('profile staging shadow success', {
+        method,
+        latencyMs: Date.now() - remoteStartedAt,
+        statusClass: '2xx',
+        mismatchCategory: mismatchCategory ?? 'none',
+        fieldCategory: 'read',
+      });
+      if (mismatchCategory) {
+        emitProfileStagingTelemetry('profile semantic mismatch', {
+          method,
+          mismatchCategory,
+          fieldCategory: 'read',
+        });
+        observability.metrics.counter('profile.remote.shape_mismatch', 1, { method, mismatchCategory });
+        observability.logger.warn('ProfileRemoteShadowMismatch', {
+          method,
+          mismatchCategory,
+          localShape: summarizeShape(localValue),
+          remoteShape: summarizeShape(remoteValue),
         });
       }
-      return local;
+    } catch (error) {
+      emitProfileStagingTelemetry('profile staging shadow failure', {
+        method,
+        latencyMs: Date.now() - remoteStartedAt,
+        statusClass: extractStatusClass(error),
+        fieldCategory: 'read',
+        error,
+      });
+      observability.logger.warn('ProfileRemoteShadowFailure', {
+        method,
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+    }
+    return localValue;
+  }
+
+  async function shadowWrite<T>(
+    method: string,
+    local: () => Promise<T>,
+    remote: () => Promise<T>,
+    fieldCategory: string,
+    compare: (localValue: T, remoteValue: T) => string | null = () => null,
+  ) {
+    emitProfileStagingTelemetry('profile staging shadow request', {
+      method,
+      fieldCategory,
+    });
+    const localValue = await local();
+    if (!shadowWritesEnabled) {
+      emitProfileStagingTelemetry('profile staging shadow skipped', {
+        method,
+        fieldCategory,
+      });
+      return localValue;
+    }
+    const remoteStartedAt = Date.now();
+    try {
+      const remoteValue = await remote();
+      const mismatchCategory = compare(localValue, remoteValue);
+      emitProfileStagingTelemetry('profile staging shadow success', {
+        method,
+        latencyMs: Date.now() - remoteStartedAt,
+        statusClass: '2xx',
+        mismatchCategory: mismatchCategory ?? 'none',
+        fieldCategory,
+      });
+      if (mismatchCategory) {
+        emitProfileStagingTelemetry('profile semantic mismatch', {
+          method,
+          mismatchCategory,
+          fieldCategory,
+        });
+      }
+    } catch (error) {
+      emitProfileStagingTelemetry('profile staging shadow failure', {
+        method,
+        latencyMs: Date.now() - remoteStartedAt,
+        statusClass: extractStatusClass(error),
+        fieldCategory,
+        error,
+      });
+      observability.logger.warn('ProfileRemoteShadowFailure', {
+        method,
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+    }
+    return localValue;
+  }
+
+  const repository = {
+    async getProfileImage() {
+      return shadowRead(
+        'getProfileImage',
+        () => localRepository.getProfileImage(),
+        () => remoteRepository.getProfileImage(),
+        (localValue, remoteValue) => {
+          if (localValue === remoteValue) return null;
+          return 'photo';
+        },
+      );
     },
     async saveProfileImage(uri: string) {
-      await localRepository.saveProfileImage(uri);
-      try {
-        await remoteRepository.saveProfileImage(uri);
-      } catch (error) {
-        observability.logger.warn('ProfileRemoteShadowFailure', {
-          method: 'saveProfileImage',
-          error: error instanceof Error ? error.name : 'unknown',
-        });
-      }
+      return shadowWrite(
+        'saveProfileImage',
+        () => localRepository.saveProfileImage(uri),
+        () => remoteRepository.saveProfileImage(uri),
+        'photo',
+      );
     },
     async removeProfileImage() {
-      await localRepository.removeProfileImage();
-      try {
-        await remoteRepository.removeProfileImage();
-      } catch (error) {
-        observability.logger.warn('ProfileRemoteShadowFailure', {
-          method: 'removeProfileImage',
-          error: error instanceof Error ? error.name : 'unknown',
-        });
-      }
+      return shadowWrite(
+        'removeProfileImage',
+        () => localRepository.removeProfileImage(),
+        () => remoteRepository.removeProfileImage(),
+        'photo',
+      );
     },
     async getCurrentProfile(current?: UserProfile | null) {
       const local = current ?? null;
-      try {
-        const remote = await remoteRepository.getCurrentProfile(current ?? null);
-        if (hasSemanticMismatch(extractProfileSemantics(local), extractProfileSemantics(remote))) {
-          observability.metrics.counter('profile.remote.shape_mismatch', 1, { method: 'getCurrentProfile' });
-          observability.logger.warn('ProfileRemoteShadowMismatch', {
-            method: 'getCurrentProfile',
-            localShape: summarizeShape(local),
-            remoteShape: summarizeShape(remote),
-          });
-        }
-      } catch (error) {
-        observability.logger.warn('ProfileRemoteShadowFailure', {
-          method: 'getCurrentProfile',
-          error: error instanceof Error ? error.name : 'unknown',
-        });
-      }
-      return local;
+      return shadowRead(
+        'getCurrentProfile',
+        async () => local,
+        () => remoteRepository.getCurrentProfile(current ?? null),
+        (localValue, remoteValue) => classifyProfileMismatch(localValue, remoteValue),
+      );
     },
-  } satisfies ProfileRepository & {
+    async updateProfile(
+      updates: Partial<User> | Partial<UserProfile>,
+      metadata: UpdateProfileRequestDto,
+      current?: UserProfile | null,
+    ) {
+      const local = current ?? null;
+      return shadowWrite(
+        'updateProfile',
+        async () => local,
+        () => remoteRepository.updateProfile(updates, metadata, current ?? null),
+        'profile',
+        (localValue, remoteValue) => classifyProfileMismatch(localValue, remoteValue),
+      );
+    },
+    async uploadProfilePhoto(
+      uri: string,
+      metadata: UploadProfilePhotoRequestDto,
+      current?: UserProfile | null,
+    ) {
+      const local = current?.profilePhoto ?? null;
+      return shadowWrite(
+        'uploadProfilePhoto',
+        async () => local,
+        () => remoteRepository.uploadProfilePhoto(uri, metadata, current ?? null),
+        'photo',
+        (localValue, remoteValue) => {
+          const localUri = localValue?.uri ?? null;
+          const remoteUri = remoteValue?.uri ?? null;
+          return localUri === remoteUri ? null : 'photo';
+        },
+      );
+    },
+    async updatePhoneNumber(
+      phoneNumber: string,
+      otp: string,
+      metadata: ChangePhoneRequestDto,
+      current?: UserProfile | null,
+    ) {
+      const local = current ?? null;
+      return shadowWrite(
+        'updatePhoneNumber',
+        async () => local,
+        () => remoteRepository.updatePhoneNumber(phoneNumber, otp, metadata, current ?? null),
+        'phone',
+        (localValue, remoteValue) => classifyProfileMismatch(localValue, remoteValue),
+      );
+    },
+    async updatePreferences(
+      preferences: ProfilePreferences,
+      metadata: UpdateProfileRequestDto,
+      current?: UserProfile | null,
+    ) {
+      const local = current ?? null;
+      return shadowWrite(
+        'updatePreferences',
+        async () => local,
+        () => remoteRepository.updatePreferences(preferences, metadata, current ?? null),
+        'preference',
+        (localValue, remoteValue) => classifyProfileMismatch(localValue, remoteValue),
+      );
+    },
+  };
+
+  return repository satisfies ProfileRepository & {
     getCurrentProfile(current?: UserProfile | null): Promise<UserProfile | null>;
+    updateProfile(
+      updates: Partial<User> | Partial<UserProfile>,
+      metadata: UpdateProfileRequestDto,
+      current?: UserProfile | null,
+    ): Promise<UserProfile | null>;
+    uploadProfilePhoto(
+      uri: string,
+      metadata: UploadProfilePhotoRequestDto,
+      current?: UserProfile | null,
+    ): Promise<ProfilePhoto | null>;
+    updatePhoneNumber(
+      phoneNumber: string,
+      otp: string,
+      metadata: ChangePhoneRequestDto,
+      current?: UserProfile | null,
+    ): Promise<UserProfile | null>;
+    updatePreferences(
+      preferences: ProfilePreferences,
+      metadata: UpdateProfileRequestDto,
+      current?: UserProfile | null,
+    ): Promise<UserProfile | null>;
   };
 }

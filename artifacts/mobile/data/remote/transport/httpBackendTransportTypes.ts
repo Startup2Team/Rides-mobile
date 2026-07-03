@@ -8,6 +8,8 @@ export interface BackendTransportEnvironment {
   nodeEnv?: string;
   savedLocationsRepositoryMode?: string;
   savedLocationsShadowWritesEnabled?: string;
+  profileRepositoryMode?: string;
+  profileShadowWritesEnabled?: string;
 }
 
 export interface ResolvedBackendTransportConfig {

@@ -92,3 +92,16 @@ Saved locations is the first real staging shadow integration.
 
 This does not promote saved locations, profile, or any other domain to
 `HYBRID` or `REMOTE`.
+
+## Phase 13B Update
+
+Profile is the second real staging shadow integration.
+
+- readiness remains `staging_shadow_candidate`, not remote authority
+- `LOCAL` is still the default and authoritative runtime source
+- profile shadow requires explicit repository mode and backend staging
+  configuration
+- read shadow can be enabled without write shadow
+- write shadow defaults off and is disabled in production
+- production cannot accidentally use staging configuration
+- the one-account customer/driver model remains unchanged

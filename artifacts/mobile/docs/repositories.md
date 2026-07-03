@@ -260,6 +260,22 @@ Phase 13A adds the first real staging shadow integration for saved locations.
 - screens, hooks, providers, `RideProvider`, auth, payments, matching, and
   realtime behavior are unchanged
 
+Phase 13B adds the profile staging shadow integration.
+
+- `data/repositories/profileRepositoryFactory.ts` is the controlled source
+  selection point for profile
+- default repository mode remains `LOCAL`
+- `EXPO_PUBLIC_PROFILE_REPOSITORY_MODE=SHADOW_REMOTE` can enable profile read
+  shadow only when backend environment is explicitly `STAGING` with a valid
+  HTTPS base URL
+- `REMOTE` and `HYBRID` remain blocked through environment configuration
+- local profile behavior remains authoritative for identity, photo, and
+  compatibility reads
+- write shadowing is independently controlled by
+  `EXPO_PUBLIC_PROFILE_SHADOW_WRITES_ENABLED` and defaults to false
+- `AuthContext`, session persistence, and profile screens are unchanged
+- the one-account customer/driver model stays intact
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection

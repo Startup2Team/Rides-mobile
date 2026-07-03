@@ -29,6 +29,8 @@ EXPO_PUBLIC_BACKEND_ENV=STAGING
 EXPO_PUBLIC_BACKEND_BASE_URL=https://placeholder-staging.example
 EXPO_PUBLIC_SAVED_LOCATIONS_REPOSITORY_MODE=SHADOW_REMOTE
 EXPO_PUBLIC_SAVED_LOCATIONS_SHADOW_WRITES_ENABLED=false
+EXPO_PUBLIC_PROFILE_REPOSITORY_MODE=SHADOW_REMOTE
+EXPO_PUBLIC_PROFILE_SHADOW_WRITES_ENABLED=false
 ```
 
 Allowed backend environments:
@@ -64,6 +66,9 @@ Safe headers:
 
 The transport may accept an injected token provider for future authorization
 metadata. It does not read tokens from AsyncStorage or own session persistence.
+
+Saved Locations and Profile both use this transport boundary through explicit
+staging factories.
 
 ## Retry Policy
 

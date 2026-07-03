@@ -15,6 +15,8 @@ export function readBackendTransportEnvironment(): BackendTransportEnvironment {
     nodeEnv: process.env.NODE_ENV,
     savedLocationsRepositoryMode: process.env.EXPO_PUBLIC_SAVED_LOCATIONS_REPOSITORY_MODE,
     savedLocationsShadowWritesEnabled: process.env.EXPO_PUBLIC_SAVED_LOCATIONS_SHADOW_WRITES_ENABLED,
+    profileRepositoryMode: process.env.EXPO_PUBLIC_PROFILE_REPOSITORY_MODE,
+    profileShadowWritesEnabled: process.env.EXPO_PUBLIC_PROFILE_SHADOW_WRITES_ENABLED,
   };
 }
 

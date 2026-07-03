@@ -154,6 +154,16 @@ Phase 13A introduces the first real staging backend transport boundary.
 - timeout, retry, response mapping, and telemetry policy live in the transport
   layer rather than in screens or hooks
 
+Phase 13B adds profile as the second real staging shadow integration.
+
+- `RemoteProfileRepository` can now run against the real Go staging API through
+  the profile staging factory
+- local profile behavior remains authoritative
+- profile shadow writes default off
+- the one-account customer/driver identity model does not change
+- `AuthContext`, session persistence, and profile screens remain unchanged
+- staging failure, timeout, and mismatch behavior is diagnostics-only
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

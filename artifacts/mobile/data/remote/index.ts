@@ -6,3 +6,4 @@ export * from './mappers';
 export * from './readiness';
 export * from './transport';
 export * from './staging/createSavedLocationsStagingShadow';
+export * from './staging/createProfileStagingShadow';
