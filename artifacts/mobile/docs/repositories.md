@@ -231,6 +231,19 @@ Phase 12L adds remote prototype paths for search and map.
 - fare estimates are preview-only and must not become final fare truth
 - telemetry must not include raw address queries, exact saved/home addresses, full route geometry, precise movement history, Mapbox tokens, access tokens, or backend secrets
 
+Phase 12M adds the remote prototype readiness matrix.
+
+- `data/remote/readiness/` centralizes contract, shadow, and safety scoring
+  for every remote prototype domain
+- the matrix is read-only diagnostics and does not change repository source
+  selection, persistence, or UI behavior
+- local repositories remain authoritative while the matrix identifies safe
+  future staging candidates
+- financial, lifecycle, and identity/security domains keep extra rollout gates
+  before remote authority can be considered
+- the current safe staging path starts with saved locations and shared profile
+  data, then expands to other shadow-ready domains as backend confidence grows
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection

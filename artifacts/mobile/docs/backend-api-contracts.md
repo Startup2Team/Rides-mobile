@@ -318,3 +318,23 @@ distance/duration estimates, and fare-preview contracts can be exercised in
 Comparisons are tolerance-based: search uses semantic overlap instead of exact
 ranking equality, and map diagnostics allow coordinate, distance, duration, and
 fare-preview drift. Fake backend transport is automated-test-only.
+
+Phase 12M adds a centralized readiness matrix that scores every remote
+prototype for future staging selection. The matrix is diagnostics-only and
+does not change any API contract, runtime authority, or repository default.
+It exists so later Go backend work can stage domains in a controlled order
+after the contract, shadow, and safety gates are satisfied.
+
+The current rollout priority reflected by the matrix is:
+
+1. saved locations
+2. profile
+3. payment methods
+4. notifications
+5. vehicles
+6. ride reads
+7. driver onboarding
+8. search
+9. map
+10. auth
+11. packages

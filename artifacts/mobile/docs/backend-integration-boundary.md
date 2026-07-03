@@ -123,6 +123,22 @@ mismatch category. It must not include exact home/saved-location addresses, raw
 search query text, full route geometry, precise movement history, Mapbox
 tokens, access tokens, or backend secrets.
 
+Phase 12M adds the remote prototype readiness matrix.
+
+- `data/remote/readiness/remoteReadinessMatrix.ts` centralizes the remote
+  prototype maturity snapshot across auth, profile, saved locations,
+  notifications, vehicles, packages, payment methods, ride reads, driver
+  onboarding, search, and map
+- the matrix is diagnostics-only and does not change repository resolution,
+  UI, or local authority
+- production and test defaults remain `LOCAL`; `SHADOW_REMOTE` still requires
+  explicit resolver configuration
+- the matrix separates contract readiness, shadow readiness, and safety
+  readiness so the team can choose future staging candidates without promoting
+  runtime authority too early
+- financial, lifecycle, and identity/security domains retain extra gates
+  before any future remote-authority rollout
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the
