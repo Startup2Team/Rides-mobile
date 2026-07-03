@@ -164,6 +164,17 @@ Phase 13B adds profile as the second real staging shadow integration.
 - `AuthContext`, session persistence, and profile screens remain unchanged
 - staging failure, timeout, and mismatch behavior is diagnostics-only
 
+Phase 13C adds the staging shadow health report.
+
+- `data/remote/staging/health/` aggregates memory-only readiness metrics for
+  saved locations and profile
+- the report tracks local operations, shadow attempts, success/failure,
+  timeout, skip, and mismatch outcomes
+- the report does not change repository selection, UI behavior, or backend
+  authority
+- the report is the diagnostics surface used to decide when a staging-shadow
+  domain may become a future HYBRID candidate
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

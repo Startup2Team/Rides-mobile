@@ -6,6 +6,11 @@ real Rides Go staging API in `SHADOW_REMOTE` mode.
 This is diagnostics-only. Local saved locations remain authoritative, and
 remote staging results never replace UI results.
 
+Phase 13C adds the centralized staging shadow health report for this domain.
+Saved locations now records local-operation, shadow-attempt, success, failure,
+timeout, skip, and mismatch events into the in-memory report while remaining
+local-authoritative.
+
 ## Source Selection
 
 Saved locations are selected in one controlled repository factory:
@@ -75,6 +80,9 @@ unless a future contract requires shared IDs.
 
 Telemetry must not include raw addresses, exact coordinates, notes, phone
 numbers, auth tokens, backend secrets, or credentials.
+
+The health report stays memory only and is the place to decide whether saved
+locations is ready to become a future HYBRID candidate.
 
 ## Rollback
 

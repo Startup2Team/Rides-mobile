@@ -8,6 +8,7 @@ import { readBackendTransportEnvironment, resolveBackendTransportConfig, validat
 import type { BackendTransportEnvironment, HttpBackendTransportConfig } from '../transport/httpBackendTransportTypes';
 import { RemoteProfileRepository, createProfileShadowRepository } from '../repositories/RemoteProfileRepository';
 import type { ChangePhoneRequestDto, UpdateProfileRequestDto, UploadProfilePhotoRequestDto } from '../contracts/api';
+import { recordStagingShadowEvent } from './health';
 
 export type ProfileRepositoryMode = 'LOCAL' | 'SHADOW_REMOTE';
 
@@ -61,6 +62,18 @@ function emitConfigSkipped(reason: string) {
   });
 }
 
+function recordConfigHealthSkip(reason: string) {
+  const event = reason === 'repository-mode-local'
+    ? 'skipped_mode_local'
+    : 'skipped_invalid_config';
+  recordStagingShadowEvent({
+    domain: 'profile',
+    operation: 'repository-resolution',
+    event,
+    errorCategory: reason,
+  });
+}
+
 function normalizeRepositoryMode(value?: string): ProfileRepositoryMode {
   return value?.trim().toUpperCase() === 'SHADOW_REMOTE' ? 'SHADOW_REMOTE' : 'LOCAL';
 }
@@ -76,15 +89,35 @@ function isProductionRuntime(env: BackendTransportEnvironment) {
 function createLocalOnlyProfileStagingRepository(localRepository: ProfileRepository): ProfileStagingShadowRepository {
   return {
     async getProfileImage() {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'getProfileImage',
+        event: 'local_operation_completed',
+      });
       return localRepository.getProfileImage();
     },
     async saveProfileImage(uri: string) {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'saveProfileImage',
+        event: 'local_operation_completed',
+      });
       return localRepository.saveProfileImage(uri);
     },
     async removeProfileImage() {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'removeProfileImage',
+        event: 'local_operation_completed',
+      });
       return localRepository.removeProfileImage();
     },
     async getCurrentProfile(current?: UserProfile | null) {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'getCurrentProfile',
+        event: 'local_operation_completed',
+      });
       return current ?? null;
     },
     async updateProfile(
@@ -92,6 +125,11 @@ function createLocalOnlyProfileStagingRepository(localRepository: ProfileReposit
       _metadata: UpdateProfileRequestDto,
       current?: UserProfile | null,
     ) {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'updateProfile',
+        event: 'local_operation_completed',
+      });
       return current ?? null;
     },
     async uploadProfilePhoto(
@@ -99,6 +137,11 @@ function createLocalOnlyProfileStagingRepository(localRepository: ProfileReposit
       _metadata: UploadProfilePhotoRequestDto,
       current?: UserProfile | null,
     ) {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'uploadProfilePhoto',
+        event: 'local_operation_completed',
+      });
       return current?.profilePhoto ?? null;
     },
     async updatePhoneNumber(
@@ -107,6 +150,11 @@ function createLocalOnlyProfileStagingRepository(localRepository: ProfileReposit
       _metadata: ChangePhoneRequestDto,
       current?: UserProfile | null,
     ) {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'updatePhoneNumber',
+        event: 'local_operation_completed',
+      });
       return current ?? null;
     },
     async updatePreferences(
@@ -114,6 +162,11 @@ function createLocalOnlyProfileStagingRepository(localRepository: ProfileReposit
       _metadata: UpdateProfileRequestDto,
       current?: UserProfile | null,
     ) {
+      recordStagingShadowEvent({
+        domain: 'profile',
+        operation: 'updatePreferences',
+        event: 'local_operation_completed',
+      });
       return current ?? null;
     },
   };
@@ -123,11 +176,18 @@ export function resolveProfileStagingShadowConfig(
   env: BackendTransportEnvironment = readBackendTransportEnvironment(),
 ) {
   const mode = normalizeRepositoryMode(env.profileRepositoryMode);
-  if (mode !== 'SHADOW_REMOTE') return { enabled: false as const, mode: 'LOCAL' as const, reason: 'repository-mode-local' };
-  if (isProductionRuntime(env)) return { enabled: false as const, mode: 'LOCAL' as const, reason: 'production-shadow-disabled' };
+  if (mode !== 'SHADOW_REMOTE') {
+    recordConfigHealthSkip('repository-mode-local');
+    return { enabled: false as const, mode: 'LOCAL' as const, reason: 'repository-mode-local' };
+  }
+  if (isProductionRuntime(env)) {
+    recordConfigHealthSkip('production-shadow-disabled');
+    return { enabled: false as const, mode: 'LOCAL' as const, reason: 'production-shadow-disabled' };
+  }
 
   const backendConfig = resolveBackendTransportConfig(env);
   if (!backendConfig.enabled || backendConfig.environment !== 'STAGING' || !backendConfig.baseUrl) {
+    recordConfigHealthSkip(backendConfig.reason ?? 'backend-not-staging');
     return {
       enabled: false as const,
       mode: 'LOCAL' as const,
@@ -137,6 +197,7 @@ export function resolveProfileStagingShadowConfig(
 
   const validated = validateBackendBaseUrl(backendConfig.baseUrl, 'STAGING');
   if (!validated.ok) {
+    recordConfigHealthSkip(validated.reason);
     return { enabled: false as const, mode: 'LOCAL' as const, reason: validated.reason };
   }
 
@@ -191,6 +252,7 @@ export function createProfileStagingShadowRepository(
       localRepository: options.localRepository,
       remoteRepository,
       shadowWritesEnabled: resolved.shadowWritesEnabled,
+      healthRecorder: recordStagingShadowEvent,
     }),
     mode: 'SHADOW_REMOTE',
   };

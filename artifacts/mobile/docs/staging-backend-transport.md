@@ -70,6 +70,13 @@ metadata. It does not read tokens from AsyncStorage or own session persistence.
 Saved Locations and Profile both use this transport boundary through explicit
 staging factories.
 
+## Staging Shadow Health
+
+Phase 13C adds a memory-only staging shadow health report for saved locations
+and profile. The report aggregates local operations, shadow attempts, shadow
+success/failure, timeout, skip, and mismatch events while keeping the transport
+layer separate from readiness reporting.
+
 ## Retry Policy
 
 Retry behavior is centralized in

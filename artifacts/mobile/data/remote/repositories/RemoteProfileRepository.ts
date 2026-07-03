@@ -4,6 +4,7 @@ import type { User } from '@/types';
 import { observability } from '@/observability/context/observabilityContext';
 import { BackendClient } from '../client/backendClient';
 import { createBackendUnavailableError, BackendError } from '../contracts/backendErrors';
+import type { StagingShadowHealthEvent } from '../staging/health';
 import type {
   ChangePhoneRequestDto,
   ChangePhoneResponseDto,
@@ -30,6 +31,7 @@ export interface ProfileShadowRepositoryOptions {
   localRepository: ProfileRepository;
   remoteRepository: RemoteProfileRepository;
   shadowWritesEnabled?: boolean;
+  healthRecorder?: (event: StagingShadowHealthEvent) => void;
 }
 
 function summarizeShape(value: unknown) {
@@ -386,19 +388,41 @@ export function createRemoteProfileRepository(options: RemoteProfileRepositoryOp
 }
 
 export function createProfileShadowRepository(options: ProfileShadowRepositoryOptions) {
-  const { localRepository, remoteRepository, shadowWritesEnabled = true } = options;
+  const { localRepository, remoteRepository, shadowWritesEnabled = true, healthRecorder } = options;
+
+  function recordHealth(event: StagingShadowHealthEvent) {
+    healthRecorder?.(event);
+  }
+
+  function withDomain(event: StagingShadowHealthEvent['event'], operation: string, extras: Partial<StagingShadowHealthEvent> = {}) {
+    recordHealth({
+      domain: 'profile',
+      operation,
+      event,
+      ...extras,
+    });
+  }
 
   async function shadowRead<T>(method: string, local: () => Promise<T>, remote: () => Promise<T>, compare: (localValue: T, remoteValue: T) => string | null) {
     const localStartedAt = Date.now();
     const localValue = await local();
+    withDomain('local_operation_completed', method, {
+      latencyMs: Date.now() - localStartedAt,
+      fieldCategory: 'read',
+    });
     emitProfileStagingTelemetry('profile staging shadow request', {
       method,
       latencyMs: Date.now() - localStartedAt,
       fieldCategory: 'read',
     });
+    withDomain('shadow_attempted', method, { fieldCategory: 'read' });
     const remoteStartedAt = Date.now();
     try {
       const remoteValue = await remote();
+      withDomain('shadow_success', method, {
+        latencyMs: Date.now() - remoteStartedAt,
+        fieldCategory: 'read',
+      });
       const mismatchCategory = compare(localValue, remoteValue);
       emitProfileStagingTelemetry('profile staging shadow success', {
         method,
@@ -408,6 +432,10 @@ export function createProfileShadowRepository(options: ProfileShadowRepositoryOp
         fieldCategory: 'read',
       });
       if (mismatchCategory) {
+        withDomain('semantic_mismatch', method, {
+          mismatchCategory,
+          fieldCategory: 'read',
+        });
         emitProfileStagingTelemetry('profile semantic mismatch', {
           method,
           mismatchCategory,
@@ -422,6 +450,12 @@ export function createProfileShadowRepository(options: ProfileShadowRepositoryOp
         });
       }
     } catch (error) {
+      withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', method, {
+        latencyMs: Date.now() - remoteStartedAt,
+        statusClass: extractStatusClass(error),
+        fieldCategory: 'read',
+        errorCategory: error instanceof Error ? error.name : 'unknown',
+      });
       emitProfileStagingTelemetry('profile staging shadow failure', {
         method,
         latencyMs: Date.now() - remoteStartedAt,
@@ -444,21 +478,34 @@ export function createProfileShadowRepository(options: ProfileShadowRepositoryOp
     fieldCategory: string,
     compare: (localValue: T, remoteValue: T) => string | null = () => null,
   ) {
+    const localStartedAt = Date.now();
     emitProfileStagingTelemetry('profile staging shadow request', {
       method,
       fieldCategory,
     });
     const localValue = await local();
+    withDomain('local_operation_completed', method, {
+      latencyMs: Date.now() - localStartedAt,
+      fieldCategory,
+    });
     if (!shadowWritesEnabled) {
+      withDomain('skipped_write_shadow_disabled', method, {
+        fieldCategory,
+      });
       emitProfileStagingTelemetry('profile staging shadow skipped', {
         method,
         fieldCategory,
       });
       return localValue;
     }
+    withDomain('shadow_attempted', method, { fieldCategory });
     const remoteStartedAt = Date.now();
     try {
       const remoteValue = await remote();
+      withDomain('shadow_success', method, {
+        latencyMs: Date.now() - remoteStartedAt,
+        fieldCategory,
+      });
       const mismatchCategory = compare(localValue, remoteValue);
       emitProfileStagingTelemetry('profile staging shadow success', {
         method,
@@ -468,6 +515,10 @@ export function createProfileShadowRepository(options: ProfileShadowRepositoryOp
         fieldCategory,
       });
       if (mismatchCategory) {
+        withDomain('semantic_mismatch', method, {
+          mismatchCategory,
+          fieldCategory,
+        });
         emitProfileStagingTelemetry('profile semantic mismatch', {
           method,
           mismatchCategory,
@@ -475,6 +526,12 @@ export function createProfileShadowRepository(options: ProfileShadowRepositoryOp
         });
       }
     } catch (error) {
+      withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', method, {
+        latencyMs: Date.now() - remoteStartedAt,
+        statusClass: extractStatusClass(error),
+        fieldCategory,
+        errorCategory: error instanceof Error ? error.name : 'unknown',
+      });
       emitProfileStagingTelemetry('profile staging shadow failure', {
         method,
         latencyMs: Date.now() - remoteStartedAt,

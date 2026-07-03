@@ -6,6 +6,11 @@ Rides Go staging API in `SHADOW_REMOTE` mode.
 This is diagnostics-only. Local profile behavior remains authoritative and the
 staging result never replaces app state.
 
+Phase 13C adds the centralized staging shadow health report for profile.
+Profile now records local-operation, shadow-attempt, success, failure,
+timeout, skip, and mismatch events into the in-memory report while staying
+local-authoritative.
+
 ## Source Selection
 
 Profile repository source selection is centralized in:
@@ -68,6 +73,9 @@ Safe comparisons focus on:
 
 Telemetry must not expose raw profile values, email addresses, phone numbers,
 signed photo URLs, auth tokens, or backend secrets.
+
+The health report is the diagnostics-only place to decide whether profile is a
+future HYBRID candidate.
 
 ## Rollback
 

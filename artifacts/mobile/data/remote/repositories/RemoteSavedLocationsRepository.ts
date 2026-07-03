@@ -3,6 +3,7 @@ import type { SavedLocation, RideLocation } from '@/types';
 import { observability } from '@/observability/context/observabilityContext';
 import { BackendClient } from '../client/backendClient';
 import { createBackendUnavailableError, BackendError } from '../contracts/backendErrors';
+import type { StagingShadowHealthEvent } from '../staging/health';
 import type {
   CreateSavedLocationRequestDto,
   CreateSavedLocationResponseDto,
@@ -30,6 +31,7 @@ export interface SavedLocationsShadowRepositoryOptions {
   localRepository: SavedLocationsRepository;
   remoteRepository: RemoteSavedLocationsRepository;
   shadowWritesEnabled?: boolean;
+  healthRecorder?: (event: StagingShadowHealthEvent) => void;
 }
 
 function summarizeShape(value: unknown) {
@@ -353,25 +355,46 @@ export function createSavedLocationsShadowRepository(options: {
   localRepository: SavedLocationsRepository;
   remoteRepository: RemoteSavedLocationsRepository;
   shadowWritesEnabled?: boolean;
+  healthRecorder?: (event: StagingShadowHealthEvent) => void;
 }) {
-  const { localRepository, remoteRepository, shadowWritesEnabled = true } = options;
+  const { localRepository, remoteRepository, shadowWritesEnabled = true, healthRecorder } = options;
+
+  function recordHealth(event: StagingShadowHealthEvent) {
+    healthRecorder?.(event);
+  }
+
+  function withDomain(event: StagingShadowHealthEvent['event'], operation: string, extras: Partial<StagingShadowHealthEvent> = {}) {
+    recordHealth({
+      domain: 'savedLocations',
+      operation,
+      event,
+      ...extras,
+    });
+  }
 
   return {
     async listSavedLocations() {
       const localStartedAt = Date.now();
       const local = await localRepository.listSavedLocations();
+      withDomain('local_operation_completed', 'listSavedLocations', {
+        latencyMs: Date.now() - localStartedAt,
+      });
       emitSavedLocationsShadowEvent('local_completed', {
         method: 'listSavedLocations',
         latencyMs: Date.now() - localStartedAt,
         count: local.length,
       });
       const remoteStartedAt = Date.now();
+      withDomain('shadow_attempted', 'listSavedLocations');
       emitSavedLocationsShadowEvent('staging_attempted', {
         method: 'listSavedLocations',
         count: local.length,
       });
       try {
         const remote = await remoteRepository.list();
+        withDomain('shadow_success', 'listSavedLocations', {
+          latencyMs: Date.now() - remoteStartedAt,
+        });
         emitSavedLocationsShadowEvent('staging_success', {
           method: 'listSavedLocations',
           latencyMs: Date.now() - remoteStartedAt,
@@ -379,6 +402,9 @@ export function createSavedLocationsShadowRepository(options: {
         });
         const mismatchCategory = classifySavedLocationsParity(local, remote);
         if (mismatchCategory) {
+          withDomain('semantic_mismatch', 'listSavedLocations', {
+            mismatchCategory,
+          });
           observability.logger.warn('SavedLocationsRemoteShadowMismatch', {
             method: 'listSavedLocations',
             localShape: summarizeShape(local),
@@ -395,6 +421,10 @@ export function createSavedLocationsShadowRepository(options: {
           });
         }
       } catch (error) {
+        withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', 'listSavedLocations', {
+          latencyMs: Date.now() - remoteStartedAt,
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+        });
         emitSavedLocationsShadowEvent(error instanceof Error && error.name === 'TimeoutError' ? 'staging_timeout' : 'staging_failure', {
           method: 'listSavedLocations',
           latencyMs: Date.now() - remoteStartedAt,
@@ -409,16 +439,25 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async replaceSavedLocations(next: SavedLocation[]) {
       await localRepository.replaceSavedLocations(next);
+      withDomain('local_operation_completed', 'replaceSavedLocations', {
+        count: next.length,
+      });
       if (!shadowWritesEnabled) {
+        withDomain('skipped_write_shadow_disabled', 'replaceSavedLocations');
         emitSavedLocationsShadowEvent('write_shadow_skipped', {
           method: 'replaceSavedLocations',
           count: next.length,
         });
         return;
       }
+      withDomain('shadow_attempted', 'replaceSavedLocations');
       try {
         await remoteRepository.replaceSavedLocations(next);
+        withDomain('shadow_success', 'replaceSavedLocations');
       } catch (error) {
+        withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', 'replaceSavedLocations', {
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+        });
         observability.logger.warn('SavedLocationsRemoteShadowFailure', {
           method: 'replaceSavedLocations',
           error: error instanceof Error ? error.name : 'unknown',
@@ -427,15 +466,22 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async saveLocation(location: RideLocation, label: string) {
       const local = await localRepository.saveLocation(location, label);
+      withDomain('local_operation_completed', 'saveLocation');
       if (!shadowWritesEnabled) {
+        withDomain('skipped_write_shadow_disabled', 'saveLocation');
         emitSavedLocationsShadowEvent('write_shadow_skipped', {
           method: 'saveLocation',
         });
         return local;
       }
+      withDomain('shadow_attempted', 'saveLocation');
       try {
         await remoteRepository.saveLocation(location, label);
+        withDomain('shadow_success', 'saveLocation');
       } catch (error) {
+        withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', 'saveLocation', {
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+        });
         observability.logger.warn('SavedLocationsRemoteShadowFailure', {
           method: 'saveLocation',
           error: error instanceof Error ? error.name : 'unknown',
@@ -445,15 +491,22 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async removeSavedLocation(id: string) {
       await localRepository.removeSavedLocation(id);
+      withDomain('local_operation_completed', 'removeSavedLocation');
       if (!shadowWritesEnabled) {
+        withDomain('skipped_write_shadow_disabled', 'removeSavedLocation');
         emitSavedLocationsShadowEvent('write_shadow_skipped', {
           method: 'removeSavedLocation',
         });
         return;
       }
+      withDomain('shadow_attempted', 'removeSavedLocation');
       try {
         await remoteRepository.removeSavedLocation(id);
+        withDomain('shadow_success', 'removeSavedLocation');
       } catch (error) {
+        withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', 'removeSavedLocation', {
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+        });
         observability.logger.warn('SavedLocationsRemoteShadowFailure', {
           method: 'removeSavedLocation',
           error: error instanceof Error ? error.name : 'unknown',
@@ -462,15 +515,22 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async clearSavedLocations() {
       await localRepository.clearSavedLocations();
+      withDomain('local_operation_completed', 'clearSavedLocations');
       if (!shadowWritesEnabled) {
+        withDomain('skipped_write_shadow_disabled', 'clearSavedLocations');
         emitSavedLocationsShadowEvent('write_shadow_skipped', {
           method: 'clearSavedLocations',
         });
         return;
       }
+      withDomain('shadow_attempted', 'clearSavedLocations');
       try {
         await remoteRepository.clearSavedLocations();
+        withDomain('shadow_success', 'clearSavedLocations');
       } catch (error) {
+        withDomain(error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'shadow_failure', 'clearSavedLocations', {
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+        });
         observability.logger.warn('SavedLocationsRemoteShadowFailure', {
           method: 'clearSavedLocations',
           error: error instanceof Error ? error.name : 'unknown',

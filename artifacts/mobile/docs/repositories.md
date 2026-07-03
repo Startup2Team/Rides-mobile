@@ -276,6 +276,15 @@ Phase 13B adds the profile staging shadow integration.
 - `AuthContext`, session persistence, and profile screens are unchanged
 - the one-account customer/driver model stays intact
 
+Phase 13C adds the staging shadow health report.
+
+- `data/remote/staging/health/` aggregates diagnostics for saved locations
+  and profile
+- the report is memory only and does not change repository source selection
+- future domains can emit health events without rewriting the report core
+- the report is the place to evaluate whether a domain should move from
+  `SHADOW_REMOTE` diagnostics to a future HYBRID candidate
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection

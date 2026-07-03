@@ -105,3 +105,18 @@ Profile is the second real staging shadow integration.
 - write shadow defaults off and is disabled in production
 - production cannot accidentally use staging configuration
 - the one-account customer/driver model remains unchanged
+
+## Phase 13C Update
+
+The staging shadow health report is the diagnostics surface for deciding when a
+domain may become a future HYBRID candidate.
+
+- the report aggregates saved locations and profile events in memory
+- health status comes from actual shadow attempts, success, failure, timeout,
+  skip, and mismatch events
+- `collect_data` means there are no shadow attempts yet
+- `continue_shadow` means the domain has data but not enough healthy sample
+  size for promotion
+- `ready_for_hybrid_candidate` means the domain has enough healthy staging
+  data to review for a future HYBRID rollout
+- production guard blocks keep the report `blocked` for that domain

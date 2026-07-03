@@ -73,6 +73,15 @@ Phase 13B adds the first real staging shadow integration for profile.
 - rollback is setting the profile repository mode back to `LOCAL` or
   disabling the backend environment
 
+Phase 13C adds the staging shadow health report.
+
+- profile events now feed the shared in-memory staging shadow report
+- the report is diagnostics only and does not change app behavior
+- the report keeps raw profile values, phone numbers, email addresses, and
+  signed URLs out of telemetry
+- the report is where profile readiness is evaluated for a future HYBRID
+  candidate decision
+
 Compatibility layer:
 - `AuthContext` still owns the live app session and role switching
 - `useProfilePhotoActions` still exists as a wrapper
