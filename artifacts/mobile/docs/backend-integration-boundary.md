@@ -139,6 +139,21 @@ Phase 12M adds the remote prototype readiness matrix.
 - financial, lifecycle, and identity/security domains retain extra gates
   before any future remote-authority rollout
 
+Phase 13A introduces the first real staging backend transport boundary.
+
+- `HttpBackendTransport` is the real API transport under `BackendClient`
+- `FakeBackendTransport` remains automated-test-only
+- saved locations can opt into real Go staging traffic in `SHADOW_REMOTE`
+  diagnostics mode
+- local saved locations remain authoritative and staging results are ignored
+- staging read and write shadowing are independently controlled
+- saved-location shadow writes default off because staging writes can create
+  real staging data
+- production does not automatically enable staging, `SHADOW_REMOTE`, `REMOTE`,
+  or `HYBRID`
+- timeout, retry, response mapping, and telemetry policy live in the transport
+  layer rather than in screens or hooks
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

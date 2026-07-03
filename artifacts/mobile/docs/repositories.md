@@ -244,6 +244,22 @@ Phase 12M adds the remote prototype readiness matrix.
 - the current safe staging path starts with saved locations and shared profile
   data, then expands to other shadow-ready domains as backend confidence grows
 
+Phase 13A adds the first real staging shadow integration for saved locations.
+
+- `data/repositories/savedLocationsRepositoryFactory.ts` is the controlled
+  source-selection point for saved locations
+- default repository mode remains `LOCAL`
+- `EXPO_PUBLIC_SAVED_LOCATIONS_REPOSITORY_MODE=SHADOW_REMOTE` can enable
+  saved-location read shadow only when backend environment is explicitly
+  `STAGING` with a valid HTTPS base URL
+- `REMOTE` and `HYBRID` remain blocked through environment configuration
+- local saved locations remain authoritative for queries, context, screens,
+  navigation, and UI behavior
+- write shadowing is independently controlled by
+  `EXPO_PUBLIC_SAVED_LOCATIONS_SHADOW_WRITES_ENABLED` and defaults to false
+- screens, hooks, providers, `RideProvider`, auth, payments, matching, and
+  realtime behavior are unchanged
+
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
 - `domains/profile/types.ts` owns the shared identity projection

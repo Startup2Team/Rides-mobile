@@ -4,6 +4,7 @@ export interface BackendRequestOptions {
   body?: unknown;
   timeoutMs?: number;
   signal?: AbortSignal;
+  retrySafe?: boolean;
 }
 
 export interface BackendResponse<T = unknown> {

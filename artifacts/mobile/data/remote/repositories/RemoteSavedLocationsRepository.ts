@@ -26,6 +26,12 @@ export interface RemoteSavedLocationsRepositoryOptions {
   transportLabel?: 'remote' | 'shadow_remote' | 'hybrid';
 }
 
+export interface SavedLocationsShadowRepositoryOptions {
+  localRepository: SavedLocationsRepository;
+  remoteRepository: RemoteSavedLocationsRepository;
+  shadowWritesEnabled?: boolean;
+}
+
 function summarizeShape(value: unknown) {
   if (Array.isArray(value)) return `array:${value.length}`;
   if (value === null) return 'null';
@@ -58,6 +64,42 @@ function recordSavedLocationsTelemetry(
     transport: context.transport,
     latencyMs: context.latencyMs,
     responseShape: context.responseShape,
+    error: context.error instanceof Error ? context.error.name : undefined,
+  });
+}
+
+function emitSavedLocationsShadowEvent(
+  event: 'local_completed' | 'staging_attempted' | 'staging_success' | 'staging_failure' | 'staging_timeout' | 'semantic_mismatch' | 'write_shadow_skipped',
+  context: {
+    method: string;
+    latencyMs?: number;
+    count?: number;
+    statusClass?: string;
+    mismatchCategory?: string;
+    correlationId?: string;
+    error?: unknown;
+  },
+) {
+  observability.metrics.counter('saved_locations.staging_shadow', 1, {
+    method: context.method,
+    event,
+    statusClass: context.statusClass ?? 'none',
+    mismatchCategory: context.mismatchCategory ?? 'none',
+  });
+  if (typeof context.latencyMs === 'number') {
+    observability.metrics.histogram('saved_locations.staging_shadow.latency_ms', context.latencyMs, {
+      method: context.method,
+      event,
+    });
+  }
+  observability.logger.info('SavedLocationsStagingShadow', {
+    event,
+    method: context.method,
+    latencyMs: context.latencyMs,
+    count: context.count,
+    statusClass: context.statusClass,
+    mismatchCategory: context.mismatchCategory,
+    correlationId: context.correlationId,
     error: context.error instanceof Error ? context.error.name : undefined,
   });
 }
@@ -98,6 +140,15 @@ function normalizeDeleteRequest(
     ...metadata,
     id,
   };
+}
+
+function classifySavedLocationsParity(local: SavedLocation[], remote: SavedLocation[]) {
+  if (local.length !== remote.length) return 'count';
+  const normalizeLabel = (value: string) => value.trim().toLowerCase();
+  const localLabels = local.map(item => normalizeLabel(item.label)).sort();
+  const remoteLabels = remote.map(item => normalizeLabel(item.label)).sort();
+  if (localLabels.some((label, index) => label !== remoteLabels[index])) return 'label';
+  return null;
 }
 
 export class RemoteSavedLocationsRepository implements SavedLocationsRepository {
@@ -153,6 +204,10 @@ export class RemoteSavedLocationsRepository implements SavedLocationsRepository 
       const request = normalizeCreateRequest(location, label, metadata);
       const response = await this.client.post<CreateSavedLocationResponseDto>('/v1/saved-locations', {
         body: request,
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       return dtoToDomainSavedLocations(response.data.data);
     });
@@ -164,6 +219,10 @@ export class RemoteSavedLocationsRepository implements SavedLocationsRepository 
       const request = normalizeUpdateRequest(location, metadata);
       const response = await this.client.patch<UpdateSavedLocationResponseDto>(`/v1/saved-locations/${location.id}`, {
         body: request,
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       return dtoToDomainSavedLocations(response.data.data);
     });
@@ -174,6 +233,10 @@ export class RemoteSavedLocationsRepository implements SavedLocationsRepository 
       if (!this.client) throw createBackendUnavailableError('savedLocations', 'delete', 'remote');
       const response = await this.client.delete<DeleteSavedLocationResponseDto>(`/v1/saved-locations/${id}`, {
         body: normalizeDeleteRequest(id, metadata),
+        headers: {
+          'X-Correlation-Id': metadata.correlationId,
+          'X-Idempotency-Key': metadata.idempotencyKey,
+        },
       });
       if (!response.data?.data?.deleted) {
         throw createBackendUnavailableError('savedLocations', 'delete', 'remote');
@@ -289,25 +352,54 @@ export function createRemoteSavedLocationsRepository(options: RemoteSavedLocatio
 export function createSavedLocationsShadowRepository(options: {
   localRepository: SavedLocationsRepository;
   remoteRepository: RemoteSavedLocationsRepository;
+  shadowWritesEnabled?: boolean;
 }) {
-  const { localRepository, remoteRepository } = options;
+  const { localRepository, remoteRepository, shadowWritesEnabled = true } = options;
 
   return {
     async listSavedLocations() {
+      const localStartedAt = Date.now();
       const local = await localRepository.listSavedLocations();
+      emitSavedLocationsShadowEvent('local_completed', {
+        method: 'listSavedLocations',
+        latencyMs: Date.now() - localStartedAt,
+        count: local.length,
+      });
+      const remoteStartedAt = Date.now();
+      emitSavedLocationsShadowEvent('staging_attempted', {
+        method: 'listSavedLocations',
+        count: local.length,
+      });
       try {
         const remote = await remoteRepository.list();
-        if (summarizeShape(remote) !== summarizeShape(local)) {
+        emitSavedLocationsShadowEvent('staging_success', {
+          method: 'listSavedLocations',
+          latencyMs: Date.now() - remoteStartedAt,
+          count: remote.length,
+        });
+        const mismatchCategory = classifySavedLocationsParity(local, remote);
+        if (mismatchCategory) {
           observability.logger.warn('SavedLocationsRemoteShadowMismatch', {
             method: 'listSavedLocations',
             localShape: summarizeShape(local),
             remoteShape: summarizeShape(remote),
+            mismatchCategory,
           });
           observability.metrics.counter('saved_locations.remote.shape_mismatch', 1, {
             method: 'listSavedLocations',
+            mismatchCategory,
+          });
+          emitSavedLocationsShadowEvent('semantic_mismatch', {
+            method: 'listSavedLocations',
+            mismatchCategory,
           });
         }
       } catch (error) {
+        emitSavedLocationsShadowEvent(error instanceof Error && error.name === 'TimeoutError' ? 'staging_timeout' : 'staging_failure', {
+          method: 'listSavedLocations',
+          latencyMs: Date.now() - remoteStartedAt,
+          error,
+        });
         observability.logger.warn('SavedLocationsRemoteShadowFailure', {
           method: 'listSavedLocations',
           error: error instanceof Error ? error.name : 'unknown',
@@ -317,6 +409,13 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async replaceSavedLocations(next: SavedLocation[]) {
       await localRepository.replaceSavedLocations(next);
+      if (!shadowWritesEnabled) {
+        emitSavedLocationsShadowEvent('write_shadow_skipped', {
+          method: 'replaceSavedLocations',
+          count: next.length,
+        });
+        return;
+      }
       try {
         await remoteRepository.replaceSavedLocations(next);
       } catch (error) {
@@ -328,6 +427,12 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async saveLocation(location: RideLocation, label: string) {
       const local = await localRepository.saveLocation(location, label);
+      if (!shadowWritesEnabled) {
+        emitSavedLocationsShadowEvent('write_shadow_skipped', {
+          method: 'saveLocation',
+        });
+        return local;
+      }
       try {
         await remoteRepository.saveLocation(location, label);
       } catch (error) {
@@ -340,6 +445,12 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async removeSavedLocation(id: string) {
       await localRepository.removeSavedLocation(id);
+      if (!shadowWritesEnabled) {
+        emitSavedLocationsShadowEvent('write_shadow_skipped', {
+          method: 'removeSavedLocation',
+        });
+        return;
+      }
       try {
         await remoteRepository.removeSavedLocation(id);
       } catch (error) {
@@ -351,6 +462,12 @@ export function createSavedLocationsShadowRepository(options: {
     },
     async clearSavedLocations() {
       await localRepository.clearSavedLocations();
+      if (!shadowWritesEnabled) {
+        emitSavedLocationsShadowEvent('write_shadow_skipped', {
+          method: 'clearSavedLocations',
+        });
+        return;
+      }
       try {
         await remoteRepository.clearSavedLocations();
       } catch (error) {

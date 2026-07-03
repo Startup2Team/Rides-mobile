@@ -8,10 +8,11 @@ export {
   paymentRepository,
   profileRepository,
   rideRepository,
-  savedLocationsRepository,
   searchRepository,
   vehicleRepository,
 } from '@/data/adapters/localRepositories';
+export { savedLocationsRepository } from './savedLocationsRepositoryFactory';
+export { createSavedLocationsRepository, getSavedLocationsRepository, resetSavedLocationsRepositoryForTests } from './savedLocationsRepositoryFactory';
 export type {
   AuthRepository,
   BookingRepository,

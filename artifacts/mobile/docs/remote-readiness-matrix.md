@@ -78,3 +78,17 @@ integrations. The matrix is informational only until the backend authority and
 token/session, financial, lifecycle, and privacy gates are explicitly signed
 off.
 
+## Phase 13A Update
+
+Saved locations is the first real staging shadow integration.
+
+- readiness remains `staging_shadow_candidate`, not remote authority
+- `LOCAL` is still the default and authoritative runtime source
+- staging shadow requires explicit saved-location repository mode and backend
+  staging configuration
+- read shadow can be enabled without write shadow
+- write shadow defaults off and is disabled in production
+- production cannot accidentally use staging configuration
+
+This does not promote saved locations, profile, or any other domain to
+`HYBRID` or `REMOTE`.
