@@ -73,6 +73,21 @@ request, cancel, accept, decline, start, complete, matching, negotiation,
 payment, package credit deduction, and realtime ride events remain out of scope
 for this phase.
 
+Phase 12J adds the remote driver onboarding and driver application prototype.
+The remote driver application/profile, application status, submit/update,
+document metadata/reference, clarification list, and clarification response
+paths can now be exercised in `SHADOW_REMOTE` mode for diagnostics, but local
+driver onboarding state remains authoritative. Remote review status never
+changes role switching, driver capability, go-online eligibility, package
+eligibility, vehicle behavior, or ride lifecycle behavior.
+
+Driver approval authority remains backend/admin-owned in the future model.
+Mobile repositories must not expose approve-driver, reject-driver, or
+force-verification operations. Telemetry for driver shadow comparisons is
+sanitized to safe semantic categories only and must not contain national ID,
+DOB, license number, MoMo pay code, phone number, document contents, raw
+document URLs, or signed URLs.
+
 ## Migration Strategy
 
 The boundary exists so future backend work can swap sources behind the

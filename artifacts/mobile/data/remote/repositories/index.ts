@@ -15,3 +15,8 @@ export {
   createRemoteRideRepositoryPrototype,
   createRideReadOnlyShadowRepository,
 } from './RemoteRideRepository';
+export {
+  RemoteDriverRepository,
+  createDriverShadowRepository,
+  createRemoteDriverRepositoryPrototype,
+} from './RemoteDriverRepository';

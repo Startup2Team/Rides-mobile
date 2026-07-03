@@ -23,10 +23,21 @@ selection changes are introduced here.
 ### Driver
 
 - `POST /v1/driver/applications`
+- `GET /v1/driver/applications/current`
+- `PATCH /v1/driver/applications/{applicationId}`
+- `GET /v1/driver/applications/{applicationId}/status`
+- `GET /v1/driver/applications/{applicationId}/documents`
 - `POST /v1/driver/applications/{applicationId}/documents`
+- `GET /v1/driver/applications/{applicationId}/clarifications`
 - `GET /v1/driver/applications/{applicationId}`
-- `POST /v1/driver/applications/{applicationId}/clarifications`
+- `PATCH /v1/driver/applications/{applicationId}/clarifications/{clarificationId}`
 - approval and rejection remain backend-admin actions
+
+Phase 12J treats driver onboarding and driver applications as the next remote
+repository prototype. The mobile app may validate application reads/writes,
+document metadata references, review status reads, and clarification responses
+in `SHADOW_REMOTE`, but it cannot approve, reject, force verification, or grant
+driver capability. Backend review truth remains future authority.
 
 ### Vehicles
 
@@ -128,6 +139,10 @@ truth stay out of scope for this phase.
 - Ride read DTOs map active ride read models directly and map ride history/detail
   responses back into the existing `Ride` UI/domain shape. Ride write DTOs remain
   contract-only until lifecycle mutation ownership moves backend-side.
+- Driver onboarding DTOs keep application identity, review status, document
+  metadata, upload/reference keys, and clarification messages explicit at the
+  backend boundary. Raw document bytes and base64 payloads are not part of these
+  DTOs.
 
 ## Mapper Strategy
 
@@ -167,6 +182,18 @@ Write requests should always include:
 
 This applies to ride lifecycle writes, payment method mutations, package
 mutations, saved location mutations, and driver onboarding submissions.
+
+Driver onboarding follows the one-account model:
+
+1. Account identity
+2. Driver application
+3. Backend review
+4. Driver capability granted
+5. Driver mode eligibility
+
+The driver application never creates a second user identity. Mobile-submitted
+application data is review input only; mobile cannot manufacture verified status
+or self-approve a driver.
 
 ## Versioning
 
@@ -232,3 +259,12 @@ mode for diagnostics, while local/live-provider ride lifecycle behavior remains
 authoritative. Ride lifecycle mutations, matching, negotiation, payment,
 package credit deduction, and realtime ride-event integration remain future
 work.
+
+Driver onboarding is the eighth repository to gain a concrete remote prototype.
+Driver application/profile reads, application status, submit/update application,
+document metadata/reference submission, clarification reads, and clarification
+responses can be exercised in `SHADOW_REMOTE` mode for diagnostics. Local
+driver onboarding state and current approval behavior remain authoritative.
+Document telemetry must be sanitized and must not include national ID, DOB,
+license number, MoMo pay code, phone number, document contents, or sensitive
+document URLs.

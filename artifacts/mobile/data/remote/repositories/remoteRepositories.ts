@@ -17,6 +17,7 @@ import { createBackendUnavailableError } from '../contracts/backendErrors';
 import type { BackendClient } from '../client/backendClient';
 import { createRemoteSavedLocationsRepository as createRemoteSavedLocationsRepositoryImpl, createSavedLocationsShadowRepository } from './RemoteSavedLocationsRepository';
 import { createRemoteRideRepositoryPrototype } from './RemoteRideRepository';
+import { createRemoteDriverRepositoryPrototype } from './RemoteDriverRepository';
 
 type RepoName =
   | 'auth'
@@ -193,24 +194,7 @@ function createRemoteSavedLocationsRepository(client?: BackendClient): SavedLoca
 }
 
 function createRemoteDriverRepository(client?: BackendClient): DriverRepository {
-  return {
-    async getDriverProfile() {
-      void client;
-      return rejectUnavailable('driver', 'getDriverProfile');
-    },
-    async saveDriverProfile() {
-      void client;
-      return rejectUnavailable('driver', 'saveDriverProfile');
-    },
-    async setOnlineState() {
-      void client;
-      return rejectUnavailable('driver', 'setOnlineState');
-    },
-    async clearDriverState() {
-      void client;
-      return rejectUnavailable('driver', 'clearDriverState');
-    },
-  };
+  return createRemoteDriverRepositoryPrototype({ client });
 }
 
 function createRemoteVehicleRepository(client?: BackendClient): VehicleRepository {

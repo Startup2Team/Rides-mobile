@@ -51,6 +51,8 @@ Each domain has a single repository contract.
   - driver profile
   - availability
   - driver-side identity projection
+  - driver onboarding/application remote prototype in diagnostics mode
+  - mobile does not own approval authority
 
 - `VehicleRepository`
   - vehicle list
@@ -193,6 +195,16 @@ Phase 12I adds the first read-only remote prototype path for rides.
 - `createRideReadOnlyShadowRepository` runs remote reads only after local reads and ignores remote results for UI/state
 - local/live-provider ride lifecycle behavior remains authoritative
 - request, cancel, accept, decline, start, complete, matching, negotiation, payment, package credit deduction, and realtime ride events remain future work and must stay out of this prototype
+
+Phase 12J adds the remote prototype path for driver onboarding and driver applications.
+
+- `RemoteDriverRepository` maps driver application/profile, application status, submit/update, document metadata/reference, and clarification DTOs through the backend boundary
+- `createDriverShadowRepository` runs local first and remote second, then ignores remote results for UI/state
+- local driver onboarding and current driver approval runtime behavior remain authoritative
+- the one canonical account identity remains intact; approved driver capability is a future backend-granted capability on the same account, not a second user
+- mobile cannot approve, reject, force verification, or manufacture verified status
+- driver document contracts are metadata/reference-only and must not carry raw bytes or base64 document data
+- telemetry is sanitized to safe semantic categories and must not emit national ID, DOB, license number, MoMo pay code, phone number, document contents, document URLs, or signed URLs
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
