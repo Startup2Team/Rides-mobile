@@ -82,3 +82,13 @@ source to hybrid authority.
 
 The repository resolver should still default to `LOCAL` until a future phase
 explicitly changes the runtime rollout policy.
+
+## Phase 13H Dry-Run Plan
+
+Phase 13H adds a separate dry-run planning scaffold on top of the candidate
+review gate.
+
+- the dry-run plan does not enable `HYBRID` mode
+- `LOCAL` remains authoritative
+- a candidate approval still does not change runtime source selection
+- the future runtime rollout must be shipped in a separate PR

@@ -7,6 +7,7 @@ import { createStagingShadowHealthSnapshot, getStagingShadowHealthReport } from 
 import type { RemoteProductionGuardAudit, RemoteReadinessDomain, RemoteReadinessRiskCategory } from './remoteReadinessTypes';
 import type { StagingShadowHealthSnapshot } from '../staging/health/stagingShadowHealthSnapshot';
 import type { StagingShadowHealthReport } from '../staging/health/stagingShadowHealthTypes';
+import type { StagingShadowHealthRecommendation, StagingShadowHealthStatus } from '../staging/health';
 
 export type HybridCandidateDomain = 'savedLocations' | 'profile';
 
@@ -51,8 +52,8 @@ export interface HybridCandidateDomainReview {
   evidence: HybridCandidateEvidenceStatus;
   readinessScore: number;
   readinessRecommendation: string;
-  stagingHealthStatus: string;
-  stagingHealthRecommendation: string;
+  stagingHealthStatus: StagingShadowHealthStatus;
+  stagingHealthRecommendation: StagingShadowHealthRecommendation;
   stagingShadowAttempts: number;
   approval: HybridCandidateApprovalRecord;
   approved: boolean;

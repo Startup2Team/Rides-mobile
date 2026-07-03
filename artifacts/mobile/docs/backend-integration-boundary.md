@@ -218,6 +218,16 @@ Phase 13G adds the HYBRID candidate review gate.
 - HYBRID candidate status is not the same as enabling `HYBRID` mode in the
   resolver
 
+Phase 13H adds the HYBRID rollout dry-run plan scaffold.
+
+- `data/remote/readiness/hybridDryRunEvaluator.ts` evaluates the future
+  HYBRID rollout path without changing runtime repository behavior
+- `scripts/plan-hybrid-rollout.js` is a diagnostics-only CLI and does not
+  contact the backend
+- the dry-run plan is safe by default and recommends `disabled` until the
+  evidence chain is complete
+- the future runtime HYBRID switch must still be implemented in a separate PR
+
 See [`hybrid-candidate-review.md`](./hybrid-candidate-review.md) for the
 review workflow and approval semantics.
 

@@ -378,3 +378,11 @@ Phase 13G adds the HYBRID candidate review gate.
 - the checked-in approval file defaults both domains to unapproved
 - HYBRID candidate status is not the same as enabling `HYBRID` mode in the
   resolver
+
+Phase 13H adds a HYBRID rollout dry-run plan scaffold.
+
+- `data/remote/readiness/hybridDryRunEvaluator.ts` is diagnostics-only and
+  does not alter repository source selection
+- `scripts/plan-hybrid-rollout.js` only reports a planning recommendation
+- the current repository resolver default remains `LOCAL`
+- no repository is promoted to `HYBRID` or `REMOTE` in this phase

@@ -71,6 +71,9 @@ jobs:
       - name: Review HYBRID candidates
         run: pnpm --dir artifacts/mobile run review:hybrid-candidates
 
+      - name: Plan HYBRID rollout
+        run: pnpm --dir artifacts/mobile run plan:hybrid-rollout -- --all
+
       - name: Run mobile tests
         run: pnpm --filter @workspace/mobile test
 

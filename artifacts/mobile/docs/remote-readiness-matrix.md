@@ -172,3 +172,15 @@ enabling HYBRID mode.
 - the checked-in approval file defaults both domains to unapproved
 - savedLocations and profile are reviewed first because they already have the
   safest real staging shadow paths
+
+## Phase 13H Update
+
+The HYBRID rollout dry-run scaffold defines the future stage model without
+changing runtime source selection.
+
+- `data/remote/readiness/hybridRolloutPolicy.ts` defines rollout stages and
+  rollback metadata for the future HYBRID path
+- the policy file is planning only and does not select a runtime repository
+- `disabled` is the default rollout stage
+- `shadow_remote`, `hybrid_dry_run`, `hybrid_canary`, `hybrid_enabled`, and
+  `remote_candidate` remain future stages only
