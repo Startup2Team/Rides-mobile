@@ -5,12 +5,14 @@ import {
 } from './activeRideCanaryStability';
 
 export type ActiveRideCanaryRecommendation =
+  | 'collect_data'
   | 'hold'
   | 'investigate'
   | 'rollback'
   | 'ready_for_next_surface';
 
 export type ActiveRideCanaryReportStabilityStatus =
+  | 'idle'
   | 'unknown'
   | 'holding'
   | 'needs_attention'
@@ -52,7 +54,21 @@ function detectSevereMismatch(snapshot: ActiveRideCanaryStabilitySnapshot) {
   return snapshot.comparisonMismatches >= 3 || mismatchRate >= 0.5;
 }
 
+function hasNoObservations(snapshot: ActiveRideCanaryStabilitySnapshot) {
+  return snapshot.projectedSourceSelections === 0
+    && snapshot.liveFallbacks === 0
+    && snapshot.gateDenials === 0
+    && snapshot.mappingFailures === 0
+    && snapshot.staleProjectionIncidents === 0
+    && snapshot.comparisonMismatches === 0
+    && snapshot.rollbackEvents === 0;
+}
+
 function determineRecommendation(snapshot: ActiveRideCanaryStabilitySnapshot): ActiveRideCanaryRecommendation {
+  if (hasNoObservations(snapshot)) {
+    return 'collect_data';
+  }
+
   if (snapshot.rollbackEvents > 0 || detectSevereMismatch(snapshot)) {
     return 'rollback';
   }
@@ -72,6 +88,7 @@ function deriveStabilityStatus(
   snapshot: ActiveRideCanaryStabilitySnapshot,
   recommendation: ActiveRideCanaryRecommendation,
 ): ActiveRideCanaryReportStabilityStatus {
+  if (recommendation === 'collect_data') return 'idle';
   if (recommendation === 'ready_for_next_surface') return 'ready';
   if (recommendation === 'rollback' || snapshot.mappingFailures > 0 || snapshot.staleProjectionIncidents > 0) {
     return 'needs_attention';

@@ -10,7 +10,7 @@ import {
   resetActiveRideCanaryStabilityForTests,
 } from '../activeRideCanaryStability';
 
-export type RideCanaryInspectorTone = 'healthy' | 'warning' | 'critical';
+export type RideCanaryInspectorTone = 'idle' | 'healthy' | 'warning' | 'critical';
 
 export interface RideCanaryInspectorSummary {
   label: string;
@@ -43,15 +43,13 @@ export interface RideCanaryInspectorSnapshot {
   monitoringReport: string;
 }
 
-function isProduction() {
-  return process.env.NODE_ENV === 'production';
+function isExplicitlyEnabled() {
+  return process.env.EXPO_PUBLIC_ENABLE_RIDE_CANARY_INSPECTOR === 'true'
+    || process.env.ENABLE_RIDE_CANARY_INSPECTOR === 'true';
 }
 
 export function isRideCanaryInspectorVisible() {
-  if (isProduction()) return false;
-  if (process.env.NODE_ENV === 'test') return true;
-  if (typeof globalThis !== 'undefined' && (globalThis as { __DEV__?: boolean }).__DEV__) return true;
-  return process.env.ENABLE_RIDE_CANARY_INSPECTOR === 'true';
+  return isExplicitlyEnabled();
 }
 
 function toTone({
@@ -63,11 +61,22 @@ function toTone({
   readiness: string;
   status: string;
 }): RideCanaryInspectorTone {
+  if (recommendation === 'collect_data' || status === 'idle' || readiness === 'not_observed' || readiness === 'insufficient_data') {
+    return 'idle';
+  }
   if (recommendation === 'rollback' || status === 'unhealthy' || readiness === 'blocked') return 'critical';
-  if (recommendation === 'investigate' || recommendation === 'hold' || readiness === 'warning' || status === 'degraded') {
+  if (recommendation === 'investigate' || readiness === 'warning' || status === 'degraded') {
     return 'warning';
   }
   return 'healthy';
+}
+
+function hasNoHistoryOrDetailObservations(state: ReturnType<typeof getRideCanaryHealthSnapshot>['history' | 'detail']) {
+  return state.comparisons === 0
+    && state.liveFallbacks === 0
+    && state.projectionUnavailable === 0
+    && state.mappingFailures === 0
+    && state.mismatches === 0;
 }
 
 function summarizeHistoryOrDetail(
@@ -77,19 +86,29 @@ function summarizeHistoryOrDetail(
 ): RideCanaryInspectorSummary {
   const projectedReads = state.comparisons;
   const liveReads = state.liveFallbacks + state.projectionUnavailable;
+  const notObserved = hasNoHistoryOrDetailObservations(state);
   const recommendation =
+    notObserved
+      ? 'collect_data'
+      : (
     report.currentStatus === 'healthy'
       ? 'ready_for_next_surface'
       : state.mappingFailures > 0 || state.mismatches > 0 || state.liveFallbacks > 0
         ? 'investigate'
-        : state.comparisons === 0
-          ? 'hold'
-          : 'hold';
-  const readiness = report.currentStatus === 'healthy' ? 'ready' : 'blocked';
+        : 'hold'
+      );
+  const readiness = notObserved
+    ? 'not_observed'
+    : report.currentStatus === 'healthy'
+      ? 'ready'
+      : state.mappingFailures > 0 || state.mismatches > 0 || state.liveFallbacks > 0 || state.projectionUnavailable > 0
+        ? 'warning'
+        : 'insufficient_data';
+  const status = notObserved ? 'idle' : report.currentStatus;
 
   return {
     label,
-    status: report.currentStatus,
+    status,
     projectedReads,
     liveReads,
     fallbacks: state.liveFallbacks,
@@ -99,8 +118,18 @@ function summarizeHistoryOrDetail(
     rollbackCount: 0,
     readiness,
     recommendation,
-    tone: toTone({ recommendation, readiness, status: report.currentStatus }),
+    tone: toTone({ recommendation, readiness, status }),
   };
+}
+
+function hasNoActiveRideObservations(stability: ReturnType<typeof getActiveRideCanaryStabilitySnapshot>) {
+  return stability.projectedSourceSelections === 0
+    && stability.liveFallbacks === 0
+    && stability.gateDenials === 0
+    && stability.mappingFailures === 0
+    && stability.staleProjectionIncidents === 0
+    && stability.comparisonMismatches === 0
+    && stability.rollbackEvents === 0;
 }
 
 function summarizeActiveRide(
@@ -110,11 +139,20 @@ function summarizeActiveRide(
 ): RideCanaryInspectorSummary {
   const projectedReads = stability.projectedSourceSelections;
   const liveReads = stability.liveFallbacks;
-  const readiness = report.readinessForNextSurface ? 'ready' : 'blocked';
+  const notObserved = hasNoActiveRideObservations(stability);
+  const readiness = notObserved
+    ? 'not_observed'
+    : report.readinessForNextSurface
+      ? 'ready'
+      : report.recommendedAction === 'investigate' || report.recommendedAction === 'rollback'
+        ? 'warning'
+        : 'insufficient_data';
+  const status = notObserved ? 'idle' : report.stabilityStatus;
+  const recommendation = notObserved ? 'collect_data' : report.recommendedAction;
 
   return {
     label: 'Active Ride',
-    status: report.stabilityStatus,
+    status,
     projectedReads,
     liveReads,
     fallbacks: stability.liveFallbacks,
@@ -123,11 +161,11 @@ function summarizeActiveRide(
     mappingFailures: stability.mappingFailures,
     rollbackCount: stability.rollbackEvents,
     readiness,
-    recommendation: report.recommendedAction,
+    recommendation,
     tone: toTone({
-      recommendation: report.recommendedAction,
+      recommendation,
       readiness,
-      status: report.stabilityStatus,
+      status,
     }),
   };
 }

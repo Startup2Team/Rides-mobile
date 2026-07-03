@@ -17,11 +17,11 @@ describe('active ride canary report', () => {
     resetActiveRideCanaryReport();
   });
 
-  test('default report is hold', () => {
+  test('default report is collect_data', () => {
     const report = getActiveRideCanaryReport();
 
-    expect(report.recommendedAction).toBe('hold');
-    expect(report.stabilityStatus).toBe('holding');
+    expect(report.recommendedAction).toBe('collect_data');
+    expect(report.stabilityStatus).toBe('idle');
     expect(report.readinessForNextSurface).toBe(false);
   });
 

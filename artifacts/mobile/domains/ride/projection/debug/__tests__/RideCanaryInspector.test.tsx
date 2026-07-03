@@ -1,4 +1,4 @@
-import { act, render, renderHook } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook } from '@testing-library/react-native';
 import React from 'react';
 import { RideProvider, useRide } from '@/context/RideContext';
 import { queryClient } from '@/query/client';
@@ -9,19 +9,21 @@ import {
   forceActiveRideLiveSource,
   resetActiveRideRolloutGateForTests,
 } from '../../activeRideRolloutGate';
-import { recordActiveRideCanaryRollback } from '../../activeRideCanaryStability';
+import { recordActiveRideCanaryRollback, resetActiveRideCanaryStabilityForTests } from '../../activeRideCanaryStability';
 import {
   createRideCanaryInspectorSnapshot,
   isRideCanaryInspectorVisible,
   useRideCanaryInspector,
 } from '../RideCanaryInspectorHooks';
-import { RideCanaryInspector } from '../RideCanaryInspector';
+import { RideCanaryInspector, RideCanaryInspectorLauncher } from '../RideCanaryInspector';
 import type { Ride } from '@/types';
 
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
   return {
+    Modal: ({ children, visible, testID }: { children?: React.ReactNode; visible?: boolean; testID?: string }) => (visible ? <React.Fragment>{React.createElement('Modal', { testID }, children)}</React.Fragment> : null),
+    Pressable: host('Pressable'),
     ScrollView: host('ScrollView'),
     StyleSheet: {
       create: (styles: object) => styles,
@@ -32,6 +34,15 @@ jest.mock('react-native', () => {
     View: host('View'),
   };
 });
+
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: ({ children }: { children?: React.ReactNode }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+    return <View>{children}</View>;
+  },
+  useSafeAreaInsets: () => ({ top: 12, right: 0, bottom: 24, left: 0 }),
+}));
 
 jest.mock('@/components/AppText', () => ({
   AppText: ({ children }: { children?: React.ReactNode }) => {
@@ -86,7 +97,18 @@ jest.mock('../../activeRideCanaryStability', () => {
 });
 
 const originalNodeEnv = process.env.NODE_ENV;
+const originalEnableInspector = process.env.ENABLE_RIDE_CANARY_INSPECTOR;
+const originalExpoEnableInspector = process.env.EXPO_PUBLIC_ENABLE_RIDE_CANARY_INSPECTOR;
 const environment = process.env as Record<string, string | undefined>;
+
+function enableInspector() {
+  environment.ENABLE_RIDE_CANARY_INSPECTOR = 'true';
+}
+
+function disableInspector() {
+  delete environment.ENABLE_RIDE_CANARY_INSPECTOR;
+  delete environment.EXPO_PUBLIC_ENABLE_RIDE_CANARY_INSPECTOR;
+}
 
 function createRide(id: string): Ride {
   return {
@@ -135,9 +157,11 @@ describe('RideCanaryInspector', () => {
     resetObservabilityForTests();
     resetRideCanaryHealthForTests();
     resetActiveRideCanaryReport();
+    resetActiveRideCanaryStabilityForTests();
     resetActiveRideRolloutGateForTests();
     queryClient.clear();
     environment.NODE_ENV = 'test';
+    disableInspector();
     jest.clearAllMocks();
   });
 
@@ -145,18 +169,41 @@ describe('RideCanaryInspector', () => {
     resetObservabilityForTests();
     resetRideCanaryHealthForTests();
     resetActiveRideCanaryReport();
+    resetActiveRideCanaryStabilityForTests();
     resetActiveRideRolloutGateForTests();
     queryClient.clear();
     environment.NODE_ENV = originalNodeEnv;
+    environment.ENABLE_RIDE_CANARY_INSPECTOR = originalEnableInspector;
+    environment.EXPO_PUBLIC_ENABLE_RIDE_CANARY_INSPECTOR = originalExpoEnableInspector;
     jest.clearAllMocks();
   });
 
-  test('is hidden in production', () => {
+  test('is hidden by default in test', () => {
+    environment.NODE_ENV = 'test';
+    expect(isRideCanaryInspectorVisible()).toBe(false);
+  });
+
+  test('is hidden by default in dev', () => {
+    environment.NODE_ENV = 'development';
+    (globalThis as { __DEV__?: boolean }).__DEV__ = true;
+    expect(isRideCanaryInspectorVisible()).toBe(false);
+  });
+
+  test('is hidden by default in production', () => {
     environment.NODE_ENV = 'production';
     expect(isRideCanaryInspectorVisible()).toBe(false);
   });
 
+  test('is visible only with explicit flag', () => {
+    enableInspector();
+    expect(isRideCanaryInspectorVisible()).toBe(true);
+    disableInspector();
+    environment.EXPO_PUBLIC_ENABLE_RIDE_CANARY_INSPECTOR = 'true';
+    expect(isRideCanaryInspectorVisible()).toBe(true);
+  });
+
   test('builds the combined report snapshot', () => {
+    enableInspector();
     seedHistoryAndDetailHealth();
     const snapshot = createRideCanaryInspectorSnapshot();
 
@@ -169,7 +216,25 @@ describe('RideCanaryInspector', () => {
     expect(snapshot.report.recommendedAction).toBeDefined();
   });
 
+  test('zero observations classify as idle and not observed', () => {
+    enableInspector();
+    const snapshot = createRideCanaryInspectorSnapshot();
+
+    expect(snapshot.history.status).toBe('idle');
+    expect(snapshot.detail.status).toBe('idle');
+    expect(snapshot.activeRide.status).toBe('idle');
+    expect(snapshot.history.readiness).toBe('not_observed');
+    expect(snapshot.detail.readiness).toBe('not_observed');
+    expect(snapshot.activeRide.readiness).toBe('not_observed');
+    expect(snapshot.history.recommendation).toBe('collect_data');
+    expect(snapshot.detail.recommendation).toBe('collect_data');
+    expect(snapshot.activeRide.recommendation).toBe('collect_data');
+    expect(snapshot.activeRide.recommendation).not.toBe('rollback');
+    expect(snapshot.activeRide.tone).toBe('idle');
+  });
+
   test('refresh reset export and force live do not mutate query cache', () => {
+    enableInspector();
     seedHistoryAndDetailHealth();
     const beforeQueryCount = queryClient.getQueryCache().getAll().length;
     const { result } = renderHook(() => useRideCanaryInspector(), {
@@ -190,6 +255,9 @@ describe('RideCanaryInspector', () => {
     });
     expect(result.current.snapshot.history.projectedReads).toBe(0);
     expect(result.current.snapshot.detail.projectedReads).toBe(0);
+    expect(result.current.snapshot.history.status).toBe('idle');
+    expect(result.current.snapshot.detail.status).toBe('idle');
+    expect(result.current.snapshot.activeRide.status).toBe('idle');
     expect(queryClient.getQueryCache().getAll().length).toBe(beforeQueryCount);
 
     act(() => {
@@ -209,6 +277,7 @@ describe('RideCanaryInspector', () => {
   });
 
   test('renders the hidden inspector surface in test mode', () => {
+    enableInspector();
     seedHistoryAndDetailHealth();
     const view = render(<RideCanaryInspector />);
 
@@ -224,7 +293,73 @@ describe('RideCanaryInspector', () => {
     expect(view.getByText('Export Report (JSON)')).toBeTruthy();
   });
 
+  test('floating launcher is visible with explicit flag and full inspector is closed by default', () => {
+    enableInspector();
+    const view = render(<RideCanaryInspectorLauncher />);
+
+    expect(view.getByTestId('ride-canary-launcher')).toBeTruthy();
+    expect(view.queryByText('Monitoring Report')).toBeNull();
+  });
+
+  test('floating launcher is hidden in production', () => {
+    environment.NODE_ENV = 'production';
+    const view = render(<RideCanaryInspectorLauncher />);
+
+    expect(view.queryByTestId('ride-canary-launcher')).toBeNull();
+  });
+
+  test('floating launcher is hidden in test by default', () => {
+    environment.NODE_ENV = 'test';
+    const view = render(<RideCanaryInspectorLauncher />);
+
+    expect(view.queryByTestId('ride-canary-launcher')).toBeNull();
+  });
+
+  test('tapping launcher opens scrollable modal overlay and Close hides it', () => {
+    enableInspector();
+    const view = render(<RideCanaryInspectorLauncher />);
+
+    fireEvent.press(view.getByTestId('ride-canary-launcher'));
+
+    expect(view.getByTestId('ride-canary-inspector-modal')).toBeTruthy();
+    expect(view.getByText('Monitoring Report')).toBeTruthy();
+    expect(view.getByText('Current environment: test')).toBeTruthy();
+
+    fireEvent.press(view.getByText('Close'));
+
+    expect(view.queryByText('Monitoring Report')).toBeNull();
+  });
+
+  test('opening closing and refreshing do not increment rollback count', () => {
+    enableInspector();
+    const view = render(<RideCanaryInspectorLauncher />);
+
+    expect(createRideCanaryInspectorSnapshot().activeRide.rollbackCount).toBe(0);
+
+    fireEvent.press(view.getByTestId('ride-canary-launcher'));
+    expect(createRideCanaryInspectorSnapshot().activeRide.rollbackCount).toBe(0);
+
+    fireEvent.press(view.getByText('Refresh Report'));
+    expect(createRideCanaryInspectorSnapshot().activeRide.rollbackCount).toBe(0);
+
+    fireEvent.press(view.getByText('Close'));
+    expect(createRideCanaryInspectorSnapshot().activeRide.rollbackCount).toBe(0);
+  });
+
+  test('explicit rollback simulation increments rollback exactly once', () => {
+    enableInspector();
+    const { result } = renderHook(() => useRideCanaryInspector());
+
+    act(() => {
+      result.current.simulateRollback();
+    });
+
+    expect(recordActiveRideCanaryRollback).toHaveBeenCalledTimes(1);
+    expect(result.current.snapshot.activeRide.rollbackCount).toBe(1);
+  });
+
   test('RideProvider state remains unchanged while inspector actions run', () => {
+    enableInspector();
     const wrapper = ({ children }: { children: React.ReactNode }) => <RideProvider>{children}</RideProvider>;
     const { result } = renderHook(() => {
       const ride = useRide();

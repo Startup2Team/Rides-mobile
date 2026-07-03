@@ -16,13 +16,17 @@ export function RideCanaryInspectorCard({
   children: React.ReactNode;
 }) {
   const borderColor =
-    tone === 'healthy'
+    tone === 'idle'
+      ? colors.border
+      : tone === 'healthy'
       ? colors.successHex
       : tone === 'warning'
         ? colors.warningHex
         : colors.destructiveHex;
   const toneColor =
-    tone === 'healthy'
+    tone === 'idle'
+      ? colors.mutedForeground
+      : tone === 'healthy'
       ? colors.success
       : tone === 'warning'
         ? colors.warning

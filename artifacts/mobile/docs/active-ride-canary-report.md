@@ -23,11 +23,17 @@ The report summarizes the current canary state:
 
 ## Recommendation Meanings
 
+- `collect_data`: no active-ride observations have been recorded yet
 - `hold`: not enough stable data yet
 - `investigate`: mapping, stale, or mismatch issues need review
 - `rollback`: rollback events were recorded or the mismatch pattern is severe
 - `ready_for_next_surface`: the stability gate passes and the canary is ready
   to be considered for the next conservative expansion step
+
+Zero traffic is explicitly classified as `idle`, not as a failure. A report
+with no projected reads, live fallbacks, gate denials, mapping failures, stale
+projection incidents, mismatches, or rollback events recommends
+`collect_data`.
 
 ## Why The UI Still Does Not Expand
 
@@ -38,4 +44,6 @@ current UI cutover remains the only projected surface.
 
 The developer-only Ride Canary Inspector reads this report together with the
 history, detail, and active ride canary diagnostics. It is QA and
-development-only and does not change production UI behavior.
+development-only and does not change production UI behavior. Rollback
+simulation is event-driven by the explicit developer action; report refreshes,
+inspector open/close, and remounts do not record rollback events.

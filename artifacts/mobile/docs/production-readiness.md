@@ -125,5 +125,10 @@ require investigation, or stay ready for a later expansion step. It still does
 not expand the UI.
 
 Phase 11J adds the hidden Ride Canary Inspector for development and QA. It is
-diagnostics-only, invisible in production, and does not change RideProvider or
-query cache behavior.
+diagnostics-only, invisible in production, and does not change RideProvider,
+navigation, or query cache behavior. The full inspector is opened only from a
+small developer floating entry point and renders as a modal/debug overlay, so
+normal customer and driver layouts are not displaced. Zero observations are
+classified as idle/not observed instead of critical. Rollback simulation
+records one event per explicit developer tap, and reset returns diagnostics to
+the clean unobserved state.

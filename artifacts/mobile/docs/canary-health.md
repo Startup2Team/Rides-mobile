@@ -45,6 +45,11 @@ detail output still matches the live repository-backed view.
 - last fallback
 - last comparison timestamp
 
+The developer inspector overlays an additional presentation state on top of
+the raw health report: no observations are displayed as `idle` /
+`not_observed`, not `critical`. Zero projected reads and zero live reads only
+mean the canary still needs data.
+
 ## Readiness
 
 `isReadyForActiveRideCanary()` evaluates both canaries against configurable
@@ -80,6 +85,10 @@ remains on live RideProvider state and records fallback telemetry instead of
 changing runtime behavior.
 
 These diagnostics are informational only.
+
+Resetting canary metrics returns history, detail, and active-ride diagnostics
+to the unobserved state by clearing counters, observation timestamps, last
+mismatch, last fallback, and rollback counts.
 
 Phase 11F adds a separate active-ride rollout gate on top of this health
 report. Even when canary health is green, projected Active Ride stays blocked

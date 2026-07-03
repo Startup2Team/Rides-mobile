@@ -1,5 +1,6 @@
-import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { useColors } from '@/hooks/useColors';
 import { RideCanaryInspectorActionRow, RideCanaryInspectorPrimaryAction, RideCanaryInspectorSection } from './RideCanaryInspectorSection';
@@ -16,6 +17,13 @@ export function RideCanaryInspector() {
   if (!isRideCanaryInspectorVisible() || !inspector.visible) return null;
 
   const { snapshot } = inspector;
+  const overallTone = snapshot.activeRide.tone === 'critical' || snapshot.history.tone === 'critical' || snapshot.detail.tone === 'critical'
+    ? 'critical'
+    : snapshot.activeRide.tone === 'warning' || snapshot.history.tone === 'warning' || snapshot.detail.tone === 'warning'
+      ? 'warning'
+      : snapshot.activeRide.tone === 'healthy' || snapshot.history.tone === 'healthy' || snapshot.detail.tone === 'healthy'
+        ? 'healthy'
+        : 'idle';
 
   return (
     <ScrollView
@@ -25,11 +33,21 @@ export function RideCanaryInspector() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <AppText variant="label" style={[styles.title, { color: colors.foreground }]}>
-          Ride Canary Inspector
-        </AppText>
+        <View style={styles.headerTitleRow}>
+          <View style={styles.headerTitleText}>
+            <AppText variant="label" style={[styles.title, { color: colors.foreground }]}>
+              Ride Canary Inspector
+            </AppText>
+            <AppText variant="tiny" style={{ color: colors.mutedForeground }}>
+              Environment: {process.env.NODE_ENV ?? 'unknown'}
+            </AppText>
+          </View>
+          <AppText variant="caption" style={[styles.overallTone, { color: toneColor(overallTone, colors) }]}>
+            {overallTone}
+          </AppText>
+        </View>
         <AppText variant="tiny" style={{ color: colors.mutedForeground }}>
-          Query cache: {inspector.queryCacheSize}
+          Query cache: {inspector.queryCacheSize} | Last refreshed: {snapshot.report.generatedAt}
         </AppText>
       </View>
 
@@ -113,25 +131,151 @@ export function RideCanaryInspector() {
   );
 }
 
+function toneColor(tone: string, colors: ReturnType<typeof useColors>) {
+  if (tone === 'critical') return colors.destructive;
+  if (tone === 'warning') return colors.warning;
+  if (tone === 'healthy') return colors.success;
+  return colors.mutedForeground;
+}
+
+function toneIndicatorColor(tone: string, colors: ReturnType<typeof useColors>) {
+  if (tone === 'critical') return colors.destructiveHex;
+  if (tone === 'warning') return colors.warningHex;
+  if (tone === 'healthy') return colors.successHex;
+  return colors.border;
+}
+
+export function RideCanaryInspectorLauncher() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const inspector = useRideCanaryInspector();
+  const [open, setOpen] = useState(false);
+
+  if (!isRideCanaryInspectorVisible() || !inspector.visible) return null;
+
+  const tones = [inspector.snapshot.history.tone, inspector.snapshot.detail.tone, inspector.snapshot.activeRide.tone];
+  const overallTone = tones.includes('critical')
+    ? 'critical'
+    : tones.includes('warning')
+      ? 'warning'
+      : tones.includes('healthy')
+        ? 'healthy'
+        : 'idle';
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open Ride Canary Inspector"
+        testID="ride-canary-launcher"
+        onPress={() => setOpen(true)}
+        style={[
+          styles.launcher,
+          {
+            right: Math.max(12, insets.right + 12),
+            bottom: Math.max(96, insets.bottom + 88),
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <View style={[styles.launcherDot, { backgroundColor: toneIndicatorColor(overallTone, colors) }]} />
+        <AppText variant="tiny" style={[styles.launcherText, { color: colors.foreground }]}>CANARY</AppText>
+      </Pressable>
+      <Modal
+        animationType="fade"
+        visible={open}
+        transparent={false}
+        onRequestClose={() => setOpen(false)}
+        testID="ride-canary-inspector-modal"
+      >
+        <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+            <View style={styles.headerTitleText}>
+              <AppText variant="label" style={[styles.title, { color: colors.foreground }]}>Ride Canary Inspector</AppText>
+              <AppText variant="tiny" style={{ color: colors.mutedForeground }}>
+                Current environment: {process.env.NODE_ENV ?? 'unknown'}
+              </AppText>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close Ride Canary Inspector" onPress={() => setOpen(false)} style={[styles.closeButton, { borderColor: colors.border }]}>
+              <AppText variant="caption" style={{ color: colors.foreground }}>Close</AppText>
+            </Pressable>
+          </View>
+          <RideCanaryInspector />
+        </SafeAreaView>
+      </Modal>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10000,
-    maxHeight: '86%',
+    flex: 1,
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
   content: {
     gap: 10,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   header: {
     gap: 2,
     paddingHorizontal: 2,
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  headerTitleText: {
+    flex: 1,
+    gap: 2,
+  },
   title: {
     flexShrink: 1,
+  },
+  overallTone: {
+    textTransform: 'uppercase',
+  },
+  launcher: {
+    position: 'absolute',
+    zIndex: 10000,
+    elevation: 12,
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  launcherDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  launcherText: {
+    fontWeight: '700',
+  },
+  modalRoot: {
+    flex: 1,
+  },
+  modalHeader: {
+    minHeight: 58,
+    borderBottomWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  closeButton: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
   },
 });
