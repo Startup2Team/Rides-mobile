@@ -62,7 +62,6 @@ export const headerScrollStore = {
       listeners.get(pathname)?.delete(listener);
       if (listeners.get(pathname)?.size === 0) {
         listeners.delete(pathname);
-        states.delete(pathname);
       }
     };
   },

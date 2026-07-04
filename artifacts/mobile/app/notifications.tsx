@@ -491,9 +491,11 @@ export default function NotificationsScreen() {
           </View>
         )}
         right={derivedUnreadCount > 0 ? (
-          <TouchableOpacity onPress={() => { void markAllRead(); }} style={styles.markAllBtn}>
-            <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
-          </TouchableOpacity>
+          <View style={styles.markAllSlot}>
+            <TouchableOpacity onPress={() => { void markAllRead(); }} style={styles.markAllBtn}>
+              <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={{ width: sizes.avatar.xxl }} />
         )}
@@ -528,7 +530,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   badge: { minWidth: spacing[20], height: spacing[20], borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   badgeText: { ...typography.badge, color: '#000' },
-  markAllBtn: { width: sizes.avatar.xxl, alignItems: 'flex-end' },
+  markAllSlot: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  markAllBtn: { minWidth: sizes.avatar.xxl, alignItems: 'flex-end' },
   markAllText: { ...typography.label },
   list: { padding: semanticSpacing.listItemPadding },
   sectionTitle: {

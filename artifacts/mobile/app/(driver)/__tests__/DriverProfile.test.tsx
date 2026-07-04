@@ -190,4 +190,33 @@ describe('DriverProfileScreen', () => {
     expect(mockAlert).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
+
+  test('opens rating information from the driver rating area', async () => {
+    const DriverProfileScreen = require('../profile').default;
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DriverProfileScreen />
+      </QueryClientProvider>,
+    );
+
+    const ratingInfoButton = screen.getByLabelText('Open rating information');
+    fireEvent.press(ratingInfoButton);
+    fireEvent.press(ratingInfoButton);
+
+    await waitFor(() => {
+      const { router } = require('expo-router');
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/rating-information',
+        params: { mode: 'driver' },
+      });
+    });
+    const { router } = require('expo-router');
+    expect(router.push).toHaveBeenCalledTimes(1);
+  });
 });

@@ -253,3 +253,14 @@ Phase 13I adds the staging backend connection checklist and contract gate.
   mobile-side contract expectation
 - `ready_for_staging_shadow` means diagnostics-only staging calls may begin
   for a real backend URL, but it does not enable HYBRID or REMOTE authority
+
+Phase 13J adds the backend staging evidence pack.
+
+- `docs/backend-staging-evidence-pack.md` and
+  `docs/backend-staging-questions.md` package the questions the Go backend
+  team must answer before the first real staging probe
+- `docs/contracts/saved-locations-staging-contract.md` and
+  `docs/contracts/profile-staging-contract.md` spell out the mobile-side
+  staging expectations for the two first connection-ready domains
+- the evidence pack is documentation only and does not connect a URL, enable
+  `SHADOW_REMOTE`, or alter repository source selection

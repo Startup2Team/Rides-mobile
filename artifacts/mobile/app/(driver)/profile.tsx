@@ -18,6 +18,7 @@ import { getActivePackageActivation } from '@/domain/driverRidePackages';
 import { useVehicles } from '@/domains/vehicle';
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
+import { getRatingInformationRoute } from '@/navigation/ratingNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
@@ -32,6 +33,7 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
+import { usePressGuard } from '@/hooks/usePressGuard';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -72,18 +74,20 @@ export default function DriverProfileScreen() {
     };
   }, [user?.id]);
 
-  const handleSwitchToCustomer = () => {
+  const handleEditProfile = usePressGuard(() => router.push('/edit-profile'));
+  const handleRatingInfo = usePressGuard(() => router.push(getRatingInformationRoute(user?.mode) as never));
+  const handleSwitchToCustomer = usePressGuard(() => {
     Alert.alert('Switch Mode', 'Switch to customer mode?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Switch',
-          onPress: async () => {
-            await switchMode('customer');
-            navigateToCustomerHomeAfterCompletion(router);
-          },
+        onPress: async () => {
+          await switchMode('customer');
+          navigateToCustomerHomeAfterCompletion(router);
         },
-      ]);
-  };
+      },
+    ]);
+  });
 
   const profileInitial = profile?.fullName?.trim()?.[0]?.toUpperCase() ?? user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
   const nameParts = profile?.fullName ? profile.fullName.trim().split(/\s+/) : user?.name ? user.name.trim().split(/\s+/) : [];
@@ -96,7 +100,7 @@ export default function DriverProfileScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.profileInfoContainer}>
             <TouchableOpacity
-              onPress={() => router.push('/edit-profile')}
+              onPress={handleEditProfile}
               activeOpacity={0.7}
               style={styles.nameContainer}
               accessibilityRole="button"
@@ -139,8 +143,16 @@ export default function DriverProfileScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.statsRow}>
-              <View style={styles.statColumn}>
+              <View style={styles.statsRow}>
+              <TouchableOpacity
+                style={styles.statColumn}
+                onPress={handleRatingInfo}
+                activeOpacity={0.72}
+                accessibilityRole="button"
+                accessibilityLabel="Open rating information"
+                accessibilityHint="Explains how your rating works"
+                hitSlop={8}
+              >
                 <View style={styles.ratingGroup}>
                   <FontAwesome name="star" size={spacing[10]} color={colors.primary} style={{ marginRight: 3 }} />
                   <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
@@ -148,7 +160,7 @@ export default function DriverProfileScreen() {
                   </AppText>
                 </View>
                 <AppText style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Rating</AppText>
-              </View>
+              </TouchableOpacity>
 
               <View style={styles.statColumn}>
                 <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
@@ -364,8 +376,9 @@ function SectionTitle({ title }: { title: string }) {
 function MenuItem({ colors, detail, iconFamily = 'mci', icon, label, last = false, onPress }: {
   colors: ReturnType<typeof useColors>; detail?: string; iconFamily?: 'feather' | 'mci' | 'symbol'; icon: keyof typeof Feather.glyphMap | keyof typeof MaterialCommunityIcons.glyphMap; label: string; last?: boolean; onPress: () => void;
 }) {
+  const guardedPress = usePressGuard(onPress);
   return <>
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
+    <TouchableOpacity style={styles.menuItem} onPress={guardedPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.menuIcon}>
         {iconFamily === 'symbol' ? (
           <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={icons.size.lg} />

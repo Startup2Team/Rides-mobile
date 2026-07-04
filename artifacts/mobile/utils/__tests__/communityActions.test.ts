@@ -9,7 +9,10 @@ jest.mock('expo-store-review', () => ({
 }));
 
 jest.mock('react-native', () => ({
-  Linking: { openURL: (...args: unknown[]) => mockOpenUrl(...args) },
+  Linking: {
+    canOpenURL: jest.fn().mockResolvedValue(true),
+    openURL: (...args: unknown[]) => mockOpenUrl(...args),
+  },
   Platform: { OS: 'android' },
   Share: { share: (...args: unknown[]) => mockShare(...args) },
 }));
@@ -34,6 +37,15 @@ describe('community actions', () => {
 
     expect(mockOpenUrl).toHaveBeenCalledWith(expect.stringContaining('mailto:support@rides.rw'));
     expect(mockOpenUrl).toHaveBeenCalledWith(expect.stringContaining('Feature%20suggestion'));
+  });
+
+  test('skips opening mail when the device cannot handle the url', async () => {
+    const { Linking } = require('react-native');
+    Linking.canOpenURL.mockResolvedValueOnce(false);
+
+    await leaveRidesFeedback();
+
+    expect(mockOpenUrl).not.toHaveBeenCalled();
   });
 
   test('shares the Rides website', async () => {

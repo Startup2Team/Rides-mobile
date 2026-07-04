@@ -28,6 +28,13 @@ shadow side effect.
 - `POST /v1/profile/me/photo`
 - `PATCH /v1/profile/me/phone`
 
+Phase 13J expands the profile staging review into:
+
+- `docs/contracts/profile-staging-contract.md`
+
+That page is the mobile-side expectation for diagnostics-only staging
+connection review. It is not proof of backend implementation.
+
 ### Driver
 
 - `POST /v1/driver/applications`
@@ -63,6 +70,13 @@ driver capability. Backend review truth remains future authority.
 - `POST /v1/saved-locations`
 - `PATCH /v1/saved-locations/{locationId}`
 - `DELETE /v1/saved-locations/{locationId}`
+
+Phase 13J expands the saved-locations staging review into:
+
+- `docs/contracts/saved-locations-staging-contract.md`
+
+That page is the mobile-side expectation for diagnostics-only staging
+connection review. It is not proof of backend implementation.
 
 ### Rides
 

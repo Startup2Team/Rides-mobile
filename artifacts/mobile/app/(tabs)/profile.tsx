@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
+import { getRatingInformationRoute } from '@/navigation/ratingNavigation';
 import { canAccessDriverMode, getDriverApplicationAction } from '@/utils/driverVerification';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
@@ -34,6 +35,7 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { usePressGuard } from '@/hooks/usePressGuard';
 
 
 function MenuItem({
@@ -56,11 +58,12 @@ function MenuItem({
   separatorColor: string;
 }) {
   const colors = useColors();
+  const guardedPress = usePressGuard(onPress);
   return (
     <>
       <TouchableOpacity
         style={styles.menuItem}
-        onPress={onPress}
+        onPress={guardedPress}
         activeOpacity={0.6}
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -109,8 +112,9 @@ export default function ProfileScreen() {
   const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase() : '';
   const lastName = nameParts.slice(1).join(' ').toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
-
-  const handleSwitchToDriver = () => {
+  const handleEditProfile = usePressGuard(() => router.push('/edit-profile'));
+  const handleRatingInfo = usePressGuard(() => router.push(getRatingInformationRoute(user?.mode) as never));
+  const handleSwitchToDriver = usePressGuard(() => {
     if (canAccessDriverMode(driverProfile)) {
       Alert.alert('Switch to Driver Mode', 'Switch to driver dashboard?', [
         { text: 'Cancel', style: 'cancel' },
@@ -125,7 +129,7 @@ export default function ProfileScreen() {
       return;
     }
     router.push(driverAction.route);
-  };
+  });
 
   return (
     <View style={[styles.container, { backgroundColor: pageBackground }]}>
@@ -134,7 +138,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.profileInfoContainer}>
             <TouchableOpacity
-              onPress={() => router.push('/edit-profile')}
+              onPress={handleEditProfile}
               activeOpacity={0.7}
               style={styles.nameContainer}
               accessibilityRole="button"
@@ -162,10 +166,18 @@ export default function ProfileScreen() {
               ) : null}
             </TouchableOpacity>
 
-            <View style={styles.ratingBadge}>
+            <TouchableOpacity
+              style={styles.ratingBadge}
+              onPress={handleRatingInfo}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open rating information"
+              accessibilityHint="Explains how your rating works"
+              hitSlop={8}
+            >
               <FontAwesome name="star" size={icons.size.xxs} color={colors.primary} />
               <AppText variant="label" style={[styles.ratingText, { color: colors.foreground }]}>5.0</AppText>
-            </View>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity

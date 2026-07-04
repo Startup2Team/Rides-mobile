@@ -113,6 +113,14 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen
+        name="rating-information"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          headerShown: false,
+        }}
+      />
       <Stack.Screen name="payment-methods" />
       <Stack.Screen name="edit-profile" />
       <Stack.Screen name="change-phone-number" />

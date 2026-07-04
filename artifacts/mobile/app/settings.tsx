@@ -26,6 +26,7 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { usePressGuard } from '@/hooks/usePressGuard';
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -170,8 +171,9 @@ function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon
   onPress: () => void;
 }) {
   const colors = useColors();
+  const guardedPress = usePressGuard(onPress);
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
+    <TouchableOpacity style={styles.row} onPress={guardedPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.rowIcon}>
         {iconFamily === 'mci' ? (
           <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />

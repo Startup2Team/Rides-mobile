@@ -195,3 +195,11 @@ Phase 13I adds the staging backend connection checklist and contract gate.
   already have the safest real staging shadow paths
 - a connection-ready result is a prerequisite for staged backend evidence
   collection, not a HYBRID or remote-authority signal
+
+Phase 13J adds the backend evidence pack and contract review pages.
+
+- the evidence pack documents the questions the backend team must answer
+  before the first real staging connection
+- the saved-locations and profile staging contract pages make the mobile
+  expectation explicit without claiming backend implementation proof
+- the evidence pack is still separate from runtime rollout decisions

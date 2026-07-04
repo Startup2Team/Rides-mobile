@@ -57,6 +57,11 @@ That file is a contract expectation, not backend proof. It documents the HTTP
 methods, paths, DTOs, idempotency expectations, and correlation expectations
 the mobile app is prepared to use.
 
+For a human-readable breakdown of the first two domains, see:
+
+- `docs/contracts/saved-locations-staging-contract.md`
+- `docs/contracts/profile-staging-contract.md`
+
 ## Evidence File
 
 The backend/infrastructure evidence lives in:
@@ -70,6 +75,11 @@ updated when the backend team confirms:
 - staging/production isolation
 - rate-limit policy
 - endpoint contract confirmation
+
+Phase 13J packages the backend-facing evidence checklist in:
+
+- `docs/backend-staging-evidence-pack.md`
+- `docs/backend-staging-questions.md`
 
 The evidence file must not contain real URLs, tokens, credentials, phone
 numbers, customer data, or private names.

@@ -49,6 +49,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     const scrollY = React.useRef(new Animated.Value(0)).current;
     const indicatorOpacity = React.useRef(new Animated.Value(0)).current;
     const hideIndicatorTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const headerResetTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [scrollMetrics, setScrollMetrics] = React.useState({
       contentHeight: 1,
       viewportHeight: 1,
@@ -131,6 +132,30 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       extrapolate: 'clamp',
     });
 
+    const updateHeaderScrollState = React.useCallback((offsetY: number) => {
+      const isScrolled = offsetY > restingY + 2;
+
+      if (headerResetTimeout.current) {
+        clearTimeout(headerResetTimeout.current);
+        headerResetTimeout.current = null;
+      }
+
+      if (isScrolled) {
+        headerScrollStore?.set(pathname, true);
+        return;
+      }
+
+      if (!headerScrollStore.get(pathname)) {
+        headerScrollStore?.set(pathname, false);
+        return;
+      }
+
+      headerResetTimeout.current = setTimeout(() => {
+        headerScrollStore?.set(pathname, false);
+        headerResetTimeout.current = null;
+      }, 140);
+    }, [pathname, restingY]);
+
     const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
       scrollY.setValue(offsetY);
@@ -153,7 +178,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       }
 
       // Update header scroll store
-      headerScrollStore?.set(pathname, offsetY > restingY + 2);
+      updateHeaderScrollState(offsetY);
 
       if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
       hideIndicatorTimeout.current = setTimeout(() => {
@@ -193,6 +218,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     React.useEffect(() => {
       return () => {
         if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
+        if (headerResetTimeout.current) clearTimeout(headerResetTimeout.current);
       };
     }, []);
 
