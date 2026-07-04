@@ -241,3 +241,15 @@ or hybrid.
 
 The app should continue to default to local repositories until backend
 integration is explicitly enabled in a later phase.
+
+Phase 13I adds the staging backend connection checklist and contract gate.
+
+- `data/remote/staging/connection/` validates backend connection evidence and
+  the mobile contract expectation without calling the backend
+- the gate covers `savedLocations` and `profile` and can expand to future
+  staging-connected domains later
+- `docs/staging/staging-connection-evidence.json` is the sanitized evidence
+  record and `docs/contracts/staging-backend-contract-manifest.json` is the
+  mobile-side contract expectation
+- `ready_for_staging_shadow` means diagnostics-only staging calls may begin
+  for a real backend URL, but it does not enable HYBRID or REMOTE authority

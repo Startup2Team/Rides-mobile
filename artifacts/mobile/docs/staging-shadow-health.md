@@ -228,3 +228,17 @@ The gate requires all of the following before it can approve a domain:
 
 Default output is safe. A domain with no staging shadow data stays
 `not_reviewed`, and the approval file does not auto-approve anything.
+
+## Phase 13I Connection Checklist
+
+Phase 13I adds the formal staging backend connection checklist on top of the
+health and readiness path.
+
+- the checklist validates backend environment, transport, auth, contract,
+  privacy, observability, resilience, rate-limit, and rollback evidence
+- the checklist uses sanitized evidence files and a sanitized contract
+  manifest
+- the checklist decides whether the app may begin diagnostics-only staging
+  shadow calls
+- a connection-ready status does not imply HYBRID readiness or production
+  authority

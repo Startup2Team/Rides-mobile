@@ -184,3 +184,14 @@ changing runtime source selection.
 - `disabled` is the default rollout stage
 - `shadow_remote`, `hybrid_dry_run`, `hybrid_canary`, `hybrid_enabled`, and
   `remote_candidate` remain future stages only
+
+## Phase 13I Update
+
+Phase 13I adds the staging backend connection checklist and contract gate.
+
+- the checklist is separate from the readiness matrix and answers whether the
+  real staging backend is safe enough for diagnostics-only shadow calls
+- `savedLocations` and `profile` are the first domains checked because they
+  already have the safest real staging shadow paths
+- a connection-ready result is a prerequisite for staged backend evidence
+  collection, not a HYBRID or remote-authority signal

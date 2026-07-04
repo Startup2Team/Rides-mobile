@@ -95,3 +95,15 @@ EXPO_PUBLIC_BACKEND_ENV=DISABLED
 
 Because local remains authoritative, rollback does not require data migration
 or UI changes.
+
+## Phase 13I Connection Checklist
+
+Phase 13I adds the machine-readable staging connection checklist and contract
+gate for saved locations.
+
+- the checklist is validation-only and does not contact the backend
+- the mobile contract manifest documents the expected saved-location
+  operations for backend review
+- the evidence file records sanitized backend and infrastructure assertions
+- `ready_for_staging_shadow` is only a diagnostics gate, not HYBRID or REMOTE
+  authority

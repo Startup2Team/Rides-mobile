@@ -54,6 +54,12 @@ jobs:
             git diff --check HEAD^ HEAD
           fi
 
+      - name: Run mobile tests
+        run: pnpm --filter @workspace/mobile test
+
+      - name: Run mobile typecheck
+        run: pnpm --filter @workspace/mobile typecheck
+
       - name: Generate staging shadow health snapshot
         run: pnpm --dir artifacts/mobile run report:staging-health -- --json --output artifacts/mobile/staging-health-report.json
 
@@ -74,11 +80,8 @@ jobs:
       - name: Plan HYBRID rollout
         run: pnpm --dir artifacts/mobile run plan:hybrid-rollout -- --all
 
-      - name: Run mobile tests
-        run: pnpm --filter @workspace/mobile test
-
-      - name: Run mobile typecheck
-        run: pnpm --filter @workspace/mobile typecheck
+      - name: Check staging backend connection
+        run: pnpm --dir artifacts/mobile run check:staging-connection
 
   mobile-release-validation:
     name: Production export and Android config

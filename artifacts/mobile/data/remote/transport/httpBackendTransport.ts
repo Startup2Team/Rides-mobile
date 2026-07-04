@@ -1,4 +1,4 @@
-import { observability } from '@/observability/context/observabilityContext';
+import { observability } from '../../../observability/context/observabilityContext';
 import type { BackendResponse, BackendTransport } from '../contracts/backendClientTypes';
 import {
   BackendUnavailableError,

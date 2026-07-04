@@ -14,6 +14,7 @@
     "compare:staging-health": "node scripts/compare-staging-health.js",
     "review:hybrid-candidates": "node scripts/review-hybrid-candidates.js",
     "plan:hybrid-rollout": "node scripts/plan-hybrid-rollout.js",
+    "check:staging-connection": "node scripts/check-staging-connection.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --runInBand",
     "check:typography": "node scripts/check-typography.js",

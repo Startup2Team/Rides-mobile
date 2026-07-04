@@ -99,3 +99,15 @@ notes, or phone numbers.
 Mobile sends only safe staging/client metadata. The Go backend remains
 responsible for physical or logical isolation between staging and production
 databases, storage, queues, and credentials.
+
+## Phase 13I Connection Gate
+
+Phase 13I adds the formal staging backend connection checklist and contract
+gate.
+
+- the gate validates checked-in evidence and contract expectations without
+  contacting the backend
+- `savedLocations` and `profile` are the current evaluated domains
+- `ready_for_staging_shadow` only means diagnostics-only SHADOW_REMOTE calls
+  may be considered for the real staging backend
+- the gate does not enable HYBRID, REMOTE, or production authority

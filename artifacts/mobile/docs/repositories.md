@@ -368,6 +368,16 @@ Phase 8B.7 extends it into payment methods:
 - `PaymentRepository` remains the source boundary
 - transaction truth remains future backend work
 
+Phase 13I adds the staging backend connection checklist and contract gate.
+
+- the checklist does not change repository selection or the resolver default
+- `savedLocations` and `profile` are the first domains checked because they
+  already have real staging shadow implementations
+- the contract manifest and evidence file are validation-only artifacts and do
+  not change repository behavior
+- a connection-ready result does not imply `HYBRID`, `REMOTE`, or production
+  authority
+
 Phase 13G adds the HYBRID candidate review gate.
 
 - `data/remote/readiness/hybridCandidateGate.ts` stays in the repository

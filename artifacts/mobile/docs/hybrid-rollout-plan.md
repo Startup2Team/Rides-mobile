@@ -112,3 +112,13 @@ scaffold.
 
 This phase is intentionally limited to documentation, policy types, dry-run
 evaluation, CLI reporting, and CI-safe review tooling.
+
+## Phase 13I Bridge
+
+Phase 13I adds the staging backend connection checklist that must pass before
+the HYBRID planning path becomes meaningful against a real backend.
+
+- the connection gate is still diagnostics-only
+- the gate does not change the HYBRID dry-run plan or runtime policy types
+- a staging-ready connection status is a prerequisite for future backend
+  evidence collection, not a HYBRID enablement signal
