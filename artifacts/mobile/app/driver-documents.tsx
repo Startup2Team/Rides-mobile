@@ -143,7 +143,7 @@ export default function DriverDocumentsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-      <GlassHeader title="Driver Documents" subtitle="Manage submitted verification documents" />
+      <GlassHeader title="Driver Documents" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING, paddingHorizontal: semanticSpacing.cardPadding, gap: icons.semantic.row }}

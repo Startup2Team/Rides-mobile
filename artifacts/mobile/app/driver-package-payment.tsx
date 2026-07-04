@@ -193,7 +193,7 @@ export default function DriverPackagePaymentScreen() {
   const isIncomplete = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'expired';
 
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-    <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
+    <GlassHeader title="Package Payment" onBackPress={() => router.back()} />
     <GlassScrollView
       style={styles.root}
       contentContainerStyle={[

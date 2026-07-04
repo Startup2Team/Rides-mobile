@@ -142,7 +142,7 @@ export default function PaymentMethodsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Payment Methods" subtitle="Manage how you pay" />
+      <GlassHeader title="Payment Methods" />
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoiding}

@@ -118,19 +118,16 @@ export default function DriverPackagesScreen() {
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader
       title="Ride Packages"
-      subtitle={`Choose a package for your ${vehicleLabel}`}
       onBackPress={() => router.back()}
     />
 
     <GlassScrollView
       style={styles.root}
+      indicatorTop={headerMetrics.indicatorTop}
       contentContainerStyle={{
         paddingTop: Platform.OS === 'ios' ? 0 : headerMetrics.contentTop,
         paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
       }}
-      contentInset={Platform.OS === 'ios' ? { top: headerMetrics.contentTop } : undefined}
-      contentOffset={Platform.OS === 'ios' ? { x: 0, y: -headerMetrics.contentTop } : undefined}
-      scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
       onRefresh={refresh}
       refreshing={isRefreshing}
       refreshIndicatorTop={headerMetrics.headerInset + 44}

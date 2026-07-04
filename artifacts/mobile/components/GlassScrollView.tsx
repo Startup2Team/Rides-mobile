@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -12,11 +13,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePathname } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
-import { headerScrollStore } from '@/components/GlassHeader';
-import * as Haptics from 'expo-haptics';
-
+import { useGlassHeaderMetrics } from '@/components/GlassHeader';
 
 interface GlassScrollViewProps extends ScrollViewProps {
   indicatorTop?: number;
@@ -26,11 +24,66 @@ interface GlassScrollViewProps extends ScrollViewProps {
   refreshIndicatorTop?: number;
 }
 
+export function resolveGlassScrollViewLayout({
+  defaultTop,
+  defaultIndicatorTop,
+  platformOS,
+  contentInset,
+  contentOffset,
+  scrollIndicatorInsets,
+  contentContainerStyle,
+}: {
+  defaultTop: number;
+  defaultIndicatorTop: number;
+  platformOS: typeof Platform.OS;
+  contentInset?: ScrollViewProps['contentInset'];
+  contentOffset?: ScrollViewProps['contentOffset'];
+  scrollIndicatorInsets?: ScrollViewProps['scrollIndicatorInsets'];
+  contentContainerStyle?: ScrollViewProps['contentContainerStyle'];
+}) {
+  const flattenedContentStyle = StyleSheet.flatten(contentContainerStyle);
+  const hasContentTopPadding =
+    typeof flattenedContentStyle?.paddingTop === 'number' && flattenedContentStyle.paddingTop > 0;
+  const shouldApplyDefaultTopInset = !hasContentTopPadding;
+  const resolvedDefaultTop = shouldApplyDefaultTopInset ? defaultTop : 0;
+
+  const finalContentInset = platformOS === 'ios'
+    ? { top: resolvedDefaultTop, ...contentInset }
+    : contentInset;
+
+  const finalContentOffset = platformOS === 'ios'
+    ? { x: contentOffset?.x ?? 0, y: resolvedDefaultTop === 0 ? 0 : -resolvedDefaultTop, ...contentOffset }
+    : contentOffset;
+
+  const finalScrollIndicatorInsets = platformOS === 'ios'
+    ? { top: defaultIndicatorTop, ...scrollIndicatorInsets }
+    : scrollIndicatorInsets;
+
+  const finalContentContainerStyle = [
+    platformOS !== 'ios' && shouldApplyDefaultTopInset && { paddingTop: defaultTop },
+    contentContainerStyle,
+  ];
+
+  const finalInsetTop = finalContentInset?.top ?? (platformOS === 'ios' ? resolvedDefaultTop : 0);
+  const restingY = platformOS === 'ios' ? -finalInsetTop : 0;
+  const initialDistance = Math.max(0, ((finalContentOffset?.y ?? restingY) - restingY));
+
+  return {
+    finalContentInset,
+    finalContentOffset,
+    finalScrollIndicatorInsets,
+    finalContentContainerStyle,
+    finalInsetTop,
+    restingY,
+    initialDistance,
+  };
+}
+
 export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps>(
   (
     {
       children,
-      indicatorTop = 88,
+      indicatorTop,
       indicatorBottom,
       onScroll,
       onContentSizeChange,
@@ -45,11 +98,32 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
   ) => {
     const colors = useColors();
     const insets = useSafeAreaInsets();
-    const pathname = typeof usePathname === 'function' ? usePathname() : '/mock-path';
-    const scrollY = React.useRef(new Animated.Value(0)).current;
+    const headerMetrics = useGlassHeaderMetrics();
+    const defaultTop = headerMetrics.contentTop;
+    const defaultIndicatorTop = headerMetrics.indicatorTop;
+    const actualIndicatorTop = indicatorTop ?? defaultIndicatorTop;
+    const layout = resolveGlassScrollViewLayout({
+      defaultTop,
+      defaultIndicatorTop,
+      platformOS: Platform.OS,
+      contentInset: props.contentInset,
+      contentOffset: props.contentOffset,
+      scrollIndicatorInsets: props.scrollIndicatorInsets,
+      contentContainerStyle: props.contentContainerStyle,
+    });
+    const {
+      finalContentInset,
+      finalContentOffset,
+      finalScrollIndicatorInsets,
+      finalContentContainerStyle,
+      finalInsetTop,
+      restingY,
+      initialDistance,
+    } = layout;
+
+    const scrollDistance = React.useRef(new Animated.Value(initialDistance)).current;
     const indicatorOpacity = React.useRef(new Animated.Value(0)).current;
     const hideIndicatorTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const headerResetTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [scrollMetrics, setScrollMetrics] = React.useState({
       contentHeight: 1,
       viewportHeight: 1,
@@ -83,11 +157,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
           useNativeDriver: true,
         }).start();
       }
-    }, [refreshing]);
-
-    const insetTop = props.contentInset?.top ?? 0;
-    const restingY = Platform.OS === 'ios' ? -insetTop : 0;
-    const pullThreshold = restingY - 55;
+    }, [pullProgress, refreshing, snapAnim]);
 
     const refreshOpacity = pullProgress.interpolate({
       inputRange: [0, 1],
@@ -107,16 +177,6 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       extrapolate: 'clamp',
     });
 
-    const rotate = scrollY.interpolate({
-      inputRange: [pullThreshold, restingY],
-      outputRange: ['360deg', '0deg'],
-      extrapolate: 'clamp',
-    });
-
-
-
-
-
     const canScroll = scrollMetrics.contentHeight > scrollMetrics.viewportHeight + 12;
     const indicatorHeight = Math.max(
       24,
@@ -126,39 +186,19 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       ),
     );
     const indicatorTravel = Math.max(0, scrollMetrics.indicatorTrackHeight - indicatorHeight);
-    const indicatorTranslateY = scrollY.interpolate({
+    const indicatorTranslateY = scrollDistance.interpolate({
       inputRange: [0, Math.max(1, scrollMetrics.contentHeight - scrollMetrics.viewportHeight)],
       outputRange: [0, indicatorTravel],
       extrapolate: 'clamp',
     });
 
-    const updateHeaderScrollState = React.useCallback((offsetY: number) => {
-      const isScrolled = offsetY > restingY + 2;
-
-      if (headerResetTimeout.current) {
-        clearTimeout(headerResetTimeout.current);
-        headerResetTimeout.current = null;
-      }
-
-      if (isScrolled) {
-        headerScrollStore?.set(pathname, true);
-        return;
-      }
-
-      if (!headerScrollStore.get(pathname)) {
-        headerScrollStore?.set(pathname, false);
-        return;
-      }
-
-      headerResetTimeout.current = setTimeout(() => {
-        headerScrollStore?.set(pathname, false);
-        headerResetTimeout.current = null;
-      }, 140);
-    }, [pathname, restingY]);
+    const updateScrollDistance = (offsetY: number) => {
+      scrollDistance.setValue(Math.max(0, offsetY - restingY));
+    };
 
     const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
-      scrollY.setValue(offsetY);
+      updateScrollDistance(offsetY);
       indicatorOpacity.setValue(1);
 
       if (onRefresh && !refreshing && isDragging.current) {
@@ -166,19 +206,15 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
         const progress = Math.min(1, Math.max(0, dragDistance / 55));
         pullProgress.setValue(progress);
 
-        // Trigger a light tactile haptic impact when pulling past the refresh threshold
-        if (offsetY <= pullThreshold) {
+        if (offsetY <= restingY - 55) {
           if (!hapticTriggered.current) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             hapticTriggered.current = true;
           }
-        } else if (offsetY > pullThreshold + 10) {
+        } else if (offsetY > restingY - 45) {
           hapticTriggered.current = false;
         }
       }
-
-      // Update header scroll store
-      updateHeaderScrollState(offsetY);
 
       if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
       hideIndicatorTimeout.current = setTimeout(() => {
@@ -188,10 +224,9 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
           useNativeDriver: true,
         }).start();
       }, 700);
+
       onScroll?.(event);
     };
-
-
 
     const handleScrollBeginDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       isDragging.current = true;
@@ -202,7 +237,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       isDragging.current = false;
       const offsetY = event.nativeEvent.contentOffset.y;
       if (onRefresh && !refreshing) {
-        if (offsetY < pullThreshold) {
+        if (offsetY < restingY - 55) {
           onRefresh();
         } else {
           Animated.timing(pullProgress, {
@@ -218,7 +253,6 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     React.useEffect(() => {
       return () => {
         if (hideIndicatorTimeout.current) clearTimeout(hideIndicatorTimeout.current);
-        if (headerResetTimeout.current) clearTimeout(headerResetTimeout.current);
       };
     }, []);
 
@@ -229,12 +263,11 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
             style={[
               styles.refreshContainer,
               {
-                top: refreshIndicatorTop ?? (indicatorTop - 44),
+                top: refreshIndicatorTop ?? (actualIndicatorTop - 44),
                 opacity: refreshOpacity,
                 transform: [
                   { translateY: refreshTranslateY },
                   { scale: refreshScale },
-                  { rotate: refreshing ? '0deg' : rotate },
                 ],
               },
             ]}
@@ -250,6 +283,10 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
         <ScrollView
           {...props}
           ref={ref}
+          contentInset={finalContentInset}
+          contentOffset={finalContentOffset}
+          scrollIndicatorInsets={finalScrollIndicatorInsets}
+          contentContainerStyle={finalContentContainerStyle}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={scrollEventThrottle}
           onScroll={handleScroll}
@@ -274,7 +311,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
             style={[
               styles.scrollIndicatorTrack,
               {
-                top: indicatorTop,
+                top: actualIndicatorTop,
                 bottom: indicatorBottom ?? insets.bottom + 24,
               },
             ]}

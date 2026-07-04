@@ -91,7 +91,6 @@ export default function DriverStats() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <GlassHeader
         title="Statistics"
-        subtitle="Track your driver performance"
         showBack={false}
       />
       <GlassScrollView

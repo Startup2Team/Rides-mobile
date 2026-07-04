@@ -62,6 +62,7 @@ jest.mock('react-native', () => {
     Animated: {
       Value,
       View: host('AnimatedView'),
+      createAnimatedComponent: (Component: any) => Component,
       timing: jest.fn(animation),
     },
     Easing: {

@@ -90,7 +90,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: pageBackground }]}>
-      <GlassHeader title="Settings" subtitle="Preferences and account controls" />
+      <GlassHeader title="Settings" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{

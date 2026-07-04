@@ -148,7 +148,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? '#0A0A0A' : '#F5F5F5');
+    void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? '#000000' : '#F2F2F7');
   }, [scheme]);
 
   const [fontsLoaded, fontError] = useFonts({

@@ -69,7 +69,7 @@ export default function ReportRideIssueScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Report a Ride Issue" subtitle="Tell us what happened" />
+      <GlassHeader title="Report a Ride Issue" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
