@@ -88,7 +88,7 @@ export function MapPickerOverlay({
 
       <View style={styles.mapPickerControlsRail} pointerEvents="box-none">
         <TouchableOpacity
-          style={[styles.mapPickerControl, { backgroundColor: colors.card }]}
+          style={[styles.mapPickerControl, { backgroundColor: colors.background }]}
           onPress={onCycleMapType}
           activeOpacity={0.8}
           accessibilityRole="button"
@@ -101,7 +101,7 @@ export function MapPickerOverlay({
           />
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.mapPickerControl, { backgroundColor: colors.card }]}
+          style={[styles.mapPickerControl, { backgroundColor: colors.background }]}
           onPress={onCenterUser}
           activeOpacity={0.8}
           accessibilityRole="button"

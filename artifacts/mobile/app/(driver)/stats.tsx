@@ -32,6 +32,7 @@ export default function DriverStats() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
+  const statsContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
   const { user, driverProfile } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
@@ -95,13 +96,15 @@ export default function DriverStats() {
       />
       <GlassScrollView
         style={styles.container}
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
-          paddingTop: headerMetrics.contentTop,
-          paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
+          paddingTop: Platform.OS === 'ios' ? 0 : statsContentTop,
+          paddingBottom: insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING,
           paddingHorizontal: semanticSpacing.cardPadding,
           gap: semanticSpacing.sectionGap,
         }}
-        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+        contentInset={Platform.OS === 'ios' ? { top: statsContentTop } : undefined}
+        contentOffset={Platform.OS === 'ios' ? { x: 0, y: -statsContentTop } : undefined}
         showsVerticalScrollIndicator={false}
         onRefresh={handleRefresh}
         refreshing={isRefreshing}

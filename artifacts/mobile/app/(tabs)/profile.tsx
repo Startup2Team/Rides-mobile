@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
-import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -31,6 +30,7 @@ import { AppText } from '@/components/AppText';
 import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
+import { prefetchRatingInformationImages } from '@/constants/ratingInformationImages';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
@@ -97,7 +97,6 @@ export default function ProfileScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const insets = useSafeAreaInsets();
-  const headerMetrics = useGlassHeaderMetrics();
   const { user, driverProfile, switchMode, profile } = useProfile();
   const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions();
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
@@ -113,7 +112,10 @@ export default function ProfileScreen() {
   const lastName = nameParts.slice(1).join(' ').toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
   const handleEditProfile = usePressGuard(() => router.push('/edit-profile'));
-  const handleRatingInfo = usePressGuard(() => router.push(getRatingInformationRoute(user?.mode) as never));
+  const handleRatingInfo = usePressGuard(() => {
+    prefetchRatingInformationImages();
+    router.push(getRatingInformationRoute(user?.mode) as never);
+  });
   const handleSwitchToDriver = usePressGuard(() => {
     if (canAccessDriverMode(driverProfile)) {
       Alert.alert('Switch to Driver Mode', 'Switch to driver dashboard?', [
@@ -206,10 +208,10 @@ export default function ProfileScreen() {
       </View>
 
       <GlassScrollView
-        indicatorTop={0}
+        indicatorTop={spacing[8]}
         contentContainerStyle={{
           paddingTop: spacing[8],
-          paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
+          paddingBottom: insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING + spacing[16],
         }}
       >
 

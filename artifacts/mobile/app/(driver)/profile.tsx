@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
-import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useColors } from '@/hooks/useColors';
@@ -29,6 +28,7 @@ import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
+import { prefetchRatingInformationImages } from '@/constants/ratingInformationImages';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
@@ -40,7 +40,6 @@ const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingC
 export default function DriverProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, switchMode, profile } = useProfile();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
@@ -75,7 +74,10 @@ export default function DriverProfileScreen() {
   }, [user?.id]);
 
   const handleEditProfile = usePressGuard(() => router.push('/edit-profile'));
-  const handleRatingInfo = usePressGuard(() => router.push(getRatingInformationRoute(user?.mode) as never));
+  const handleRatingInfo = usePressGuard(() => {
+    prefetchRatingInformationImages();
+    router.push(getRatingInformationRoute(user?.mode) as never);
+  });
   const handleSwitchToCustomer = usePressGuard(() => {
     Alert.alert('Switch Mode', 'Switch to customer mode?', [
       { text: 'Cancel', style: 'cancel' },
@@ -204,10 +206,10 @@ export default function DriverProfileScreen() {
       </View>
 
       <GlassScrollView
-        indicatorTop={headerMetrics.indicatorTop}
+        indicatorTop={spacing[8]}
         contentContainerStyle={{
           paddingTop: semanticSpacing.inlineGap,
-          paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
+          paddingBottom: insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING + spacing[16],
           paddingHorizontal: semanticSpacing.cardPadding,
           gap: radius.sheetCompact,
         }}

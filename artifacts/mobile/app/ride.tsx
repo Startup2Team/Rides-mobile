@@ -409,7 +409,7 @@ export default function RideScreen() {
           <TouchableOpacity
             style={[
               styles.mapLayerBtn,
-              { backgroundColor: colors.card, bottom: mapLayerBtnBottom },
+              { backgroundColor: colors.background, bottom: mapLayerBtnBottom },
             ]}
             onPress={cycleMapType}
             activeOpacity={0.8}
@@ -431,7 +431,7 @@ export default function RideScreen() {
           <TouchableOpacity
             style={[
               styles.recenterBtn,
-              { backgroundColor: colors.card, bottom: recenterBtnBottom },
+              { backgroundColor: colors.background, bottom: recenterBtnBottom },
             ]}
             onPress={recenterRideMap}
             activeOpacity={0.8}

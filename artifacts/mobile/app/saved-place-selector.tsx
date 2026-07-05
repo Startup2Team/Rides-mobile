@@ -313,7 +313,7 @@ export default function SavedPlaceSelectorScreen() {
           ) : undefined
         }
       />
-      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - spacing[4] }]}>
+      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - spacing[8] }]}>
         {displayLabel === 'Other' ? (
           <View style={[styles.labelInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="bookmark" size={icons.semantic.row} color={colors.mutedForeground} />
@@ -372,7 +372,9 @@ export default function SavedPlaceSelectorScreen() {
           indicatorTop={spacing[8]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
+          contentInset={{ top: 0 }}
+          contentOffset={{ x: 0, y: 0 }}
+          contentContainerStyle={{ paddingTop: 1, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
         >
           {hasQuery ? (
             <TouchableOpacity

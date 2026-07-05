@@ -374,7 +374,7 @@ export default function CustomerHome() {
 
       {/* Map layer button */}
       <TouchableOpacity
-        style={[styles.mapLayerBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset + sizes.thumbnail.sm }]}
+        style={[styles.mapLayerBtn, { backgroundColor: colors.background, bottom: recenterBottomOffset + sizes.thumbnail.sm }]}
         onPress={cycleMapType}
         activeOpacity={0.8}
       >
@@ -387,7 +387,7 @@ export default function CustomerHome() {
 
       {/* Recenter button */}
       <TouchableOpacity
-        style={[styles.recenterBtn, { backgroundColor: colors.card, bottom: recenterBottomOffset }]}
+        style={[styles.recenterBtn, { backgroundColor: colors.background, bottom: recenterBottomOffset }]}
         onPress={() => { if (gpsLocation) centerMapOnUser(600); else void refreshHereLocation(); }}
         activeOpacity={0.8}
       >
