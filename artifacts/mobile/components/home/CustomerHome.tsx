@@ -46,9 +46,11 @@ import {
   type AppMapType,
   SCREEN_HEIGHT,
 } from './homeUtils';
+import { useTabBarGlass } from '@/components/navigation/TabBarGlassContext';
 
 export default function CustomerHome() {
   const colors = useColors();
+  const { setHasGlassContent } = useTabBarGlass();
   const { reload: reloadSavedPlaces } = useSavedLocations();
   const insets = useSafeAreaInsets();
   const { user, driverProfile } = useAuth();
@@ -329,6 +331,11 @@ export default function CustomerHome() {
     showBooking,
     sheetHeight,
   ]);
+
+  React.useEffect(() => {
+    setHasGlassContent(true);
+    return () => setHasGlassContent(false);
+  }, [setHasGlassContent]);
 
   if (locLoading) {
     return (

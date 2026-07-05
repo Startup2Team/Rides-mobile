@@ -55,6 +55,7 @@ import { MapPickerProvider } from '@/context/MapPickerContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { TabBarGlassProvider } from '@/components/navigation/TabBarGlassContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
 import { replaceFlowScreen } from '@/navigation/navigationPolicy';
@@ -185,12 +186,14 @@ export default function RootLayout() {
                   <ToastProvider>
                     <SavedLocationsProvider>
                       <MapPickerProvider>
-                        <GestureHandlerRootView style={{ flex: 1 }}>
-                          <KeyboardProvider>
-                            <RootLayoutNav />
-                            <RideCanaryInspectorLauncher />
-                          </KeyboardProvider>
-                        </GestureHandlerRootView>
+                        <TabBarGlassProvider>
+                          <GestureHandlerRootView style={{ flex: 1 }}>
+                            <KeyboardProvider>
+                              <RootLayoutNav />
+                              <RideCanaryInspectorLauncher />
+                            </KeyboardProvider>
+                          </GestureHandlerRootView>
+                        </TabBarGlassProvider>
                       </MapPickerProvider>
                     </SavedLocationsProvider>
                   </ToastProvider>

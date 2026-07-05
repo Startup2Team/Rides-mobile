@@ -5,6 +5,8 @@ import { BottomTabBar } from '@/components/navigation/BottomTabBar';
 import { icons } from '@/constants/icons';
 import { typography } from '@/constants/typography';
 
+let mockColorScheme: 'light' | 'dark' = 'light';
+
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) =>
@@ -37,6 +39,7 @@ jest.mock('react-native', () => {
       quad: (t: number) => t,
     },
     Platform: { OS: 'ios' },
+    PlatformColor: (name: string) => name,
     Pressable: host('Pressable'),
     StyleSheet: {
       absoluteFill: {},
@@ -48,7 +51,7 @@ jest.mock('react-native', () => {
       ),
       hairlineWidth: 1,
     },
-    useColorScheme: () => 'light',
+    useColorScheme: () => mockColorScheme,
     View: host('View'),
   };
 });
@@ -74,6 +77,10 @@ jest.mock('expo-symbols', () => ({
 }));
 
 describe('BottomTabBar typography', () => {
+  beforeEach(() => {
+    mockColorScheme = 'light';
+  });
+
   test('uses tab typography token for labels', () => {
     const homeIcon = jest.fn(() => null);
     const historyIcon = jest.fn(() => null);
@@ -122,5 +129,86 @@ describe('BottomTabBar typography', () => {
     expect(activeStyle.fontFamily).toBe(typography.badge.fontFamily);
     expect(homeIcon).toHaveBeenCalledWith(expect.objectContaining({ size: icons.semantic.tab }));
     expect(historyIcon).toHaveBeenCalledWith(expect.objectContaining({ size: icons.semantic.tab }));
+  });
+
+  test('uses black inactive tab icons in light mode', () => {
+    const homeIcon = jest.fn(() => null);
+    const historyIcon = jest.fn(() => null);
+    const state = {
+      index: 0,
+      routes: [
+        { key: 'home-key', name: 'index' },
+        { key: 'history-key', name: 'history' },
+      ],
+    };
+    const descriptors = {
+      'home-key': {
+        options: {
+          title: 'Home',
+          tabBarIcon: homeIcon,
+        },
+      },
+      'history-key': {
+        options: {
+          title: 'History',
+          tabBarIcon: historyIcon,
+        },
+      },
+    };
+    const navigation = {
+      emit: jest.fn(() => ({ defaultPrevented: false })),
+      navigate: jest.fn(),
+    };
+
+    render(
+      <BottomTabBar
+        state={state}
+        descriptors={descriptors}
+        navigation={navigation}
+      />,
+    );
+
+    expect(historyIcon).toHaveBeenCalledWith(expect.objectContaining({ color: '#000000' }));
+  });
+
+  test('uses white inactive tab icons in dark mode', () => {
+    mockColorScheme = 'dark';
+    const homeIcon = jest.fn(() => null);
+    const historyIcon = jest.fn(() => null);
+    const state = {
+      index: 0,
+      routes: [
+        { key: 'home-key', name: 'index' },
+        { key: 'history-key', name: 'history' },
+      ],
+    };
+    const descriptors = {
+      'home-key': {
+        options: {
+          title: 'Home',
+          tabBarIcon: homeIcon,
+        },
+      },
+      'history-key': {
+        options: {
+          title: 'History',
+          tabBarIcon: historyIcon,
+        },
+      },
+    };
+    const navigation = {
+      emit: jest.fn(() => ({ defaultPrevented: false })),
+      navigate: jest.fn(),
+    };
+
+    render(
+      <BottomTabBar
+        state={state}
+        descriptors={descriptors}
+        navigation={navigation}
+      />,
+    );
+
+    expect(historyIcon).toHaveBeenCalledWith(expect.objectContaining({ color: '#FFFFFF' }));
   });
 });

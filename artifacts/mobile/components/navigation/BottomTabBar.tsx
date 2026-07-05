@@ -16,10 +16,13 @@ import { duration, easing } from '@/constants/motion';
 import { spacing } from '@/constants/spacing';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
 import { typography } from '@/constants/typography';
+import { useColors } from '@/hooks/useColors';
+import { useTabBarGlass } from '@/components/navigation/TabBarGlassContext';
 
 const ACTIVE_LIGHT = '#007AFF';
 const ACTIVE_DARK = '#0A84FF';
-const INACTIVE = '#000000';
+const INACTIVE_LIGHT = '#000000';
+const INACTIVE_DARK = '#FFFFFF';
 const LIGHT_BACKGROUND = '#FFFFFF';
 const DARK_BACKGROUND = '#1C1C1E';
 const LIGHT_BORDER = '#E5E5EA';
@@ -136,12 +139,14 @@ function TabBarItem({
 
 export function BottomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
+  const { hasGlassContent } = useTabBarGlass();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-  const backgroundColor = isDark ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)';
-  const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
+  const backgroundColor = colors.background;
+  const borderColor = colors.border;
   const activeColor = isDark ? ACTIVE_DARK : ACTIVE_LIGHT;
-  const inactiveColor = isDark ? '#FFFFFF' : INACTIVE;
+  const inactiveColor = isDark ? INACTIVE_DARK : INACTIVE_LIGHT;
 
   const focusedRoute = state.routes[state.index];
   const focusedOptions = descriptors[focusedRoute.key].options;
@@ -167,7 +172,7 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
         },
       ]}
     >
-      {!isHidden && (
+      {!isHidden && hasGlassContent && (
         <BlurView
           intensity={90}
           tint={isDark ? 'dark' : 'light'}

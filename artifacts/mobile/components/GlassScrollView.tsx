@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { useTabBarGlass } from '@/components/navigation/TabBarGlassContext';
 
 interface GlassScrollViewProps extends ScrollViewProps {
   indicatorTop?: number;
@@ -99,6 +100,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     const colors = useColors();
     const insets = useSafeAreaInsets();
     const headerMetrics = useGlassHeaderMetrics();
+    const { setHasGlassContent } = useTabBarGlass();
     const defaultTop = headerMetrics.contentTop;
     const defaultIndicatorTop = headerMetrics.indicatorTop;
     const actualIndicatorTop = indicatorTop ?? defaultIndicatorTop;
@@ -195,6 +197,11 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
     const updateScrollDistance = (offsetY: number) => {
       scrollDistance.setValue(Math.max(0, offsetY - restingY));
     };
+
+    React.useEffect(() => {
+      setHasGlassContent(canScroll);
+      return () => setHasGlassContent(false);
+    }, [canScroll, setHasGlassContent]);
 
     const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
