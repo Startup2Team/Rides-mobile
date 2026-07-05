@@ -29,6 +29,7 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { DRIVER_PACKAGES_ROUTE } from '@/navigation/driverPackagesNavigation';
 import { closeTemporaryScreen, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 function formatRwf(amount: number) {
@@ -184,7 +185,7 @@ export default function DriverPackagePaymentScreen() {
           ? 'This package offer expired. Please refresh packages.'
           : 'This package offer is missing or invalid. Please choose the package again.'}
       </AppText>
-      <AppButton title="Return to Packages" onPress={() => closeTemporaryScreen(router, '/driver-packages')} />
+      <AppButton title="Return to Packages" onPress={() => closeTemporaryScreen(router, DRIVER_PACKAGES_ROUTE)} />
     </View>;
   }
 

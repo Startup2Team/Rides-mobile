@@ -93,6 +93,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       onRefresh,
       refreshing = false,
       refreshIndicatorTop,
+      showsVerticalScrollIndicator = false,
       ...props
     },
     ref,
@@ -294,7 +295,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
           contentOffset={finalContentOffset}
           scrollIndicatorInsets={finalScrollIndicatorInsets}
           contentContainerStyle={finalContentContainerStyle}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={showsVerticalScrollIndicator}
           scrollEventThrottle={scrollEventThrottle}
           onScroll={handleScroll}
           onScrollBeginDrag={handleScrollBeginDrag}

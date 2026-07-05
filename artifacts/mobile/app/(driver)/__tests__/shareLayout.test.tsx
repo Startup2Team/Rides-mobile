@@ -45,7 +45,7 @@ jest.mock('expo-router', () => {
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
-  return { Feather: host('Feather'), MaterialCommunityIcons: host('MaterialCommunityIcons') };
+  return { Feather: host('Feather'), Ionicons: host('Ionicons'), MaterialCommunityIcons: host('MaterialCommunityIcons') };
 });
 
 jest.mock('expo-symbols', () => ({
@@ -96,5 +96,11 @@ describe('driver tab layout', () => {
     render(<DriverTabLayout />);
 
     expect(mockCapturedScreens).not.toContain('share');
+  });
+
+  test('includes Packages in the bottom navbar', () => {
+    render(<DriverTabLayout />);
+
+    expect(mockCapturedScreens).toContain('packages');
   });
 });

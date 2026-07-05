@@ -8,7 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { FORM_BOTTOM_PADDING, TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { usePackageSync } from '@/context/PackageSyncContext';
@@ -32,7 +32,7 @@ function formatRwf(amount: number) {
 
 
 
-export default function DriverPackagesScreen() {
+export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
@@ -55,7 +55,6 @@ export default function DriverPackagesScreen() {
     syncGeneration,
   } = usePackageSync();
   const [selectedOffer, setSelectedOffer] = useState<DriverPackageOfferSnapshot | null>(null);
-  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
@@ -64,6 +63,8 @@ export default function DriverPackagesScreen() {
   const packages = offerSourceReady ? getActivePackages(vehicleType, catalog) : [];
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
   const activeCampaigns = getActiveDriverRideCampaigns(campaigns);
+  const bottomPadding = showBack ? FORM_BOTTOM_PADDING : TAB_BAR_SCREEN_BOTTOM_PADDING;
+  const packagesContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
 
   useEffect(() => {
     if (generationRef.current === null) {
@@ -74,7 +75,6 @@ export default function DriverPackagesScreen() {
       generationRef.current = syncGeneration;
       if (selectedOffer) {
         setSelectedOffer(null);
-        setSelectionNotice('Package offers were refreshed. Please select again.');
       }
     }
   }, [selectedOffer, syncGeneration]);
@@ -96,14 +96,11 @@ export default function DriverPackagesScreen() {
     try {
       await saveLockedPackageOffer(lockedOffer, catalog, offer);
       if (generationRef.current !== selectionGeneration) {
-        setSelectionNotice('Package offers were refreshed. Please select again.');
         return;
       }
-      setSelectionNotice(null);
       setSelectedOffer(lockedOffer);
     } catch (lockError) {
       setSelectedOffer(null);
-      setSelectionNotice(lockError instanceof Error ? lockError.message : 'Unable to lock this package offer.');
     }
   };
 
@@ -118,6 +115,7 @@ export default function DriverPackagesScreen() {
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader
       title="Ride Packages"
+      showBack={showBack}
       onBackPress={() => router.back()}
     />
 
@@ -125,26 +123,35 @@ export default function DriverPackagesScreen() {
       style={styles.root}
       indicatorTop={headerMetrics.indicatorTop}
       contentContainerStyle={{
-        paddingTop: Platform.OS === 'ios' ? 0 : headerMetrics.contentTop,
-        paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
+        paddingTop: Platform.OS === 'ios' ? 0 : packagesContentTop,
+        paddingBottom: insets.bottom + bottomPadding,
       }}
+      contentInset={Platform.OS === 'ios' ? { top: packagesContentTop } : undefined}
+      contentOffset={Platform.OS === 'ios' ? { x: 0, y: -packagesContentTop } : undefined}
+      showsVerticalScrollIndicator={false}
       onRefresh={refresh}
       refreshing={isRefreshing}
       refreshIndicatorTop={headerMetrics.headerInset + 44}
     >
 
-    {((syncWarning && offerSourceReady) || selectionNotice) ? (
+    {(syncWarning && offerSourceReady) ? (
       <View style={styles.syncRow}>
         <View style={styles.syncCopy}>
           {syncWarning && offerSourceReady ? (
             <AppText style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</AppText>
           ) : null}
-          {selectionNotice ? (
-            <AppText style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</AppText>
-          ) : null}
         </View>
       </View>
     ) : null}
+
+    <View style={styles.introCopy}>
+      <AppText style={[styles.introText, { color: colors.foreground }]}>
+        Buy a package to go online and start receiving ride requests.
+      </AppText>
+      <AppText style={[styles.introText, { color: colors.foreground }]}>
+        One completed trip uses one ride; declined requests do not count.
+      </AppText>
+    </View>
 
     {isCatalogLoading && !hasCatalogSnapshot ? (
       <PackageState
@@ -198,6 +205,7 @@ export default function DriverPackagesScreen() {
         size="lg"
       />
     </View> : null}
+    <View style={styles.scrollTail} />
     </GlassScrollView>
   </View>;
 }
@@ -282,6 +290,8 @@ const styles = StyleSheet.create({
   syncRow: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   syncCopy: { flex: 1, gap: 3 },
   syncWarning: { ...typography.tiny,  },
+  introCopy: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], gap: spacing[4] },
+  introText: { ...typography.caption, lineHeight: 18 },
 
   stateCard: { marginHorizontal: semanticSpacing.cardPadding, borderRadius: 18, borderWidth: 1, padding: radius.sheetCompact, alignItems: 'center', gap: semanticSpacing.inlineGap },
   stateTitle: { ...typography.title, textAlign: 'center' },
@@ -301,4 +311,7 @@ const styles = StyleSheet.create({
   unavailableText: { ...typography.tiny, marginTop: 2 },
   selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: spacing[2] },
   buyButtonContainer: { marginHorizontal: semanticSpacing.cardPadding, marginTop: spacing[4] },
+  scrollTail: { height: spacing[32] },
 });
+
+export default DriverPackagesScreen;

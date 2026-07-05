@@ -49,6 +49,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
+import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
@@ -369,7 +370,7 @@ export default function DriverDashboard() {
     }
 
     if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
-      router.push('/driver-packages');
+      navigateToDriverPackages(router);
       return;
     }
 
@@ -405,7 +406,7 @@ export default function DriverDashboard() {
         return;
       }
       if (!canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
-        router.push('/driver-packages');
+        navigateToDriverPackages(router);
         return;
       }
     }
@@ -759,7 +760,7 @@ export default function DriverDashboard() {
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.activityStat}
-              onPress={() => router.push('/driver-packages')}
+              onPress={() => navigateToDriverPackages(router)}
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="View ride package rides"
@@ -770,7 +771,7 @@ export default function DriverDashboard() {
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.activityStat}
-              onPress={() => router.push('/driver-packages')}
+              onPress={() => navigateToDriverPackages(router)}
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="View ride package Bonus Rides"
@@ -793,7 +794,7 @@ export default function DriverDashboard() {
               </View>
               <TouchableOpacity
                 style={[styles.viewPackagesButton, { backgroundColor: colors.primary }]}
-                onPress={() => router.push('/driver-packages')}
+                onPress={() => navigateToDriverPackages(router)}
                 activeOpacity={0.8}
               >
                 <AppText style={[styles.viewPackagesButtonText, { color: colors.primaryForeground }]}>View Packages</AppText>

@@ -284,7 +284,7 @@ describe('DriverPackagesScreen', () => {
     mockSyncGeneration = 'generation-2';
     view.rerender(<DriverPackagesScreen />);
 
-    expect(await screen.findByText('Package offers were refreshed. Please select again.')).toBeTruthy();
+    expect(screen.queryByText('Package offers were refreshed. Please select again.')).toBeNull();
     fireEvent.press(screen.getByText('Buy Selected Package'));
     expect(require('expo-router').router.push).not.toHaveBeenCalled();
   });

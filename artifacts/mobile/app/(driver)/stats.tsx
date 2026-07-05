@@ -1,9 +1,8 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -170,32 +169,6 @@ export default function DriverStats() {
               tone={colors.primaryHex}
             />
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Ride Package" />
-          <TouchableOpacity
-            style={[styles.packageCard, styles.cardShadow, { backgroundColor: colors.card }]}
-            onPress={() => router.push('/driver-packages')}
-            activeOpacity={0.72}
-            accessibilityRole="button"
-            accessibilityLabel="View ride packages"
-          >
-            <Feather name="layers" size={icons.size.lg} color={colors.primary} />
-            <View style={styles.packageHeader}>
-              <View style={styles.packageTitleGroup}>
-                <AppText style={[styles.packageName, { color: colors.foreground }]}>
-                  Ride Packages
-                </AppText>
-                <AppText style={[styles.packageMeta, { color: colors.mutedForeground }]}>
-                  Explore package options for your driving needs
-                </AppText>
-              </View>
-            </View>
-            <View style={[styles.packageAction, { backgroundColor: colors.primary }]}>
-              <AppText style={[styles.packageActionText, { color: colors.primaryForeground }]}>View Packages</AppText>
-            </View>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -386,13 +359,6 @@ const styles = StyleSheet.create({
   metricNote: { ...typography.tiny, lineHeight: 13 },
   cardShadow: { ...elevation.card, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
   surface: { borderRadius: radius['3xl'], overflow: 'hidden' },
-  packageCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
-  packageHeader: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
-  packageTitleGroup: { flex: 1, gap: 3 },
-  packageName: { ...typography.body,  },
-  packageMeta: { ...typography.tiny,  },
-  packageAction: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 11, paddingVertical: semanticSpacing.inlineGap, borderRadius: radius.pill },
-  packageActionText: { ...typography.button },
   performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap, padding: semanticSpacing.cardPadding },
   performanceStatusCopy: { flex: 1, gap: spacing[4] },
   performanceStatusTitle: { ...typography.body,  },

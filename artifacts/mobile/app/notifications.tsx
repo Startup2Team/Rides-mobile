@@ -20,6 +20,7 @@ import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
 import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
+import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
 import type { Ride } from '@/types';
 import { AppText } from '@/components/AppText';
 import { icons } from '@/constants/icons';
@@ -426,8 +427,8 @@ export default function NotificationsScreen() {
             void markRead(item.id);
             if (item.type === 'ride' && item.rideId && item.icon === 'check-circle') {
               router.push(`/ride-detail?rideId=${item.rideId}` as any);
-            } else if (item.title === 'Ride package activated') {
-              router.push('/(driver)/stats');
+            } else if (item.title === 'Ride package activated' || item.title === 'Ride package update' || item.title === 'No rides left' || item.title === 'Rides running low') {
+              navigateToDriverPackages(router);
             }
           }}
           activeOpacity={0.75}
