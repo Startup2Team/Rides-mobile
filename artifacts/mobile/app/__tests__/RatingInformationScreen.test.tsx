@@ -96,4 +96,3 @@ describe('RatingInformationScreen', () => {
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 });
-

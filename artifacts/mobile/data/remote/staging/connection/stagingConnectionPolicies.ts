@@ -65,4 +65,3 @@ export function confirmedStatusToItemStatus(value: 'unknown' | 'confirmed' | 'fa
 export function isReadyOverallStatuses(statuses: StagingConnectionItemStatus[]) {
   return statuses.every(status => status === 'passed' || status === 'not_applicable');
 }
-
