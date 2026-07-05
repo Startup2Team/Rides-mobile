@@ -265,6 +265,22 @@ describe('DriverPackagesScreen', () => {
     });
   });
 
+  test('activates free packages without opening the payment screen', async () => {
+    render(<DriverPackagesScreen />);
+
+    fireEvent.press(screen.getByText('Launch Starter Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
+    fireEvent.press(screen.getByText('Activate Package'));
+
+    await waitFor(() => expect(mockActivatePackage).toHaveBeenCalledWith(expect.objectContaining({
+      packageId: 'launch_starter',
+      priceRwf: 0,
+    })));
+    expect(require('expo-router').router.push).not.toHaveBeenCalledWith(expect.objectContaining({
+      pathname: '/driver-package-payment',
+    }));
+  });
+
   test('deselects a package when it is pressed again', async () => {
     render(<DriverPackagesScreen />);
 
@@ -388,6 +404,18 @@ describe('DriverPackagesScreen', () => {
     expect(screen.getByLabelText('40 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('1,500 RWF')).toBeTruthy();
     expect(screen.getByText('Promotional Offer')).toBeTruthy();
+  });
+
+  test('shows admin-marked free trial packages as free now', () => {
+    mockCatalog = DRIVER_RIDE_PACKAGE_CATALOG
+      .filter(entry => entry.packageId === 'growth' && entry.vehicleType === 'moto')
+      .map(entry => ({ ...entry, isFreeTrial: true }));
+
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('Growth Package')).toBeTruthy();
+    expect(screen.getByText('FREE NOW')).toBeTruthy();
+    expect(screen.getByText('2,000 RWF')).toBeTruthy();
   });
 
   test('renders variable package counts and unknown package IDs from the supplied catalog', () => {

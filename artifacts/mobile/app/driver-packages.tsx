@@ -25,6 +25,7 @@ import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersiste
 import { VEHICLE_LABELS } from '@/types';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -40,6 +41,7 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
   const { driverProfile, user } = useAuth();
   const {
     isLoading: isEntitlementLoading,
+    activatePackage,
     entitlement,
   } = useDriverEntitlement();
   const {
@@ -55,6 +57,8 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
     syncGeneration,
   } = usePackageSync();
   const [selectedOffer, setSelectedOffer] = useState<DriverPackageOfferSnapshot | null>(null);
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
   const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
@@ -75,6 +79,7 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
       generationRef.current = syncGeneration;
       if (selectedOffer) {
         setSelectedOffer(null);
+        setActivationError(null);
       }
     }
   }, [selectedOffer, syncGeneration]);
@@ -82,6 +87,7 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
   const handleSelectPackage = async (offer: DriverRidePackageOffer) => {
     if (selectedOffer?.packageId === offer.packageId) {
       setSelectedOffer(null);
+      setActivationError(null);
       return;
     }
     const vehicle = activeVehicle
@@ -99,13 +105,27 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
         return;
       }
       setSelectedOffer(lockedOffer);
+      setActivationError(null);
     } catch (lockError) {
       setSelectedOffer(null);
     }
   };
 
-  const handleBuySelectedPackage = () => {
+  const handleBuySelectedPackage = async () => {
     if (!selectedOffer) return;
+    if (selectedOffer.priceRwf === 0) {
+      setIsActivating(true);
+      setActivationError(null);
+      try {
+        await activatePackage(selectedOffer);
+        navigateToDriverHomeAfterCompletion(router);
+      } catch (activationFailure) {
+        setActivationError(activationFailure instanceof Error ? activationFailure.message : 'Unable to activate this package.');
+      } finally {
+        setIsActivating(false);
+      }
+      return;
+    }
     router.push({
       pathname: '/driver-package-payment',
       params: { offerId: selectedOffer.offerId },
@@ -196,11 +216,18 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
         />
       );
     })}
+    {activationError ? (
+      <View style={[styles.activationError, { borderColor: colors.destructiveHex + '30' }]}>
+        <Feather name="alert-triangle" size={15} color={colors.destructive} />
+        <AppText style={[styles.activationErrorText, { color: colors.destructive }]}>{activationError}</AppText>
+      </View>
+    ) : null}
     {packages.length > 0 ? <View style={styles.buyButtonContainer}>
       <AppButton
-        title="Buy Selected Package"
-        onPress={handleBuySelectedPackage}
-        disabled={!selectedOffer}
+        title={selectedOffer?.priceRwf === 0 ? 'Activate Package' : 'Buy Selected Package'}
+        onPress={() => void handleBuySelectedPackage()}
+        disabled={!selectedOffer || isActivating}
+        loading={isActivating}
         fullWidth
         size="lg"
       />
@@ -310,6 +337,8 @@ const styles = StyleSheet.create({
   normalPrice: { ...typography.tiny, textDecorationLine: 'line-through' },
   unavailableText: { ...typography.tiny, marginTop: 2 },
   selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: spacing[2] },
+  activationError: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[10], borderWidth: 1, borderRadius: radius.lg, padding: spacing[10], flexDirection: 'row', alignItems: 'center', gap: spacing[8] },
+  activationErrorText: { ...typography.caption, flex: 1, lineHeight: 18 },
   buyButtonContainer: { marginHorizontal: semanticSpacing.cardPadding, marginTop: spacing[4] },
   scrollTail: { height: spacing[32] },
 });

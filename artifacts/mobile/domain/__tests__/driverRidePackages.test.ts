@@ -444,6 +444,20 @@ describe('driver ride packages', () => {
     expect(offer.priceRwf).toBe(1_000);
   });
 
+  test('admin-marked free trial packages resolve as free offers', () => {
+    const catalogEntry = getPackageCatalogEntry('growth', 'moto')!;
+    const offer = resolvePackageOffer({
+      package: { ...catalogEntry, isFreeTrial: true },
+      vehicleType: 'moto',
+      activeCampaigns: [],
+      now: new Date('2026-06-19T00:00:00.000Z'),
+    });
+
+    expect(offer.priceRwf).toBe(0);
+    expect(offer.basePriceRwf).toBe(catalogEntry.priceRwf);
+    expect(offer.isFreeTrial).toBe(true);
+  });
+
   test('campaign validation rejects invalid and reversed dates', () => {
     const campaign = {
       campaignId: 'dated',

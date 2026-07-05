@@ -16,6 +16,8 @@ export interface PackageCatalogItemDto {
   packageName: string;
   vehicleType: VehicleType;
   priceRwf: number;
+  isFreeTrial?: boolean | null;
+  freeTrial?: boolean | null;
   ridesGranted: number;
   bonusRidesGranted: number;
   status: DriverRidePackageCatalogStatus;

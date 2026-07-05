@@ -218,6 +218,28 @@ describe('RemotePackageRepository', () => {
     expect(transportFixture.calls[0]).toMatchObject({ method: 'GET', path: '/v1/packages/catalog' });
   });
 
+  test('maps admin free trial catalog flag to domain', async () => {
+    const transportFixture = createFakeBackendTransport([
+      {
+        method: 'GET',
+        path: '/v1/packages/catalog',
+        response: {
+          status: 200,
+          data: {
+            data: { items: [{ ...catalogEntry, isFreeTrial: true }], nextCursor: null, hasMore: false },
+            version: 'v1',
+          },
+        },
+      },
+    ]);
+    const repo = new RemotePackageRepository({
+      client: new BackendClient({ transport: transportFixture.transport }),
+      transportLabel: 'shadow_remote',
+    });
+
+    await expect(repo.getCatalog()).resolves.toEqual([{ ...catalogEntry, isFreeTrial: true }]);
+  });
+
   test('maps campaigns dto correctly', async () => {
     const transportFixture = createFakeBackendTransport([
       {
