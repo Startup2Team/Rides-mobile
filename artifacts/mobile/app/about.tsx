@@ -19,6 +19,7 @@ import {
   TERMS_URL,
 } from '@/constants/branding';
 import { useColors } from '@/hooks/useColors';
+import { usePressGuard } from '@/hooks/usePressGuard';
 import { typography } from '@/constants/typography';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
@@ -86,20 +87,7 @@ export default function AboutScreen() {
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>LEGAL</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           {LINKS.map((link, i) => (
-            <View key={link.label}>
-              {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => Linking.openURL(link.url)}
-                activeOpacity={0.75}
-              >
-                <View style={styles.linkIcon}>
-                  <Feather name={link.icon} size={icons.size.lg} color={colors.primary} />
-                </View>
-                <Text style={[styles.linkLabel, { color: colors.foreground, flex: 1 }]}>{link.label}</Text>
-                <Feather name="external-link" size={icons.size.xs} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            </View>
+            <LinkRow key={link.label} index={i} link={link} />
           ))}
         </View>
 
@@ -107,6 +95,27 @@ export default function AboutScreen() {
           © 2026 {APP_NAME} · Kigali, Rwanda
         </Text>
       </GlassScrollView>
+    </View>
+  );
+}
+
+function LinkRow({ index, link }: { index: number; link: typeof LINKS[number] }) {
+  const colors = useColors();
+  const guardedPress = usePressGuard(() => Linking.openURL(link.url));
+  return (
+    <View>
+      {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+      <TouchableOpacity
+        style={styles.linkRow}
+        onPress={guardedPress}
+        activeOpacity={0.75}
+      >
+        <View style={styles.linkIcon}>
+          <Feather name={link.icon} size={icons.size.lg} color={colors.primary} />
+        </View>
+        <Text style={[styles.linkLabel, { color: colors.foreground, flex: 1 }]}>{link.label}</Text>
+        <Feather name="external-link" size={icons.size.xs} color={colors.mutedForeground} />
+      </TouchableOpacity>
     </View>
   );
 }

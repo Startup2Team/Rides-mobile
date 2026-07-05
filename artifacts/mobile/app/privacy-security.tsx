@@ -116,7 +116,7 @@ export default function PrivacySecurityScreen() {
         </TouchableOpacity>
 
         <Text style={[styles.lastUpdated, { color: colors.mutedForeground }]}>
-          Last updated: May 2026 · Version 1.0
+          Last updated: May 2026
         </Text>
       </GlassScrollView>
     </View>

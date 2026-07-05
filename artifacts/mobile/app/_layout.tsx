@@ -55,6 +55,7 @@ import { MapPickerProvider } from '@/context/MapPickerContext';
 import { RideProvider } from '@/context/RideContext';
 import { SavedLocationsProvider } from '@/context/SavedLocationsContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { TabBarGlassProvider } from '@/components/navigation/TabBarGlassContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
 import { replaceFlowScreen } from '@/navigation/navigationPolicy';
@@ -64,6 +65,7 @@ import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerifi
 import { bootstrapShadowRideProjection, stopShadowRideProjection } from '@/domains/ride/shadow';
 import { RideDualReadDiagnostics } from '@/domains/ride/dualRead';
 import { ActiveRideCanaryDiagnosticsBootstrapper as RideActiveRideCanaryDiagnosticsBootstrapper } from '@/domains/ride/projection';
+import { RideCanaryInspectorLauncher } from '@/domains/ride/projection/debug';
 
 SplashScreen.preventAutoHideAsync();
 initializeMonitoring();
@@ -112,6 +114,14 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen
+        name="rating-information"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          headerShown: false,
+        }}
+      />
       <Stack.Screen name="payment-methods" />
       <Stack.Screen name="edit-profile" />
       <Stack.Screen name="change-phone-number" />
@@ -139,7 +149,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? '#0A0A0A' : '#F5F5F5');
+    void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? '#000000' : '#F2F2F7');
   }, [scheme]);
 
   const [fontsLoaded, fontError] = useFonts({
@@ -176,11 +186,14 @@ export default function RootLayout() {
                   <ToastProvider>
                     <SavedLocationsProvider>
                       <MapPickerProvider>
-                        <GestureHandlerRootView style={{ flex: 1 }}>
-                          <KeyboardProvider>
-                            <RootLayoutNav />
-                          </KeyboardProvider>
-                        </GestureHandlerRootView>
+                        <TabBarGlassProvider>
+                          <GestureHandlerRootView style={{ flex: 1 }}>
+                            <KeyboardProvider>
+                              <RootLayoutNav />
+                              <RideCanaryInspectorLauncher />
+                            </KeyboardProvider>
+                          </GestureHandlerRootView>
+                        </TabBarGlassProvider>
                       </MapPickerProvider>
                     </SavedLocationsProvider>
                   </ToastProvider>

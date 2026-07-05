@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -14,6 +13,8 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
+import { openExternalUrl } from '@/utils/openExternalUrl';
+import { usePressGuard } from '@/hooks/usePressGuard';
 import { typography } from '@/constants/typography';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
@@ -53,21 +54,21 @@ const CONTACT_CHANNELS = [
     icon: 'phone' as const,
     label: 'Call Support',
     detail: '+250 788 123 456',
-    onPress: () => Linking.openURL('tel:+250788123456'),
+    onPress: () => void openExternalUrl('tel:+250788123456'),
   },
   {
     id: 'email',
     icon: 'mail' as const,
     label: 'Email Us',
     detail: SUPPORT_EMAIL,
-    onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`),
+    onPress: () => void openExternalUrl(`mailto:${SUPPORT_EMAIL}`),
   },
   {
     id: 'whatsapp',
     icon: 'whatsapp' as const,
     label: 'WhatsApp',
     detail: 'Chat with us',
-    onPress: () => Linking.openURL('https://wa.me/250788123456'),
+    onPress: () => void openExternalUrl('https://wa.me/250788123456'),
     family: 'mci' as const,
   },
 ];
@@ -80,38 +81,22 @@ export default function HelpSupportScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Help and Support" subtitle="We're here for you" />
+      <GlassHeader title="Help and Support" />
 
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[styles.scroll, { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }]}
       >
         {/* Contact */}
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CONTACT US</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Contact Us</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           {CONTACT_CHANNELS.map((ch, i) => (
-            <View key={ch.id}>
-              {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-              <TouchableOpacity style={styles.contactRow} onPress={ch.onPress} activeOpacity={0.75}>
-                <View style={styles.contactIcon}>
-                  {ch.family === 'mci' ? (
-                    <MaterialCommunityIcons name={ch.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={colors.primary} />
-                  ) : (
-                    <Feather name={ch.icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={colors.primary} />
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.contactLabel, { color: colors.foreground }]}>{ch.label}</Text>
-                  <Text style={[styles.contactDetail, { color: colors.mutedForeground }]}>{ch.detail}</Text>
-                </View>
-                <Feather name="chevron-right" size={icons.semantic.button} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            </View>
+            <ContactRow key={ch.id} index={i} channel={ch} />
           ))}
         </View>
 
         {/* FAQs */}
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>FREQUENTLY ASKED</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Frequently Asked Questions</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           {FAQS.map((faq, i) => {
             const isOpen = openFaq === i;
@@ -147,13 +132,37 @@ export default function HelpSupportScreen() {
   );
 }
 
+function ContactRow({ index, channel }: { index: number; channel: typeof CONTACT_CHANNELS[number] }) {
+  const colors = useColors();
+  const guardedPress = usePressGuard(channel.onPress);
+  return (
+    <View>
+      {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+      <TouchableOpacity style={styles.contactRow} onPress={guardedPress} activeOpacity={0.75}>
+        <View style={styles.contactIcon}>
+          {channel.family === 'mci' ? (
+            <MaterialCommunityIcons name={channel.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={colors.primary} />
+          ) : (
+            <Feather name={channel.icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={colors.primary} />
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.contactLabel, { color: colors.foreground }]}>{channel.label}</Text>
+          <Text style={[styles.contactDetail, { color: colors.mutedForeground }]}>{channel.detail}</Text>
+        </View>
+        <Feather name="chevron-right" size={icons.semantic.button} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { padding: semanticSpacing.screenPadding },
   sectionLabel: {
-    ...typography.tiny,
+    ...typography.bodySmall,
     fontFamily: typography.title.fontFamily,
-    letterSpacing: 0.8,
+    letterSpacing: 0,
     marginBottom: spacing[10],
     marginTop: semanticSpacing.sectionGap,
   },
@@ -167,10 +176,10 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.listItemPadding },
   contactRow: { flexDirection: 'row', alignItems: 'center', padding: semanticSpacing.listItemPadding, gap: semanticSpacing.rowGap },
   contactIcon: { width: sizes.avatar.md, height: sizes.avatar.md, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' },
-  contactLabel: { ...typography.bodySmall, fontFamily: typography.title.fontFamily},
+  contactLabel: { ...typography.bodySmall, fontFamily: typography.title.fontFamily },
   contactDetail: { ...typography.caption, fontFamily: typography.body.fontFamily, marginTop: spacing[2] },
   faqRow: { flexDirection: 'row', alignItems: 'center', padding: semanticSpacing.listItemPadding, gap: semanticSpacing.rowGap },
-  faqQuestion: { ...typography.bodySmall, fontFamily: typography.label.fontFamily, lineHeight: 20 },
+  faqQuestion: { ...typography.bodySmall, fontFamily: typography.title.fontFamily, lineHeight: 20 },
   faqAnswer: { paddingHorizontal: semanticSpacing.listItemPadding, paddingBottom: semanticSpacing.listItemPadding, borderTopWidth: StyleSheet.hairlineWidth },
   faqAnswerText: { ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 20, marginTop: spacing[10] },
   infoBox: {

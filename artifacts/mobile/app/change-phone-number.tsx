@@ -92,7 +92,6 @@ export default function ChangePhoneNumberScreen() {
     >
       <GlassHeader
         title="Change Phone Number"
-        subtitle={pendingPhone ? 'Verify your new number' : 'Enter your new number'}
       />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}

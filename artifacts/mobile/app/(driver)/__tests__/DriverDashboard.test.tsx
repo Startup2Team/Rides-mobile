@@ -374,6 +374,7 @@ function makeVehicleEntitlement(vehicle: DriverVehicleProfile, rides: number, bo
 
 describe('DriverDashboard online state', () => {
   beforeEach(async () => {
+    jest.clearAllMocks();
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
     mockScreenTimers.clearAll();
@@ -549,6 +550,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(screen.getByText('Offline')).toBeTruthy();
+    expect(router.push).not.toHaveBeenCalled();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -563,6 +565,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(screen.getByText('Offline')).toBeTruthy();
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/(driver)/packages'));
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -778,7 +781,7 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByTestId('dashboard-ad-bralirwa')).toBeTruthy();
 
     fireEvent.press(screen.getByText('View Packages'));
-    expect(router.push).toHaveBeenCalledWith('/driver-packages');
+    expect(router.push).toHaveBeenCalledWith('/(driver)/packages');
 
     fireEvent.press(screen.getByTestId('dashboard-ad-airtel'));
     expect(Linking.openURL).toHaveBeenCalledWith('https://www.airtel.co.rw/');

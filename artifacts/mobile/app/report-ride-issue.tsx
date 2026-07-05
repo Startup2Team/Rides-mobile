@@ -7,6 +7,8 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
+import { openExternalUrl } from '@/utils/openExternalUrl';
+import { usePressGuard } from '@/hooks/usePressGuard';
 import { typography } from '@/constants/typography';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
@@ -62,12 +64,12 @@ export default function ReportRideIssueScreen() {
       'Pickup and destination:',
       'What happened:',
     ].join('\n');
-    void Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    void openExternalUrl(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Report a Ride Issue" subtitle="Tell us what happened" />
+      <GlassHeader title="Report a Ride Issue" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
@@ -86,25 +88,7 @@ export default function ReportRideIssueScreen() {
         <View style={styles.centeredContent}>
           <View style={[styles.card, { backgroundColor: colors.card }]}>
             {REPORT_TYPES.map((report, index) => (
-              <React.Fragment key={report.label}>
-                {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
-                <TouchableOpacity
-                  accessibilityLabel={report.label}
-                  accessibilityRole="button"
-                  activeOpacity={0.65}
-                  onPress={() => openReport(report.label, report.email)}
-                  style={styles.row}
-                >
-                  <View style={styles.icon}>
-                    <Feather name={report.icon} size={icons.size.lg} color={colors.primary} />
-                  </View>
-                  <View style={styles.copy}>
-                    <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>
-                    <Text style={[styles.detail, { color: colors.mutedForeground }]}>{report.detail}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              </React.Fragment>
+              <ReportRow key={report.label} index={index} colors={colors} report={report} onOpen={openReport} />
             ))}
           </View>
         </View>
@@ -116,6 +100,42 @@ export default function ReportRideIssueScreen() {
         </View>
       </GlassScrollView>
     </View>
+  );
+}
+
+function ReportRow({
+  colors,
+  index,
+  onOpen,
+  report,
+}: {
+  colors: ReturnType<typeof useColors>;
+  index: number;
+  onOpen: (label: string, email: string) => void;
+  report: typeof REPORT_TYPES[number];
+}) {
+  const guardedPress = usePressGuard(() => onOpen(report.label, report.email));
+
+  return (
+    <>
+      {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
+      <TouchableOpacity
+        accessibilityLabel={report.label}
+        accessibilityRole="button"
+        activeOpacity={0.65}
+        onPress={guardedPress}
+        style={styles.row}
+      >
+        <View style={styles.icon}>
+          <Feather name={report.icon} size={icons.size.lg} color={colors.primary} />
+        </View>
+        <View style={styles.copy}>
+          <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>
+          <Text style={[styles.detail, { color: colors.mutedForeground }]}>{report.detail}</Text>
+        </View>
+        <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    </>
   );
 }
 

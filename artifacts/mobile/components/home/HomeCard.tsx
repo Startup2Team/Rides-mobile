@@ -53,7 +53,7 @@ export function HomeCard({
       </AppText>
 
       {locationStatus === 'unavailable' ? (
-        <View style={[styles.locationUnavailable, { backgroundColor: colors.muted }]}>
+        <View style={[styles.locationUnavailable, { backgroundColor: colors.card }]}>
           <AppText variant="label" style={[styles.locationUnavailableText, { color: colors.foreground }]}>
             Unable to determine your location.
           </AppText>
@@ -80,7 +80,7 @@ export function HomeCard({
             style={[
               styles.vehicleChip,
               {
-                backgroundColor: selectedVehicle === v ? colors.primary : colors.muted,
+                backgroundColor: selectedVehicle === v ? colors.primary : colors.card,
                 borderWidth: selectedVehicle === v ? 0 : 1,
                 borderColor: colors.border,
               },

@@ -22,6 +22,12 @@ Current query-backed read models:
 - `rideHistoryRepository.listRideHistory()` reads completed ride history through `RideRepository`
 - `rideHistoryRepository.getRideDetail(rideId)` reads a ride detail snapshot through `RideRepository`
 
+Remote prototype:
+- Phase 12I adds `RemoteRideRepository` for read-only active ride, ride history, and ride detail reads
+- `SHADOW_REMOTE` diagnostics run after local reads and never mutate UI/state
+- local/live-provider ride lifecycle behavior remains authoritative
+- ride request, cancel, accept, decline, start, complete, matching, negotiation, payment, package credit deduction, and realtime event integration remain future work
+
 Future migration plan:
 - move lifecycle logic into `domains/ride`
 - keep repository boundary in `RideRepository`

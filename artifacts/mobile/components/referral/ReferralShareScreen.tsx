@@ -133,7 +133,7 @@ export default function ReferralShareScreen() {
   if (!user?.id) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <GlassHeader title={`Invite people to ${APP_NAME}`} subtitle="Share your link or QR" />
+        <GlassHeader title={`Invite people to ${APP_NAME}`} />
         <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
           <Text style={[styles.emptyState, { color: colors.mutedForeground }]}>No referral account is available.</Text>
         </View>
@@ -143,7 +143,7 @@ export default function ReferralShareScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <GlassHeader title={`Invite people to ${APP_NAME}`} subtitle="Share your link or QR" />
+      <GlassHeader title={`Invite people to ${APP_NAME}`} />
       <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
         <Text style={[styles.helpText, { color: colors.mutedForeground }]}>
           Ask a friend to scan the QR code, copy the link and send it in chat or contacts, or tap Share to choose social apps and messaging.

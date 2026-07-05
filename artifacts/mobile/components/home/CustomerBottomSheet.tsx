@@ -198,7 +198,7 @@ export function CustomerBottomSheet({
       testID="booking-sheet"
       style={[
         sheetStyles.shell,
-        { backgroundColor: colors.card },
+        { backgroundColor: colors.background },
         transform ? { transform } : undefined,
       ]}
       // Attach gesture only while booking card is active and stable.

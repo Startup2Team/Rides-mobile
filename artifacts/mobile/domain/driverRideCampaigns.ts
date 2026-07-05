@@ -145,7 +145,7 @@ export function resolvePackageOffer(input: {
     }),
   ) ?? null;
 
-  const priceRwf = campaign?.priceRwf ?? input.package.priceRwf;
+  const priceRwf = input.package.isFreeTrial ? 0 : (campaign?.priceRwf ?? input.package.priceRwf);
   const ridesGranted = campaign?.ridesGranted ?? input.package.ridesGranted;
   const bonusRidesGranted = campaign?.bonusRidesGranted ?? input.package.bonusRidesGranted;
 

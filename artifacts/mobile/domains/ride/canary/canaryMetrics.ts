@@ -206,3 +206,65 @@ export function emitRideActiveRideUiProjectionBlockedByGateTelemetry(record: {
   });
   observability.logger.warn('RideActiveRideUiProjectionBlockedByGate', record);
 }
+
+export function emitRideActiveRideCanaryStabilityUpdatedTelemetry(record: {
+  reason: string;
+  projectedSourceSelections: number;
+  liveFallbacks: number;
+  gateDenials: number;
+  mappingFailures: number;
+  staleProjectionIncidents: number;
+  comparisonMismatches: number;
+  rollbackEvents: number;
+}) {
+  observability.metrics.counter('ride.active.canary.stability.updated', 1, {
+    reason: record.reason,
+  });
+  observability.logger.info('RideActiveRideCanaryStabilityUpdated', record);
+}
+
+export function emitRideActiveRideCanaryStabilityApprovedTelemetry(record: {
+  ready: boolean;
+  projectedSourceSelections: number;
+  liveFallbacks: number;
+  gateDenials: number;
+  mappingFailures: number;
+  staleProjectionIncidents: number;
+  comparisonMismatches: number;
+  rollbackEvents: number;
+  observationWindowMs: number;
+  fallbackRate: number;
+}) {
+  observability.metrics.counter('ride.active.canary.stability.approved', 1, {
+    ready: String(record.ready),
+  });
+  observability.logger.info('RideActiveRideCanaryStabilityApproved', record);
+}
+
+export function emitRideActiveRideCanaryStabilityDeniedTelemetry(record: {
+  ready: boolean;
+  projectedSourceSelections: number;
+  liveFallbacks: number;
+  gateDenials: number;
+  mappingFailures: number;
+  staleProjectionIncidents: number;
+  comparisonMismatches: number;
+  rollbackEvents: number;
+  observationWindowMs: number;
+  fallbackRate: number;
+}) {
+  observability.metrics.counter('ride.active.canary.stability.denied', 1, {
+    ready: String(record.ready),
+  });
+  observability.logger.warn('RideActiveRideCanaryStabilityDenied', record);
+}
+
+export function emitRideActiveRideCanaryFallbackRecordedTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.canary.stability.fallback.recorded', 1, { reason: record.reason });
+  observability.logger.info('RideActiveRideCanaryFallbackRecorded', record);
+}
+
+export function emitRideActiveRideCanaryRollbackRecordedTelemetry(record: { reason: string }) {
+  observability.metrics.counter('ride.active.canary.stability.rollback.recorded', 1, { reason: record.reason });
+  observability.logger.warn('RideActiveRideCanaryRollbackRecorded', record);
+}

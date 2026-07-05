@@ -113,3 +113,22 @@ Phase 11G is the first live UI cutover. It only exposes the read-only Active
 Ride summary surface to projected data, and every other operational surface
 continues to use the live RideProvider state. Any fallback, staleness, or gate
 failure returns the UI to live reads immediately.
+
+Phase 11H adds the stability gate around that first summary canary. It does
+not expand the UI surface. The next surface remains blocked until the
+stability window, fallback rate, mismatch history, and rollback count all stay
+within the strict thresholds.
+
+Phase 11I adds a developer-facing monitoring report over the same canary. The
+report is used to decide whether the next surface should remain blocked,
+require investigation, or stay ready for a later expansion step. It still does
+not expand the UI.
+
+Phase 11J adds the hidden Ride Canary Inspector for development and QA. It is
+diagnostics-only, invisible in production, and does not change RideProvider,
+navigation, or query cache behavior. The full inspector is opened only from a
+small developer floating entry point and renders as a modal/debug overlay, so
+normal customer and driver layouts are not displaced. Zero observations are
+classified as idle/not observed instead of critical. Rollback simulation
+records one event per explicit developer tap, and reset returns diagnostics to
+the clean unobserved state.

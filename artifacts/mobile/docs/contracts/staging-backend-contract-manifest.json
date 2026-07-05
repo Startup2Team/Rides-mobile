@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "domains": {
+    "savedLocations": {
+      "operations": [
+        {
+          "operation": "list",
+          "method": "GET",
+          "path": "/v1/saved-locations",
+          "requestContract": "none",
+          "responseContract": "ListSavedLocationsResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": false,
+          "correlationExpected": true
+        },
+        {
+          "operation": "create",
+          "method": "POST",
+          "path": "/v1/saved-locations",
+          "requestContract": "CreateSavedLocationRequestDto",
+          "responseContract": "CreateSavedLocationResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": true,
+          "correlationExpected": true
+        },
+        {
+          "operation": "update",
+          "method": "PATCH",
+          "path": "/v1/saved-locations/{id}",
+          "requestContract": "UpdateSavedLocationRequestDto",
+          "responseContract": "UpdateSavedLocationResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": true,
+          "correlationExpected": true
+        },
+        {
+          "operation": "delete",
+          "method": "DELETE",
+          "path": "/v1/saved-locations/{id}",
+          "requestContract": "DeleteSavedLocationRequestDto",
+          "responseContract": "DeleteSavedLocationResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": true,
+          "correlationExpected": true
+        }
+      ]
+    },
+    "profile": {
+      "operations": [
+        {
+          "operation": "getCurrentProfile",
+          "method": "GET",
+          "path": "/v1/profile/me",
+          "requestContract": "none",
+          "responseContract": "GetProfileResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": false,
+          "correlationExpected": true
+        },
+        {
+          "operation": "updateProfile",
+          "method": "PATCH",
+          "path": "/v1/profile/me",
+          "requestContract": "UpdateProfileRequestDto",
+          "responseContract": "UpdateProfileResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": true,
+          "correlationExpected": true
+        },
+        {
+          "operation": "uploadProfilePhoto",
+          "method": "POST",
+          "path": "/v1/profile/me/photo",
+          "requestContract": "UploadProfilePhotoRequestDto",
+          "responseContract": "UploadProfilePhotoResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": true,
+          "correlationExpected": true
+        },
+        {
+          "operation": "updatePhoneNumber",
+          "method": "PATCH",
+          "path": "/v1/profile/me/phone",
+          "requestContract": "ChangePhoneRequestDto",
+          "responseContract": "ChangePhoneResponseDto",
+          "authenticationExpected": "required",
+          "idempotencyExpected": true,
+          "correlationExpected": true
+        }
+      ]
+    }
+  }
+}

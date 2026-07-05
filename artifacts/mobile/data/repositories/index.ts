@@ -6,12 +6,14 @@ export {
   notificationRepository,
   packageRepository,
   paymentRepository,
-  profileRepository,
   rideRepository,
-  savedLocationsRepository,
   searchRepository,
   vehicleRepository,
 } from '@/data/adapters/localRepositories';
+export { profileRepository } from './profileRepositoryFactory';
+export { createProfileRepository, getProfileRepository, resetProfileRepositoryForTests } from './profileRepositoryFactory';
+export { savedLocationsRepository } from './savedLocationsRepositoryFactory';
+export { createSavedLocationsRepository, getSavedLocationsRepository, resetSavedLocationsRepositoryForTests } from './savedLocationsRepositoryFactory';
 export type {
   AuthRepository,
   BookingRepository,

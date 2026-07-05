@@ -61,3 +61,10 @@ export async function saveDriverPackagePurchases(purchases: DriverPackagePurchas
     purchaseHistory: purchases,
   });
 }
+
+export {
+  RemotePackageRepository,
+  createPackageShadowRepository,
+  createRemotePackageRepository,
+  createRemotePackageRepositoryPrototype,
+} from '@/data/remote/repositories/RemotePackageRepository';

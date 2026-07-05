@@ -53,6 +53,35 @@ Current source files outside this domain:
 - `app/change-phone-number.tsx`
 - `app/driver-onboarding.tsx`
 
+Remote prototype:
+- `RemoteProfileRepository` can run in `SHADOW_REMOTE` mode for diagnostics
+- local profile storage remains authoritative
+- the shared identity still stays one account across customer and driver projections
+
+Phase 13B adds the first real staging shadow integration for profile.
+
+- `HttpBackendTransport` can talk to the Go staging API through `BackendClient`
+- the repository factory defaults to `LOCAL`
+- `SHADOW_REMOTE` requires explicit staging backend configuration and the
+  profile rollout flag
+- local results remain authoritative for UI, query hooks, and context
+- staging failures, timeouts, outages, malformed responses, and semantic
+  mismatches are telemetry-only
+- staging writes are skipped by default and require
+  `EXPO_PUBLIC_PROFILE_SHADOW_WRITES_ENABLED=true`
+- production does not enable staging shadow or write shadow
+- rollback is setting the profile repository mode back to `LOCAL` or
+  disabling the backend environment
+
+Phase 13C adds the staging shadow health report.
+
+- profile events now feed the shared in-memory staging shadow report
+- the report is diagnostics only and does not change app behavior
+- the report keeps raw profile values, phone numbers, email addresses, and
+  signed URLs out of telemetry
+- the report is where profile readiness is evaluated for a future HYBRID
+  candidate decision
+
 Compatibility layer:
 - `AuthContext` still owns the live app session and role switching
 - `useProfilePhotoActions` still exists as a wrapper

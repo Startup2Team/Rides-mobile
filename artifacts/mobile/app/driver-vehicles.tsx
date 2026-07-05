@@ -75,7 +75,6 @@ export default function DriverVehiclesScreen() {
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader
         title="My Vehicles"
-        subtitle="Manage your linked vehicles"
         onBackPress={() => router.back()}
       />
       <GlassScrollView

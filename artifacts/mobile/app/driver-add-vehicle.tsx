@@ -249,7 +249,6 @@ export default function DriverAddVehicleScreen() {
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader
         title="Add Vehicle"
-        subtitle="Submit another vehicle for review"
         onBackPress={() => router.back()}
       />
       <GlassScrollView

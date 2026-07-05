@@ -105,7 +105,7 @@ export default function DriverVehicleDetailsScreen() {
   if (!vehicle) {
     return (
       <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-        <GlassHeader title="Vehicle Details" subtitle="Review vehicle information and documents" onBackPress={() => router.back()} />
+        <GlassHeader title="Vehicle Details" onBackPress={() => router.back()} />
         <View style={styles.emptyState}>
           <AppText style={[styles.emptyStateTitle, { color: colors.foreground }]}>Vehicle not found</AppText>
           <AppText style={[styles.emptyStateText, { color: colors.mutedForeground }]}>This vehicle is no longer available in your account.</AppText>
@@ -272,7 +272,6 @@ export default function DriverVehicleDetailsScreen() {
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader
         title="Vehicle Details"
-        subtitle="Review vehicle information and documents"
         onBackPress={() => router.back()}
       />
       <GlassScrollView

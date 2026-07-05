@@ -111,4 +111,15 @@ describe('SettingsScreen', () => {
       params: expect.objectContaining({ mode: 'edit', savedPlaceId: 'home' }),
     }));
   });
+
+  test('guards support navigation against rapid double taps', () => {
+    render(<SettingsScreen />);
+
+    const supportButton = screen.getByLabelText('Help and Support');
+    fireEvent.press(supportButton);
+    fireEvent.press(supportButton);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/help-support');
+  });
 });

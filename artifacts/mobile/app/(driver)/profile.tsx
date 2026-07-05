@@ -7,17 +7,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
-import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@/context/AuthContext';
-import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
-import { getActivePackageActivation } from '@/domain/driverRidePackages';
 import { useVehicles } from '@/domains/vehicle';
 import { APP_NAME } from '@/constants/branding';
 import { getShareRouteForMode } from '@/navigation/shareNavigation';
+import { getRatingInformationRoute } from '@/navigation/ratingNavigation';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { leaveRidesFeedback, rateRides } from '@/utils/communityActions';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
@@ -28,22 +25,21 @@ import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
+import { prefetchRatingInformationImages } from '@/constants/ratingInformationImages';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
+import { usePressGuard } from '@/hooks/usePressGuard';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
 export default function DriverProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
   const { user, driverProfile, switchMode, profile } = useProfile();
-  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
   const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
-  const activePackage = getActivePackageActivation(entitlement);
   const { vehicles } = useVehicles();
   const vehicleCounts = React.useMemo(() => ({
     approved: vehicles.filter(vehicle => vehicle.status === 'approved').length,
@@ -72,18 +68,23 @@ export default function DriverProfileScreen() {
     };
   }, [user?.id]);
 
-  const handleSwitchToCustomer = () => {
+  const handleEditProfile = usePressGuard(() => router.push('/edit-profile'));
+  const handleRatingInfo = usePressGuard(() => {
+    prefetchRatingInformationImages();
+    router.push(getRatingInformationRoute(user?.mode) as never);
+  });
+  const handleSwitchToCustomer = usePressGuard(() => {
     Alert.alert('Switch Mode', 'Switch to customer mode?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Switch',
-          onPress: async () => {
-            await switchMode('customer');
-            navigateToCustomerHomeAfterCompletion(router);
-          },
+        onPress: async () => {
+          await switchMode('customer');
+          navigateToCustomerHomeAfterCompletion(router);
         },
-      ]);
-  };
+      },
+    ]);
+  });
 
   const profileInitial = profile?.fullName?.trim()?.[0]?.toUpperCase() ?? user?.name?.trim()?.[0]?.toUpperCase() ?? '?';
   const nameParts = profile?.fullName ? profile.fullName.trim().split(/\s+/) : user?.name ? user.name.trim().split(/\s+/) : [];
@@ -96,7 +97,7 @@ export default function DriverProfileScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.profileInfoContainer}>
             <TouchableOpacity
-              onPress={() => router.push('/edit-profile')}
+              onPress={handleEditProfile}
               activeOpacity={0.7}
               style={styles.nameContainer}
               accessibilityRole="button"
@@ -139,8 +140,16 @@ export default function DriverProfileScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.statsRow}>
-              <View style={styles.statColumn}>
+              <View style={styles.statsRow}>
+              <TouchableOpacity
+                style={styles.statColumn}
+                onPress={handleRatingInfo}
+                activeOpacity={0.72}
+                accessibilityRole="button"
+                accessibilityLabel="Open rating information"
+                accessibilityHint="Explains how your rating works"
+                hitSlop={8}
+              >
                 <View style={styles.ratingGroup}>
                   <FontAwesome name="star" size={spacing[10]} color={colors.primary} style={{ marginRight: 3 }} />
                   <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
@@ -148,7 +157,7 @@ export default function DriverProfileScreen() {
                   </AppText>
                 </View>
                 <AppText style={[styles.statHeaderLabel, { color: colors.mutedForeground }]}>Rating</AppText>
-              </View>
+              </TouchableOpacity>
 
               <View style={styles.statColumn}>
                 <AppText style={[styles.statHeaderVal, { color: colors.foreground }]}>
@@ -192,10 +201,10 @@ export default function DriverProfileScreen() {
       </View>
 
       <GlassScrollView
-        indicatorTop={headerMetrics.indicatorTop}
+        indicatorTop={spacing[8]}
         contentContainerStyle={{
           paddingTop: semanticSpacing.inlineGap,
-          paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
+          paddingBottom: insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING + spacing[16],
           paddingHorizontal: semanticSpacing.cardPadding,
           gap: radius.sheetCompact,
         }}
@@ -216,35 +225,6 @@ export default function DriverProfileScreen() {
               </AppText>
               <AppText style={[styles.vehicleSummaryDetail, { color: colors.mutedForeground }]}>
                 Approved {vehicleCounts.approved} • Pending {vehicleCounts.pendingReview} • Rejected {vehicleCounts.rejected}
-              </AppText>
-            </View>
-            <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <SectionTitle title={activePackage ? 'Active Ride Package' : 'Ride Package'} />
-          <TouchableOpacity
-            style={[styles.packageCard, styles.cardShadow, { backgroundColor: cardFill }]}
-            onPress={() => router.push('/driver-packages')}
-            activeOpacity={0.72}
-            accessibilityRole="button"
-            accessibilityLabel={activePackage ? 'Manage active ride package' : 'Explore ride packages'}
-          >
-            <Feather name="layers" size={icons.size.lg} color={colors.primary} />
-            <View style={styles.packageCopy}>
-              <View style={styles.packageTitleRow}>
-                <AppText style={[styles.packageTitle, { color: colors.foreground }]} numberOfLines={1}>
-                  {isEntitlementLoading ? 'Checking ride package...' : activePackage?.packageName ?? 'No active package'}
-                </AppText>
-                {!isEntitlementLoading && activePackage ? (
-                  <View style={[styles.packageStatus, { backgroundColor: colors.successHex + '16' }]}>
-                    <AppText style={[styles.packageStatusText, { color: colors.successHex }]}>Active</AppText>
-                  </View>
-                ) : null}
-              </View>
-              <AppText style={[styles.packageSubtext, { color: colors.mutedForeground }]}>
-                {isEntitlementLoading ? 'Loading package details...' : activePackage ? 'Manage package' : 'Explore available packages'}
               </AppText>
             </View>
             <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
@@ -364,8 +344,9 @@ function SectionTitle({ title }: { title: string }) {
 function MenuItem({ colors, detail, iconFamily = 'mci', icon, label, last = false, onPress }: {
   colors: ReturnType<typeof useColors>; detail?: string; iconFamily?: 'feather' | 'mci' | 'symbol'; icon: keyof typeof Feather.glyphMap | keyof typeof MaterialCommunityIcons.glyphMap; label: string; last?: boolean; onPress: () => void;
 }) {
+  const guardedPress = usePressGuard(onPress);
   return <>
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
+    <TouchableOpacity style={styles.menuItem} onPress={guardedPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.menuIcon}>
         {iconFamily === 'symbol' ? (
           <SymbolView name="square.and.arrow.up" tintColor={colors.primary} size={icons.size.lg} />
@@ -482,13 +463,6 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3,
     ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }),
   },
-  packageCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
-  packageCopy: { flex: 1, gap: 3 },
-  packageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  packageTitle: { flexShrink: 1, ...typography.body,  },
-  packageSubtext: { ...typography.tiny,  },
-  packageStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.pill },
-  packageStatusText: { ...typography.tiny,  },
   vehicleSummaryCard: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap, borderRadius: radius['3xl'], padding: semanticSpacing.cardPadding },
   vehicleSummaryCopy: { flex: 1, gap: 3 },
   vehicleSummaryTitle: { ...typography.body,  },

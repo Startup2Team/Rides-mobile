@@ -445,7 +445,7 @@ export function HomeTopHeader({
           </View>
         </Pressable>
       )}
-      <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.card }]}>
+      <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.background }]}>
         <View style={styles.locationRowCompact}>
           <Feather name="map-pin" size={icons.semantic.button} color={colors.primary} />
           <Text
@@ -459,7 +459,7 @@ export function HomeTopHeader({
       </View>
 
       <TouchableOpacity
-        style={[styles.notifBtn, { backgroundColor: colors.card }]}
+        style={[styles.notifBtn, { backgroundColor: colors.background }]}
         onPress={() => router.push('/notifications')}
         activeOpacity={0.82}
         accessibilityRole="button"
@@ -470,7 +470,7 @@ export function HomeTopHeader({
           <View
             style={[
               styles.notifBadge,
-              { backgroundColor: colors.destructive, borderColor: colors.card },
+              { backgroundColor: colors.destructive, borderColor: colors.background },
             ]}
           />
         )}

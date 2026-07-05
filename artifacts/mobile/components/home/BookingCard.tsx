@@ -103,7 +103,7 @@ export function BookingCard({
           <View style={[styles.formSheetBody, styles.bookingFormSheetBody]}>
 
             {/* Pickup / drop-off card */}
-            <View style={[styles.locationCard, { backgroundColor: colors.muted }]}>
+            <View style={[styles.locationCard, { backgroundColor: colors.card }]}>
               <TouchableOpacity
                 style={styles.locRow}
                 onPress={() => onOpenLocationSearch('pickup')}
@@ -188,7 +188,7 @@ export function BookingCard({
             {/* Route preview — ETA + distance */}
             {destination ? (
               <View style={styles.rideInfoRow}>
-                <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
                   <MaterialCommunityIcons name="clock-outline" size={icons.semantic.button} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>
@@ -203,7 +203,7 @@ export function BookingCard({
                     </AppText>
                   </View>
                 </View>
-                <View style={[styles.rideInfoCard, { backgroundColor: colors.muted }]}>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
                   <MaterialCommunityIcons name="map-marker-distance" size={icons.semantic.button} color={colors.primary} />
                   <View style={styles.rideInfoText}>
                     <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>

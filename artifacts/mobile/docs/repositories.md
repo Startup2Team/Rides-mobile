@@ -26,6 +26,8 @@ Each domain has a single repository contract.
   - current user
   - driver profile
   - session boundary
+  - OTP/session remote prototype in diagnostics mode
+  - local session remains authoritative
 
 - `ProfileRepository`
   - shared user identity
@@ -39,6 +41,8 @@ Each domain has a single repository contract.
 - `RideRepository`
   - ride history
   - ride append/replay boundaries
+  - read-only active/history/detail remote prototype in diagnostics mode
+  - lifecycle mutations remain local/live-provider controlled
 
 - `SavedLocationsRepository`
   - saved place CRUD
@@ -49,6 +53,8 @@ Each domain has a single repository contract.
   - driver profile
   - availability
   - driver-side identity projection
+  - driver onboarding/application remote prototype in diagnostics mode
+  - mobile does not own approval authority
 
 - `VehicleRepository`
   - vehicle list
@@ -61,6 +67,7 @@ Each domain has a single repository contract.
   - campaigns
   - offer source cache
   - entitlement and purchase history access through the package domain facade
+  - package balance and credit rules remain local-authoritative for now
 
 - `NotificationRepository`
   - notification read state
@@ -69,13 +76,17 @@ Each domain has a single repository contract.
   - payment methods
   - default payment method updates
   - payment method metadata updates
+  - billing profile projection
+  - local-authoritative method storage until backend payment truth exists
 
 - `SearchRepository`
   - search history
   - search suggestions
+  - place search/autocomplete/detail diagnostics prototype
 
 - `MapRepository`
   - reverse geocoding and map lookup helpers
+  - route/distance/duration/fare-preview diagnostics prototype
 
 ## Dependency Rules
 
@@ -138,6 +149,141 @@ Phase 7F adds the first domain boundary under `domains/saved-locations/`.
 - `domains/saved-locations/hooks.ts` wraps the existing context for compatibility
 - `hooks/useSavedLocations.ts` now forwards through the domain entry point
 - the context remains the compatibility layer until a later TanStack Query migration
+
+Phase 12C adds the first real remote repository prototype for saved locations.
+
+- `RemoteSavedLocationsRepository` maps saved-location DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
+Phase 12D adds the same remote prototype path for shared profile identity.
+
+- `RemoteProfileRepository` maps profile, photo, and phone DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local profile persistence remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
+Phase 12E adds the same remote prototype path for notifications.
+
+- `RemoteNotificationRepository` maps notification feed and read-state DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local notification persistence remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
+Phase 12F adds the same remote prototype path for driver vehicles.
+
+- `RemoteVehicleRepository` maps vehicle list, detail, create/update/delete, and primary-selection DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local driver-profile-backed vehicle truth remains authoritative for current UI behavior
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`
+
+Phase 12G adds the same remote prototype path for packages and entitlements.
+
+- `RemotePackageRepository` maps catalog, campaign, offer-source, available-offer, entitlement, purchase, activation, and credit-deduction DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local package economics, purchase history, balance, and credit deduction remain authoritative for current UI behavior
+- because this domain touches driver credits and payment-linked flows, the rollout path remains conservative and should only advance after extra financial safeguards are in place
+
+Phase 12H adds the same remote prototype path for payment methods and billing preferences.
+
+- `RemotePaymentRepository` maps payment-method list, default, billing-profile, create, update, delete, and default-selection DTOs through the backend boundary
+- `SHADOW_REMOTE` runs the remote path only for diagnostics
+- local payment methods remain authoritative for current UI behavior
+- payment execution, settlement, refunds, wallet balance, and transaction truth remain future work and must stay out of this prototype
+
+Phase 12I adds the first read-only remote prototype path for rides.
+
+- `RemoteRideRepository` maps active ride, ride history, and ride detail DTOs through the backend boundary
+- active ride responses stay in the active ride read-model shape, while history and detail responses map back into the existing `Ride` domain/UI shape
+- `createRideReadOnlyShadowRepository` runs remote reads only after local reads and ignores remote results for UI/state
+- local/live-provider ride lifecycle behavior remains authoritative
+- request, cancel, accept, decline, start, complete, matching, negotiation, payment, package credit deduction, and realtime ride events remain future work and must stay out of this prototype
+
+Phase 12J adds the remote prototype path for driver onboarding and driver applications.
+
+- `RemoteDriverRepository` maps driver application/profile, application status, submit/update, document metadata/reference, and clarification DTOs through the backend boundary
+- `createDriverShadowRepository` runs local first and remote second, then ignores remote results for UI/state
+- local driver onboarding and current driver approval runtime behavior remain authoritative
+- the one canonical account identity remains intact; approved driver capability is a future backend-granted capability on the same account, not a second user
+- mobile cannot approve, reject, force verification, or manufacture verified status
+- driver document contracts are metadata/reference-only and must not carry raw bytes or base64 document data
+- telemetry is sanitized to safe semantic categories and must not emit national ID, DOB, license number, MoMo pay code, phone number, document contents, document URLs, or signed URLs
+
+Phase 12K adds the remote prototype path for auth.
+
+- `RemoteAuthRepository` maps OTP dry-run request, OTP verify, session refresh, logout, and current-session DTOs through the backend boundary
+- `createAuthShadowRepository` runs local first and remote diagnostics second only when explicitly configured
+- local auth/session state, `AuthContext`, navigation, and phone verification behavior remain authoritative
+- shadow `requestOtp` must use a backend dry-run/non-delivery diagnostics endpoint and must never call the real SMS-producing OTP request endpoint
+- remote tokens and session responses are ignored and must not mutate token persistence or the current app session
+- telemetry is sanitized and must not emit OTP codes, raw access tokens, raw refresh tokens, full phone numbers, session secrets, or device secrets
+- the rollout path remains `LOCAL -> SHADOW_REMOTE -> HYBRID -> REMOTE`, with HYBRID/REMOTE reserved until backend auth authority and token persistence are explicitly designed
+
+Phase 12L adds remote prototype paths for search and map.
+
+- `RemoteSearchRepository` maps place search, autocomplete, place detail, and reverse-geocode DTOs into existing `GeocodeSuggestion` / location shapes
+- `RemoteMapRepository` maps reverse geocode, route estimate/preview, distance, duration, and fare-preview DTOs into existing route/location preview shapes
+- `createSearchShadowRepository` and `createMapShadowRepository` run local first and remote diagnostics second only when explicitly configured
+- current local/Mapbox search, route rendering, booking, matching, navigation, and pricing behavior remain authoritative
+- search comparisons use semantic overlap and tolerate ranking differences
+- map comparisons use explicit coordinate, distance, duration, and fare-preview tolerances
+- fare estimates are preview-only and must not become final fare truth
+- telemetry must not include raw address queries, exact saved/home addresses, full route geometry, precise movement history, Mapbox tokens, access tokens, or backend secrets
+
+Phase 12M adds the remote prototype readiness matrix.
+
+- `data/remote/readiness/` centralizes contract, shadow, and safety scoring
+  for every remote prototype domain
+- the matrix is read-only diagnostics and does not change repository source
+  selection, persistence, or UI behavior
+- local repositories remain authoritative while the matrix identifies safe
+  future staging candidates
+- financial, lifecycle, and identity/security domains keep extra rollout gates
+  before remote authority can be considered
+- the current safe staging path starts with saved locations and shared profile
+  data, then expands to other shadow-ready domains as backend confidence grows
+
+Phase 13A adds the first real staging shadow integration for saved locations.
+
+- `data/repositories/savedLocationsRepositoryFactory.ts` is the controlled
+  source-selection point for saved locations
+- default repository mode remains `LOCAL`
+- `EXPO_PUBLIC_SAVED_LOCATIONS_REPOSITORY_MODE=SHADOW_REMOTE` can enable
+  saved-location read shadow only when backend environment is explicitly
+  `STAGING` with a valid HTTPS base URL
+- `REMOTE` and `HYBRID` remain blocked through environment configuration
+- local saved locations remain authoritative for queries, context, screens,
+  navigation, and UI behavior
+- write shadowing is independently controlled by
+  `EXPO_PUBLIC_SAVED_LOCATIONS_SHADOW_WRITES_ENABLED` and defaults to false
+- screens, hooks, providers, `RideProvider`, auth, payments, matching, and
+  realtime behavior are unchanged
+
+Phase 13B adds the profile staging shadow integration.
+
+- `data/repositories/profileRepositoryFactory.ts` is the controlled source
+  selection point for profile
+- default repository mode remains `LOCAL`
+- `EXPO_PUBLIC_PROFILE_REPOSITORY_MODE=SHADOW_REMOTE` can enable profile read
+  shadow only when backend environment is explicitly `STAGING` with a valid
+  HTTPS base URL
+- `REMOTE` and `HYBRID` remain blocked through environment configuration
+- local profile behavior remains authoritative for identity, photo, and
+  compatibility reads
+- write shadowing is independently controlled by
+  `EXPO_PUBLIC_PROFILE_SHADOW_WRITES_ENABLED` and defaults to false
+- `AuthContext`, session persistence, and profile screens are unchanged
+- the one-account customer/driver model stays intact
+
+Phase 13C adds the staging shadow health report.
+
+- `data/remote/staging/health/` aggregates diagnostics for saved locations
+  and profile
+- the report is memory only and does not change repository source selection
+- future domains can emit health events without rewriting the report core
+- the report is the place to evaluate whether a domain should move from
+  `SHADOW_REMOTE` diagnostics to a future HYBRID candidate
 
 Phase 7G makes `profile` the next extracted domain module without changing runtime behavior.
 
@@ -221,3 +367,32 @@ Phase 8B.7 extends it into payment methods:
 - the payments domain owns method metadata, default method selection, and billing preference projections
 - `PaymentRepository` remains the source boundary
 - transaction truth remains future backend work
+
+Phase 13I adds the staging backend connection checklist and contract gate.
+
+- the checklist does not change repository selection or the resolver default
+- `savedLocations` and `profile` are the first domains checked because they
+  already have real staging shadow implementations
+- the contract manifest and evidence file are validation-only artifacts and do
+  not change repository behavior
+- a connection-ready result does not imply `HYBRID`, `REMOTE`, or production
+  authority
+
+Phase 13G adds the HYBRID candidate review gate.
+
+- `data/remote/readiness/hybridCandidateGate.ts` stays in the repository
+  boundary and does not change runtime source selection
+- the gate only reviews `savedLocations` and `profile`
+- explicit human approval is required before a domain can be marked
+  `approved_for_hybrid_candidate`
+- the checked-in approval file defaults both domains to unapproved
+- HYBRID candidate status is not the same as enabling `HYBRID` mode in the
+  resolver
+
+Phase 13H adds a HYBRID rollout dry-run plan scaffold.
+
+- `data/remote/readiness/hybridDryRunEvaluator.ts` is diagnostics-only and
+  does not alter repository source selection
+- `scripts/plan-hybrid-rollout.js` only reports a planning recommendation
+- the current repository resolver default remains `LOCAL`
+- no repository is promoted to `HYBRID` or `REMOTE` in this phase

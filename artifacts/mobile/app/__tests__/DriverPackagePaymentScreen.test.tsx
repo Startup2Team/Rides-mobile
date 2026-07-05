@@ -197,7 +197,7 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     expect(await screen.findByText('This package offer expired. Please refresh packages.')).toBeTruthy();
     expect(screen.queryByText('Send Payment Prompt')).toBeNull();
     fireEvent.press(screen.getByText('Return to Packages'));
-    expect(require('expo-router').router.replace).toHaveBeenCalledWith('/driver-packages');
+    expect(require('expo-router').router.replace).toHaveBeenCalledWith('/(driver)/packages');
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
   });
 

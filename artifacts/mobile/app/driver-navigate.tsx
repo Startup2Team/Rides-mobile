@@ -426,7 +426,7 @@ export default function DriverNavigateScreen() {
 
       {/* Map controls */}
       <TouchableOpacity
-        style={[styles.mapBtn, { backgroundColor: colors.card, bottom: mapControlsBottom + 58 }]}
+        style={[styles.mapBtn, { backgroundColor: colors.background, bottom: mapControlsBottom + 58 }]}
         onPress={cycleMapType}
         activeOpacity={0.8}
         accessibilityRole="button"
@@ -439,7 +439,7 @@ export default function DriverNavigateScreen() {
         />
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.mapBtn, { backgroundColor: colors.card, bottom: mapControlsBottom }]}
+        style={[styles.mapBtn, { backgroundColor: colors.background, bottom: mapControlsBottom }]}
         onPress={recenterMap}
         activeOpacity={0.8}
         accessibilityRole="button"

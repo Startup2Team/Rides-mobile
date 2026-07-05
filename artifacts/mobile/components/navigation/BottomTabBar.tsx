@@ -10,20 +10,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { BlurView } from 'expo-blur';
 import { icons } from '@/constants/icons';
 import { duration, easing } from '@/constants/motion';
 import { spacing } from '@/constants/spacing';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
 import { typography } from '@/constants/typography';
+import { useColors } from '@/hooks/useColors';
 
 const ACTIVE_LIGHT = '#007AFF';
 const ACTIVE_DARK = '#0A84FF';
-const INACTIVE = '#000000';
-const LIGHT_BACKGROUND = '#FFFFFF';
-const DARK_BACKGROUND = '#1C1C1E';
-const LIGHT_BORDER = '#E5E5EA';
-const DARK_BORDER = '#38383A';
+const INACTIVE_LIGHT = '#000000';
+const INACTIVE_DARK = '#FFFFFF';
+const PROFILE_HEADER_LIGHT_BACKGROUND = '#F2F2F7';
+const PROFILE_HEADER_DARK_BACKGROUND = '#000000';
 
 function TabBarItem({
   focused,
@@ -136,12 +135,13 @@ function TabBarItem({
 
 export function BottomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-  const backgroundColor = isDark ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)';
-  const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
+  const backgroundColor = isDark ? PROFILE_HEADER_DARK_BACKGROUND : PROFILE_HEADER_LIGHT_BACKGROUND;
+  const borderColor = colors.border;
   const activeColor = isDark ? ACTIVE_DARK : ACTIVE_LIGHT;
-  const inactiveColor = isDark ? '#FFFFFF' : INACTIVE;
+  const inactiveColor = isDark ? INACTIVE_DARK : INACTIVE_LIGHT;
 
   const focusedRoute = state.routes[state.index];
   const focusedOptions = descriptors[focusedRoute.key].options;
@@ -167,13 +167,6 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
         },
       ]}
     >
-      {!isHidden && (
-        <BlurView
-          intensity={90}
-          tint={isDark ? 'dark' : 'light'}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         if (route.name === 'share' || options.href === null) {
@@ -289,6 +282,9 @@ export const driverTabBarIcons = {
   ),
   stats: ({ color }: { color: string; focused: boolean }) => (
     <MaterialCommunityIcons name="chart-box" size={icons.semantic.tab} color={color} />
+  ),
+  packages: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="cube-outline" size={icons.semantic.tab} color={color} />
   ),
   share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (

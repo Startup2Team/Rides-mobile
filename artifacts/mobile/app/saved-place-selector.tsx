@@ -15,6 +15,7 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { AppText } from '@/components/AppText';
 
+import { buttonCornerRadius } from '@/constants/buttons';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
@@ -297,18 +298,11 @@ export default function SavedPlaceSelectorScreen() {
         title={displayLabel === 'Other' ? (mode === 'edit' ? 'Edit Place' : 'Add Place') : `${mode === 'edit' ? 'Edit' : 'Add'} ${label}`}
         right={
           mode === 'edit' && existing ? (
-            <View style={{ width: sizes.iconButton.md, height: sizes.iconButton.md, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={styles.headerActionSlot}>
               <TouchableOpacity
                 onPress={deletePlace}
                 activeOpacity={0.8}
-                style={{
-                  width: sizes.avatar.xs,
-                  height: sizes.avatar.xs,
-                  borderRadius: radius.xl,
-                  backgroundColor: colors.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={[styles.headerDeleteButton, { backgroundColor: colors.primary }]}
                 accessibilityRole="button"
                 accessibilityLabel="Delete saved place"
                 testID="header-delete-button"
@@ -319,7 +313,7 @@ export default function SavedPlaceSelectorScreen() {
           ) : undefined
         }
       />
-      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - spacing[4] }]}>
+      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - spacing[8] }]}>
         {displayLabel === 'Other' ? (
           <View style={[styles.labelInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="bookmark" size={icons.semantic.row} color={colors.mutedForeground} />
@@ -378,7 +372,9 @@ export default function SavedPlaceSelectorScreen() {
           indicatorTop={spacing[8]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
+          contentInset={{ top: 0 }}
+          contentOffset={{ x: 0, y: 0 }}
+          contentContainerStyle={{ paddingTop: 1, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
         >
           {hasQuery ? (
             <TouchableOpacity
@@ -439,7 +435,7 @@ const styles = StyleSheet.create({
   searchBody: { flex: 1, paddingHorizontal: semanticSpacing.cardPadding },
   searchInputWrap: {
     height: sizes.input.lg,
-    borderRadius: radius.input,
+    borderRadius: buttonCornerRadius(sizes.input.lg),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,7 +444,7 @@ const styles = StyleSheet.create({
   },
   labelInputWrap: {
     height: sizes.input.lg,
-    borderRadius: radius.input,
+    borderRadius: buttonCornerRadius(sizes.input.lg),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -462,6 +458,18 @@ const styles = StyleSheet.create({
     height: sizes.avatar.xs,
     borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerActionSlot: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  headerDeleteButton: {
+    width: sizes.avatar.xs,
+    height: sizes.avatar.xs,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,0 +1,57 @@
+{
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "domainsIncluded": [
+    "profile",
+    "savedLocations"
+  ],
+  "domains": [
+    {
+      "domain": "profile",
+      "status": "idle",
+      "recommendation": "collect_data",
+      "score": null,
+      "attempts": 0,
+      "successRate": 0,
+      "failureRate": 0,
+      "mismatchRate": 0,
+      "timeoutRate": 0,
+      "blockedReason": null,
+      "lastMismatchCategory": null,
+      "lastErrorCategory": null,
+      "lastUpdatedAt": null
+    },
+    {
+      "domain": "savedLocations",
+      "status": "idle",
+      "recommendation": "collect_data",
+      "score": null,
+      "attempts": 0,
+      "successRate": 0,
+      "failureRate": 0,
+      "mismatchRate": 0,
+      "timeoutRate": 0,
+      "blockedReason": null,
+      "lastMismatchCategory": null,
+      "lastErrorCategory": null,
+      "lastUpdatedAt": null
+    }
+  ],
+  "blockers": [],
+  "warnings": [
+    "profile: collect_data",
+    "savedLocations: collect_data"
+  ],
+  "metricsSummary": {
+    "domainsTotal": 2,
+    "domainsWithData": 0,
+    "totalAttempts": 0,
+    "totalSuccesses": 0,
+    "totalFailures": 0,
+    "totalTimeouts": 0,
+    "totalMismatches": 0,
+    "averageLatencyMs": 0
+  },
+  "overallStatus": "idle",
+  "overallRecommendation": "collect_data",
+  "overallScore": null
+}

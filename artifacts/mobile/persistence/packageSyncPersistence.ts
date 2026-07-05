@@ -15,6 +15,7 @@ const catalogEntrySchema = z.object({
   packageName: z.string().trim().min(1),
   vehicleType: vehicleTypeSchema,
   priceRwf: z.number().nonnegative(),
+  isFreeTrial: z.boolean().optional(),
   ridesGranted: z.number().int().nonnegative(),
   bonusRidesGranted: z.number().int().nonnegative(),
   status: packageStatusSchema,

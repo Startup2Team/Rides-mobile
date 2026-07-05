@@ -18,6 +18,14 @@ import { mapProjectedActiveRideReadModel } from './activeRideReadModelMapper';
 import { evaluateActiveRideRolloutGate } from './activeRideRolloutGate';
 import { ENABLE_PROJECTED_ACTIVE_RIDE_CANARY } from './projectionTypes';
 import { USE_PROJECTED_RIDE_READ_MODEL } from '../dualRead/rideDualReadTypes';
+import {
+  recordActiveRideCanaryComparisonMismatch,
+  recordActiveRideCanaryFallback,
+  recordActiveRideCanaryGateDenial,
+  recordActiveRideCanaryMappingFailure,
+  recordActiveRideCanaryProjectedSelection,
+  recordActiveRideCanaryStaleProjection,
+} from './activeRideCanaryStability';
 
 export interface ActiveRideCanaryOptions {
   canaryEnabled?: boolean;
@@ -100,6 +108,8 @@ export function resolveProjectedActiveRide(
   const useProjectedRideReadModel = options.useProjectedRideReadModel ?? USE_PROJECTED_RIDE_READ_MODEL;
 
   if (!canaryEnabled || !useProjectedRideReadModel) {
+    recordActiveRideCanaryGateDenial('feature-disabled');
+    recordActiveRideCanaryFallback('feature-disabled');
     emitRideActiveRideReadinessDeniedTelemetry({ reason: 'feature-disabled' });
     emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
     emitRideActiveRideFallbackTelemetry({ reason: 'feature-disabled' });
@@ -115,6 +125,8 @@ export function resolveProjectedActiveRide(
   }
 
   if (!isReadyForActiveRideCanary()) {
+    recordActiveRideCanaryGateDenial('health-gate');
+    recordActiveRideCanaryFallback('health-gate');
     emitRideActiveRideReadinessDeniedTelemetry({ reason: 'health-gate' });
     emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
     emitRideActiveRideFallbackTelemetry({ reason: 'health-gate' });
@@ -137,6 +149,8 @@ export function resolveProjectedActiveRide(
 
   const shadowSnapshot = options.shadowSnapshot ?? rideShadowProjectionManager.getSnapshot();
   if (!shadowSnapshot.enabled || !shadowSnapshot.running) {
+    recordActiveRideCanaryGateDenial('projection-unavailable');
+    recordActiveRideCanaryFallback('projection-unavailable');
     evaluateActiveRideRolloutGate({
       canaryEnabled,
       useProjectedRideReadModel,
@@ -190,6 +204,8 @@ export function resolveProjectedActiveRide(
     });
 
     if (!projectedRide) {
+      recordActiveRideCanaryGateDenial('projection-unavailable');
+      recordActiveRideCanaryFallback('projection-unavailable');
       emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
       emitRideActiveRideFallbackTelemetry({ reason: 'projection-unavailable' });
       return {
@@ -204,6 +220,9 @@ export function resolveProjectedActiveRide(
     }
 
     if (staleness.stale) {
+      recordActiveRideCanaryStaleProjection(staleness.reason ?? 'stale');
+      recordActiveRideCanaryGateDenial(staleness.reason ?? 'stale');
+      recordActiveRideCanaryFallback(staleness.reason ?? 'stale');
       emitRideActiveRideProjectionStaleTelemetry({
         reason: staleness.reason ?? 'stale',
         sequenceNumber: projectedRide.sequenceNumber,
@@ -223,6 +242,9 @@ export function resolveProjectedActiveRide(
     }
 
     if (comparison && comparison.length > 0) {
+      recordActiveRideCanaryComparisonMismatch();
+      recordActiveRideCanaryGateDenial('comparison-failure');
+      recordActiveRideCanaryFallback('comparison-failure');
       emitRideActiveRideMismatchTelemetry({ fieldDiffCount: comparison.length });
       emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
       emitRideActiveRideFallbackTelemetry({ reason: 'comparison-failure' });
@@ -238,6 +260,8 @@ export function resolveProjectedActiveRide(
     }
 
     if (!rolloutStatus.eligible) {
+      recordActiveRideCanaryGateDenial(rolloutStatus.reason);
+      recordActiveRideCanaryFallback(rolloutStatus.reason);
       emitRideActiveRideSourceSelectedTelemetry({ source: 'live' });
       emitRideActiveRideFallbackTelemetry({ reason: `rollout-${rolloutStatus.reason}` });
       return {
@@ -252,6 +276,7 @@ export function resolveProjectedActiveRide(
     }
 
     emitRideActiveRideSourceSelectedTelemetry({ source: 'projected' });
+    recordActiveRideCanaryProjectedSelection();
     return {
       source: 'projected',
       activeRide: projectedRide,
@@ -262,6 +287,9 @@ export function resolveProjectedActiveRide(
       readinessDenied: false,
     };
   } catch (error) {
+    recordActiveRideCanaryMappingFailure('mapping-failure');
+    recordActiveRideCanaryGateDenial('mapping-failure');
+    recordActiveRideCanaryFallback('mapping-failure');
     emitRideActiveRideMappingFailureTelemetry({ reason: 'mapping-failure', error });
     evaluateActiveRideRolloutGate({
       canaryEnabled,

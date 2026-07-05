@@ -49,6 +49,7 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
+import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
@@ -196,7 +197,10 @@ export default function DriverDashboard() {
     }, 450);
   }, [clearAdLoopReset, resetAdCarouselToStart]);
 
-  const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const dashboardPageBackground = isDark ? '#000000' : '#F2F2F7';
+  const dashboardCardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const dashboardSecondaryFill = dashboardPageBackground;
+  const cardFill = dashboardCardFill;
   const tabBarHeight = Platform.OS === 'web' ? HOME_TAB_BAR_HEIGHT : HOME_TAB_BAR_HEIGHT + insets.bottom;
   const isOnline = driverProfile?.isOnline === true;
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
@@ -366,7 +370,7 @@ export default function DriverDashboard() {
     }
 
     if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
-      router.push('/driver-packages');
+      navigateToDriverPackages(router);
       return;
     }
 
@@ -402,7 +406,7 @@ export default function DriverDashboard() {
         return;
       }
       if (!canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
-        router.push('/driver-packages');
+        navigateToDriverPackages(router);
         return;
       }
     }
@@ -588,7 +592,7 @@ export default function DriverDashboard() {
     : -CTA_LABEL_SLOT_WIDTH / 2;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: dashboardPageBackground }]}>
 
       {/* ── Full-screen map ── */}
       <MapView
@@ -618,7 +622,7 @@ export default function DriverDashboard() {
       {/* Top dashboard overlay */}
       <View style={[styles.topBar, { paddingTop: Platform.OS === 'web' ? 67 : spacing[0] }]}>
         <View
-          style={[styles.statusCard, { backgroundColor: cardFill, paddingTop: insets.top + spacing[14] }]}
+          style={[styles.statusCard, { backgroundColor: dashboardPageBackground, paddingTop: insets.top + spacing[14] }]}
           onLayout={onStatusCardLayout}
           testID="driver-status-card"
         >
@@ -715,7 +719,7 @@ export default function DriverDashboard() {
               <TouchableOpacity
                 style={[
                   styles.notificationButton,
-                  { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' },
+                  { backgroundColor: dashboardSecondaryFill },
                 ]}
                 onPress={() => router.push('/notifications')}
                 activeOpacity={0.75}
@@ -729,7 +733,7 @@ export default function DriverDashboard() {
                       styles.notifDot,
                       {
                         backgroundColor: colors.destructive,
-                        borderColor: isDark ? '#2C2C2E' : '#F2F2F7',
+                        borderColor: dashboardSecondaryFill,
                       },
                     ]}
                   />
@@ -756,7 +760,7 @@ export default function DriverDashboard() {
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.activityStat}
-              onPress={() => router.push('/driver-packages')}
+              onPress={() => navigateToDriverPackages(router)}
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="View ride package rides"
@@ -767,7 +771,7 @@ export default function DriverDashboard() {
             <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.activityStat}
-              onPress={() => router.push('/driver-packages')}
+              onPress={() => navigateToDriverPackages(router)}
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="View ride package Bonus Rides"
@@ -790,7 +794,7 @@ export default function DriverDashboard() {
               </View>
               <TouchableOpacity
                 style={[styles.viewPackagesButton, { backgroundColor: colors.primary }]}
-                onPress={() => router.push('/driver-packages')}
+                onPress={() => navigateToDriverPackages(router)}
                 activeOpacity={0.8}
               >
                 <AppText style={[styles.viewPackagesButtonText, { color: colors.primaryForeground }]}>View Packages</AppText>
@@ -835,13 +839,13 @@ export default function DriverDashboard() {
 
       {/* ── Map controls ── */}
       <View style={[styles.mapControls, { bottom: tabBarHeight - 8 }]}>
-        <TouchableOpacity style={[styles.mapBtn, { backgroundColor: cardFill }]} onPress={cycleMapType} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.mapBtn, { backgroundColor: dashboardPageBackground }]} onPress={cycleMapType} activeOpacity={0.8}>
           <MaterialCommunityIcons
             name={mapType === 'standard' ? 'layers-outline' : mapType === 'satellite' ? 'satellite-variant' : 'map'}
             size={22} color={colors.primary}
           />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.mapBtn, { backgroundColor: cardFill }]} onPress={recenterMap} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.mapBtn, { backgroundColor: dashboardPageBackground }]} onPress={recenterMap} activeOpacity={0.8}>
           <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
@@ -874,7 +878,7 @@ export default function DriverDashboard() {
       {/* ── Incoming ride request sheet ── */}
       {request && (
         <Animated.View
-          style={[styles.requestSheet, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + spacing[10] }]}
+          style={[styles.requestSheet, { backgroundColor: colors.card, transform: [{ translateY: slideAnim }], paddingBottom: tabBarHeight + spacing[10] }]}
         >
           <View style={styles.requestHeader}>
             <ProfileAvatarCircle
@@ -899,7 +903,7 @@ export default function DriverDashboard() {
               <AppText style={styles.countdownSub}>sec</AppText>
             </View>
           </View>
-          <View style={[styles.routeCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+          <View style={[styles.routeCard, { backgroundColor: colors.muted }]}>
             <View style={styles.routeRow}>
               <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
               <View style={styles.routeTextBlock}>
@@ -917,21 +921,21 @@ export default function DriverDashboard() {
             </View>
           </View>
           <View style={styles.metaRow}>
-            <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+            <View style={[styles.metaInfoCard, { backgroundColor: colors.muted }]}>
               <MaterialCommunityIcons name="map-marker-radius" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
                 <AppText style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Pickup</AppText>
                 <AppText style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestDistanceToPickup}</AppText>
               </View>
             </View>
-            <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+            <View style={[styles.metaInfoCard, { backgroundColor: colors.muted }]}>
               <MaterialCommunityIcons name="map-marker-distance" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
                 <AppText style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Trip Distance</AppText>
                 <AppText style={[styles.metaInfoValue, { color: colors.foreground }]}>{requestTripDistance}</AppText>
               </View>
             </View>
-            <View style={[styles.metaInfoCard, { backgroundColor: isDark ? '#2C2C2E' : colors.muted }]}>
+            <View style={[styles.metaInfoCard, { backgroundColor: colors.muted }]}>
               <MaterialCommunityIcons name="clock-outline" size={17} color={colors.primary} />
               <View style={styles.metaInfoText}>
                 <AppText style={[styles.metaInfoLabel, { color: colors.mutedForeground }]}>Time</AppText>

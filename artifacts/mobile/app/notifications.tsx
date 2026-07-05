@@ -20,6 +20,7 @@ import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
 import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
+import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
 import type { Ride } from '@/types';
 import { AppText } from '@/components/AppText';
 import { icons } from '@/constants/icons';
@@ -426,8 +427,8 @@ export default function NotificationsScreen() {
             void markRead(item.id);
             if (item.type === 'ride' && item.rideId && item.icon === 'check-circle') {
               router.push(`/ride-detail?rideId=${item.rideId}` as any);
-            } else if (item.title === 'Ride package activated') {
-              router.push('/(driver)/stats');
+            } else if (item.title === 'Ride package activated' || item.title === 'Ride package update' || item.title === 'No rides left' || item.title === 'Rides running low') {
+              navigateToDriverPackages(router);
             }
           }}
           activeOpacity={0.75}
@@ -491,9 +492,11 @@ export default function NotificationsScreen() {
           </View>
         )}
         right={derivedUnreadCount > 0 ? (
-          <TouchableOpacity onPress={() => { void markAllRead(); }} style={styles.markAllBtn}>
-            <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
-          </TouchableOpacity>
+          <View style={styles.markAllSlot}>
+            <TouchableOpacity onPress={() => { void markAllRead(); }} style={styles.markAllBtn}>
+              <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={{ width: sizes.avatar.xxl }} />
         )}
@@ -528,7 +531,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   badge: { minWidth: spacing[20], height: spacing[20], borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   badgeText: { ...typography.badge, color: '#000' },
-  markAllBtn: { width: sizes.avatar.xxl, alignItems: 'flex-end' },
+  markAllSlot: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  markAllBtn: { minWidth: sizes.avatar.xxl, alignItems: 'flex-end' },
   markAllText: { ...typography.label },
   list: { padding: semanticSpacing.listItemPadding },
   sectionTitle: {
