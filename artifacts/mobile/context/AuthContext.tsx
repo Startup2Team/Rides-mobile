@@ -17,6 +17,9 @@ import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken } from '@/persistence/authTokens';
 import { fetchProfile } from '@/services/profile';
+import { switchUserMode } from '@/services/userMode';
+import { setDriverAvailability } from '@/services/driverAvailability';
+import { getDriverProfile } from '@/services/driverProfile';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
@@ -33,6 +36,21 @@ interface AuthContextType {
   setDriverOnline: (isOnline: boolean) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
+}
+
+// Backend approval_status (PENDING|APPROVED|REJECTED|SUSPENDED) → mobile status.
+function mapApprovalStatus(status: string): DriverProfile['verificationStatus'] | null {
+  switch (status) {
+    case 'APPROVED':
+      return 'approved';
+    case 'REJECTED':
+    case 'SUSPENDED':
+      return 'rejected';
+    case 'PENDING':
+      return 'pending_review';
+    default:
+      return null;
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,7 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(storedUser.data);
         void syncProfileFromBackend();
       }
-      if (storedDriverProfile.data) setDriverProfile(storedDriverProfile.data);
+      if (storedDriverProfile.data) {
+        setDriverProfile(storedDriverProfile.data);
+        void syncDriverProfileFromBackend();
+      }
     } catch {
       // ignore
     } finally {
@@ -88,6 +109,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch {
       // Backend unreachable — keep the locally stored profile.
+    }
+  }, []);
+
+  // Sync the driver's real approval status + online state from the backend
+  // (GET /driver/profile). Only for existing drivers; merges non-destructively.
+  const syncDriverProfileFromBackend = useCallback(async () => {
+    if (!driverProfileRef.current) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const backend = await getDriverProfile();
+      const status = mapApprovalStatus(backend.approvalStatus);
+      setDriverProfile(prev => {
+        if (!prev) return prev;
+        const updated: DriverProfile = {
+          ...prev,
+          verificationStatus: status ?? prev.verificationStatus,
+          isOnline: backend.isOnline,
+          acceptanceRate: backend.acceptanceRate || prev.acceptanceRate,
+          completedRides: backend.totalRides || prev.completedRides,
+          rejectionReason: backend.rejectionReason ?? prev.rejectionReason,
+        };
+        void saveStoredDriverProfile(updated);
+        return updated;
+      });
+    } catch {
+      // Not a driver yet, or backend unreachable — keep the local profile.
     }
   }, []);
 
@@ -143,10 +191,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       setDriverProfile(updated);
       await saveStoredDriverProfile(updated);
+      // Real backend: POST /driver/availability. Best-effort (credit-gating is
+      // enforced server-side once the live ride flow is wired).
+      try {
+        await setDriverAvailability(true);
+      } catch {
+        // keep local online state
+      }
       return;
     }
     const updated: DriverProfile = { ...prev, isOnline: false, onlineVehicleSession: null };
     setDriverProfile(updated);
+    try {
+      await setDriverAvailability(false);
+    } catch {
+      // keep local offline state
+    }
     await saveStoredDriverProfile(updated);
   }, []);
 
@@ -156,6 +216,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...userRef.current, mode };
     setUser(updated);
     await saveStoredUser(updated);
+    // Real backend: PATCH /users/mode updates role_state. Best-effort — the
+    // local UX already reflects the switch; a failure is retried next switch.
+    try {
+      await switchUserMode(mode === 'driver' ? 'driver' : 'customer');
+    } catch {
+      // ignore — keep the local mode
+    }
   }, []);
 
   const recordCompletedRide = useCallback(async (agreedFare?: number | null) => {

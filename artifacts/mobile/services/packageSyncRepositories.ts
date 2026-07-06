@@ -3,6 +3,7 @@ import {
   validatePackageCatalog,
   type DriverRidePackageCatalogEntry,
 } from '@/domain/driverRidePackageCatalog';
+import { listRidePackages, type RidePackage } from '@/services/driverPackages';
 import {
   validatePackageCampaigns,
   type DriverRidePackageCampaign,
@@ -59,6 +60,47 @@ export class MockPackageCatalogBackendAdapter implements PackageCatalogBackendAd
   }
 }
 
+// Real backend catalog: GET /driver/packages. Only APPROVED (active) drivers can
+// list packages, so on any failure we fall back to the bundled catalog to keep
+// the packages screen usable rather than blank.
+function backendPackageToCatalogEntry(pkg: RidePackage): DriverRidePackageCatalogEntry {
+  const now = new Date().toISOString();
+  return {
+    packageId: pkg.id,
+    packageVersion: 'backend-v1',
+    packageName: pkg.name,
+    vehicleType: pkg.vehicleType ?? 'moto',
+    priceRwf: pkg.priceRwf,
+    isFreeTrial: pkg.priceRwf === 0,
+    ridesGranted: pkg.rideCount,
+    bonusRidesGranted: pkg.bonusRides,
+    status: 'active',
+    createdAt: now,
+    effectiveFrom: now,
+    effectiveUntil: null,
+  };
+}
+
+export class BackendPackageCatalogAdapter implements PackageCatalogBackendAdapter {
+  async fetchPackages() {
+    try {
+      const packages = await listRidePackages();
+      if (packages.length > 0) {
+        return {
+          data: packages.map(backendPackageToCatalogEntry),
+          sourceVersion: `backend-${Date.now()}`,
+        };
+      }
+    } catch {
+      // fall through to the bundled catalog
+    }
+    return {
+      data: DRIVER_RIDE_PACKAGE_CATALOG.map(entry => ({ ...entry })),
+      sourceVersion: 'bundled-catalog-fallback',
+    };
+  }
+}
+
 export class MockPackageCampaignBackendAdapter implements PackageCampaignBackendAdapter {
   constructor(private readonly campaigns: DriverRidePackageCampaign[] = []) {}
 
@@ -72,7 +114,7 @@ export class MockPackageCampaignBackendAdapter implements PackageCampaignBackend
 
 export class CachedPackageCatalogRepository implements PackageCatalogRepository {
   constructor(
-    private readonly adapter: PackageCatalogBackendAdapter = new MockPackageCatalogBackendAdapter(),
+    private readonly adapter: PackageCatalogBackendAdapter = new BackendPackageCatalogAdapter(),
     private readonly now: () => Date = () => new Date(),
   ) {}
 

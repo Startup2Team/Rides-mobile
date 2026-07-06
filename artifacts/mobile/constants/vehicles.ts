@@ -3,6 +3,36 @@ import type { VehicleType } from '@/types';
 /** Customer home panel + booking vehicle chips (left-to-right order). */
 export const CUSTOMER_VEHICLE_TYPES: VehicleType[] = ['moto', 'rifani', 'cab', 'hilux', 'fuso'];
 
+/**
+ * Backend transport_type codes (the API uses SCREAMING_SNAKE identifiers).
+ * The mobile uses short local names; every request/response crosses this map.
+ */
+export type BackendTransportType = 'MOTO_BIKE' | 'CAB_TAXI' | 'HEAVY_FUSO' | 'LIGHT_HILUX' | 'TUK_TUK';
+
+export const VEHICLE_BACKEND_CODE: Record<VehicleType, BackendTransportType> = {
+  moto: 'MOTO_BIKE',
+  rifani: 'TUK_TUK',
+  cab: 'CAB_TAXI',
+  hilux: 'LIGHT_HILUX',
+  fuso: 'HEAVY_FUSO',
+};
+
+const BACKEND_CODE_TO_VEHICLE: Record<BackendTransportType, VehicleType> = {
+  MOTO_BIKE: 'moto',
+  TUK_TUK: 'rifani',
+  CAB_TAXI: 'cab',
+  LIGHT_HILUX: 'hilux',
+  HEAVY_FUSO: 'fuso',
+};
+
+export function toBackendTransportType(vehicle: VehicleType): BackendTransportType {
+  return VEHICLE_BACKEND_CODE[vehicle];
+}
+
+export function fromBackendTransportType(code: string): VehicleType | null {
+  return BACKEND_CODE_TO_VEHICLE[code as BackendTransportType] ?? null;
+}
+
 /** Chip / selector — side-view vehicle artwork. */
 export const VEHICLE_MARKER_IMAGES: Record<VehicleType, number> = {
   moto: require('../assets/vehicle-markers/moto.png'),

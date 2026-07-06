@@ -3,13 +3,54 @@ import { getPackagePurchaseSnapshot, type DriverEntitlement as DriverEntitlement
 import { notificationRepository as baseNotificationRepository } from '@/data/repositories';
 import type { Ride } from '@/types';
 import type {
+  NotificationCategory,
   NotificationFeedContext,
+  NotificationIconName,
   NotificationItem,
   NotificationReadState,
 } from './types';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
+import { listNotifications as apiListNotifications, type AppNotification } from '@/services/notifications';
 
 export const notificationRepository = baseNotificationRepository;
+
+// Map a real backend notification (push record) onto the UI feed item shape.
+function backendNotificationCategory(type: string): NotificationCategory {
+  const t = type.toLowerCase();
+  if (t.includes('ride') || t.includes('trip') || t.includes('driver')) return 'ride';
+  if (t.includes('promo') || t.includes('campaign') || t.includes('package')) return 'promo';
+  if (t.includes('safety') || t.includes('security') || t.includes('sos')) return 'safety';
+  return 'system';
+}
+
+const CATEGORY_ICON: Record<NotificationCategory, NotificationIconName> = {
+  ride: 'navigation',
+  promo: 'package',
+  safety: 'shield',
+  system: 'bell',
+};
+
+function toNotificationItem(n: AppNotification): NotificationItem {
+  const category = backendNotificationCategory(n.type);
+  return {
+    id: n.id,
+    type: category,
+    icon: CATEGORY_ICON[category],
+    title: n.title,
+    message: n.body,
+    time: n.sentAt,
+    read: n.isRead,
+    rideId: n.data?.ride_id,
+  };
+}
+
+async function fetchBackendNotifications(): Promise<NotificationItem[]> {
+  try {
+    return (await apiListNotifications()).map(toNotificationItem);
+  } catch {
+    return [];
+  }
+}
 
 export type { NotificationFeedContext, NotificationItem, NotificationReadState } from './types';
 
@@ -161,8 +202,11 @@ const STATIC_NOTIFICATIONS: NotificationItem[] = [
 ];
 
 export async function listNotifications(input: NotificationFeedContext): Promise<NotificationItem[]> {
-  const state = await notificationRepository.getReadState();
-  const modeNotifications = input.driverMode
+  const [state, backendNotifications] = await Promise.all([
+    notificationRepository.getReadState(),
+    fetchBackendNotifications(),
+  ]);
+  const derived = input.driverMode
     ? buildDriverNotifications({
         currentRide: input.currentRide,
         driverId: input.driverId,
@@ -172,6 +216,8 @@ export async function listNotifications(input: NotificationFeedContext): Promise
         rideCredits: input.rideCredits,
       })
     : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(input.rideHistory)];
+  // Real backend push records first, then the locally-derived feed items.
+  const modeNotifications = [...backendNotifications, ...derived];
 
   return modeNotifications
     .map(notification => {

@@ -20,6 +20,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { APP_NAME } from '@/constants/branding';
 import { useAuth } from '@/context/AuthContext';
+import { submitRideRating } from '@/services/rating';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { type DriverRatingStars } from '@/domain/driverWallet';
@@ -156,6 +157,13 @@ export default function RatingScreen() {
       });
     } catch (error) {
       reportOperationalFailure('ride.shadow.rating', error, { rideId: ratedRide.id, driverId });
+    }
+
+    try {
+      // Real backend: POST /customer/rides/{id}/rate
+      await submitRideRating(ratedRide.id, { score: stars, comment: review || null });
+    } catch (error) {
+      reportOperationalFailure('ride.rating.submit', error, { rideId: ratedRide.id, driverId });
     }
 
     try {

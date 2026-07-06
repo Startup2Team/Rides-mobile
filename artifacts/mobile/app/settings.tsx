@@ -26,6 +26,7 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { submitSupportTicket } from '@/services/support';
 import { usePressGuard } from '@/hooks/usePressGuard';
 
 export default function SettingsScreen() {
@@ -52,7 +53,24 @@ export default function SettingsScreen() {
       'Delete Account',
       'This will permanently delete your account and all ride history. This cannot be undone.',
       [
-        { text: 'Delete Forever', style: 'destructive', onPress: () => {} },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: async () => {
+            // No self-serve deletion endpoint exists yet — file a deletion
+            // request for the team to action, then sign the user out locally.
+            try {
+              await submitSupportTicket({
+                subject: 'Account deletion request',
+                type: 'account_deletion',
+              });
+            } catch {
+              // Proceed with local sign-out even if the request fails to send.
+            }
+            await logout();
+            replaceAuthBoundary(router, '/(auth)/welcome');
+          },
+        },
         { text: 'Cancel', style: 'cancel' },
       ],
     );

@@ -39,13 +39,13 @@ import { HomeMap } from './HomeMap';
 import { styles } from './homeStyles';
 import {
   BOOKING_SHEET_BOTTOM_PADDING,
-  DRIVER_OFFSETS,
   HOME_FLOATING_PANEL_FALLBACK_HEIGHT,
   HOME_LOCATION_DELTA,
   MAP_TYPES,
   type AppMapType,
   SCREEN_HEIGHT,
 } from './homeUtils';
+import { getNearbyDrivers } from '@/services/nearbyDrivers';
 import { useTabBarGlass } from '@/components/navigation/TabBarGlassContext';
 
 export default function CustomerHome() {
@@ -298,11 +298,33 @@ export default function CustomerHome() {
   const shouldShowYouAreHere =
     locationStatus === 'available' && (!showBooking || !shouldShowBookingRoute);
 
-  const visibleDrivers = useMemo(() => DRIVER_OFFSETS.map((offset, i) => ({
-    id: `nearby-driver-${i}`,
-    latitude: userLocation.latitude + offset.lat,
-    longitude: userLocation.longitude + offset.lng,
-  })), [userLocation.latitude, userLocation.longitude]);
+  // Real backend: nearby online drivers (POST /customer/location), refreshed as
+  // the user moves or changes vehicle type. Approx pins only (privacy).
+  const [nearbyDrivers, setNearbyDrivers] = useState<
+    { id: string; latitude: number; longitude: number }[]
+  >([]);
+  useEffect(() => {
+    if (locationStatus !== 'available') return;
+    let active = true;
+    getNearbyDrivers(userLocation.latitude, userLocation.longitude, selectedVehicle)
+      .then(pins => {
+        if (!active) return;
+        setNearbyDrivers(
+          pins.map((pin, i) => ({
+            id: `nearby-driver-${i}`,
+            latitude: pin.latitude,
+            longitude: pin.longitude,
+          })),
+        );
+      })
+      .catch(() => {
+        if (active) setNearbyDrivers([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userLocation.latitude, userLocation.longitude, selectedVehicle, locationStatus]);
+  const visibleDrivers = nearbyDrivers;
 
   const homeInitialRegion = useMemo(() => {
     const latitudeOffset = (sheetHeight / (2 * SCREEN_HEIGHT)) * HOME_LOCATION_DELTA;
