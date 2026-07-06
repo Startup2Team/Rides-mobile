@@ -50,9 +50,9 @@ import { LocationSearchOverlay } from './LocationSearchOverlay';
 import { MapPickerOverlay } from './MapPickerOverlay';
 import { SaveLocationSheet } from './SaveLocationSheet';
 import { styles } from './homeStyles';
+import { getNearbyDrivers, type NearbyDriverPin } from '@/services/rides';
 import {
   BOOKING_SHEET_BOTTOM_PADDING,
-  DRIVER_OFFSETS,
   HOME_FLOATING_PANEL_FALLBACK_HEIGHT,
   HOME_LOCATION_DELTA,
   MAP_TYPES,
@@ -573,11 +573,27 @@ export default function CustomerHome() {
     closeLocationSearch();
   };
 
-  const visibleDrivers = useMemo(() => DRIVER_OFFSETS.map((offset, i) => ({
-    id: `nearby-driver-${i}`,
-    latitude: userLocation.latitude + offset.lat,
-    longitude: userLocation.longitude + offset.lng,
-  })), [userLocation.latitude, userLocation.longitude]);
+  // Real nearby drivers from the backend (POST /customer/location). Empty when
+  // no drivers are online near you — no more mock bikes.
+  const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriverPin[]>([]);
+  useEffect(() => {
+    let active = true;
+    getNearbyDrivers(userLocation.latitude, userLocation.longitude)
+      .then(pins => { if (active) setNearbyDrivers(pins); })
+      .catch(() => { if (active) setNearbyDrivers([]); });
+    return () => {
+      active = false;
+    };
+  }, [userLocation.latitude, userLocation.longitude]);
+
+  const visibleDrivers = useMemo(
+    () => nearbyDrivers.map((driver, i) => ({
+      id: `nearby-driver-${i}`,
+      latitude: driver.approx_lat,
+      longitude: driver.approx_lng,
+    })),
+    [nearbyDrivers],
+  );
 
   const savedLocations = useMemo<SavedLocation[]>(() => savedPlaces, [savedPlaces]);
   const recentLocations = useMemo<RideLocation[]>(() => {

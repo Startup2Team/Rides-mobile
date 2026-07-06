@@ -238,9 +238,16 @@ export function useHomeLocation({
     };
 
     const requestNotificationPermission = async () => {
-      const permission = await Notifications.getPermissionsAsync();
-      if (permission.granted || !permission.canAskAgain) return;
-      await Notifications.requestPermissionsAsync();
+      // Isolated from the location flow: expo-notifications is unsupported in
+      // Expo Go (SDK 53+) and can throw. A notification-permission failure must
+      // NOT surface as "location unavailable", so swallow its errors here.
+      try {
+        const permission = await Notifications.getPermissionsAsync();
+        if (permission.granted || !permission.canAskAgain) return;
+        await Notifications.requestPermissionsAsync();
+      } catch {
+        // Non-fatal — push isn't available in Expo Go; ignore.
+      }
     };
 
     // Safety net: never trap the user on "Finding your pickup point". If GPS
