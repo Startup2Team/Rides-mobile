@@ -24,11 +24,14 @@ import type {
   VerifyOtpRequestDto,
   VerifyOtpResponseDto,
 } from '../contracts/api';
-import type { ApiIdempotencyMetadata } from '../contracts/api/shared';
+import type { DeviceMetadata } from '../client/deviceMetadata';
 
 export interface AuthOtpRequestInput {
   phoneNumber: string;
   channel?: 'sms' | 'whatsapp' | 'voice';
+  // Optional profile fields the register step can send (backend accepts them).
+  fullName?: string;
+  email?: string;
 }
 
 export interface AuthOtpRequestResult {
@@ -82,48 +85,86 @@ export function domainToDtoAuthUser(user: User): AuthUserDto {
   };
 }
 
-export function domainToRequestOtpDto(input: AuthOtpRequestInput, dryRun: boolean): RequestOtpRequestDto {
+// role_state (e.g. CUSTOMER | DRIVER_ACTIVE | DRIVER_PENDING) → app user mode.
+function isDriverRole(roleState: string | undefined): boolean {
+  return (roleState ?? '').toUpperCase().startsWith('DRIVER');
+}
+
+function maskPhone(phone: string): string {
+  if (phone.length <= 4) return phone;
+  return `${phone.slice(0, 4)}••••${phone.slice(-2)}`;
+}
+
+// Build a minimal User from the flat verify response. The backend returns only
+// { user_id, role_state } here, so name/email are filled later by a profile fetch.
+function minimalUser(userId: string, roleState: string, phoneNumber: string): User {
+  const driver = isDriverRole(roleState);
   return {
-    phoneNumber: input.phoneNumber,
-    channel: input.channel,
-    dryRun,
+    id: userId,
+    name: '',
+    phone: phoneNumber,
+    email: undefined,
+    mode: driver ? 'driver' : 'customer',
+    isDriver: driver,
+    createdAt: '',
+    emergencyContactName: undefined,
+    emergencyContactPhone: undefined,
   };
 }
 
-export function dtoToDomainOtpRequest(dto: RequestOtpResponseDto): AuthOtpRequestResult {
+export function domainToRequestOtpDto(input: AuthOtpRequestInput, device: DeviceMetadata): RequestOtpRequestDto {
   return {
-    requestId: dto.requestId,
-    maskedPhoneNumber: dto.maskedPhoneNumber,
-    expiresAt: dto.expiresAt,
+    phone_number: input.phoneNumber,
+    full_name: input.fullName,
+    email: input.email,
+    device_id: device.device_id,
+    platform: device.platform,
   };
 }
 
-export function domainToVerifyOtpDto(input: AuthVerifyOtpInput, metadata: ApiIdempotencyMetadata): VerifyOtpRequestDto {
+// Register returns { dev_otp } (dev) or 204 empty (prod) — neither carries a
+// request id / expiry, so synthesize a result the UI can display.
+export function dtoToDomainOtpRequest(_dto: RequestOtpResponseDto | undefined, phoneNumber: string): AuthOtpRequestResult {
   return {
-    phoneNumber: input.phoneNumber,
+    requestId: '',
+    maskedPhoneNumber: maskPhone(phoneNumber),
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+  };
+}
+
+export function domainToVerifyOtpDto(input: AuthVerifyOtpInput, device: DeviceMetadata): VerifyOtpRequestDto {
+  return {
+    phone_number: input.phoneNumber,
     otp: input.otp,
-    ...metadata,
+    device_id: device.device_id,
+    platform: device.platform,
+    app_version: device.app_version,
   };
 }
 
-export function dtoToDomainAuthSession(dto: VerifyOtpResponseDto | RefreshSessionResponseDto): AuthSessionDomain {
+// Verify carries a flat token payload + minimal user; refresh carries just tokens
+// (user stays null so the caller keeps its existing hydrated user).
+export function dtoToDomainAuthSession(
+  dto: VerifyOtpResponseDto | RefreshSessionResponseDto,
+  phoneNumber?: string,
+): AuthSessionDomain {
+  const userId = 'user_id' in dto ? dto.user_id : undefined;
+  const user = userId && phoneNumber ? minimalUser(userId, dto.role_state ?? '', phoneNumber) : null;
   return {
-    user: dtoToDomainAuthUser(dto.user),
-    accessToken: dto.accessToken,
-    refreshToken: dto.refreshToken,
-    expiresAt: dto.expiresAt,
+    user,
+    accessToken: dto.access_token,
+    refreshToken: dto.refresh_token,
+    // Backend doesn't return an expiry — the transport refreshes on 401.
+    expiresAt: '',
   };
 }
 
 export function domainToRefreshSessionDto(refreshToken: string): RefreshSessionRequestDto {
-  return { refreshToken };
+  return { refresh_token: refreshToken };
 }
 
-export function domainToLogoutDto(refreshToken: string, metadata: ApiIdempotencyMetadata): LogoutRequestDto {
-  return {
-    refreshToken,
-    ...metadata,
-  };
+export function domainToLogoutDto(refreshToken: string): LogoutRequestDto {
+  return { refresh_token: refreshToken };
 }
 
 export function dtoToDomainCurrentSession(dto: CurrentSessionResponseDto): AuthCurrentSessionDomain {
