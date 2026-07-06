@@ -9,6 +9,9 @@ const mockUpdatePackagePurchaseStatus = jest.fn();
 const mockShowToast = jest.fn();
 const mockCopyToClipboard = jest.fn();
 const mockReportOperationalWarning = jest.fn();
+const mockCreateManualPaymentClaim = jest.fn();
+const mockSubmitManualPaymentClaim = jest.fn();
+const mockCreatePackagePaymentRepository = jest.fn();
 let mockParams: { offerId?: string; priceRwf?: string; ridesGranted?: string } = {};
 const mockLoadLockedPackageOffer = jest.fn();
 const mockUsePackagePaymentConfigQuery = jest.fn();
@@ -159,6 +162,10 @@ jest.mock('@/persistence/lockedPackageOfferPersistence', () => ({
   loadLockedPackageOffer: (...args: unknown[]) => mockLoadLockedPackageOffer(...args),
 }));
 
+jest.mock('@/data/repositories/packagePaymentRepositoryFactory', () => ({
+  createPackagePaymentRepository: (...args: unknown[]) => mockCreatePackagePaymentRepository(...args),
+}));
+
 describe('DriverPackagePaymentScreen offer lock', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -194,6 +201,62 @@ describe('DriverPackagePaymentScreen offer lock', () => {
       phoneNumber: '+250788000000',
       transactionId: 'purchase-1',
       status: 'pending',
+    });
+    mockCreateManualPaymentClaim.mockResolvedValue({
+      data: {
+        id: 'RDP-2026-ABC12',
+        driverId: 'driver-user-1',
+        vehicleId: 'vehicle-moto-1',
+        vehicleType: 'moto',
+        offerId: lockedOffer.offerId,
+        packageId: lockedOffer.packageId,
+        packageVersion: lockedOffer.packageVersion,
+        packageName: lockedOffer.packageName,
+        expectedAmountRwf: lockedOffer.priceRwf,
+        provider: 'mtn',
+        merchantCodeSnapshot: '0202565',
+        payerPhoneNumber: '+250788000000',
+        transactionReference: 'MP123',
+        status: 'draft',
+        createdAt: '2026-07-06T10:00:00.000Z',
+        expiresAt: '2026-07-06T10:30:00.000Z',
+        idempotencyKey: 'manual-payment-claim:RDP-2026-ABC12',
+        auditLog: [],
+      },
+      failure: null,
+    });
+    mockSubmitManualPaymentClaim.mockResolvedValue({
+      data: {
+        id: 'RDP-2026-ABC12',
+        driverId: 'driver-user-1',
+        vehicleId: 'vehicle-moto-1',
+        vehicleType: 'moto',
+        offerId: lockedOffer.offerId,
+        packageId: lockedOffer.packageId,
+        packageVersion: lockedOffer.packageVersion,
+        packageName: lockedOffer.packageName,
+        expectedAmountRwf: lockedOffer.priceRwf,
+        provider: 'mtn',
+        merchantCodeSnapshot: '0202565',
+        payerPhoneNumber: '+250788000000',
+        transactionReference: 'MP123',
+        status: 'submitted',
+        createdAt: '2026-07-06T10:00:00.000Z',
+        submittedAt: '2026-07-06T10:01:00.000Z',
+        expiresAt: '2026-07-06T10:30:00.000Z',
+        idempotencyKey: 'manual-payment-claim:RDP-2026-ABC12',
+        auditLog: [],
+      },
+      failure: null,
+    });
+    mockCreatePackagePaymentRepository.mockReturnValue({
+      getPaymentConfiguration: jest.fn(),
+      createManualPaymentClaim: mockCreateManualPaymentClaim,
+      getManualPaymentClaim: jest.fn(),
+      listDriverManualPaymentClaims: jest.fn(),
+      submitManualPaymentClaim: mockSubmitManualPaymentClaim,
+      resubmitManualPaymentClaim: jest.fn(),
+      cancelManualPaymentClaim: jest.fn(),
     });
   });
 
@@ -300,6 +363,194 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('USSD copied', 'success'));
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
     expect(mockActivatePackage).not.toHaveBeenCalled();
+  });
+
+  test('renders manual form, submits a claim, and shows pending review without activating the package', async () => {
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'manual',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+        manual: {
+          providers: [
+            { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+            { provider: 'airtel', merchantCode: '3378888', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+          ],
+          claimExpiresAfterMinutes: 30,
+          transactionReferenceRequired: true,
+          proofImageEnabled: true,
+        },
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: null,
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
+
+    render(<DriverPackagePaymentScreen />);
+
+    expect(await screen.findByText('Locked Growth')).toBeTruthy();
+    expect(screen.getByText('1,250 RWF')).toBeTruthy();
+    expect(screen.queryByLabelText('Amount')).toBeNull();
+
+    fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
+    fireEvent.changeText(screen.getByLabelText('Transaction reference'), 'MP123');
+    fireEvent.press(screen.getByLabelText('I have paid'));
+
+    await waitFor(() => expect(mockCreateManualPaymentClaim).toHaveBeenCalled());
+    await waitFor(() => expect(mockSubmitManualPaymentClaim).toHaveBeenCalled());
+
+    expect(await screen.findByText('Pending review')).toBeTruthy();
+    expect(screen.getByText('Payment claim submitted for review.')).toBeTruthy();
+    expect(screen.getByText('RDP-2026-ABC12')).toBeTruthy();
+    expect(mockActivatePackage).not.toHaveBeenCalled();
+    expect(mockUpdatePackagePurchaseStatus).not.toHaveBeenCalled();
+    expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
+
+    const telemetry = JSON.stringify((mockReportOperationalWarning as jest.Mock).mock.calls.map(call => call[1]));
+    expect(telemetry).not.toContain('+250788000000');
+    expect(telemetry).not.toContain('MP123');
+    expect(telemetry).toContain('submitted');
+  });
+
+  test('rejects invalid phone numbers before submission', async () => {
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'manual',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+        manual: {
+          providers: [
+            { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+          ],
+          claimExpiresAfterMinutes: 30,
+          transactionReferenceRequired: true,
+          proofImageEnabled: true,
+        },
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: null,
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
+
+    render(<DriverPackagePaymentScreen />);
+
+    expect(await screen.findByText('Locked Growth')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Payer phone number'), '123');
+    fireEvent.changeText(screen.getByLabelText('Transaction reference'), 'MP123');
+    fireEvent.press(screen.getByLabelText('I have paid'));
+
+    expect(await screen.findByText('Manual payment claim is invalid.')).toBeTruthy();
+    expect(mockCreateManualPaymentClaim).not.toHaveBeenCalled();
+    expect(mockSubmitManualPaymentClaim).not.toHaveBeenCalled();
+    expect(mockActivatePackage).not.toHaveBeenCalled();
+  });
+
+  test('requires a transaction reference when the configuration says so', async () => {
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'manual',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+        manual: {
+          providers: [
+            { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+          ],
+          claimExpiresAfterMinutes: 30,
+          transactionReferenceRequired: true,
+          proofImageEnabled: true,
+        },
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: null,
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
+
+    render(<DriverPackagePaymentScreen />);
+
+    expect(await screen.findByText('Locked Growth')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
+    fireEvent.press(screen.getByLabelText('I have paid'));
+
+    expect(await screen.findByText('A transaction reference is required.')).toBeTruthy();
+    expect(mockCreateManualPaymentClaim).not.toHaveBeenCalled();
+    expect(mockSubmitManualPaymentClaim).not.toHaveBeenCalled();
+  });
+
+  test('rejects duplicate references from the repository without exposing the raw value', async () => {
+    mockCreateManualPaymentClaim.mockResolvedValueOnce({
+      data: null,
+      failure: {
+        code: 'duplicate_transaction_reference',
+        message: 'A manual payment claim with this provider transaction reference already exists.',
+        details: { provider: 'mtn', duplicateDetected: true },
+      },
+    });
+
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'manual',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+        manual: {
+          providers: [
+            { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+          ],
+          claimExpiresAfterMinutes: 30,
+          transactionReferenceRequired: true,
+          proofImageEnabled: true,
+        },
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: null,
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
+
+    render(<DriverPackagePaymentScreen />);
+
+    expect(await screen.findByText('Locked Growth')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
+    fireEvent.changeText(screen.getByLabelText('Transaction reference'), 'DUP-REF-123');
+    fireEvent.press(screen.getByLabelText('I have paid'));
+
+    expect(await screen.findByText('A manual payment claim with this provider transaction reference already exists.')).toBeTruthy();
+    expect(JSON.stringify((mockReportOperationalWarning as jest.Mock).mock.calls.map(call => call[1]))).not.toContain('DUP-REF-123');
+    expect(mockSubmitManualPaymentClaim).not.toHaveBeenCalled();
   });
 
   test('renders unavailable shell in disabled mode without creating a purchase', async () => {

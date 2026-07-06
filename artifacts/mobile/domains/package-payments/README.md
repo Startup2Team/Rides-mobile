@@ -34,4 +34,11 @@ MP4 adds a mode-aware checkout shell:
 - manual mode shows USSD instructions only
 - disabled mode blocks package payment
 
+MP5 adds driver claim submission:
+
+- manual mode can submit a claim after the driver pays
+- the claim stays pending review
+- the mobile client still cannot approve, reject, or activate packages
+- credits still come only from the package entitlement path
+
 That prototype is still dormant and does not change checkout runtime behavior.

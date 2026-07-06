@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { migrateDriverProfileToMultiVehicle } from '@/domain/driverVehicles';
 import { normalizeEntitlement } from '@/domain/driverRidePackages';
+import type { ManualPaymentClaimAuditAction, ManualPaymentClaimStatus, ManualPaymentProvider } from '@/domains/package-payments';
 
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
@@ -51,6 +52,72 @@ export const paymentMethodsSchema = z.array(z.object({
   label: z.string(),
   phoneNumber: z.string().optional(),
   isDefault: z.boolean(),
+}).passthrough());
+
+const MANUAL_PAYMENT_CLAIM_AUDIT_ACTIONS = [
+  'claim_created',
+  'claim_submitted',
+  'review_started',
+  'clarification_requested',
+  'clarification_resubmitted',
+  'claim_approved',
+  'claim_rejected',
+  'claim_expired',
+  'claim_cancelled',
+  'activation_requested',
+  'activation_completed',
+] as const;
+
+const MANUAL_PAYMENT_PROVIDER_VALUES = ['mtn', 'airtel'] as const;
+
+const MANUAL_PAYMENT_CLAIM_STATUS_VALUES = [
+  'draft',
+  'submitted',
+  'pending_review',
+  'needs_clarification',
+  'approved',
+  'rejected',
+  'expired',
+  'cancelled',
+] as const;
+
+const manualPaymentClaimAuditEntrySchema = z.object({
+  id: z.string(),
+  at: z.string(),
+  actorType: z.enum(['driver', 'admin', 'support', 'system']),
+  actorId: z.string().optional(),
+  action: z.enum(MANUAL_PAYMENT_CLAIM_AUDIT_ACTIONS),
+  reasonCode: z.string().optional(),
+});
+
+export const manualPaymentClaimsSchema = z.array(z.object({
+  id: z.string(),
+  driverId: z.string(),
+  vehicleId: z.string(),
+  vehicleType: vehicleTypeSchema,
+  offerId: z.string(),
+  packageId: z.string(),
+  packageVersion: z.string(),
+  packageName: z.string(),
+  expectedAmountRwf: z.number().positive(),
+  provider: z.enum(MANUAL_PAYMENT_PROVIDER_VALUES),
+  merchantCodeSnapshot: z.string(),
+  payerPhoneNumber: z.string(),
+  transactionReference: z.string().optional(),
+  proofImageId: z.string().optional(),
+  status: z.enum(MANUAL_PAYMENT_CLAIM_STATUS_VALUES),
+  createdAt: z.string(),
+  submittedAt: z.string().optional(),
+  expiresAt: z.string(),
+  reviewedAt: z.string().optional(),
+  reviewedBy: z.string().optional(),
+  rejectionReason: z.string().optional(),
+  clarificationMessage: z.string().optional(),
+  supportNote: z.string().optional(),
+  activationId: z.string().optional(),
+  purchaseTransactionId: z.string().optional(),
+  idempotencyKey: z.string(),
+  auditLog: z.array(manualPaymentClaimAuditEntrySchema),
 }).passthrough());
 
 export const profileImageSchema = z.string();

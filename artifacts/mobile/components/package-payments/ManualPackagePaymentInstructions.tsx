@@ -1,7 +1,6 @@
 import React from 'react';
 import { Feather } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '@/components/AppButton';
 import { useColors } from '@/hooks/useColors';
 import type { DriverPackageOfferSnapshot } from '@/domain/driverRidePackages';
 import type { ManualPaymentProviderConfiguration } from '@/domains/package-payments';
@@ -82,17 +81,9 @@ export function ManualPackagePaymentInstructions({
 
       <View style={[styles.note, { backgroundColor: colors.muted }]}>
         <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
-          Manual payment confirmation is coming next.
+          After payment, submit your claim from the form below.
         </Text>
       </View>
-
-      <AppButton
-        title="I have paid"
-        onPress={() => undefined}
-        variant="secondary"
-        disabled
-        fullWidth
-      />
     </View>
   );
 }

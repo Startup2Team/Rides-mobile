@@ -14,6 +14,14 @@ MP4 adds a mode-aware checkout UI shell only:
 - manual mode shows instructions only and does not submit claims
 - disabled mode blocks package payment and returns the driver to packages
 
+MP5 adds driver manual claim submission only:
+
+- the mobile app can submit a manual payment claim in manual mode
+- submitted claims remain pending review
+- mobile submission does not activate packages
+- mobile submission does not grant credits
+- approval and activation stay backend/admin authority
+
 ## Payment Mode
 
 The authoritative mode is a single value:
@@ -27,7 +35,7 @@ Unknown or malformed values fail closed to `disabled`.
 ## Manual Payment Flow
 
 Manual payment is a claim workflow, not an activation workflow.
-The mobile checkout shell in MP4 only shows the payment instruction surface. Claim submission and approval still live in future phases.
+The mobile checkout shell in MP4 showed the payment instruction surface. MP5 adds claim submission, but not approval or activation.
 
 The claim records:
 
@@ -68,6 +76,8 @@ Approved, rejected, and cancelled claims stay terminal.
 A manual claim never activates a package on the mobile client.
 
 Only a trusted backend/admin path can bridge an approved claim into package activation atomically and idempotently.
+
+Support contact is optional and secondary. The default flow is to submit the claim in-app and wait for review.
 
 ## Repository Boundary
 

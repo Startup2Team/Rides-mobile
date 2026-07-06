@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,12 +22,20 @@ import {
   type PackageActivation,
 } from '@/domain/driverRidePackages';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
-import { ManualPackagePaymentInstructions } from '@/components/package-payments/ManualPackagePaymentInstructions';
+import { ManualPaymentClaimSubmission } from '@/components/package-payments/ManualPaymentClaimSubmission';
 import { PackagePaymentUnavailable } from '@/components/package-payments/PackagePaymentUnavailable';
 import { usePackagePaymentConfigQuery } from '@/query/hooks/usePackagePaymentConfigQuery';
 import { useColors } from '@/hooks/useColors';
 import { reportOperationalWarning } from '@/observability/monitoring';
 import { loadLockedPackageOffer, type LockedOfferLoadFailure } from '@/persistence/lockedPackageOfferPersistence';
+import { createPackagePaymentRepository } from '@/data/repositories/packagePaymentRepositoryFactory';
+import {
+  normalizeManualPaymentTransactionReference,
+  validateManualPaymentClaim,
+  type ManualPaymentClaim,
+  type ManualPaymentProvider,
+} from '@/domains/package-payments';
+import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -69,9 +77,24 @@ export default function DriverPackagePaymentScreen() {
   const [receipt, setReceipt] = useState<PackageActivation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualClaimProvider, setManualClaimProvider] = useState<ManualPaymentProvider>(
+    driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
+  );
+  const [manualPayerPhoneNumber, setManualPayerPhoneNumber] = useState(driverProfile?.momoCode ?? '');
+  const [manualTransactionReference, setManualTransactionReference] = useState('');
+  const [manualClaimSubmitting, setManualClaimSubmitting] = useState(false);
+  const [manualClaimError, setManualClaimError] = useState<string | null>(null);
+  const [submittedManualClaim, setSubmittedManualClaim] = useState<ManualPaymentClaim | null>(null);
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const paymentConfigQuery = usePackagePaymentConfigQuery();
   const paymentMode = paymentConfigQuery.configuration.mode;
+  const packagePaymentRepository = useMemo(
+    () => createPackagePaymentRepository({ configuration: paymentConfigQuery.configuration }),
+    [paymentConfigQuery.configuration],
+  );
+  const manualPaymentConfiguration = paymentConfigQuery.configuration.manual;
+  const manualPaymentProviders = manualPaymentConfiguration?.providers ?? [];
+  const manualTransactionReferenceRequired = manualPaymentConfiguration?.transactionReferenceRequired ?? false;
 
   const clearPaymentTimers = () => {
     paymentTimers.current.forEach(timer => clearTimeout(timer));
@@ -97,6 +120,16 @@ export default function DriverPackagePaymentScreen() {
     };
   }, [checkoutVehicleId, checkoutVehicle?.vehicleType, offerId, user?.id]);
 
+  useEffect(() => {
+    if (paymentMode !== 'manual') return;
+    const preferredProvider = manualPaymentProviders.find(provider => provider.provider === manualClaimProvider && provider.enabled)
+      ?? manualPaymentProviders.find(provider => provider.enabled)
+      ?? manualPaymentProviders[0];
+    if (preferredProvider && preferredProvider.provider !== manualClaimProvider) {
+      setManualClaimProvider(preferredProvider.provider);
+    }
+  }, [manualClaimProvider, manualPaymentProviders, paymentMode]);
+
   const handleCopyManualInstruction = async (
     provider: 'mtn' | 'airtel',
     instruction: string,
@@ -114,6 +147,94 @@ export default function DriverPackagePaymentScreen() {
       });
     } catch {
       showToast('Unable to copy USSD', 'error');
+    }
+  };
+
+  const handleManualClaimSubmit = async () => {
+    if (!ridePackage || !user?.id) return;
+    if (!manualPaymentConfiguration) {
+      setManualClaimError('Manual payment configuration is unavailable.');
+      return;
+    }
+    setManualClaimSubmitting(true);
+    setManualClaimError(null);
+    setError(null);
+    try {
+      const normalizedPhone = normalizeRwandaPhoneNumber(manualPayerPhoneNumber);
+      const normalizedTransactionReference = normalizeManualPaymentTransactionReference(manualTransactionReference);
+      const validation = validateManualPaymentClaim({
+        claimId: `manual-payment-claim:${ridePackage.offerId}:${user.id}`,
+        driverId: user.id,
+        offer: ridePackage,
+        provider: manualClaimProvider,
+        payerPhoneNumber: normalizedPhone ?? manualPayerPhoneNumber,
+        transactionReference: normalizedTransactionReference ?? undefined,
+      }, paymentConfigQuery.configuration);
+
+      if (validation.failure || !validation.data) {
+        const failureMessage = validation.failure?.message ?? 'Manual payment claim is invalid.';
+        setManualClaimError(failureMessage);
+        reportOperationalWarning('package-payment.manual.claim.failure', {
+          operation: 'driver-package-payment',
+          provider: manualClaimProvider,
+          failureCategory: validation.failure?.code ?? 'invalid_claim',
+        });
+        return;
+      }
+
+      const createdClaimResult = await packagePaymentRepository.createManualPaymentClaim({
+        claimId: validation.data.id,
+        idempotencyKey: validation.data.idempotencyKey,
+        offer: ridePackage,
+        driverId: user.id,
+        provider: manualClaimProvider,
+        payerPhoneNumber: normalizedPhone ?? manualPayerPhoneNumber,
+        transactionReference: normalizedTransactionReference ?? undefined,
+      });
+
+      if (createdClaimResult.failure || !createdClaimResult.data) {
+        setManualClaimError(createdClaimResult.failure?.message ?? 'Unable to create manual payment claim.');
+        reportOperationalWarning('package-payment.manual.claim.failure', {
+          operation: 'driver-package-payment',
+          provider: manualClaimProvider,
+          failureCategory: createdClaimResult.failure?.code ?? 'repository_unavailable',
+        });
+        return;
+      }
+
+      const submittedResult = await packagePaymentRepository.submitManualPaymentClaim({
+        claim: createdClaimResult.data,
+        submittedAt: new Date().toISOString(),
+        actorId: user.id,
+      });
+
+      if (submittedResult.failure || !submittedResult.data) {
+        setManualClaimError(submittedResult.failure?.message ?? 'Unable to submit manual payment claim.');
+        reportOperationalWarning('package-payment.manual.claim.failure', {
+          operation: 'driver-package-payment',
+          provider: manualClaimProvider,
+          failureCategory: submittedResult.failure?.code ?? 'repository_unavailable',
+        });
+        return;
+      }
+
+      setSubmittedManualClaim(submittedResult.data);
+      showToast('Payment claim submitted for review.', 'success');
+      reportOperationalWarning('package-payment.manual.claim.submitted', {
+        operation: 'driver-package-payment',
+        provider: manualClaimProvider,
+        claimStatus: submittedResult.data.status,
+      });
+    } catch (claimError) {
+      const failureMessage = claimError instanceof Error ? claimError.message : 'Unable to submit manual payment claim.';
+      setManualClaimError(failureMessage);
+      reportOperationalWarning('package-payment.manual.claim.failure', {
+        operation: 'driver-package-payment',
+        provider: manualClaimProvider,
+        failureCategory: 'repository_unavailable',
+      });
+    } finally {
+      setManualClaimSubmitting(false);
     }
   };
 
@@ -219,7 +340,6 @@ export default function DriverPackagePaymentScreen() {
   }
 
   if (paymentMode === 'manual') {
-    const manualConfiguration = paymentConfigQuery.configuration.manual;
     return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
       <ScrollView
@@ -230,13 +350,27 @@ export default function DriverPackagePaymentScreen() {
         ]}
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
       >
-        <ManualPackagePaymentInstructions
+        <ManualPaymentClaimSubmission
           offer={ridePackage}
           vehicleLabel={getVehicleLabel(ridePackage.vehicleType)}
-          providers={manualConfiguration?.providers ?? []}
+          providers={manualPaymentProviders}
+          selectedProvider={manualClaimProvider}
+          onSelectProvider={setManualClaimProvider}
+          payerPhoneNumber={manualPayerPhoneNumber}
+          onChangePayerPhoneNumber={value => {
+            setManualPayerPhoneNumber(formatRwandaPhoneInput(value));
+          }}
+          transactionReference={manualTransactionReference}
+          onChangeTransactionReference={value => setManualTransactionReference(value.trimStart())}
+          transactionReferenceRequired={manualTransactionReferenceRequired}
+          submitDisabled={false}
+          submitting={manualClaimSubmitting}
+          error={manualClaimError}
+          submittedClaim={submittedManualClaim}
           onCopyProvider={(provider, instruction) => {
             void handleCopyManualInstruction(provider.provider, instruction);
           }}
+          onSubmit={() => void handleManualClaimSubmit()}
         />
       </ScrollView>
     </View>;
