@@ -49,3 +49,11 @@ MP8 finalizes the frontend contract boundary:
 - mutation hooks exist only for create/submit/resubmit/cancel
 - no approval, rejection, activation, or credit-grant mutation exists in the mobile client
 - local prototype claims are explicitly legacy prototype data, not trusted payment records
+
+## Phase MP9 Status
+
+Phase MP9 completes the driver-facing manual package payment checkout, status card, and history views, while strictly maintaining the integration boundaries:
+- **No Client-Side Approval**: The frontend remains completely submission-only. Tapping "I have paid" merely creates and submits a claim to the repository. Approved/Rejected claims are read-only presentations.
+- **No Entitlement Mutation**: An approved manual claim UI reads status from the local or remote query, but does NOT call `activatePackage`, modify `DriverEntitlementContext`, or grant credits locally. Active status must be driven by backend authority.
+- **Strict Privacy**: Payer phone numbers and transaction references are masked before display. No sensitive fields (payer phone, transaction reference) are logged or echoed to telemetry.
+

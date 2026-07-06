@@ -20,6 +20,7 @@ import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePacka
 import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
+import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -60,6 +61,7 @@ export default function DriverPackagesScreen() {
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const { claims } = useManualPaymentClaimsQuery({ driverId: user?.id });
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
@@ -136,6 +138,19 @@ export default function DriverPackagesScreen() {
       </View>
       <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
     </View>
+
+    {claims && claims.length > 0 ? (
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="View payment confirmations"
+        style={[styles.historyLink, { backgroundColor: cardFill, borderColor: colors.border }]}
+        onPress={() => router.push('/driver-package-payment-status')}
+      >
+        <Feather name="clock" size={16} color={colors.primary} />
+        <Text style={[styles.historyLinkText, { color: colors.foreground }]}>Payment confirmations</Text>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 'auto' }} />
+      </TouchableOpacity>
+    ) : null}
 
     <View style={styles.syncRow}>
       <View style={styles.syncCopy}>
@@ -325,4 +340,19 @@ const styles = StyleSheet.create({
   unavailableText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   buyButtonContainer: { marginHorizontal: 16, marginTop: 4 },
+  historyLink: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  historyLinkText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
 });

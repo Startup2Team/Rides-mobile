@@ -119,8 +119,8 @@ jest.mock('@expo/vector-icons', () => {
   return { Feather: Icon };
 });
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({
+jest.mock('@/context/AuthContext', () => {
+  const auth = {
     user: { id: 'driver-user-1' },
     driverProfile: {
       isVerified: true,
@@ -128,6 +128,19 @@ jest.mock('@/context/AuthContext', () => ({
       momoProvider: 'mtn',
       verificationStatus: 'approved',
     },
+  };
+  return {
+    useAuth: () => auth,
+    useOptionalAuth: () => auth,
+  };
+});
+
+jest.mock('@/query/hooks/useManualPaymentClaimsQuery', () => ({
+  useManualPaymentClaimsQuery: () => ({
+    claims: [],
+    isLoading: false,
+    isFetching: false,
+    refetch: jest.fn(),
   }),
 }));
 

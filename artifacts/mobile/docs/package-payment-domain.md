@@ -140,3 +140,17 @@ MP8 finalizes the frontend/backend integration contract only.
 - remote claims are backend-authoritative when the backend team ships them
 
 Existing local claims must not automatically sync to the backend when remote authority is introduced.
+
+## MP9 Status
+
+MP9 completed the polished driver-facing manual package payment UI and status experience.
+
+- **Staged Checkout Flow**: Completed a structured staged interface (`PAYMENT_INSTRUCTIONS` -> `CLAIM_FORM` -> `CLAIM_STATUS`) in `driver-package-payment.tsx`.
+- **Instruction Stage**: Displays selected package, locked price, and active vehicle context. Renders MTN and Airtel instructions with copyable USSD strings generated from templates. Includes a prominent "I have paid" transition action.
+- **Form Stage**: Collects provider, payer phone number, and transaction reference. Handles validation, formatting, and prevents duplicate submissions.
+- **Status Stage**: Integrates `ManualPaymentClaimStatusCard` to render claims dynamically. Consumes the centralized MP8 presentation policy to show statuses (`submitted`, `pending_review`, `needs_clarification`, `approved`, `rejected`, `expired`, `cancelled`) with themed colors and clear visual feedback.
+- **Clarification & Resubmission**: Allows updating provider, phone, and reference when in `needs_clarification` state. Safely mutates with `expectedClaimVersion` and refetches upon version conflicts.
+- **Cancellation**: Supports cancelling non-terminal claims with a warning dialog making it clear that cancellation does not refund Mobile Money payments.
+- **History Route**: Created `driver-package-payment-status.tsx` as a dedicated claim history route. Shows a list of recent confirmations and navigates to the checkout screen to view details.
+- **Privacy & Authority Boundary**: No raw reference or phone data is logged or printed. Local approved status remains a read-model presentation; actual activation/credits require trusted backend authority.
+

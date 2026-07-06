@@ -1,4 +1,5 @@
 import type { ManualPaymentClaimAuditAction, ManualPaymentClaimAuditEntry } from './types';
+import type { ManualPaymentClaimReadModel } from './manualPaymentClaimReadModel';
 
 export function createManualPaymentClaimId(now = new Date()) {
   const year = now.getUTCFullYear();
@@ -27,3 +28,24 @@ export function createManualPaymentClaimAuditEntry(input: {
     reasonCode: input.reasonCode,
   };
 }
+
+export function selectRelevantManualPaymentClaim(
+  claims: ManualPaymentClaimReadModel[],
+  packageId: string,
+  vehicleId: string
+): ManualPaymentClaimReadModel | null {
+  const relevant = claims.filter(
+    claim =>
+      claim.packageId === packageId &&
+      claim.vehicleId === vehicleId &&
+      ['submitted', 'pending_review', 'needs_clarification'].includes(claim.status)
+  );
+
+  if (relevant.length === 0) {
+    return null;
+  }
+
+  // Sort by updatedAt or createdAt (latest first) to choose the latest one.
+  return relevant.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+

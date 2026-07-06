@@ -121,8 +121,8 @@ jest.mock('@/context/ToastContext', () => ({
   useToast: () => ({ showToast: mockShowToast }),
 }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({
+jest.mock('@/context/AuthContext', () => {
+  const auth = {
     user: { id: 'driver-user-1' },
     driverProfile: {
       activeVehicle: { vehicleId: 'vehicle-moto-1' },
@@ -135,8 +135,12 @@ jest.mock('@/context/AuthContext', () => ({
       momoCode: '+250788000000',
       momoProvider: 'mtn',
     },
-  }),
-}));
+  };
+  return {
+    useAuth: () => auth,
+    useOptionalAuth: () => auth,
+  };
+});
 
 jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
@@ -158,6 +162,42 @@ jest.mock('@/query/hooks/usePackagePaymentConfigQuery', () => ({
   usePackagePaymentConfigQuery: (...args: unknown[]) => mockUsePackagePaymentConfigQuery(...args),
 }));
 
+let mockClaims: any[] = [];
+
+jest.mock('@/query/hooks/useManualPaymentClaimsQuery', () => ({
+  useManualPaymentClaimsQuery: () => ({
+    claims: mockClaims,
+    isLoading: false,
+    isFetching: false,
+    refetch: jest.fn(),
+  }),
+}));
+
+jest.mock('@/query/hooks/useManualPaymentClaimQuery', () => ({
+  useManualPaymentClaimQuery: () => ({
+    claim: null,
+    presentation: null,
+    isLoading: false,
+    isFetching: false,
+    refetch: jest.fn(),
+  }),
+}));
+
+jest.mock('@/query/hooks/useManualPaymentClaimMutations', () => ({
+  useCreateManualPaymentClaimMutation: () => ({
+    mutateAsync: mockCreateManualPaymentClaim,
+  }),
+  useSubmitManualPaymentClaimMutation: () => ({
+    mutateAsync: mockSubmitManualPaymentClaim,
+  }),
+  useResubmitManualPaymentClaimMutation: () => ({
+    mutateAsync: jest.fn(() => Promise.resolve({ data: {}, failure: null })),
+  }),
+  useCancelManualPaymentClaimMutation: () => ({
+    mutateAsync: jest.fn(() => Promise.resolve({ data: {}, failure: null })),
+  }),
+}));
+
 jest.mock('@/persistence/lockedPackageOfferPersistence', () => ({
   loadLockedPackageOffer: (...args: unknown[]) => mockLoadLockedPackageOffer(...args),
 }));
@@ -169,6 +209,7 @@ jest.mock('@/data/repositories/packagePaymentRepositoryFactory', () => ({
 describe('DriverPackagePaymentScreen offer lock', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClaims = [];
     mockParams = { offerId: lockedOffer.offerId };
     mockLoadLockedPackageOffer.mockResolvedValue({ offer: lockedOffer, failure: null });
     mockUsePackagePaymentConfigQuery.mockReturnValue({
@@ -225,8 +266,8 @@ describe('DriverPackagePaymentScreen offer lock', () => {
       },
       failure: null,
     });
-    mockSubmitManualPaymentClaim.mockResolvedValue({
-      data: {
+    mockSubmitManualPaymentClaim.mockImplementation(async () => {
+      const claim = {
         id: 'RDP-2026-ABC12',
         driverId: 'driver-user-1',
         vehicleId: 'vehicle-moto-1',
@@ -246,8 +287,12 @@ describe('DriverPackagePaymentScreen offer lock', () => {
         expiresAt: '2026-07-06T10:30:00.000Z',
         idempotencyKey: 'manual-payment-claim:RDP-2026-ABC12',
         auditLog: [],
-      },
-      failure: null,
+      };
+      mockClaims = [claim];
+      return {
+        data: claim,
+        failure: null,
+      };
     });
     mockCreatePackagePaymentRepository.mockReturnValue({
       getPaymentConfiguration: jest.fn(),
@@ -401,16 +446,16 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     expect(screen.getByText('1,250 RWF')).toBeTruthy();
     expect(screen.queryByLabelText('Amount')).toBeNull();
 
+    fireEvent.press(screen.getByLabelText('I have paid'));
     fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
     fireEvent.changeText(screen.getByLabelText('Transaction reference'), 'MP123');
-    fireEvent.press(screen.getByLabelText('I have paid'));
+    fireEvent.press(screen.getByLabelText('Submit payment'));
 
     await waitFor(() => expect(mockCreateManualPaymentClaim).toHaveBeenCalled());
     await waitFor(() => expect(mockSubmitManualPaymentClaim).toHaveBeenCalled());
 
-    expect(await screen.findByText('Pending review')).toBeTruthy();
-    expect(screen.getByText('Payment claim submitted for review.')).toBeTruthy();
-    expect(screen.getByText('RDP-2026-ABC12')).toBeTruthy();
+    expect(await screen.findByText('PAYMENT CONFIRMATION SUBMITTED')).toBeTruthy();
+    expect(screen.getByText('Your payment claim is waiting for review.')).toBeTruthy();
     expect(mockActivatePackage).not.toHaveBeenCalled();
     expect(mockUpdatePackagePurchaseStatus).not.toHaveBeenCalled();
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
@@ -453,9 +498,10 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     render(<DriverPackagePaymentScreen />);
 
     expect(await screen.findByText('Locked Growth')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('I have paid'));
     fireEvent.changeText(screen.getByLabelText('Payer phone number'), '123');
     fireEvent.changeText(screen.getByLabelText('Transaction reference'), 'MP123');
-    fireEvent.press(screen.getByLabelText('I have paid'));
+    fireEvent.press(screen.getByLabelText('Submit payment'));
 
     expect(await screen.findByText('Manual payment claim is invalid.')).toBeTruthy();
     expect(mockCreateManualPaymentClaim).not.toHaveBeenCalled();
@@ -495,8 +541,9 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     render(<DriverPackagePaymentScreen />);
 
     expect(await screen.findByText('Locked Growth')).toBeTruthy();
-    fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
     fireEvent.press(screen.getByLabelText('I have paid'));
+    fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
+    fireEvent.press(screen.getByLabelText('Submit payment'));
 
     expect(await screen.findByText('A transaction reference is required.')).toBeTruthy();
     expect(mockCreateManualPaymentClaim).not.toHaveBeenCalled();
@@ -544,9 +591,10 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     render(<DriverPackagePaymentScreen />);
 
     expect(await screen.findByText('Locked Growth')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('I have paid'));
     fireEvent.changeText(screen.getByLabelText('Payer phone number'), '+250788000000');
     fireEvent.changeText(screen.getByLabelText('Transaction reference'), 'DUP-REF-123');
-    fireEvent.press(screen.getByLabelText('I have paid'));
+    fireEvent.press(screen.getByLabelText('Submit payment'));
 
     expect(await screen.findByText('A manual payment claim with this provider transaction reference already exists.')).toBeTruthy();
     expect(JSON.stringify((mockReportOperationalWarning as jest.Mock).mock.calls.map(call => call[1]))).not.toContain('DUP-REF-123');

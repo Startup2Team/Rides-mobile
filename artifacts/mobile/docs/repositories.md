@@ -42,3 +42,11 @@ MP8 adds frontend-readiness only:
 - failure presentation is centralized
 - local-to-remote claim migration is documented
 - OpenAPI planned contracts are marked as planned, not live
+
+## Phase MP9 Status
+
+Phase MP9 wires the repository factory and query hooks directly into the driver screens:
+- **Query Hook Integration**: `driver-packages.tsx` and `driver-package-payment.tsx` consume `useManualPaymentClaimsQuery` and `useManualPaymentClaimQuery` to fetch, select, and poll claims.
+- **Mutation Integration**: The checkout and resubmit forms trigger mutations via `useCreateManualPaymentClaimMutation`, `useSubmitManualPaymentClaimMutation`, `useResubmitManualPaymentClaimMutation`, and `useCancelManualPaymentClaimMutation`.
+- **Handoff Compliance**: The screens interact with the repository interface entirely through these react-query boundaries, maintaining complete decoupling from concrete storage (Local SQLite/SecureStorage or Future Remote APIs).
+
