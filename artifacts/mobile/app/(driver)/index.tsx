@@ -27,6 +27,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useAuth } from '@/context/AuthContext';
+import { updateDriverLocation } from '@/services/driverAvailability';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -251,6 +252,34 @@ export default function DriverDashboard() {
     }
     return () => { mounted = false; };
   }, []);
+
+  // Report location to the backend while online so the matching engine can find
+  // this driver. Fires immediately + every 10s (backend rate-limits to ~20/min).
+  useEffect(() => {
+    if (!isOnline || Platform.OS === 'web') return;
+    let cancelled = false;
+    const report = async () => {
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (cancelled) return;
+        await updateDriverLocation({
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          heading: loc.coords.heading ?? undefined,
+          speed: loc.coords.speed ?? undefined,
+          accuracy: loc.coords.accuracy ?? undefined,
+        });
+      } catch {
+        // ignore — retry on the next tick
+      }
+    };
+    void report();
+    const interval = setInterval(() => void report(), 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isOnline]);
 
   useEffect(() => {
     positionAdCarouselAtStart();
