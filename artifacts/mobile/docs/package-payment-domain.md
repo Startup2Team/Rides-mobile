@@ -6,6 +6,8 @@ Package payments are a separate responsibility from saved payment methods.
 - `domain/driverRidePackages.ts` owns package catalog, offers, purchase history, activation, and credit accounting.
 - `domains/package-payments` owns payment mode, manual payment configuration, manual payment claims, transition rules, duplicate-reference policy, expiry policy, and future activation eligibility.
 
+MP2 adds the backend boundary prototype for package-payment configuration and manual claims, but the mobile checkout flow stays dormant and unchanged.
+
 ## Payment Mode
 
 The authoritative mode is a single value:
@@ -59,6 +61,12 @@ Approved, rejected, and cancelled claims stay terminal.
 A manual claim never activates a package on the mobile client.
 
 Only a trusted backend/admin path can bridge an approved claim into package activation atomically and idempotently.
+
+## Repository Boundary
+
+`data/remote/repositories/RemotePackagePaymentRepository.ts` is the backend prototype for package-payment configuration and manual claim CRUD.
+
+`data/remote/repositories/packagePaymentShadowRepository.ts` keeps local behavior authoritative and uses remote calls only for diagnostics.
 
 ## Privacy
 

@@ -4,6 +4,10 @@
 
 `domains/package-payments/repository.ts` defines the future package-payment repository contract.
 
+`data/remote/repositories/RemotePackagePaymentRepository.ts` is the current backend prototype for package-payment configuration and manual claim CRUD.
+
+`data/remote/repositories/packagePaymentShadowRepository.ts` wraps a local repository and uses remote calls only for diagnostics.
+
 That package-payment repository is intentionally driver-facing only:
 
 - it can read configuration

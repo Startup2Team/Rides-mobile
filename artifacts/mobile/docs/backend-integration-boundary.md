@@ -16,3 +16,11 @@ Manual payment must remain policy-only until the backend is ready to own:
 - notification
 
 The mobile client should only model the claim lifecycle and never self-approve a payment.
+
+MP2 adds the backend/repository prototype only:
+
+- remote package-payment repository
+- mapper layer between DTOs and domain
+- shadow repository diagnostics
+
+It still does not wire driver UI, admin UI, activation authority, or ride-credit mutation.

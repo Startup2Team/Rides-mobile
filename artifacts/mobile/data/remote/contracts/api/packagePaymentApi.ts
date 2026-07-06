@@ -17,6 +17,12 @@ export interface ApiPaginationResponse {
   totalPages: number;
 }
 
+export interface BackendErrorDto {
+  code: string;
+  message: string;
+  details?: Record<string, string | number | boolean | null | undefined> | null;
+}
+
 export interface PackagePaymentModeDto {
   mode: PackagePaymentMode;
   version: string;
@@ -102,7 +108,7 @@ export interface ManualPaymentClaimQueueItemDto extends ManualPaymentClaimSummar
 
 export interface ManualPaymentClaimDetailResponseDto extends ApiEnvelope<ManualPaymentClaimDto> {}
 export interface ManualPaymentClaimQueueResponseDto extends ApiEnvelope<{ items: ManualPaymentClaimQueueItemDto[] } & ApiPaginationResponse> {}
-export interface ManualPaymentClaimListResponseDto extends ApiEnvelope<{ items: ManualPaymentClaimSummaryDto[] } & ApiPaginationResponse> {}
+export interface ManualPaymentClaimListResponseDto extends ApiEnvelope<{ items: ManualPaymentClaimDto[] } & ApiPaginationResponse> {}
 export interface ManualPaymentClaimMutationResponseDto extends ApiEnvelope<{
   claim?: ManualPaymentClaimDto | null;
   approvedClaim?: ManualPaymentClaimDto | null;
@@ -111,6 +117,8 @@ export interface ManualPaymentClaimMutationResponseDto extends ApiEnvelope<{
   entitlementVersion?: string | null;
   eventIds?: string[] | null;
 }> {}
+
+export interface BackendErrorResponseDto extends ApiEnvelope<{ error: BackendErrorDto }> {}
 
 export interface GetPackagePaymentConfigurationRequestDto {}
 export interface GetManualPaymentClaimRequestDto {

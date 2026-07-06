@@ -16,6 +16,8 @@ It models:
 
 The mobile driver client must not expose admin approval authority.
 
+The backend approval response is expected to be atomic with package activation in future backend work. The mobile client does not perform that activation.
+
 Manual payment approval is expected to return, atomically:
 
 - approved claim
@@ -23,3 +25,9 @@ Manual payment approval is expected to return, atomically:
 - activation identity
 - entitlement version or summary
 - notification or event metadata
+
+Relevant contracts:
+
+- `data/remote/contracts/api/packagePaymentApi.ts`
+- `data/remote/backendClient.ts`
+- `data/remote/mappers/packagePaymentMapper.ts`

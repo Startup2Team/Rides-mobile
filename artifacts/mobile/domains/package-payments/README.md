@@ -15,3 +15,11 @@ The package-payment domain is intentionally dormant in this phase:
 - it does not grant credits
 - it does not call payment providers
 - it does not expose admin approval authority to the mobile driver client
+
+MP2 adds the repository/backend boundary prototype:
+
+- remote repository implementation
+- DTO mapping layer
+- shadow repository diagnostics
+
+That prototype is still dormant and does not change checkout runtime behavior.
