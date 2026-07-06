@@ -15,6 +15,8 @@ import {
 } from '@/persistence/authPersistence';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
+import { getAccessToken } from '@/persistence/authTokens';
+import { fetchProfile } from '@/services/profile';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
@@ -54,7 +56,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadStoredUser(),
         loadStoredDriverProfile(),
       ]);
-      if (storedUser.data) setUser(storedUser.data);
+      if (storedUser.data) {
+        setUser(storedUser.data);
+        void syncProfileFromBackend();
+      }
       if (storedDriverProfile.data) setDriverProfile(storedDriverProfile.data);
     } catch {
       // ignore
@@ -63,10 +68,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Best-effort hydrate of the display fields from the real backend profile
+  // (GET /customer/profile). Non-destructive: only name + email, only when a
+  // session token exists; offline/failure keeps the stored user.
+  const syncProfileFromBackend = useCallback(async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const profile = await fetchProfile();
+      setUser(prev => {
+        if (!prev) return prev;
+        const updated: User = {
+          ...prev,
+          name: profile.fullName || prev.name,
+          email: profile.email ?? prev.email,
+        };
+        void saveStoredUser(updated);
+        return updated;
+      });
+    } catch {
+      // Backend unreachable — keep the locally stored profile.
+    }
+  }, []);
+
   const login = useCallback(async (newUser: User) => {
     setUser(newUser);
     await saveStoredUser(newUser);
-  }, []);
+    void syncProfileFromBackend();
+  }, [syncProfileFromBackend]);
 
   const logout = useCallback(async () => {
     setUser(null);
