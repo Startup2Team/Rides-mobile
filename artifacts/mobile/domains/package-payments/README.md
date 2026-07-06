@@ -28,4 +28,10 @@ MP3 adds a read-only configuration query path:
 - malformed, missing, or unavailable configuration falls back to automatic
 - checkout behavior does not branch yet
 
+MP4 adds a mode-aware checkout shell:
+
+- automatic mode keeps the current simulated payment flow
+- manual mode shows USSD instructions only
+- disabled mode blocks package payment
+
 That prototype is still dormant and does not change checkout runtime behavior.

@@ -15,4 +15,6 @@ That package-payment repository is intentionally driver-facing only:
 - it can create, submit, resubmit, cancel, and list driver claims
 - it does not expose admin approval or rejection methods
 
+`app/driver-package-payment.tsx` now consumes the configuration read path to choose between automatic checkout, a manual instruction shell, and a disabled shell. Automatic mode still uses the existing simulated purchase behavior.
+
 Admin operations belong to a separate backend authority boundary.

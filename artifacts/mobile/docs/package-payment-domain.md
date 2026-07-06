@@ -8,6 +8,11 @@ Package payments are a separate responsibility from saved payment methods.
 
 MP2 adds the backend boundary prototype for package-payment configuration and manual claims, but the mobile checkout flow stays dormant and unchanged.
 MP3 adds a safe read path for payment configuration only. The query layer can observe automatic, manual, or disabled mode, but checkout behavior still falls back to automatic until a later phase deliberately branches UI.
+MP4 adds a mode-aware checkout UI shell only:
+
+- automatic mode keeps the existing simulated purchase flow
+- manual mode shows instructions only and does not submit claims
+- disabled mode blocks package payment and returns the driver to packages
 
 ## Payment Mode
 
@@ -22,6 +27,7 @@ Unknown or malformed values fail closed to `disabled`.
 ## Manual Payment Flow
 
 Manual payment is a claim workflow, not an activation workflow.
+The mobile checkout shell in MP4 only shows the payment instruction surface. Claim submission and approval still live in future phases.
 
 The claim records:
 

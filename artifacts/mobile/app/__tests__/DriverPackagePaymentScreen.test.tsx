@@ -4,8 +4,14 @@ import type { DriverPackageOfferSnapshot } from '@/domain/driverRidePackages';
 import DriverPackagePaymentScreen from '../driver-package-payment';
 
 const mockCreatePackagePurchase = jest.fn();
+const mockActivatePackage = jest.fn();
+const mockUpdatePackagePurchaseStatus = jest.fn();
+const mockShowToast = jest.fn();
+const mockCopyToClipboard = jest.fn();
+const mockReportOperationalWarning = jest.fn();
 let mockParams: { offerId?: string; priceRwf?: string; ridesGranted?: string } = {};
 const mockLoadLockedPackageOffer = jest.fn();
+const mockUsePackagePaymentConfigQuery = jest.fn();
 
 const lockedOffer: DriverPackageOfferSnapshot = {
   offerId: 'package-offer:vehicle-moto-1:growth:v1:1',
@@ -86,6 +92,10 @@ jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
 }));
 
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: (...args: unknown[]) => mockCopyToClipboard(...args),
+}));
+
 jest.mock('expo-blur', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -103,6 +113,10 @@ jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
   return { Feather: ({ name }: { name: string }) => <Text>{name}</Text> };
 });
+
+jest.mock('@/context/ToastContext', () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
@@ -123,14 +137,22 @@ jest.mock('@/context/AuthContext', () => ({
 
 jest.mock('@/context/DriverEntitlementContext', () => ({
   useDriverEntitlement: () => ({
-    activatePackage: jest.fn(),
+    activatePackage: mockActivatePackage,
     createPackagePurchase: mockCreatePackagePurchase,
     entitlement: {
       vehicleId: null,
       vehicleType: null,
     },
-    updatePackagePurchaseStatus: jest.fn(),
+    updatePackagePurchaseStatus: mockUpdatePackagePurchaseStatus,
   }),
+}));
+
+jest.mock('@/observability/monitoring', () => ({
+  reportOperationalWarning: (...args: unknown[]) => mockReportOperationalWarning(...args),
+}));
+
+jest.mock('@/query/hooks/usePackagePaymentConfigQuery', () => ({
+  usePackagePaymentConfigQuery: (...args: unknown[]) => mockUsePackagePaymentConfigQuery(...args),
 }));
 
 jest.mock('@/persistence/lockedPackageOfferPersistence', () => ({
@@ -142,6 +164,29 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     jest.clearAllMocks();
     mockParams = { offerId: lockedOffer.offerId };
     mockLoadLockedPackageOffer.mockResolvedValue({ offer: lockedOffer, failure: null });
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'automatic',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: {
+        mode: 'automatic',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+      },
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
     mockCreatePackagePurchase.mockResolvedValue({
       ...lockedOffer,
       amount: lockedOffer.priceRwf,
@@ -209,5 +254,86 @@ describe('DriverPackagePaymentScreen offer lock', () => {
       provider: 'mtn',
       phoneNumber: '+250788000000',
     }));
+  });
+
+  test('renders manual instructions and copies generated USSD without creating a purchase', async () => {
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'manual',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+        manual: {
+          providers: [
+            { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+            { provider: 'airtel', merchantCode: '3378888', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+          ],
+          claimExpiresAfterMinutes: 30,
+          transactionReferenceRequired: true,
+          proofImageEnabled: true,
+        },
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: null,
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
+
+    render(<DriverPackagePaymentScreen />);
+
+    expect(await screen.findByText('Manual payment')).toBeTruthy();
+    expect(screen.getByText('Locked Growth')).toBeTruthy();
+    expect(screen.getByText('1,250 RWF')).toBeTruthy();
+    expect(screen.getByText('*182*8*1*0202565*1250#')).toBeTruthy();
+    expect(screen.getByText('*182*8*1*3378888*1250#')).toBeTruthy();
+
+    fireEvent.press(screen.getAllByText('Copy')[0]);
+
+    await waitFor(() => expect(mockCopyToClipboard).toHaveBeenCalledWith('*182*8*1*0202565*1250#'));
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('USSD copied', 'success'));
+    expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
+    expect(mockActivatePackage).not.toHaveBeenCalled();
+  });
+
+  test('renders unavailable shell in disabled mode without creating a purchase', async () => {
+    mockUsePackagePaymentConfigQuery.mockReturnValue({
+      configuration: {
+        mode: 'disabled',
+        version: '2026-07-06',
+        updatedAt: '2026-07-06T10:00:00.000Z',
+      },
+      fallbackConfiguration: {
+        mode: 'automatic',
+        version: 'fallback-automatic',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+      rawConfiguration: null,
+      failure: null,
+      error: null,
+      isFallbackUsed: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: jest.fn(),
+    });
+
+    render(<DriverPackagePaymentScreen />);
+
+    expect(await screen.findByText('Payment unavailable')).toBeTruthy();
+    expect(screen.getByText('Package payments are temporarily unavailable. Please try again later.')).toBeTruthy();
+    expect(screen.getByText('Locked Growth')).toBeTruthy();
+    expect(screen.getByText('1,250 RWF')).toBeTruthy();
+    fireEvent.press(screen.getByText('Return to Packages'));
+
+    expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
+    expect(mockActivatePackage).not.toHaveBeenCalled();
+    expect(mockUpdatePackagePurchaseStatus).not.toHaveBeenCalled();
+    expect(require('expo-router').router.replace).toHaveBeenCalledWith('/driver-packages');
   });
 });

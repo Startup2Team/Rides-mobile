@@ -3,6 +3,7 @@ import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorSc
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { AppButton } from '@/components/AppButton';
 import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
@@ -10,6 +11,7 @@ import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardingData';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { useToast } from '@/context/ToastContext';
 import {
   isPackageOfferExpired,
   type DriverEntitlementVehicleRef,
@@ -20,17 +22,31 @@ import {
   type PackageActivation,
 } from '@/domain/driverRidePackages';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
+import { ManualPackagePaymentInstructions } from '@/components/package-payments/ManualPackagePaymentInstructions';
+import { PackagePaymentUnavailable } from '@/components/package-payments/PackagePaymentUnavailable';
+import { usePackagePaymentConfigQuery } from '@/query/hooks/usePackagePaymentConfigQuery';
 import { useColors } from '@/hooks/useColors';
+import { reportOperationalWarning } from '@/observability/monitoring';
 import { loadLockedPackageOffer, type LockedOfferLoadFailure } from '@/persistence/lockedPackageOfferPersistence';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
 
+function getVehicleLabel(vehicleType: DriverEntitlementVehicleRef['vehicleType'] | null | undefined) {
+  if (vehicleType === 'moto') return 'Motorcycle';
+  if (vehicleType === 'cab') return 'Car';
+  if (vehicleType === 'rifani') return 'Rifani';
+  if (vehicleType === 'fuso') return 'Fuso';
+  if (vehicleType === 'hilux') return 'Hilux';
+  return null;
+}
+
 export default function DriverPackagePaymentScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
+  const { showToast } = useToast();
   const isDark = useColorScheme() === 'dark';
   const { offerId } = useLocalSearchParams<{ offerId?: string }>();
   const { driverProfile, user } = useAuth();
@@ -54,6 +70,8 @@ export default function DriverPackagePaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const paymentConfigQuery = usePackagePaymentConfigQuery();
+  const paymentMode = paymentConfigQuery.configuration.mode;
 
   const clearPaymentTimers = () => {
     paymentTimers.current.forEach(timer => clearTimeout(timer));
@@ -78,6 +96,26 @@ export default function DriverPackagePaymentScreen() {
       active = false;
     };
   }, [checkoutVehicleId, checkoutVehicle?.vehicleType, offerId, user?.id]);
+
+  const handleCopyManualInstruction = async (
+    provider: 'mtn' | 'airtel',
+    instruction: string,
+  ) => {
+    try {
+      if (Clipboard?.setStringAsync) {
+        await Clipboard.setStringAsync(instruction);
+      } else {
+        throw new Error('Clipboard unavailable');
+      }
+      showToast('USSD copied', 'success');
+      reportOperationalWarning('package-payment.manual.ussd.copied', {
+        operation: 'driver-package-payment',
+        provider,
+      });
+    } catch {
+      showToast('Unable to copy USSD', 'error');
+    }
+  };
 
   const schedulePaymentSuccess = (purchase: DriverPackagePurchase) => {
     const processingTimer = setTimeout(() => {
@@ -177,6 +215,50 @@ export default function DriverPackagePaymentScreen() {
           : 'This package offer is missing or invalid. Please choose the package again.'}
       </Text>
       <AppButton title="Return to Packages" onPress={() => router.replace('/driver-packages')} />
+    </View>;
+  }
+
+  if (paymentMode === 'manual') {
+    const manualConfiguration = paymentConfigQuery.configuration.manual;
+    return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+      <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={[
+          styles.paymentScrollContent,
+          { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
+        ]}
+        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+      >
+        <ManualPackagePaymentInstructions
+          offer={ridePackage}
+          vehicleLabel={getVehicleLabel(ridePackage.vehicleType)}
+          providers={manualConfiguration?.providers ?? []}
+          onCopyProvider={(provider, instruction) => {
+            void handleCopyManualInstruction(provider.provider, instruction);
+          }}
+        />
+      </ScrollView>
+    </View>;
+  }
+
+  if (paymentMode === 'disabled') {
+    return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+      <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={[
+          styles.paymentScrollContent,
+          { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
+        ]}
+        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+      >
+        <PackagePaymentUnavailable
+          offer={ridePackage}
+          reasonText="Package payments are temporarily unavailable. Please try again later."
+          onBack={() => router.replace('/driver-packages')}
+        />
+      </ScrollView>
     </View>;
   }
 
