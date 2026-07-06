@@ -14,6 +14,7 @@ import {
   saveStoredUser,
 } from '@/persistence/authPersistence';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
+import { endSession } from '@/services/authSession';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
@@ -70,6 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     setUser(null);
     setDriverProfile(null);
+    // Revoke the backend session + drop tokens, then wipe local sensitive data.
+    await endSession();
     await clearSensitiveStorage();
   }, []);
 

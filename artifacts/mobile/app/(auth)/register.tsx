@@ -24,6 +24,7 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { requestOtp } from '@/services/authSession';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -44,6 +45,7 @@ export default function RegisterScreen() {
   const [editingForm, setEditingForm] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountrySheet, setShowCountrySheet] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () => setEditingForm(true));
@@ -73,21 +75,30 @@ export default function RegisterScreen() {
     return e;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (submitting) return;
     const e = validate();
     if (Object.keys(e).length) {
       setErrors(e);
       return;
     }
 
-    router.push({
-      pathname: '/(auth)/otp',
-      params: {
-        phone: `${selectedCountry.dialCode}${form.phone.replace(/\D/g, '')}`,
-        name: form.name.trim(),
-        mode: 'register',
-      },
-    });
+    const phoneNumber = `${selectedCountry.dialCode}${form.phone.replace(/\D/g, '')}`;
+    const fullName = form.name.trim();
+
+    setSubmitting(true);
+    try {
+      // Real backend: sends the OTP before we move to the verification screen.
+      await requestOtp({ phoneNumber, fullName });
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone: phoneNumber, name: fullName, mode: 'register' },
+      });
+    } catch {
+      setErrors({ phone: "Couldn't send the code. Check the number and try again." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -176,7 +187,7 @@ export default function RegisterScreen() {
 
             {editingForm && (
               <View style={styles.inlineContinue}>
-                <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+                <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" loading={submitting} />
               </View>
             )}
           </View>
@@ -194,7 +205,7 @@ export default function RegisterScreen() {
             },
           ]}
         >
-          <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" />
+          <AppButton title="Continue" onPress={handleContinue} fullWidth size="lg" loading={submitting} />
           <View style={styles.row}>
             <AppText variant="bodySmall" style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </AppText>
             <TouchableOpacity onPress={() => replaceAuthBoundary(router, '/(auth)/login')}>

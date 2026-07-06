@@ -16,6 +16,8 @@ import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { verifyOtp } from '@/services/authSession';
+import type { User } from '@/types';
 
 export default function OTPScreen() {
   const colors = useColors();
@@ -57,19 +59,32 @@ export default function OTPScreen() {
       setError('This code has expired. Request a new code to continue.');
       return;
     }
+    if (verifying) return;
     setVerifying(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
-    await login({
-      id,
-      name: name ?? phone ?? 'User',
-      phone: phone ?? '',
-      email: email ?? undefined,
-      mode: 'customer',
-      isDriver: false,
-      createdAt: new Date().toISOString(),
-    });
-    navigateToCustomerHomeAfterCompletion(router);
+    setError('');
+    try {
+      // Real backend: exchanges the OTP for a session; tokens are persisted
+      // inside verifyOtp() so subsequent requests are authenticated.
+      const session = await verifyOtp({ phoneNumber: phone ?? '', otp: entered });
+      const sessionUser = session.user;
+      const user: User = {
+        id: sessionUser?.id ?? (phone ?? entered),
+        name: sessionUser?.name || (name ?? '') || (phone ?? 'User'),
+        phone: phone ?? sessionUser?.phone ?? '',
+        email: email ?? sessionUser?.email,
+        mode: sessionUser?.mode ?? 'customer',
+        isDriver: sessionUser?.isDriver ?? false,
+        createdAt: sessionUser?.createdAt || new Date().toISOString(),
+      };
+      await login(user);
+      navigateToCustomerHomeAfterCompletion(router);
+    } catch {
+      setError("That code didn't work. Check it and try again.");
+      setCode(Array(otpLength).fill(''));
+      inputRefs.current[0]?.focus();
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
