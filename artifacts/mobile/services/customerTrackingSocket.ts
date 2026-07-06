@@ -38,9 +38,13 @@ export interface CustomerTrackingSocket {
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 
-function resolveWsUrl(rideId: string): string {
+function resolveWsUrl(rideId: string, token: string | null): string {
   const base = (process.env.EXPO_PUBLIC_WS_BASE_URL ?? '').replace(/\/+$/, '');
-  return `${base}/ws/customer?ride_id=${encodeURIComponent(rideId)}`;
+  const params = new URLSearchParams({ ride_id: rideId });
+  // RN WebSocket header support is unreliable; the backend also accepts the JWT
+  // via a `token` query param, so we always include it.
+  if (token) params.set('token', token);
+  return `${base}/ws/customer?${params.toString()}`;
 }
 
 /**
@@ -82,7 +86,7 @@ export function openCustomerTrackingSocket(
         protocols?: string | string[],
         options?: { headers?: Record<string, string> },
       ) => WebSocket;
-      socket = new Ctor(resolveWsUrl(rideId), undefined, options);
+      socket = new Ctor(resolveWsUrl(rideId, token), undefined, options);
 
       socket.onopen = () => {
         attempt = 0;

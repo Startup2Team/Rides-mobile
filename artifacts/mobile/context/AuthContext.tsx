@@ -15,7 +15,7 @@ import {
 } from '@/persistence/authPersistence';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
-import { getAccessToken } from '@/persistence/authTokens';
+import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
 import { fetchProfile } from '@/services/profile';
 import { switchUserMode } from '@/services/userMode';
 import { setDriverAvailability } from '@/services/driverAvailability';
@@ -75,8 +75,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadStoredDriverProfile(),
       ]);
       if (storedUser.data) {
-        setUser(storedUser.data);
-        void syncProfileFromBackend();
+        // A user is only really authenticated if a session token is present.
+        // Otherwise (e.g. a login stored before the auth wiring) every
+        // authenticated call would 401 — so drop the stale session and force a
+        // clean re-login instead of showing a broken signed-in state.
+        const token = await getAccessToken();
+        if (token) {
+          setUser(storedUser.data);
+          void syncProfileFromBackend();
+        } else {
+          await clearAuthTokens();
+        }
       }
       if (storedDriverProfile.data) {
         setDriverProfile(storedDriverProfile.data);

@@ -23,9 +23,11 @@ export interface DriverSocket {
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 
-function resolveWsUrl(): string {
+function resolveWsUrl(token: string | null): string {
   const base = (process.env.EXPO_PUBLIC_WS_BASE_URL ?? '').replace(/\/+$/, '');
-  return `${base}/ws/driver`;
+  // RN WebSocket header support is unreliable; the backend also accepts the JWT
+  // via a `token` query param, so we always include it.
+  return token ? `${base}/ws/driver?token=${encodeURIComponent(token)}` : `${base}/ws/driver`;
 }
 
 export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
@@ -53,7 +55,7 @@ export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
         protocols?: string | string[],
         options?: { headers?: Record<string, string> },
       ) => WebSocket;
-      socket = new Ctor(resolveWsUrl(), undefined, options);
+      socket = new Ctor(resolveWsUrl(token), undefined, options);
 
       socket.onopen = () => {
         attempt = 0;
