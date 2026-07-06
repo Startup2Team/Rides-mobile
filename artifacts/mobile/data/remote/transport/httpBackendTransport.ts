@@ -192,7 +192,11 @@ export function createHttpBackendTransport(
       externalSignal?.addEventListener('abort', abortExternal);
 
       try {
-        const url = new URL(path, `${config.baseUrl.replace(/\/+$/, '')}/`);
+        // Resolve paths RELATIVE to the full base (which includes /api), so a
+        // leading-slash path like "/v1/auth/register" doesn't reset to the host
+        // root and drop the "/api" segment. Strip the leading slash first.
+        const relativePath = path.replace(/^\/+/, '');
+        const url = new URL(relativePath, `${config.baseUrl.replace(/\/+$/, '')}/`);
         appendQuery(url, options.query);
         const authHeader = await resolveAuthHeader(config.tokenProvider);
         const headers: Record<string, string> = {
