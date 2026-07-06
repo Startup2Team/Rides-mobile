@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "auth": {
+    "requiresAuthentication": "unknown",
+    "authStrategy": "unresolved",
+    "tokenProviderAvailable": "unknown",
+    "tokenPersistenceOwnedByTransport": false
+  },
+  "isolation": {
+    "stagingDatabaseIsolation": "unknown",
+    "stagingObjectStorageIsolation": "unknown",
+    "stagingCredentialIsolation": "unknown",
+    "stagingLogsSeparated": "unknown",
+    "stagingSmsAndPaymentSideEffectsSandboxed": "unknown"
+  },
+  "privacy": {
+    "telemetrySanitizationDocumented": "confirmed",
+    "semanticComparisonSanitizationDocumented": "confirmed",
+    "rawBackendStackTracesBlocked": "confirmed",
+    "fullResponseBodiesLogged": "confirmed",
+    "requestPayloadsLogged": "confirmed"
+  },
+  "observability": {
+    "correlationIdsSupported": "confirmed",
+    "requestIdsSupported": "confirmed",
+    "stagingRequestTelemetryAvailable": "confirmed",
+    "successTelemetryAvailable": "confirmed",
+    "failureTelemetryAvailable": "confirmed",
+    "timeoutTelemetryAvailable": "confirmed",
+    "latencyTelemetryAvailable": "confirmed",
+    "mismatchTelemetryAvailable": "confirmed",
+    "stagingHealthAggregationWired": "confirmed",
+    "snapshotReportAvailable": "confirmed",
+    "ciArtifactAvailable": "confirmed",
+    "baselineComparisonAvailable": "confirmed"
+  },
+  "resilience": {
+    "timeoutConfigured": "confirmed",
+    "timeoutAbortSupport": "confirmed",
+    "boundedRetry": "confirmed",
+    "getRetrySafety": "confirmed",
+    "unsafeWriteRetryBlocked": "confirmed",
+    "idempotentWriteMetadataSupported": "confirmed",
+    "exponentialBackoff": "confirmed",
+    "jitter": "confirmed",
+    "localFallback": "confirmed",
+    "remoteTimeoutDoesNotBlockLocal": "confirmed",
+    "remoteFailureDoesNotBlockLocal": "confirmed",
+    "malformedResponseDoesNotBlockLocal": "confirmed"
+  },
+  "rateLimits": {
+    "backendRateLimitPolicyKnown": "unknown",
+    "retryAfterSupported": "unknown",
+    "stagingLimitsKnown": "unknown"
+  },
+  "rollback": {
+    "repositoryDefaultLocal": true,
+    "invalidConfigReturnsLocal": true,
+    "missingConfigReturnsLocal": true,
+    "productionReturnsLocal": true,
+    "writeShadowIndependent": true,
+    "envFlagsRestoreLocal": true,
+    "restartRequirementClaimed": false
+  },
+  "contracts": {
+    "endpointContractConfirmation": "unknown",
+    "backendOwnerConfirmationTimestamp": null,
+    "backendOwnerConfirmationReference": null
+  },
+  "domainReadiness": {
+    "savedLocations": "unknown",
+    "profile": "unknown"
+  }
+}

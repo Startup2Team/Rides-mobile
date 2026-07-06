@@ -10,7 +10,12 @@ import {
   View,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { formatDateDdMmYyyy, parseDateDdMmYyyy } from '@/utils/dateUtils';
+import { typography } from '@/constants/typography';
 
 export { formatDateDdMmYyyy, parseDateDdMmYyyy } from '@/utils/dateUtils';
 
@@ -87,7 +92,7 @@ export function DatePickerField({
         accessibilityLabel={label}
         accessibilityHint="Opens date picker"
       >
-        <Feather name="calendar" size={18} color={colors.mutedForeground} style={styles.leadingIcon} />
+        <Feather name="calendar" size={icons.semantic.row} color={colors.mutedForeground} style={styles.leadingIcon} />
         <Text
           style={[
             styles.value,
@@ -96,7 +101,7 @@ export function DatePickerField({
         >
           {value || placeholder}
         </Text>
-        <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
+        <Feather name="chevron-down" size={icons.semantic.row} color={colors.mutedForeground} />
       </TouchableOpacity>
 
       {open && Platform.OS === 'ios' && (
@@ -104,7 +109,7 @@ export function DatePickerField({
           <View style={[styles.pickerToolbar, { borderBottomColor: colors.border }]}>
             <TouchableOpacity
               onPress={() => setOpen(false)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={{ top: spacing[8], bottom: spacing[8], left: spacing[8], right: spacing[8] }}
               accessibilityRole="button"
               accessibilityLabel="Cancel date selection"
             >
@@ -112,7 +117,7 @@ export function DatePickerField({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={confirmIos}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={{ top: spacing[8], bottom: spacing[8], left: spacing[8], right: spacing[8] }}
               accessibilityRole="button"
               accessibilityLabel="Confirm date of birth"
             >
@@ -140,50 +145,48 @@ export function DatePickerField({
 }
 
 const styles = StyleSheet.create({
-  wrapper: { gap: 6 },
+  wrapper: { gap: semanticSpacing.compactGap },
   label: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    marginLeft: 2,
+    ...typography.label,
+    fontFamily: typography.label.fontFamily,
+    marginLeft: spacing[2],
   },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    height: 52,
-    borderRadius: 12,
+    paddingHorizontal: semanticSpacing.listItemPadding,
+    height: sizes.input.lg,
+    borderRadius: radius.input,
     borderWidth: 1,
   },
-  leadingIcon: { marginRight: 10 },
+  leadingIcon: { marginRight: spacing[10] },
   value: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
   },
   pickerCard: {
-    marginTop: 2,
+    marginTop: spacing[2],
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radius.input,
     overflow: 'hidden',
   },
   pickerToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: semanticSpacing.cardPadding,
+    paddingVertical: spacing[10],
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   toolbarAction: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
   picker: {
     height: 216,
   },
   error: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    marginLeft: 2,
+    ...typography.caption,
+    marginLeft: spacing[2],
   },
 });

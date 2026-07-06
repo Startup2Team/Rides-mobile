@@ -267,7 +267,7 @@ describe('ImageGalleryPreview', () => {
     expect(screen.getByTestId('image-gallery-modal').props.presentationStyle).toBe('overFullScreen');
     expect(screen.getByTestId('image-gallery-fullscreen')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('image-gallery-backdrop').props.style))
-      .toEqual(expect.objectContaining({ backgroundColor: '#F5F5F5' }));
+      .toEqual(expect.objectContaining({ backgroundColor: '#F2F2F7' }));
     expect(screen.getByTestId('image-gallery-expanding-image').props.style)
       .toEqual(expect.arrayContaining([expect.objectContaining({ opacity: expect.anything() })]));
     expect(screen.queryByTestId('image-gallery-floating-frame')).toBeNull();

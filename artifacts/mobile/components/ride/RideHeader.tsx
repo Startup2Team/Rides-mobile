@@ -3,6 +3,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { StatusChip } from '@/components/StatusChip';
 import type { Ride } from '@/types';
 import type { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 export function RideHeader({
   colors,
@@ -46,6 +47,6 @@ const styles = StyleSheet.create({
   slot: { flex: 1, minWidth: 0, zIndex: 1, justifyContent: 'center' },
   end: { alignItems: 'flex-end' },
   titleOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 76, zIndex: 0 },
-  title: { maxWidth: '100%', fontSize: 13, fontFamily: 'Inter_600SemiBold', textAlign: 'center', lineHeight: 17 },
-  eta: { fontSize: 12, fontFamily: 'Inter_700Bold', textAlign: 'right' },
+  title: { maxWidth: '100%', ...typography.label, fontFamily: typography.title.fontFamily, textAlign: 'center', lineHeight: 17 },
+  eta: { ...typography.caption, fontFamily: typography.badge.fontFamily, textAlign: 'right' },
 });

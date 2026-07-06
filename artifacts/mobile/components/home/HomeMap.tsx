@@ -1,11 +1,12 @@
 import React, { memo, type RefObject } from 'react';
-import { StyleSheet, Text, View, type ColorValue } from 'react-native';
+import { StyleSheet, View, type ColorValue } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import type { Coords, VehicleType } from '@/types';
 import { DriverMarkers } from './DriverMarkers';
 import { darkMapStyle, styles } from './homeStyles';
 import type { AppMapType } from './homeUtils';
 import { RoutePreview } from './RoutePreview';
+import { AppText } from '@/components/AppText';
 
 function HomeMapComponent({
   mapRef,
@@ -68,7 +69,7 @@ function HomeMapComponent({
         <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
           <View style={styles.youAreHereContainer}>
             <View style={[styles.youAreHereBubble, { backgroundColor: primaryColor }]}>
-              <Text style={styles.youAreHereText}>You're Here</Text>
+              <AppText variant="caption" style={styles.youAreHereText}>You're Here</AppText>
             </View>
             <View style={[styles.youAreHereTail, { borderTopColor: primaryColor }]} />
           </View>

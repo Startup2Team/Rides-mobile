@@ -26,7 +26,6 @@ import { useDriverOnboardingValidation } from '@/hooks/driver-onboarding/useDriv
 import type { DriverProfile } from '@/types';
 import { buildDraftDriverProfile, buildPendingDriverProfile, formFromDriverProfile } from '@/hooks/driver-onboarding/onboardingSubmission';
 import { loadStoredDriverOnboardingDraft, removeStoredDriverOnboardingDraft, saveStoredDriverOnboardingDraft } from '@/persistence/driverOnboardingPersistence';
-import { saveStoredProfileImage } from '@/persistence/profilePersistence';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
 import { getLatestDriverApplicationRejectionSummary, submitDriverApplication, type DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
@@ -34,6 +33,8 @@ import { DOCUMENTS } from '@/components/driver-onboarding/onboardingData';
 import type { DocFaces, DocumentKey, VehiclePhotoKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardingTypes';
 import { isValidImageAsset } from '@/utils/documentValidation';
+import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
+import { profileRepository } from '@/domains/profile/repository';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -136,9 +137,9 @@ export default function DriverOnboarding() {
     setLoading(true);
     await saveStoredDriverOnboardingDraft({ form, docs, vehiclePhotos, selfieUri, acceptedTerms, step, updatedAt: new Date().toISOString() });
     await saveDriverProfile(buildDraftDriverProfile(form, selfieUri));
-    if (selfieUri) await saveStoredProfileImage(selfieUri);
+    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
     setLoading(false);
-    router.replace('/(tabs)');
+    navigateToCustomerHomeAfterCompletion(router);
   };
 
   const saveAndContinue = async () => {
@@ -158,11 +159,11 @@ export default function DriverOnboarding() {
       selfieUri,
       submittedAt: new Date().toISOString(),
     });
-    if (selfieUri) await saveStoredProfileImage(selfieUri);
+    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
     setLoading(false);
-    router.replace('/driver-submission-confirmation');
+    replaceFlowScreen(router, '/driver-submission-confirmation');
   };
 
   const handleNext = () => {
@@ -273,7 +274,7 @@ export default function DriverOnboarding() {
           disabled={step === 3 && !acceptedTerms}
         />
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <AppButton title="Save & exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
+          <AppButton title="Save and exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
         <AppButton title="Contact Support" onPress={() => router.push('/help-support')} size="sm" compact variant="plain" style={{ flex: 1 }} />
       </View>
       </ScrollView>

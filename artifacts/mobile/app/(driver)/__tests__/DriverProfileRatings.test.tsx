@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { DriverRating } from '@/domain/driverWallet';
 import type { DriverProfile, User } from '@/types';
 import DriverProfileScreen from '../profile';
@@ -158,10 +159,30 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+jest.mock('@/domains/vehicle', () => ({
+  useVehicles: () => ({
+    vehicles: [],
+    isLoading: false,
+    isRefreshing: false,
+    refreshVehicles: jest.fn(),
+    addVehicle: jest.fn(),
+    updateVehicle: jest.fn(),
+    deleteVehicle: jest.fn(),
+    setPrimaryVehicle: jest.fn(),
+  }),
+}));
+
 jest.mock('@/context/RideContext', () => ({
   useRide: () => ({
     rideHistory: [],
     loadHistory: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
+jest.mock('@/query/hooks/useRideHistoryQuery', () => ({
+  useRideHistoryQuery: () => ({
+    data: [],
+    refetch: jest.fn(() => Promise.resolve({ data: [] })),
   }),
 }));
 
@@ -187,11 +208,21 @@ describe('DriverProfileScreen rating summary', () => {
   });
 
   test('profile displays default rating when none exists', async () => {
-    render(<DriverProfileScreen />);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DriverProfileScreen />
+      </QueryClientProvider>,
+    );
 
     await waitFor(() => expect(screen.getAllByText('5.0')[0]).toBeTruthy());
     expect(screen.getByText('Notifications')).toBeTruthy();
-    expect(screen.getByText('My Vehicles')).toBeTruthy();
+    expect(screen.getByText('My vehicles')).toBeTruthy();
     expect(screen.queryByText('Driver Documents')).toBeNull();
     expect(screen.queryByText('Plate Number')).toBeNull();
     expect(screen.queryByText('License')).toBeNull();
@@ -204,7 +235,17 @@ describe('DriverProfileScreen rating summary', () => {
       rating({ id: 'rating-3', rideId: 'ride-3', driverId: 'driver-2', stars: 1, idempotencyKey: 'driver-rating:completed-ride:ride-3' }),
     ];
 
-    render(<DriverProfileScreen />);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DriverProfileScreen />
+      </QueryClientProvider>,
+    );
 
     await waitFor(() => expect(screen.getAllByText('4.5')[0]).toBeTruthy());
   });

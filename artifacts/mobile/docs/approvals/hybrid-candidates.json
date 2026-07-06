@@ -1,0 +1,16 @@
+{
+  "savedLocations": {
+    "approved": false,
+    "approvedBy": null,
+    "approvedAt": null,
+    "reason": null,
+    "expiresAt": null
+  },
+  "profile": {
+    "approved": false,
+    "approvedBy": null,
+    "approvedAt": null,
+    "reason": null,
+    "expiresAt": null
+  }
+}

@@ -1,11 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,28 +16,26 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { useColors } from '@/hooks/useColors';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useToast } from '@/context/ToastContext';
-import { loadNotificationReadState, saveNotificationReadState, type NotificationReadState } from '@/persistence/notificationPersistence';
 import { APPLE_SYSTEM_BLUE_HEX } from '@/constants/systemColors';
 import { useRide } from '@/context/RideContext';
 import { useAuth } from '@/context/AuthContext';
-import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getPackagePurchaseSnapshot, type DriverEntitlement } from '@/domain/driverRidePackages';
+import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
 import type { Ride } from '@/types';
+import { AppText } from '@/components/AppText';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import {
+  getNotificationAccentColor,
+  getNotificationDayBucket,
+  useNotifications,
+  type NotificationItem,
+} from '@/domains/notifications';
 
-type NotifType = 'ride' | 'promo' | 'system' | 'safety';
-
-interface AppNotification {
-  id: string;
-  type: NotifType;
-  icon: keyof typeof Feather.glyphMap;
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-  rideId?: string;
-}
-
-const TYPE_ICON_COLOR: Record<NotifType, string> = {
+const TYPE_ICON_COLOR: Record<NotificationItem['type'], string> = {
   ride: APPLE_SYSTEM_BLUE_HEX.light,
   promo: '#FFB800',
   system: '#007AFF',
@@ -55,27 +52,11 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function getDayBucket(time: string): 'today' | 'yesterday' | 'previous' {
-  const notificationDate = new Date(time);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfNotificationDay = new Date(
-    notificationDate.getFullYear(),
-    notificationDate.getMonth(),
-    notificationDate.getDate(),
-  ).getTime();
-  const diffDays = Math.floor((startOfToday - startOfNotificationDay) / 86400000);
-
-  if (diffDays <= 0) return 'today';
-  if (diffDays === 1) return 'yesterday';
-  return 'previous';
-}
-
-function buildRideNotifications(rideHistory: { id: string; destination?: { address?: string }; agreedFare?: number; completedAt?: string }[]): AppNotification[] {
+function buildRideNotifications(rideHistory: { id: string; destination?: { address?: string }; agreedFare?: number; completedAt?: string }[]): NotificationItem[] {
   return rideHistory.slice(0, 5).map(ride => ({
     id: `ride_${ride.id}`,
     type: 'ride' as const,
-    icon: 'check-circle' as const,
+    icon: 'check-circle',
     title: 'Ride completed',
     message: `Your ride to ${ride.destination?.address ?? 'destination'} was completed. Fare: ${ride.agreedFare?.toLocaleString() ?? '—'} RWF`,
     time: ride.completedAt ?? new Date().toISOString(),
@@ -98,7 +79,7 @@ function buildDriverNotifications({
   pendingRequest: Ride | null;
   rideHistory: Ride[];
   rideCredits: number;
-}): AppNotification[] {
+}): NotificationItem[] {
   const tripNotifications = rideHistory
     .filter(ride => ride.status === 'completed' && ride.driverId === driverId)
     .slice(0, 5)
@@ -113,7 +94,7 @@ function buildDriverNotifications({
       rideId: ride.id,
     }));
 
-  const liveTripNotifications: AppNotification[] = [];
+  const liveTripNotifications: NotificationItem[] = [];
   if (pendingRequest) {
     liveTripNotifications.push({
       id: `driver_request_${pendingRequest.id}`,
@@ -154,7 +135,7 @@ function buildDriverNotifications({
     };
   });
 
-  const creditNotifications: AppNotification[] = [];
+  const creditNotifications: NotificationItem[] = [];
   if (rideCredits <= 5) {
     creditNotifications.push({
       id: `driver_low_credits_${rideCredits}`,
@@ -172,7 +153,7 @@ function buildDriverNotifications({
   return [...liveTripNotifications, ...creditNotifications, ...packageNotifications, ...tripNotifications];
 }
 
-const STATIC_NOTIFICATIONS: AppNotification[] = [
+const STATIC_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'safety_1',
     type: 'safety',
@@ -215,23 +196,23 @@ function EmptyState({ color, driverMode, mutedColor }: { color: string; driverMo
   return (
     <View style={emptyStyles.wrap}>
       <View style={emptyStyles.iconCircle}>
-        <Feather name="bell-off" size={32} color={color} />
+        <Feather name="bell-off" size={icons.size.xxl} color={color} />
       </View>
-      <Text style={[emptyStyles.title, { color }]}>No notifications yet</Text>
-      <Text style={[emptyStyles.desc, { color: mutedColor }]}>
+      <AppText variant="h3" style={[emptyStyles.title, { color }]}>No notifications yet</AppText>
+      <AppText variant="bodySmall" style={[emptyStyles.desc, { color: mutedColor }]}>
         {driverMode
           ? "We'll notify you about ride requests, completed trips, and ride package updates."
           : "We'll notify you when your driver is confirmed, on the way, or has arrived."}
-      </Text>
+      </AppText>
     </View>
   );
 }
 
 const emptyStyles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingVertical: 60 },
-  iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  title: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 8 },
-  desc: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 22 },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[40], paddingVertical: spacing[64] - spacing[4] },
+  iconCircle: { width: sizes.thumbnail.md, height: sizes.thumbnail.md, borderRadius: spacing[32] + spacing[4], alignItems: 'center', justifyContent: 'center', marginBottom: semanticSpacing.cardPadding },
+  title: { ...typography.h3, fontFamily: typography.badge.fontFamily, marginBottom: semanticSpacing.inlineGap },
+  desc: { ...typography.bodySmall, textAlign: 'center', lineHeight: 22 },
 });
 
 export default function NotificationsScreen() {
@@ -239,95 +220,92 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { user } = useAuth();
-  const { currentRide, pendingRequest, rideHistory } = useRide();
-  const { entitlement, isLoading: isEntitlementLoading, totalAvailableRides } = useDriverEntitlement();
+  const { loadHistory } = useRide();
   const { showToast } = useToast();
+  const { notifications, unreadCount, refreshNotifications, markNotificationRead, markNotificationUnread, markAllNotificationsRead } = useNotifications();
   const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const readStateRef = useRef<NotificationReadState>({ read: new Set(), unread: new Set() });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [swipeResetKey, setSwipeResetKey] = useState(0);
   const swipeRefs = useRef<Record<string, Swipeable | null>>({});
   const openRowId = useRef<string | null>(null);
   const autoSwipeLockRef = useRef<Record<string, 'read' | 'delete' | undefined>>({});
-  const horizontalListPadding = 28;
-  const halfCardSwipeThreshold = Math.max(44, (screenWidth - horizontalListPadding) / 2);
+  const horizontalListPadding = spacing[28];
+  const halfCardSwipeThreshold = Math.max(sizes.iconButton.md, (screenWidth - horizontalListPadding) / 2);
 
-  useEffect(() => {
-    loadNotificationReadState().then(state => {
-      readStateRef.current = state;
-      const modeNotifications = driverMode
-        ? buildDriverNotifications({
-            currentRide,
-            driverId: user?.id,
-            entitlement,
-            pendingRequest,
-            rideHistory,
-            rideCredits: isEntitlementLoading ? Number.POSITIVE_INFINITY : totalAvailableRides,
-          })
-        : [...STATIC_NOTIFICATIONS, ...buildRideNotifications(rideHistory)];
-      const merged = modeNotifications
-        .map(n => {
-          if (state.unread.has(n.id)) return { ...n, read: false };
-          if (state.read.has(n.id)) return { ...n, read: true };
-          return n;
-        })
-        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setNotifications(merged);
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await loadHistory();
+      await refreshNotifications();
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise(resolve => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [loadHistory, refreshNotifications]);
+
+  const visibleNotifications = useMemo(
+    () => notifications.filter(notification => !dismissedIds.has(notification.id)),
+    [dismissedIds, notifications],
+  );
+
+  const todayNotifications = useMemo(
+    () => visibleNotifications.filter(notification => getNotificationDayBucket(notification.time) === 'today'),
+    [visibleNotifications],
+  );
+  const yesterdayNotifications = useMemo(
+    () => visibleNotifications.filter(notification => getNotificationDayBucket(notification.time) === 'yesterday'),
+    [visibleNotifications],
+  );
+  const previousNotifications = useMemo(
+    () => visibleNotifications.filter(notification => getNotificationDayBucket(notification.time) === 'previous'),
+    [visibleNotifications],
+  );
+
+  const closeAllRows = useCallback((exceptId?: string) => {
+    Object.entries(swipeRefs.current).forEach(([rowId, row]) => {
+      if (!row || rowId === exceptId) return;
+      row.close();
     });
-  }, [currentRide, driverMode, entitlement, isEntitlementLoading, pendingRequest, rideHistory, totalAvailableRides, user?.id]);
+  }, []);
 
+  const markRead = useCallback(async (id: string) => {
+    await markNotificationRead(id);
+  }, [markNotificationRead]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-  const todayNotifications = notifications.filter(n => getDayBucket(n.time) === 'today');
-  const yesterdayNotifications = notifications.filter(n => getDayBucket(n.time) === 'yesterday');
-  const previousNotifications = notifications.filter(n => getDayBucket(n.time) === 'previous');
-
-  const markAllRead = () => {
-    const hadUnread = notifications.some(n => !n.read);
-    if (!hadUnread) return;
-    Haptics.selectionAsync();
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    const newState: NotificationReadState = {
-      read: new Set(updated.map(n => n.id)),
-      unread: new Set(),
-    };
-    readStateRef.current = newState;
-    void saveNotificationReadState(newState);
-    setNotifications(updated);
-    showToast('All notifications marked as read');
-  };
-
-  const markRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    const newState = { read: new Set(readStateRef.current.read), unread: new Set(readStateRef.current.unread) };
-    newState.read.add(id);
-    newState.unread.delete(id);
-    readStateRef.current = newState;
-    void saveNotificationReadState(newState);
-  };
-  const toggleReadState = (id: string) => {
-    const item = notifications.find(n => n.id === id);
+  const toggleReadState = useCallback(async (id: string) => {
+    const item = notifications.find(notification => notification.id === id);
     if (!item) return;
-    const nextRead = !item.read;
+    await (item.read ? markNotificationUnread(id) : markNotificationRead(id));
+    showToast(item.read ? 'Marked as unread' : 'Marked as read', item.read ? 'info' : 'success');
+  }, [markNotificationRead, markNotificationUnread, notifications, showToast]);
+
+  const markAllRead = useCallback(async () => {
+    if (unreadCount <= 0) return;
     Haptics.selectionAsync();
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: nextRead } : n));
-    const newState = { read: new Set(readStateRef.current.read), unread: new Set(readStateRef.current.unread) };
-    if (nextRead) { newState.read.add(id); newState.unread.delete(id); }
-    else { newState.unread.add(id); newState.read.delete(id); }
-    readStateRef.current = newState;
-    void saveNotificationReadState(newState);
-    showToast(nextRead ? 'Marked as read' : 'Marked as unread', nextRead ? 'success' : 'info');
-  };
+    await markAllNotificationsRead();
+    showToast('All notifications marked as read');
+  }, [markAllNotificationsRead, showToast, unreadCount]);
 
-  const deleteNotification = (id: string) => {
+  const deleteNotification = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setDismissedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     showToast('Notification deleted', 'error');
-  };
+  }, [showToast]);
 
-  const confirmDeleteNotification = (id: string) => {
+  const confirmDeleteNotification = useCallback((id: string) => {
     Alert.alert(
       'Delete notification',
       'Are you sure you want to delete this notification?',
@@ -340,17 +318,10 @@ export default function NotificationsScreen() {
       ],
       { cancelable: true },
     );
-  };
+  }, [deleteNotification]);
 
-  const closeAllRows = (exceptId?: string) => {
-    Object.entries(swipeRefs.current).forEach(([rowId, row]) => {
-      if (!row || rowId === exceptId) return;
-      row.close();
-    });
-  };
-
-  const renderItem = (item: AppNotification) => {
-    const accentColor = item.icon === 'check-circle' ? colors.foreground : TYPE_ICON_COLOR[item.type];
+  const renderItem = (item: NotificationItem) => {
+    const accentColor = item.icon === 'check-circle' ? colors.foreground : getNotificationAccentColor(item.type);
 
     return (
       <Swipeable
@@ -363,8 +334,8 @@ export default function NotificationsScreen() {
         friction={1}
         leftThreshold={halfCardSwipeThreshold}
         rightThreshold={halfCardSwipeThreshold}
-        dragOffsetFromLeftEdge={22}
-        dragOffsetFromRightEdge={22}
+        dragOffsetFromLeftEdge={radius.sheetCompact}
+        dragOffsetFromRightEdge={radius.sheetCompact}
         onSwipeableWillOpen={() => {
           closeAllRows(item.id);
           openRowId.current = item.id;
@@ -376,15 +347,13 @@ export default function NotificationsScreen() {
           autoSwipeLockRef.current[item.id] = undefined;
         }}
         onSwipeableOpen={(direction) => {
-          // direction 'left' = swiped right (reveals mail / read toggle)
-          // direction 'right' = swiped left (reveals delete)
           if (direction === 'left') {
             if (autoSwipeLockRef.current[item.id] === 'read') return;
             autoSwipeLockRef.current[item.id] = 'read';
             swipeRefs.current[item.id]?.close();
             openRowId.current = null;
             setSwipeResetKey(prev => prev + 1);
-            toggleReadState(item.id);
+            void toggleReadState(item.id);
             return;
           }
           if (direction === 'right') {
@@ -403,20 +372,20 @@ export default function NotificationsScreen() {
                 styles.actionButton,
                 {
                   backgroundColor: colors.primary,
-                  marginRight: 8,
+                  marginRight: semanticSpacing.inlineGap,
                 },
               ]}
               onPress={() => {
                 swipeRefs.current[item.id]?.close();
                 openRowId.current = null;
                 setSwipeResetKey(prev => prev + 1);
-                toggleReadState(item.id);
+                void toggleReadState(item.id);
               }}
               accessibilityRole="button"
               accessibilityLabel={item.read ? 'Mark notification unread' : 'Mark notification read'}
               accessibilityHint={item.read ? 'Marks this notification as unread' : 'Marks this notification as read'}
             >
-              <Feather name="mail" size={14} color="#fff" />
+              <Feather name="mail" size={icons.size.xs} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
@@ -427,7 +396,7 @@ export default function NotificationsScreen() {
                 styles.actionButton,
                 {
                   backgroundColor: colors.destructive,
-                  marginLeft: 8,
+                  marginLeft: semanticSpacing.inlineGap,
                 },
               ]}
               onPress={() => {
@@ -440,7 +409,7 @@ export default function NotificationsScreen() {
               accessibilityLabel="Delete notification"
               accessibilityHint="Removes this notification from the list"
             >
-              <Feather name="trash-2" size={14} color="#fff" />
+              <Feather name="trash-2" size={icons.size.xs} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
@@ -455,21 +424,22 @@ export default function NotificationsScreen() {
             },
           ]}
           onPress={() => {
-            markRead(item.id);
+            void markRead(item.id);
             if (item.type === 'ride' && item.rideId && item.icon === 'check-circle') {
               router.push(`/ride-detail?rideId=${item.rideId}` as any);
-            } else if (item.title === 'Ride package activated') {
-              router.push('/(driver)/stats');
+            } else if (item.title === 'Ride package activated' || item.title === 'Ride package update' || item.title === 'No rides left' || item.title === 'Rides running low') {
+              navigateToDriverPackages(router);
             }
           }}
           activeOpacity={0.75}
         >
           <View style={styles.iconWrap}>
-            <Feather name={item.icon} size={18} color={accentColor} />
+            <Feather name={item.icon} size={icons.semantic.row} color={accentColor} />
           </View>
           <View style={styles.textWrap}>
             <View style={styles.titleRow}>
-              <Text
+              <AppText
+                variant="bodySmall"
                 style={[
                   styles.title,
                   { color: item.read ? colors.foreground : colors.primary },
@@ -477,14 +447,14 @@ export default function NotificationsScreen() {
                 numberOfLines={1}
               >
                 {item.title}
-              </Text>
-              <Text style={[styles.time, { color: colors.mutedForeground }]}>
+              </AppText>
+              <AppText variant="tiny" style={[styles.time, { color: colors.mutedForeground }]}>
                 {timeAgo(item.time)}
-              </Text>
+              </AppText>
             </View>
-            <Text style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
+            <AppText variant="label" style={[styles.message, { color: colors.mutedForeground }]} numberOfLines={2}>
               {item.message}
-            </Text>
+            </AppText>
           </View>
           {!item.read && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
@@ -492,17 +462,17 @@ export default function NotificationsScreen() {
     );
   };
 
-  const renderSection = (title: string, items: AppNotification[]) => (
+  const renderSection = (title: string, items: NotificationItem[]) => (
     <>
-      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</Text>
+      <AppText variant="label" style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</AppText>
       {items.length === 0 ? (
-        <Text style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
+        <AppText variant="label" style={[styles.emptySectionText, { color: colors.mutedForeground }]}>
           No notifications
-        </Text>
+        </AppText>
       ) : (
         items.map((item, index) => (
           <React.Fragment key={item.id}>
-            {index > 0 && <View style={{ height: 8 }} />}
+            {index > 0 && <View style={{ height: semanticSpacing.inlineGap }} />}
             {renderItem(item)}
           </React.Fragment>
         ))
@@ -510,21 +480,25 @@ export default function NotificationsScreen() {
     </>
   );
 
+  const derivedUnreadCount = unreadCount > 0 ? unreadCount : notifications.filter(notification => !notification.read).length;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <GlassHeader
         title="Notifications"
-        titleAccessory={unreadCount > 0 && (
+        titleAccessory={derivedUnreadCount > 0 && (
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
+            <AppText variant="badge" style={styles.badgeText}>{derivedUnreadCount}</AppText>
           </View>
         )}
-        right={unreadCount > 0 ? (
-          <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
-            <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
-          </TouchableOpacity>
+        right={derivedUnreadCount > 0 ? (
+          <View style={styles.markAllSlot}>
+            <TouchableOpacity onPress={() => { void markAllRead(); }} style={styles.markAllBtn}>
+              <AppText variant="label" style={[styles.markAllText, { color: colors.primary }]}>Mark all read</AppText>
+            </TouchableOpacity>
+          </View>
         ) : (
-          <View style={{ width: 80 }} />
+          <View style={{ width: sizes.avatar.xxl }} />
         )}
       />
 
@@ -533,10 +507,13 @@ export default function NotificationsScreen() {
         contentContainerStyle={[
           styles.list,
           { paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
-          notifications.length === 0 && { flex: 1 },
+          visibleNotifications.length === 0 && { flex: 1 },
         ]}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
-        {notifications.length === 0 ? (
+        {visibleNotifications.length === 0 ? (
           <EmptyState color={colors.primaryHex} driverMode={driverMode} mutedColor={colors.mutedForeground} />
         ) : (
           <>
@@ -552,56 +529,57 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  badge: { minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
-  badgeText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#000' },
-  markAllBtn: { width: 80, alignItems: 'flex-end' },
-  markAllText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
-  list: { padding: 14 },
+  badge: { minWidth: spacing[20], height: spacing[20], borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  badgeText: { ...typography.badge, color: '#000' },
+  markAllSlot: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  markAllBtn: { minWidth: sizes.avatar.xxl, alignItems: 'flex-end' },
+  markAllText: { ...typography.label },
+  list: { padding: semanticSpacing.listItemPadding },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
-    marginTop: 16,
-    marginBottom: 10,
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
+    marginTop: semanticSpacing.cardPadding,
+    marginBottom: spacing[10],
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   emptySectionText: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    marginBottom: 8,
+    ...typography.label,
+    fontFamily: typography.caption.fontFamily,
+    marginBottom: semanticSpacing.inlineGap,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    gap: 12,
-    minHeight: 76,
+    padding: semanticSpacing.rowGap,
+    gap: semanticSpacing.rowGap,
+    minHeight: sizes.thumbnail.lg,
   },
   actionButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius['3xl'] - spacing[2],
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
   },
   leftActionTrack: {
-    minHeight: 76,
+    minHeight: sizes.thumbnail.lg,
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
   rightActionTrack: {
-    minHeight: 76,
+    minHeight: sizes.thumbnail.lg,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
-  iconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  textWrap: { flex: 1, gap: 4, minWidth: 0 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold' },
-  time: { fontSize: 11, fontFamily: 'Inter_500Medium', flexShrink: 0 },
-  message: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  iconWrap: { width: sizes.avatar.md, height: sizes.avatar.md, borderRadius: radius['3xl'], alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  textWrap: { flex: 1, gap: spacing[4], minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
+  title: { flex: 1, ...typography.bodySmall, fontFamily: typography.badge.fontFamily },
+  time: { ...typography.tiny, flexShrink: 0 },
+  message: { ...typography.label, fontFamily: typography.caption.fontFamily },
   dot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
 });

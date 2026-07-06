@@ -1,25 +1,205 @@
 # Remote Readiness Matrix
 
-Package payment readiness is separate from payment methods readiness.
+Phase 12M adds a centralized diagnostics-only readiness matrix for the
+existing remote repository prototypes.
 
-Status:
+The matrix does not change runtime behavior, repository source selection, or
+local authority. It evaluates remote prototype maturity so the team can choose
+future staging targets without inferring production readiness from runtime
+state.
 
-- payment methods: existing saved-method domain
-- package payment configuration: blueprint only
-- manual claims: domain foundation plus local prototype submission
-- remote package-payment repository: prototype only
-- package-payment shadow repository: diagnostics only, with claim write shadowing disabled by default
-- claim approval and activation: backend only, not yet connected
-- admin review DTOs and atomic approval transaction blueprint: defined, not implemented
-- Go backend source: absent from this workspace
+## Included Domains
 
-Current mobile readiness:
+- auth
+- profile
+- savedLocations
+- notifications
+- vehicles
+- packages
+- paymentMethods
+- rideReads
+- driverOnboarding
+- search
+- map
 
-- package payment mode can be modeled
-- manual claim validation can be modeled
-- duplicate and expiry policies can be modeled
-- activation authority remains blocked on the backend
-- remote DTO mapping can be validated without changing checkout behavior
-- approval evidence, versioning, and idempotency can be modeled safely
-- claim read-model hooks and mutation hooks are ready for future backend wiring
-- backend implementation is not production-ready in this repository
+Optional placeholders remain tracked for future work:
+
+- rideCommands
+- realtimeEvents
+- paymentTransactions
+- wallet
+- adminReview
+
+## Evaluation Categories
+
+Each domain records:
+
+- contract readiness
+- shadow readiness
+- safety readiness
+- risk category
+- rollout recommendation
+
+## Risk Categories
+
+- low
+- medium
+- high
+- financial
+- lifecycle
+- identity/security
+
+## Rollout Recommendations
+
+- `not_ready`
+- `shadow_only`
+- `staging_shadow_candidate`
+- `hybrid_candidate`
+- `remote_candidate`
+
+The current recommended rollout order starts with:
+
+1. savedLocations
+2. profile
+3. paymentMethods
+4. notifications
+5. vehicles
+6. rideReads
+7. driverOnboarding
+8. search
+9. map
+10. auth
+11. packages
+
+## Phase 13 Strategy
+
+Phase 13 should use this matrix to choose the first real backend staging
+integrations. The matrix is informational only until the backend authority and
+token/session, financial, lifecycle, and privacy gates are explicitly signed
+off.
+
+## Phase 13A Update
+
+Saved locations is the first real staging shadow integration.
+
+- readiness remains `staging_shadow_candidate`, not remote authority
+- `LOCAL` is still the default and authoritative runtime source
+- staging shadow requires explicit saved-location repository mode and backend
+  staging configuration
+- read shadow can be enabled without write shadow
+- write shadow defaults off and is disabled in production
+- production cannot accidentally use staging configuration
+
+This does not promote saved locations, profile, or any other domain to
+`HYBRID` or `REMOTE`.
+
+## Phase 13B Update
+
+Profile is the second real staging shadow integration.
+
+- readiness remains `staging_shadow_candidate`, not remote authority
+- `LOCAL` is still the default and authoritative runtime source
+- profile shadow requires explicit repository mode and backend staging
+  configuration
+- read shadow can be enabled without write shadow
+- write shadow defaults off and is disabled in production
+- production cannot accidentally use staging configuration
+- the one-account customer/driver model remains unchanged
+
+## Phase 13C Update
+
+The staging shadow health report is the diagnostics surface for deciding when a
+domain may become a future HYBRID candidate.
+
+- the report aggregates saved locations and profile events in memory
+- health status comes from actual shadow attempts, success, failure, timeout,
+  skip, and mismatch events
+- `collect_data` means there are no shadow attempts yet
+- `continue_shadow` means the domain has data but not enough healthy sample
+  size for promotion
+- `ready_for_hybrid_candidate` means the domain has enough healthy staging
+  data to review for a future HYBRID rollout
+- production guard blocks keep the report `blocked` for that domain
+
+## Phase 13D Update
+
+The staging health snapshot is the developer and CI surface for reading the
+same readiness data in a reviewable form.
+
+- `scripts/report-staging-shadow-health.js` does not contact the backend
+- JSON export and output-file writing are available for CI capture
+- strict mode only fails on blocked or failing snapshot status
+- the default command is safe when no staging data exists
+- this snapshot helps the team decide when a domain is ready for HYBRID
+  candidate review
+
+## Phase 13E Update
+
+The CI workflow archives the JSON snapshot so the team can compare readiness
+over time.
+
+- the artifact is named `staging-shadow-health-report`
+- the archived file is `artifacts/mobile/staging-health-report.json`
+- the JSON is sanitized and safe to review offline
+- `idle` / `collect_data` is the baseline, not a failure
+- trend comparison should focus on status, recommendation, score, blockers,
+  warnings, and summary metrics
+
+## Phase 13F Update
+
+The committed baseline gives the team a stable comparison point for the
+snapshot artifact.
+
+- the baseline file is `docs/baselines/staging-health-baseline.json`
+- non-strict comparison warns without failing the normal CI path
+- strict comparison is for HYBRID review branches and readiness gating
+- baseline changes should be deliberate and reviewed against the archived JSON
+- the sanitized baseline keeps the comparison safe for CI artifact retention
+- score-drop sensitivity is configurable via
+`STAGING_HEALTH_SCORE_DROP_THRESHOLD`
+
+## Phase 13G Update
+
+The HYBRID candidate review gate adds an explicit approval step without
+enabling HYBRID mode.
+
+- `data/remote/readiness/hybridCandidateGate.ts` evaluates saved locations and
+  profile against the readiness matrix, staging health, baseline comparison,
+  and production guard audit
+- the review gate is diagnostics-only and does not change runtime repository
+  source selection
+- explicit human approval is still required even when the metrics pass
+- the checked-in approval file defaults both domains to unapproved
+- savedLocations and profile are reviewed first because they already have the
+  safest real staging shadow paths
+
+## Phase 13H Update
+
+The HYBRID rollout dry-run scaffold defines the future stage model without
+changing runtime source selection.
+
+- `data/remote/readiness/hybridRolloutPolicy.ts` defines rollout stages and
+  rollback metadata for the future HYBRID path
+- the policy file is planning only and does not select a runtime repository
+- `disabled` is the default rollout stage
+- `shadow_remote`, `hybrid_dry_run`, `hybrid_canary`, `hybrid_enabled`, and
+  `remote_candidate` remain future stages only
+
+## Phase 13I Update
+
+Phase 13I adds the staging backend connection checklist and contract gate.
+
+- the checklist is separate from the readiness matrix and answers whether the
+  real staging backend is safe enough for diagnostics-only shadow calls
+- `savedLocations` and `profile` are the first domains checked because they
+  already have the safest real staging shadow paths
+- a connection-ready result is a prerequisite for staged backend evidence
+  collection, not a HYBRID or remote-authority signal
+
+Phase 13J adds the backend evidence pack and contract review pages.
+
+- the evidence pack documents the questions the backend team must answer
+  before the first real staging connection
+- the saved-locations and profile staging contract pages make the mobile
+  expectation explicit without claiming backend implementation proof
+- the evidence pack is still separate from runtime rollout decisions

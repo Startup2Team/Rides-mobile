@@ -12,6 +12,7 @@ import { useColors } from '@/hooks/useColors';
 import { ReferralQrCode } from './ReferralQrCode';
 import { appendStoredReferralEvent } from '@/persistence/referralEventsPersistence';
 import { buildReferralId, buildReferralLink, getReferralPlatform, REFERRAL_EVENT_NAMES } from '@/domain/referrals';
+import { typography } from '@/constants/typography';
 
 function eventId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -132,7 +133,7 @@ export default function ReferralShareScreen() {
   if (!user?.id) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <GlassHeader title={`Invite people to ${APP_NAME}`} subtitle="Share your link or QR" />
+        <GlassHeader title={`Invite people to ${APP_NAME}`} />
         <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
           <Text style={[styles.emptyState, { color: colors.mutedForeground }]}>No referral account is available.</Text>
         </View>
@@ -142,7 +143,7 @@ export default function ReferralShareScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <GlassHeader title={`Invite people to ${APP_NAME}`} subtitle="Share your link or QR" />
+      <GlassHeader title={`Invite people to ${APP_NAME}`} />
       <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
         <Text style={[styles.helpText, { color: colors.mutedForeground }]}>
           Ask a friend to scan the QR code, copy the link and send it in chat or contacts, or tap Share to choose social apps and messaging.
@@ -191,11 +192,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   emptyState: {
-    fontSize: 14,
+    ...typography.bodySmall,
     lineHeight: 20,
   },
   helpText: {
-    fontSize: 14,
+    ...typography.bodySmall,
     lineHeight: 19,
   },
   qrSection: {
@@ -224,8 +225,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     flex: 1,
-    fontSize: 17,
-    fontWeight: '400',
+    ...typography.title,
     lineHeight: 22,
   },
   actions: {
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   actionButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
+    ...typography.bodySmall,
+    fontFamily: typography.badge.fontFamily,
   },
 });

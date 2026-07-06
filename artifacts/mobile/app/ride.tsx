@@ -16,6 +16,7 @@ import { useRoute } from '@/hooks/useRoute';
 import { useRideActions } from '@/hooks/ride/useRideActions';
 import { useRideStatus } from '@/hooks/ride/useRideStatus';
 import { DriverInfoCard } from '@/components/ride/DriverInfoCard';
+import { ActiveRideProjectionSummary } from '@/components/ride/ActiveRideProjectionSummary';
 import { RideActionsSection } from '@/components/ride/RideActionsSection';
 import { RideHeader } from '@/components/ride/RideHeader';
 import { RideStatusSection } from '@/components/ride/RideStatusSection';
@@ -30,6 +31,7 @@ import { formatDistance, formatDuration, haversineKm, routePolylineThroughPinTip
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { Coords, KIGALI_CENTER, VehicleType } from '@/types';
+import { useActiveRideReadModel } from '@/domains/ride/dualRead/rideDualReadAdapter';
 
 const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
@@ -86,6 +88,7 @@ export default function RideScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, driverLocation, cancelRide } = useRide();
+  const activeRideReadModel = useActiveRideReadModel();
   const { showToast } = useToast();
   const mapRef = useRef<MapView>(null);
   const fittedMapStateRef = useRef<string | null>(null);
@@ -406,7 +409,7 @@ export default function RideScreen() {
           <TouchableOpacity
             style={[
               styles.mapLayerBtn,
-              { backgroundColor: colors.card, bottom: mapLayerBtnBottom },
+              { backgroundColor: colors.background, bottom: mapLayerBtnBottom },
             ]}
             onPress={cycleMapType}
             activeOpacity={0.8}
@@ -428,7 +431,7 @@ export default function RideScreen() {
           <TouchableOpacity
             style={[
               styles.recenterBtn,
-              { backgroundColor: colors.card, bottom: recenterBtnBottom },
+              { backgroundColor: colors.background, bottom: recenterBtnBottom },
             ]}
             onPress={recenterRideMap}
             activeOpacity={0.8}
@@ -448,6 +451,12 @@ export default function RideScreen() {
         safeAreaTop={insets.top}
         statusMessage={statusMessage}
       />
+      {currentRide && (
+        <ActiveRideProjectionSummary
+          colors={colors}
+          summary={activeRideReadModel.summary}
+        />
+      )}
       {isArrived && <RideStatusSection colors={colors} isLate={isPickupLate} message={arrivedBannerMessage} />}
       <View
         onLayout={event => {

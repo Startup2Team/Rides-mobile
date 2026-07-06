@@ -24,14 +24,19 @@ import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
-import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useProfileActions } from '@/domains/profile';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
 
 export default function EditProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile, updateUser, saveDriverProfile } = useAuth();
+  const { user, driverProfile } = useAuth();
   const { showToast } = useToast();
 
   const [name, setName] = useState(user?.name ?? '');
@@ -45,7 +50,7 @@ export default function EditProfileScreen() {
     emergencyContactName?: string;
     emergencyContactPhone?: string;
   }>({});
-  const { profileImage, handleImagePick, handleDeletePhoto } = useProfilePhotoActions(driverProfile?.profileImage);
+  const { profileImage, handleImagePick, handleDeletePhoto, updateUser } = useProfileActions(driverProfile?.profileImage);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   const handlePickImage = () => {
@@ -112,22 +117,23 @@ export default function EditProfileScreen() {
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: headerMetrics.contentTop + 28, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
+          { paddingTop: headerMetrics.contentTop + spacing[28], paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
         ]}
         keyboardShouldPersistTaps="handled"
       >
         {/* Avatar preview */}
         <View style={styles.avatarSection}>
           <TouchableOpacity onPress={handlePickImage} activeOpacity={0.85} style={styles.avatarContainer}>
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-            ) : (
+            <View style={styles.avatarInner}>
               <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
                 <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>{initials}</Text>
               </View>
-            )}
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImageAbsolute} />
+              ) : null}
+            </View>
             <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary }]}>
-              <Feather name="camera" size={12} color={colors.primaryForeground} />
+              <Feather name="camera" size={icons.size.xxs} color={colors.primaryForeground} />
             </View>
           </TouchableOpacity>
           <Text style={[styles.avatarHint, { color: colors.mutedForeground }]}>
@@ -247,21 +253,28 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { paddingHorizontal: 20 },
-  avatarSection: { alignItems: 'center', marginBottom: 32, gap: 8 },
-  avatarContainer: { position: 'relative', marginBottom: 4 },
+  scroll: { paddingHorizontal: semanticSpacing.screenPadding },
+  avatarSection: { alignItems: 'center', marginBottom: spacing[32], gap: semanticSpacing.inlineGap },
+  avatarContainer: { position: 'relative', marginBottom: spacing[4] },
+  avatarInner: {
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
+    overflow: 'hidden',
+    position: 'relative',
+  },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: sizes.avatar.xxl,
+    height: sizes.avatar.xxl,
+    borderRadius: spacing[40],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarImageAbsolute: { width: sizes.avatar.xxl, height: sizes.avatar.xxl, position: 'absolute', top: spacing[0], left: spacing[0] },
   avatarEditBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: spacing[0],
+    right: spacing[0],
     width: 26,
     height: 26,
     borderRadius: 13,
@@ -270,41 +283,40 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
-  avatarText: { fontSize: 28, fontFamily: 'Inter_700Bold' },
-  avatarHint: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  form: { gap: 16, marginBottom: 28 },
+  avatarText: { ...typography.h1, fontFamily: typography.badge.fontFamily},
+  avatarHint: { ...typography.caption, fontFamily: typography.body.fontFamily},
+  form: { gap: semanticSpacing.cardPadding, marginBottom: spacing[28] },
   readOnlyField: {
-    borderRadius: 12,
+    borderRadius: radius.input,
     borderWidth: 1,
-    height: 52,
-    paddingHorizontal: 14,
+    height: sizes.input.lg,
+    paddingHorizontal: semanticSpacing.listItemPadding,
     justifyContent: 'center',
   },
-  readOnlyValue: { fontSize: 15, fontFamily: 'Inter_400Regular' },
-  phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  changePhoneText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  phoneHint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -8 },
-  phoneFieldContainer: { gap: 6 },
+  readOnlyValue: { ...typography.body, fontFamily: typography.body.fontFamily},
+  phoneValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.rowGap },
+  changePhoneText: { ...typography.label, fontFamily: typography.title.fontFamily},
+  phoneHint: { ...typography.tiny, fontFamily: typography.body.fontFamily, marginTop: -8 },
+  phoneFieldContainer: { gap: semanticSpacing.compactGap },
   fieldLabel: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
-    marginLeft: 2,
+    ...typography.label,
+    fontFamily: typography.label.fontFamily,
+    marginLeft: spacing[2],
   },
   emergencyHeaderGroup: {
-    gap: 6,
-    marginTop: 8,
+    gap: semanticSpacing.compactGap,
+    marginTop: semanticSpacing.inlineGap,
   },
   sectionHeader: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
+    fontFamily: typography.title.fontFamily,
   },
   emergencyHint: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     lineHeight: 18,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 4,
+    marginVertical: spacing[4],
   },
 });

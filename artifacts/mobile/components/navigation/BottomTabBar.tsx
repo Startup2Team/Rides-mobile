@@ -2,7 +2,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -11,16 +10,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { BlurView } from 'expo-blur';
+import { icons } from '@/constants/icons';
+import { duration, easing } from '@/constants/motion';
+import { spacing } from '@/constants/spacing';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SAFE_BOTTOM, computeTabBarHeight } from '@/constants/tabBar';
+import { typography } from '@/constants/typography';
+import { useColors } from '@/hooks/useColors';
 
 const ACTIVE_LIGHT = '#007AFF';
 const ACTIVE_DARK = '#0A84FF';
-const INACTIVE = '#000000';
-const LIGHT_BACKGROUND = '#FFFFFF';
-const DARK_BACKGROUND = '#1C1C1E';
-const LIGHT_BORDER = '#E5E5EA';
-const DARK_BORDER = '#38383A';
+const INACTIVE_LIGHT = '#000000';
+const INACTIVE_DARK = '#FFFFFF';
+const PROFILE_HEADER_LIGHT_BACKGROUND = '#F2F2F7';
+const PROFILE_HEADER_DARK_BACKGROUND = '#000000';
 
 function TabBarItem({
   focused,
@@ -51,8 +53,8 @@ function TabBarItem({
   useEffect(() => {
     Animated.timing(progress, {
       toValue: focused ? 1 : 0,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
+      duration: duration.normal,
+      easing: easing.easeOutQuad,
       useNativeDriver: true,
     }).start();
   }, [focused, progress]);
@@ -78,19 +80,19 @@ function TabBarItem({
       Animated.timing(tapScale, {
         toValue: 0.92,
         duration: 55,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
         useNativeDriver: true,
       }),
       Animated.timing(tapScale, {
         toValue: 1.04,
         duration: 70,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
         useNativeDriver: true,
       }),
       Animated.timing(tapScale, {
         toValue: 1,
         duration: 60,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
         useNativeDriver: true,
       }),
     ]).start();
@@ -110,7 +112,7 @@ function TabBarItem({
       <Animated.View style={[styles.iconWrap, { opacity: iconOpacity, transform: [{ scale: iconScale }] }]}>
         {icon?.({
           color: focused ? activeColor : inactiveColor,
-          size: 24,
+          size: icons.semantic.tab,
           focused,
         })}
       </Animated.View>
@@ -121,7 +123,7 @@ function TabBarItem({
           {
             color: focused ? activeColor : inactiveColor,
             opacity: labelOpacity,
-            fontWeight: focused ? '700' : '500',
+            fontFamily: focused ? typography.badge.fontFamily : typography.tab.fontFamily,
           },
         ]}
       >
@@ -133,12 +135,13 @@ function TabBarItem({
 
 export function BottomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-  const backgroundColor = isDark ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)';
-  const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
+  const backgroundColor = isDark ? PROFILE_HEADER_DARK_BACKGROUND : PROFILE_HEADER_LIGHT_BACKGROUND;
+  const borderColor = colors.border;
   const activeColor = isDark ? ACTIVE_DARK : ACTIVE_LIGHT;
-  const inactiveColor = isDark ? '#FFFFFF' : INACTIVE;
+  const inactiveColor = isDark ? INACTIVE_DARK : INACTIVE_LIGHT;
 
   const focusedRoute = state.routes[state.index];
   const focusedOptions = descriptors[focusedRoute.key].options;
@@ -157,20 +160,13 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
           borderTopWidth: isHidden ? 0 : StyleSheet.hairlineWidth,
           height: isHidden ? 0 : totalHeight,
           minHeight: 0,
-          paddingTop: isHidden ? 0 : 4,
+          paddingTop: isHidden ? spacing[0] : spacing[4],
           paddingBottom: isHidden ? 0 : paddingBottomVal,
           opacity: isHidden ? 0 : 1,
           overflow: 'hidden',
         },
       ]}
     >
-      {!isHidden && (
-        <BlurView
-          intensity={90}
-          tint={isDark ? 'dark' : 'light'}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         if (route.name === 'share' || options.href === null) {
@@ -228,9 +224,9 @@ export function BottomTabBar({ state, descriptors, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: spacing[0],
+    left: spacing[0],
+    right: spacing[0],
     flexDirection: 'row',
     minHeight: TAB_BAR_CONTENT_HEIGHT,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -241,7 +237,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing[2],
     paddingVertical: 3,
   },
   itemPressed: {
@@ -252,54 +248,56 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   label: {
-    fontSize: 10,
-    lineHeight: 12,
+    ...typography.tab,
     letterSpacing: 0,
   },
 });
 
 export const customerTabBarIcons = {
   index: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="map" size={24} color={color} />
+    <MaterialCommunityIcons name="map" size={icons.semantic.tab} color={color} />
   ),
   history: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="receipt-text" size={24} color={color} />
+    <MaterialCommunityIcons name="receipt-text" size={icons.semantic.tab} color={color} />
   ),
   share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (
       <SymbolView
         name="square.and.arrow.up.fill"
-        size={24}
+        size={icons.semantic.tab}
         tintColor={color}
       />
     ) : (
-      <Ionicons name="share-social" size={24} color={color} />
+      <Ionicons name="share-social" size={icons.semantic.tab} color={color} />
     )
   ),
   profile: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="account" size={24} color={color} />
+    <MaterialCommunityIcons name="account" size={icons.semantic.tab} color={color} />
   ),
 };
 
 export const driverTabBarIcons = {
   index: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="car" size={24} color={color} />
+    <MaterialCommunityIcons name="car" size={icons.semantic.tab} color={color} />
   ),
   stats: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="chart-box" size={24} color={color} />
+    <MaterialCommunityIcons name="chart-box" size={icons.semantic.tab} color={color} />
+  ),
+  packages: ({ color }: { color: string; focused: boolean }) => (
+    <MaterialCommunityIcons name="cube-outline" size={icons.semantic.tab} color={color} />
   ),
   share: ({ color }: { color: string; focused: boolean }) => (
     Platform.OS === 'ios' ? (
       <SymbolView
         name="square.and.arrow.up.fill"
-        size={24}
+        size={icons.semantic.tab}
         tintColor={color}
       />
     ) : (
-      <Ionicons name="share-social" size={24} color={color} />
+      <Ionicons name="share-social" size={icons.semantic.tab} color={color} />
     )
   ),
   profile: ({ color }: { color: string; focused: boolean }) => (
-    <MaterialCommunityIcons name="account" size={24} color={color} />
+    <MaterialCommunityIcons name="account" size={icons.semantic.tab} color={color} />
   ),
 };

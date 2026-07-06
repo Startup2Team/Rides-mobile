@@ -39,3 +39,6 @@ yarn-error.*
 .vercel
 
 .env
+
+# CI staging shadow snapshot
+staging-health-report.json

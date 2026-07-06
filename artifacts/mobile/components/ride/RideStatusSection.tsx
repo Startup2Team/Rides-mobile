@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
+import { typography } from '@/constants/typography';
 
 export function RideStatusSection({ colors, isLate, message }: {
   colors: ReturnType<typeof useColors>;
@@ -18,5 +19,5 @@ export function RideStatusSection({ colors, isLate, message }: {
 
 const styles = StyleSheet.create({
   banner: { position: 'absolute', top: 110, left: 20, right: 20, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
-  text: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 20 },
+  text: { flex: 1, ...typography.bodySmall, fontFamily: typography.title.fontFamily, lineHeight: 20 },
 });

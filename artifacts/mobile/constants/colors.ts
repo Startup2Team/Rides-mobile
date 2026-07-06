@@ -14,7 +14,7 @@ const colors = {
     text: '#0a0a0a',
     tint: APPLE_SYSTEM_BLUE_HEX.light,
 
-    background: '#F5F5F5',
+    background: '#F2F2F7',
     foreground: '#0a0a0a',
 
     card: '#FFFFFF',
@@ -58,10 +58,10 @@ const colors = {
     text: '#FFFFFF',
     tint: APPLE_SYSTEM_BLUE_HEX.dark,
 
-    background: '#0A0A0A',
+    background: '#000000',
     foreground: '#FFFFFF',
 
-    card: '#161616',
+    card: '#1C1C1E',
     cardForeground: '#FFFFFF',
 
     primary: APPLE_SYSTEM_BLUE_HEX.dark,
@@ -92,7 +92,7 @@ const colors = {
     border: '#2A2A2A',
     input: '#1E1E1E',
 
-    surface: '#161616',
+    surface: '#1C1C1E',
     surfaceAlt: '#1E1E1E',
   },
 

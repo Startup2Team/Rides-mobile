@@ -90,6 +90,25 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+jest.mock('@/components/GlassScrollView', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    GlassScrollView: React.forwardRef(({ children, onRefresh, refreshing, ...props }: any, ref: any) => (
+      <View
+        ref={ref}
+        testID="packages-refresh-control"
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        {...props}
+      >
+        {children}
+      </View>
+    )),
+  };
+});
+
+
 jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light' },
   impactAsync: jest.fn(),
@@ -331,7 +350,7 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     expect(await screen.findByText('This package offer expired. Please refresh packages.')).toBeTruthy();
     expect(screen.queryByText('Send Payment Prompt')).toBeNull();
     fireEvent.press(screen.getByText('Return to Packages'));
-    expect(require('expo-router').router.replace).toHaveBeenCalledWith('/driver-packages');
+    expect(require('expo-router').router.replace).toHaveBeenCalledWith('/(driver)/packages');
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
   });
 

@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   Image,
   Platform,
@@ -12,7 +12,10 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
+import { useProfilePhotoQuery } from '@/query/hooks/useProfileQuery';
+import { elevation } from '@/constants/elevation';
+import { sizes } from '@/constants/sizes';
+import { typography } from '@/constants/typography';
 
 export type ProfileAvatarCircleProps = {
   size?: number;
@@ -25,7 +28,7 @@ export type ProfileAvatarCircleProps = {
 };
 
 export function ProfileAvatarCircle({
-  size = 44,
+  size = sizes.iconButton.md,
   initial,
   imageUri,
   onPress,
@@ -33,22 +36,18 @@ export function ProfileAvatarCircle({
   accessibilityLabel = 'Profile',
 }: ProfileAvatarCircleProps) {
   const isDark = useColorScheme() === 'dark';
-  const [storedProfileImage, setStoredProfileImage] = useState<string | null>(null);
+  const photoQuery = useProfilePhotoQuery();
   const radius = size / 2;
   const useStoredProfile = imageUri === undefined;
-  const displayUri = useStoredProfile ? storedProfileImage : imageUri;
+  const displayUri = useStoredProfile ? photoQuery.data ?? null : imageUri;
 
   useFocusEffect(
     useCallback(() => {
       if (!useStoredProfile) return undefined;
-      let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setStoredProfileImage(stored.data);
-      });
+      void photoQuery.refetch();
       return () => {
-        active = false;
       };
-    }, [useStoredProfile]),
+    }, [photoQuery, useStoredProfile]),
   );
 
   const content = (
@@ -65,20 +64,19 @@ export function ProfileAvatarCircle({
       ]}
     >
       <View style={[styles.circle, { width: size, height: size, borderRadius: radius }]}>
+        <LinearGradient
+          colors={['#9DBBE0', '#7984C3']}
+          style={[styles.fallback, { width: size, height: size, borderRadius: radius }]}
+        >
+          <Text style={[styles.initial, { fontSize: size * 0.4 }]}>{initial}</Text>
+        </LinearGradient>
         {displayUri ? (
           <Image
             key={displayUri}
             source={{ uri: displayUri }}
-            style={{ width: size, height: size }}
+            style={[StyleSheet.absoluteFill, { width: size, height: size }]}
           />
-        ) : (
-          <LinearGradient
-            colors={['#9DBBE0', '#7984C3']}
-            style={[styles.fallback, { width: size, height: size, borderRadius: radius }]}
-          >
-            <Text style={[styles.initial, { fontSize: size * 0.4 }]}>{initial}</Text>
-          </LinearGradient>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -101,10 +99,8 @@ export function ProfileAvatarCircle({
 
 const styles = StyleSheet.create({
   shadowWrap: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    ...elevation.md,
     shadowRadius: 6,
-    elevation: 4,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
@@ -118,7 +114,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   initial: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: typography.title.fontFamily,
     color: '#FFFFFF',
   },
   pressed: {

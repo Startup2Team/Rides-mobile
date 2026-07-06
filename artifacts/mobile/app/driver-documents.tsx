@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Alert, Image, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, Image, Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
@@ -25,6 +27,11 @@ import { isFutureExpiryDate, isValidDriverLicenceNumber } from '@/hooks/driver-o
 import { loadStoredDriverDocuments, saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
 import { isValidDocumentImageUri } from '@/utils/documentValidation';
 import { isValidRwandaNationalId } from '@/utils/rwandaValidation';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const DOCUMENT_ORDER: DocumentKey[] = ['license', 'nationalId', 'insurance', 'authorization'];
 const EXPIRY_DOCUMENTS: DocumentKey[] = ['license', 'insurance', 'authorization'];
@@ -36,7 +43,31 @@ export default function DriverDocumentsScreen() {
   const isDark = useColorScheme() === 'dark';
   const { driverProfile } = useAuth();
   const [documents, setDocuments] = React.useState<DriverDocuments | null>(null);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeKey, setActiveKey] = React.useState<DocumentKey | null>(null);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      const stored = await loadStoredDriverDocuments();
+      if (stored.data) {
+        const reconciled = driverProfile ? reconcileDriverDocumentsWithProfile(stored.data, driverProfile) : stored.data;
+        setDocuments(reconciled);
+        if (reconciled !== stored.data) await saveStoredDriverDocuments(reconciled);
+      } else if (driverProfile) {
+        setDocuments(buildDriverDocumentsFromProfile(driverProfile));
+      }
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [driverProfile]);
   const [documentNumber, setDocumentNumber] = React.useState('');
   const [expiryDate, setExpiryDate] = React.useState('');
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -112,16 +143,19 @@ export default function DriverDocumentsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-      <GlassHeader title="Driver Documents" subtitle="Manage submitted verification documents" />
+      <GlassHeader title="Driver Documents" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
-        contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING, paddingHorizontal: 16, gap: 18 }}
+        contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING, paddingHorizontal: semanticSpacing.cardPadding, gap: icons.semantic.row }}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={[styles.notice, { backgroundColor: colors.primaryHex + '10' }]}>
-          <Feather name="shield" size={18} color={colors.primary} />
-          <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
+          <Feather name="shield" size={icons.semantic.row} color={colors.primary} />
+          <AppText style={[styles.noticeText, { color: colors.mutedForeground }]}>
             Replacements are reviewed before becoming your verified driver documents.
-          </Text>
+          </AppText>
         </View>
 
         {documents ? DOCUMENT_ORDER.map(key => {
@@ -156,7 +190,7 @@ export default function DriverDocumentsScreen() {
             </DocumentCard>
           );
         }) : (
-          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading driver documents...</Text>
+          <AppText style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading driver documents...</AppText>
         )}
       </GlassScrollView>
     </View>
@@ -187,24 +221,24 @@ function DocumentCard({ cardFill, children, colors, onReplace, record, status }:
     <View style={[styles.card, styles.cardShadow, { backgroundColor: cardFill }]}>
       <View style={styles.cardTop}>
         <View style={styles.cardCopy}>
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>{DRIVER_DOCUMENT_LABELS[record.key]}</Text>
-          <Text style={[styles.cardMeta, { color: colors.mutedForeground }]}>
+          <AppText style={[styles.cardTitle, { color: colors.foreground }]}>{DRIVER_DOCUMENT_LABELS[record.key]}</AppText>
+          <AppText style={[styles.cardMeta, { color: colors.mutedForeground }]}>
             {record.documentNumber ? `Number: ${record.documentNumber}` : `${imageCount} image${imageCount === 1 ? '' : 's'} saved`}
-          </Text>
-          {record.expiryDate ? <Text style={[styles.cardMeta, { color: colors.mutedForeground }]}>Expires {record.expiryDate}</Text> : null}
+          </AppText>
+          {record.expiryDate ? <AppText style={[styles.cardMeta, { color: colors.mutedForeground }]}>Expires {record.expiryDate}</AppText> : null}
         </View>
         <View style={[styles.statusChip, { backgroundColor: statusColor + '14' }]}>
-          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+          <AppText style={[styles.statusText, { color: statusColor }]}>{statusLabel}</AppText>
         </View>
       </View>
       <View style={styles.previewRow}>
         {record.faces.slice(0, DOCUMENTS_REQUIRING_BACK.includes(record.key) ? 2 : 1).map((uri, index) => uri ? <Image key={uri} source={{ uri }} style={styles.preview} /> : (
           <View key={index} style={[styles.preview, styles.emptyPreview, { backgroundColor: colors.muted }]}>
-            <Feather name="image" size={16} color={colors.mutedForeground} />
+            <Feather name="image" size={icons.semantic.button} color={colors.mutedForeground} />
           </View>
         ))}
         <TouchableOpacity style={[styles.replaceButton, { backgroundColor: colors.primary }]} onPress={onReplace}>
-          <Text style={[styles.replaceText, { color: colors.primaryForeground }]}>Update Document</Text>
+          <AppText style={[styles.replaceText, { color: colors.primaryForeground }]}>Update Document</AppText>
         </TouchableOpacity>
       </View>
       {children}
@@ -245,11 +279,11 @@ function ReplacementEditor({
     <View style={[styles.editor, { borderTopColor: colors.border }]}>
       <View style={styles.editorHeading}>
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[styles.editorTitle, { color: colors.foreground }]}>Replace {DRIVER_DOCUMENT_LABELS[documentKey]}</Text>
-          <Text style={[styles.editorSubtitle, { color: colors.mutedForeground }]}>Upload clear and current document images.</Text>
+          <AppText style={[styles.editorTitle, { color: colors.foreground }]}>Replace {DRIVER_DOCUMENT_LABELS[documentKey]}</AppText>
+          <AppText style={[styles.editorSubtitle, { color: colors.mutedForeground }]}>Upload clear and current document images.</AppText>
         </View>
         <TouchableOpacity onPress={onClose} accessibilityLabel="Close document editor">
-          <Feather name="x" size={20} color={colors.foreground} />
+          <Feather name="x" size={icons.size.lg} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
@@ -291,7 +325,7 @@ function ReplacementEditor({
           onGallery={() => onGallery(documentKey, 1)}
         />
       ) : null}
-      {errors.document ? <Text style={[styles.errorText, { color: colors.destructive }]}>{errors.document}</Text> : null}
+      {errors.document ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors.document}</AppText> : null}
       <AppButton title="Submit Document Update" onPress={onSubmit} fullWidth size="lg" loading={saving} />
     </View>
   );
@@ -306,20 +340,20 @@ function FaceEditor({ colors, label, onCamera, onGallery, uri }: {
 }) {
   return (
     <View style={styles.faceEditor}>
-      <Text style={[styles.faceLabel, { color: colors.foreground }]}>{label}</Text>
+      <AppText style={[styles.faceLabel, { color: colors.foreground }]}>{label}</AppText>
       <View style={styles.faceRow}>
         {uri ? <Image source={{ uri }} style={styles.facePreview} /> : (
           <View style={[styles.facePreview, styles.emptyPreview, { backgroundColor: colors.muted }]}>
-            <Feather name="image" size={20} color={colors.mutedForeground} />
+            <Feather name="image" size={icons.size.lg} color={colors.mutedForeground} />
           </View>
         )}
         <TouchableOpacity style={[styles.faceAction, { backgroundColor: colors.muted }]} onPress={onGallery}>
           <Feather name="upload" size={15} color="#000" />
-          <Text style={[styles.faceActionText, { color: colors.foreground }]}>Gallery</Text>
+          <AppText style={[styles.faceActionText, { color: colors.foreground }]}>Gallery</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.faceAction, { backgroundColor: colors.muted }]} onPress={onCamera}>
           <Feather name="camera" size={15} color="#000" />
-          <Text style={[styles.faceActionText, { color: colors.foreground }]}>Camera</Text>
+          <AppText style={[styles.faceActionText, { color: colors.foreground }]}>Camera</AppText>
         </TouchableOpacity>
       </View>
     </View>
@@ -328,31 +362,31 @@ function FaceEditor({ colors, label, onCamera, onGallery, uri }: {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  notice: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 16 },
-  noticeText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular' },
-  loadingText: { textAlign: 'center', paddingVertical: 28, fontSize: 13, fontFamily: 'Inter_400Regular' },
-  card: { borderRadius: 20, padding: 15, gap: 14 },
-  cardShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
+  notice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10], padding: spacing[14], borderRadius: radius['2xl'] },
+  noticeText: { flex: 1, ...typography.caption, lineHeight: 18,  },
+  loadingText: { textAlign: 'center', paddingVertical: 28, ...typography.label,  },
+  card: { borderRadius: radius['3xl'], padding: 15, gap: spacing[14] },
+  cardShadow: { ...elevation.card, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
   cardCopy: { flex: 1, minWidth: 0, gap: 3 },
-  cardTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  cardMeta: { fontSize: 10, fontFamily: 'Inter_400Regular' },
-  statusChip: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 100 },
-  statusText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
-  previewRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { ...typography.bodySmall,  },
+  cardMeta: { ...typography.tiny,  },
+  statusChip: { paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 5, borderRadius: radius.pill },
+  statusText: { ...typography.tiny,  },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
   preview: { width: 42, height: 42, borderRadius: 10 },
   emptyPreview: { alignItems: 'center', justifyContent: 'center' },
-  replaceButton: { marginLeft: 'auto', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 100 },
-  replaceText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  editor: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16, gap: 16 },
-  editorHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  editorTitle: { fontSize: 17, fontFamily: 'Inter_700Bold' },
-  editorSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  faceEditor: { gap: 8 },
-  faceLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  faceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  facePreview: { width: 52, height: 52, borderRadius: 12 },
-  faceAction: { flex: 1, height: 44, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  faceActionText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  errorText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  replaceButton: { marginLeft: 'auto', paddingHorizontal: semanticSpacing.rowGap, paddingVertical: 9, borderRadius: radius.pill },
+  replaceText: { ...typography.button },
+  editor: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: semanticSpacing.cardPadding, gap: semanticSpacing.cardPadding },
+  editorHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap },
+  editorTitle: { ...typography.title,  },
+  editorSubtitle: { ...typography.tiny,  },
+  faceEditor: { gap: semanticSpacing.inlineGap },
+  faceLabel: { ...typography.caption,  },
+  faceRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
+  facePreview: { width: sizes.avatar.lg, height: sizes.avatar.lg, borderRadius: radius.input },
+  faceAction: { flex: 1, height: sizes.button.sm, borderRadius: radius.input, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[6] },
+  faceActionText: { ...typography.button },
+  errorText: { ...typography.tiny,  },
 });

@@ -1,72 +1,42 @@
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router, usePathname } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import React from 'react';
 import {
   Platform,
   StyleSheet,
-  Text,
-  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/BackButton';
+import { AppText } from '@/components/AppText';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import { zIndex } from '@/constants/zIndex';
 import { useColors } from '@/hooks/useColors';
 
 export function useGlassHeaderMetrics() {
   const insets = useSafeAreaInsets();
   const headerInset = insets.top + (Platform.OS === 'web' ? 67 : 0);
+  const headerHeight = 44;
+  const contentGap = spacing[20];
 
   return {
     headerInset,
-    contentTop: headerInset + 62,
-    indicatorTop: headerInset + 60,
+    contentTop: headerInset + headerHeight + contentGap,
+    indicatorTop: headerInset + headerHeight - 2,
   };
 }
 
 interface GlassHeaderProps {
   title: string;
-  subtitle?: string;
   showBack?: boolean;
   onBackPress?: () => void;
   right?: React.ReactNode;
   titleAccessory?: React.ReactNode;
 }
 
-// Global store to track scroll states per route pathname
-const listeners = new Map<string, Set<(isScrolled: boolean) => void>>();
-const states = new Map<string, boolean>();
-
-export const headerScrollStore = {
-  set(pathname: string, isScrolled: boolean) {
-    if (states.get(pathname) === isScrolled) return;
-    states.set(pathname, isScrolled);
-    const pathListeners = listeners.get(pathname);
-    if (pathListeners) {
-      pathListeners.forEach(listener => listener(isScrolled));
-    }
-  },
-  get(pathname: string) {
-    return states.get(pathname) ?? false;
-  },
-  subscribe(pathname: string, listener: (isScrolled: boolean) => void) {
-    if (!listeners.has(pathname)) {
-      listeners.set(pathname, new Set());
-    }
-    listeners.get(pathname)!.add(listener);
-    return () => {
-      listeners.get(pathname)?.delete(listener);
-      if (listeners.get(pathname)?.size === 0) {
-        listeners.delete(pathname);
-        states.delete(pathname);
-      }
-    };
-  },
-};
-
 export function GlassHeader({
   title,
-  subtitle,
   showBack = true,
   onBackPress,
   right,
@@ -74,45 +44,36 @@ export function GlassHeader({
 }: GlassHeaderProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const scheme = useColorScheme();
-  const glassTint = scheme === 'dark' ? 'dark' : 'light';
-  const pathname = typeof usePathname === 'function' ? usePathname() : '/mock-path';
-  const [isScrolled, setIsScrolled] = useState(() => headerScrollStore.get(pathname));
-
-  useEffect(() => {
-    setIsScrolled(headerScrollStore.get(pathname));
-    return headerScrollStore.subscribe(pathname, setIsScrolled);
-  }, [pathname]);
 
   return (
     <View
+      testID="glass-header"
       style={[
         styles.header,
         {
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 0,
-          backgroundColor: isScrolled
-            ? (scheme === 'dark' ? 'rgba(28, 28, 30, 0.45)' : 'rgba(255, 255, 255, 0.45)')
-            : 'transparent',
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: isScrolled ? colors.border : 'transparent',
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0),
+          backgroundColor: colors.background,
         },
       ]}
     >
-      <BlurView intensity={isScrolled ? 90 : 0} tint={glassTint} style={StyleSheet.absoluteFill} />
       <View style={styles.headerContent}>
         {showBack ? (
           <BackButton exitOnPress={false} onPress={onBackPress ?? (() => router.back())} />
         ) : (
           <View style={styles.sideSlot} />
         )}
-        <View style={styles.headerCenter}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
-              {title}
-            </Text>
-            {titleAccessory}
+
+        <View style={styles.headerCenter} pointerEvents="box-none">
+          <View style={styles.titleStack}>
+            <View style={styles.titleRow}>
+              <AppText variant="h3" style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
+                {title}
+              </AppText>
+              {titleAccessory}
+            </View>
           </View>
         </View>
+
         {right ?? <View style={styles.sideSlot} />}
       </View>
     </View>
@@ -122,26 +83,43 @@ export function GlassHeader({
 const styles = StyleSheet.create({
   header: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingBottom: 0,
+    top: spacing[0],
+    left: spacing[0],
+    right: spacing[0],
+    zIndex: zIndex.header,
+    paddingBottom: spacing[0],
     overflow: 'hidden',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    minHeight: 44,
+    paddingHorizontal: semanticSpacing.cardPadding,
   },
-  headerCenter: { flex: 1, alignItems: 'center', minWidth: 0 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
+  headerCenter: {
+    position: 'absolute',
+    left: 80,
+    right: 80,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleStack: {
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: semanticSpacing.inlineGap,
+    maxWidth: '100%',
+  },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    textShadowColor: 'rgba(0,0,0,0.16)',
-    textShadowRadius: 8,
+    ...typography.h3,
   },
-  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  sideSlot: { width: 44, height: 44 },
+  sideSlot: {
+    width: sizes.iconButton.md,
+    height: sizes.iconButton.md,
+  },
 });
