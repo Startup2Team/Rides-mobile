@@ -31,6 +31,10 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { DRIVER_PACKAGES_ROUTE } from '@/navigation/driverPackagesNavigation';
 import { closeTemporaryScreen, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import * as Clipboard from 'expo-clipboard';
+import { useToast } from '@/context/ToastContext';
+import { resolveManualPaymentInfo, type ResolvedManualPaymentInfo } from '@/services/manualPayment';
+import { purchasePackage, submitPaymentProof } from '@/services/driverPackages';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -63,6 +67,29 @@ export default function DriverPackagePaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const { showToast } = useToast();
+
+  // Manual (proof-based) payment.
+  const [paymentMethod, setPaymentMethod] = useState<'momo' | 'manual'>('momo');
+  const [manualInfo, setManualInfo] = useState<ResolvedManualPaymentInfo | null>(null);
+  const [proofRef, setProofRef] = useState('');
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualSubmitted, setManualSubmitted] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void resolveManualPaymentInfo().then(info => {
+      if (active) setManualInfo(info);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleCopy = async (value: string, label: string) => {
+    await Clipboard.setStringAsync(value);
+    showToast(`${label} copied`, 'info');
+  };
 
   const clearPaymentTimers = () => {
     paymentTimers.current.forEach(timer => clearTimeout(timer));
@@ -165,6 +192,55 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
   };
 
+  const handleSubmitManualProof = async () => {
+    if (!ridePackage) return;
+    if (isPackageOfferExpired(ridePackage)) {
+      setError('This package offer expired. Please refresh packages.');
+      return;
+    }
+    const ref = proofRef.trim();
+    if (!ref) {
+      setError('Enter the transaction ID from your MoMo confirmation SMS.');
+      return;
+    }
+    setManualSubmitting(true);
+    setError(null);
+    try {
+      // Track the purchase locally as pending review — credits are NOT granted
+      // until an admin confirms the manual payment.
+      const purchase = await createPackagePurchase({
+        offer: ridePackage,
+        provider: selectedProvider,
+        phoneNumber: phoneNumber || manualInfo?.phoneNumber || '',
+      });
+      setActivePurchase(purchase);
+      await updatePackagePurchaseStatus(purchase.transactionId, 'processing');
+      setPaymentStatus('processing');
+
+      // Real backend (best-effort; safe if the payment API isn't wired yet):
+      // create the purchase, then submit the proof for admin review.
+      try {
+        const { purchaseId } = await purchasePackage({
+          packageId: ridePackage.packageId,
+          idempotencyKey: `${purchase.transactionId}-${Date.now()}`,
+        });
+        await submitPaymentProof(purchaseId, {
+          paymentRef: ref,
+          providerTxnId: ref,
+          status: 'SUBMITTED',
+        });
+      } catch {
+        // Keep the local pending state; the proof can be re-submitted later.
+      }
+
+      setManualSubmitted(true);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Could not submit your payment proof.');
+    } finally {
+      setManualSubmitting(false);
+    }
+  };
+
   if (offerLoading) {
     return <View style={[styles.root, styles.centered, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <AppText style={[styles.invalidText, { color: colors.mutedForeground }]}>Loading package offer...</AppText>
@@ -205,6 +281,8 @@ export default function DriverPackagePaymentScreen() {
     >
       {receipt ? (
         <ReceiptCard activation={receipt} colors={colors} />
+      ) : manualSubmitted ? (
+        <ManualPendingCard amount={ridePackage.priceRwf} reference={proofRef} colors={colors} />
       ) : (
         <View style={styles.paymentContent}>
           <View style={styles.summaryPanel}>
@@ -243,35 +321,50 @@ export default function DriverPackagePaymentScreen() {
             <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} tone="success" />
           ) : (
             <>
-              <View style={styles.sectionHeading}>
-                <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</AppText>
-                <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
-                  Choose a provider and confirm the phone number that will receive the prompt.
-                </AppText>
-              </View>
-              <View style={styles.providerChoiceRow}>
-                {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
-                  <ProviderOption
-                    key={option}
-                    colors={colors}
-                    isSelected={selectedProvider === option}
-                    label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
-                    provider={option}
-                    shortLabel={option === 'mtn' ? 'MTN' : 'Airtel'}
-                    onPress={() => setSelectedProvider(option)}
+              <MethodTabs value={paymentMethod} onChange={setPaymentMethod} disabled={isWaiting} colors={colors} />
+
+              {paymentMethod === 'momo' ? (
+                <>
+                  <View style={styles.sectionHeading}>
+                    <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</AppText>
+                    <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+                      Choose a provider and confirm the phone number that will receive the prompt.
+                    </AppText>
+                  </View>
+                  <View style={styles.providerChoiceRow}>
+                    {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
+                      <ProviderOption
+                        key={option}
+                        colors={colors}
+                        isSelected={selectedProvider === option}
+                        label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+                        provider={option}
+                        shortLabel={option === 'mtn' ? 'MTN' : 'Airtel'}
+                        onPress={() => setSelectedProvider(option)}
+                      />
+                    ))}
+                  </View>
+                  <AppInput
+                    label="Mobile Money Phone Number"
+                    placeholder="+250 7xxxxxxxx"
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    keyboardType="phone-pad"
+                    leftIcon="smartphone"
                   />
-                ))}
-              </View>
-              <AppInput
-                label="Mobile Money Phone Number"
-                placeholder="+250 7xxxxxxxx"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                keyboardType="phone-pad"
-                leftIcon="smartphone"
-              />
-              {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} tone="waiting" /> : null}
-              {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} tone="error" /> : null}
+                  {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} tone="waiting" /> : null}
+                  {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} tone="error" /> : null}
+                </>
+              ) : (
+                <ManualPaymentSection
+                  amount={ridePackage.priceRwf}
+                  info={manualInfo}
+                  proofRef={proofRef}
+                  onChangeProofRef={setProofRef}
+                  onCopy={handleCopy}
+                  colors={colors}
+                />
+              )}
             </>
           )}
 
@@ -286,11 +379,22 @@ export default function DriverPackagePaymentScreen() {
               <AppButton title="Choose Another Method" onPress={handleChooseAnotherMethod} variant="secondary" style={styles.actionButton} />
               <AppButton title="Try Again" onPress={() => void handleSendPaymentPrompt()} loading={loading} style={styles.actionButton} />
             </View>
+          ) : isFree ? (
+            <AppButton title="Activate Package" onPress={() => void handleSendPaymentPrompt()} loading={loading} fullWidth size="lg" />
+          ) : paymentMethod === 'manual' ? (
+            <AppButton
+              title="I've Paid — Submit for Review"
+              onPress={() => void handleSubmitManualProof()}
+              disabled={!proofRef.trim()}
+              loading={manualSubmitting}
+              fullWidth
+              size="lg"
+            />
           ) : (
             <AppButton
-              title={isFree ? 'Activate Package' : 'Send Payment Prompt'}
+              title="Send Payment Prompt"
               onPress={() => void handleSendPaymentPrompt()}
-              disabled={!isFree && !phoneNumber.trim()}
+              disabled={!phoneNumber.trim()}
               loading={loading || isWaiting}
               fullWidth
               size="lg"
@@ -300,7 +404,9 @@ export default function DriverPackagePaymentScreen() {
             <View style={styles.secureNote}>
               <Feather name="lock" size={13} color={colors.mutedForeground} />
               <AppText style={[styles.secureNoteText, { color: colors.mutedForeground }]}>
-                You will confirm this payment securely on your phone.
+                {paymentMethod === 'manual'
+                  ? 'Your ride credits are added as soon as we verify your payment.'
+                  : 'You will confirm this payment securely on your phone.'}
               </AppText>
             </View>
           ) : null}
@@ -377,8 +483,131 @@ function ReceiptCard({ activation, colors }: {
   </View>;
 }
 
+function MethodTabs({ value, onChange, disabled, colors }: {
+  value: 'momo' | 'manual'; onChange: (v: 'momo' | 'manual') => void; disabled?: boolean;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const options: { key: 'momo' | 'manual'; label: string; icon: React.ComponentProps<typeof Feather>['name'] }[] = [
+    { key: 'momo', label: 'Mobile Money', icon: 'smartphone' },
+    { key: 'manual', label: 'Manual (Proof)', icon: 'edit-3' },
+  ];
+  return (
+    <View style={[styles.methodTabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {options.map(option => {
+        const active = value === option.key;
+        return (
+          <TouchableOpacity
+            key={option.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            disabled={disabled}
+            onPress={() => onChange(option.key)}
+            style={[styles.methodTab, active ? { backgroundColor: colors.primary } : null]}
+            activeOpacity={0.8}
+          >
+            <Feather name={option.icon} size={15} color={active ? '#fff' : colors.mutedForeground} />
+            <AppText style={[styles.methodTabText, { color: active ? '#fff' : colors.mutedForeground }]}>{option.label}</AppText>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function CopyRow({ label, value, onCopy, colors, emphasize }: {
+  label: string; value: string; onCopy: () => void; colors: ReturnType<typeof useColors>; emphasize?: boolean;
+}) {
+  return (
+    <View style={styles.copyRow}>
+      <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{label}</AppText>
+      <TouchableOpacity onPress={onCopy} style={styles.copyValue} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Copy ${label}`}>
+        <AppText style={[emphasize ? styles.copyValueEmphasis : styles.copyValueText, { color: emphasize ? colors.primary : colors.foreground }]}>{value}</AppText>
+        <Feather name="copy" size={14} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, onCopy, colors }: {
+  amount: number; info: ResolvedManualPaymentInfo | null; proofRef: string;
+  onChangeProofRef: (v: string) => void; onCopy: (value: string, label: string) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const payCode = info?.payCode ?? '…';
+  const phone = info?.phoneNumber ?? '…';
+  return (
+    <>
+      <View style={styles.sectionHeading}>
+        <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay manually</AppText>
+        <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+          Send {formatRwf(amount)} using the details below, then paste your transaction ID to submit for verification.
+        </AppText>
+      </View>
+
+      <View style={[styles.payTargetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <CopyRow label="Amount" value={formatRwf(amount)} onCopy={() => onCopy(String(amount), 'Amount')} colors={colors} />
+        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+        <CopyRow label="MoMo Pay Code" value={payCode} onCopy={() => onCopy(payCode, 'Pay code')} colors={colors} emphasize />
+        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+        <CopyRow label="Phone Number" value={phone} onCopy={() => onCopy(phone, 'Phone number')} colors={colors} />
+      </View>
+
+      <View style={[styles.instructionsBox, { backgroundColor: colors.primaryHex + '0A', borderColor: colors.primaryHex + '22' }]}>
+        <Feather name="info" size={15} color={colors.primary} />
+        <AppText style={[styles.instructionsText, { color: colors.mutedForeground }]}>
+          {info?.instructions ?? 'Pay with MTN MoMo, then paste your transaction ID below.'}
+        </AppText>
+      </View>
+
+      <AppInput
+        label="Transaction ID / Reference"
+        placeholder="e.g. 1234567890 (from your MoMo SMS)"
+        value={proofRef}
+        onChangeText={onChangeProofRef}
+        leftIcon="hash"
+        autoCapitalize="characters"
+      />
+    </>
+  );
+}
+
+function ManualPendingCard({ amount, reference, colors }: {
+  amount: number; reference: string; colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={[styles.paymentContent, styles.receiptCard]}>
+      <View style={[styles.receiptIconHalo, { backgroundColor: colors.warningHex + '18' }]}>
+        <View style={[styles.receiptIcon, { backgroundColor: colors.warning }]}>
+          <Feather name="clock" size={30} color="#fff" />
+        </View>
+      </View>
+      <AppText style={[styles.receiptTitle, { color: colors.foreground }]}>Payment Submitted</AppText>
+      <AppText style={[styles.receiptText, { color: colors.mutedForeground }]}>
+        We received your payment proof for {formatRwf(amount)}. Your ride credits will be added once our team verifies it — usually within a few minutes.
+      </AppText>
+      {reference ? (
+        <AppText style={[styles.receiptCredits, { color: colors.foreground }]}>Reference: {reference}</AppText>
+      ) : null}
+      <View style={styles.receiptAction}>
+        <AppButton title="Go to Dashboard" onPress={() => navigateToDriverHomeAfterCompletion(router)} fullWidth size="lg" />
+      </View>
+      <AppButton title="View Packages" onPress={() => closeTemporaryScreen(router, DRIVER_PACKAGES_ROUTE)} variant="plain" />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  methodTabs: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: radius.card, borderWidth: 1 },
+  methodTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: radius.md },
+  methodTabText: { ...typography.bodySmall },
+  payTargetCard: { borderRadius: radius.card, borderWidth: 1, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[4] },
+  copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing[10] },
+  copyValue: { flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
+  copyValueText: { ...typography.bodySmall },
+  copyValueEmphasis: { ...typography.title },
+  instructionsBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10], padding: 12, borderRadius: radius.card, borderWidth: 1 },
+  instructionsText: { flex: 1, ...typography.caption, lineHeight: 18 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: icons.semantic.row, padding: semanticSpacing.sectionGap },
   invalidIconHalo: { width: sizes.thumbnail.md, height: sizes.thumbnail.md, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[2] },
   invalidTitle: { ...typography.h2, letterSpacing: -0.3 },
