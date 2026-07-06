@@ -210,8 +210,9 @@ export class RemoteAuthRepository implements AuthSessionRepository {
 
     return this.shadow('requestOtp', async () => {
       const client = resolveClient('requestOtp', this.client);
-      const response = await client.post<ApiEnvelope<RequestOtpResponseDto>>('/v1/auth/otp/request-dry-run', {
-        body: domainToRequestOtpDto(input, true),
+      // Real backend: POST /api/v1/auth/register sends the OTP (no dry-run).
+      const response = await client.post<ApiEnvelope<RequestOtpResponseDto>>('/v1/auth/register', {
+        body: domainToRequestOtpDto(input, false),
       });
       return dtoToDomainOtpRequest(response.data.data);
     }, input.phoneNumber);
@@ -220,7 +221,7 @@ export class RemoteAuthRepository implements AuthSessionRepository {
   async verifyOtp(input: AuthVerifyOtpInput): Promise<AuthSessionDomain> {
     return this.shadow('verifyOtp', async () => {
       const client = resolveClient('verifyOtp', this.client);
-      const response = await client.post<ApiEnvelope<VerifyOtpResponseDto>>('/v1/auth/otp/verify', {
+      const response = await client.post<ApiEnvelope<VerifyOtpResponseDto>>('/v1/auth/verify-otp', {
         body: domainToVerifyOtpDto(input, metadata('verify-otp', maskPhone(input.phoneNumber) ?? 'unknown')),
       });
       return dtoToDomainAuthSession(response.data.data);
@@ -230,7 +231,7 @@ export class RemoteAuthRepository implements AuthSessionRepository {
   async refreshSession(refreshToken: string): Promise<AuthSessionDomain> {
     return this.shadow('refreshSession', async () => {
       const client = resolveClient('refreshSession', this.client);
-      const response = await client.post<ApiEnvelope<RefreshSessionResponseDto>>('/v1/auth/session/refresh', {
+      const response = await client.post<ApiEnvelope<RefreshSessionResponseDto>>('/v1/auth/refresh', {
         body: domainToRefreshSessionDto(refreshToken),
       });
       return dtoToDomainAuthSession(response.data.data);
