@@ -61,7 +61,6 @@ export default function DriverPackagePaymentStatusScreen() {
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader
         title="Payment Status"
-        subtitle="Track your manual package confirmations"
         onBackPress={() => router.back()}
       />
       <ScrollView

@@ -22,6 +22,7 @@ import { getActivePackages } from '@/domain/driverRidePackageCatalog';
 import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePackageOffer } from '@/domain/driverRideCampaigns';
 import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
+import { VEHICLE_LABELS } from '@/types';
 import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';

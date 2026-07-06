@@ -404,7 +404,7 @@ export default function DriverPackagePaymentScreen() {
     const isLoadingStatus = singleClaimQuery.isLoading || claimsQuery.isLoading;
 
     return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-      <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
+      <GlassHeader title="Package Payment" onBackPress={() => router.back()} />
       <ScrollView
         style={styles.root}
         contentContainerStyle={[
@@ -415,7 +415,7 @@ export default function DriverPackagePaymentScreen() {
       >
         {isLoadingStatus ? (
           <View style={styles.centered}>
-            <Text style={[styles.invalidText, { color: colors.mutedForeground }]}>Loading payment status...</Text>
+            <AppText style={[styles.invalidText, { color: colors.mutedForeground }]}>Loading payment status...</AppText>
           </View>
         ) : activeClaim ? (
           <View style={{ marginHorizontal: 20 }}>
@@ -452,10 +452,10 @@ export default function DriverPackagePaymentScreen() {
         ) : (
           <View style={styles.paymentContent}>
             <View style={styles.sectionHeading}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>I have paid</Text>
-              <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+              <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>I have paid</AppText>
+              <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
                 Submit the payment details you used so support can review the claim.
-              </Text>
+              </AppText>
             </View>
 
             <View style={styles.providerChoiceRow}>
@@ -482,12 +482,12 @@ export default function DriverPackagePaymentScreen() {
                       <Image source={PAYMENT_PROVIDER_LOGOS[provider.provider]} style={styles.providerLogo} resizeMode="contain" />
                     </View>
                     <View style={styles.providerTextBlock}>
-                      <Text style={[styles.providerOptionText, { color: colors.foreground }]}>
+                      <AppText style={[styles.providerOptionText, { color: colors.foreground }]}>
                         {provider.provider === 'mtn' ? 'MTN MoMo' : 'Airtel Money'}
-                      </Text>
-                      <Text style={[styles.providerOptionSubtext, { color: colors.mutedForeground }]}>
+                      </AppText>
+                      <AppText style={[styles.providerOptionSubtext, { color: colors.mutedForeground }]}>
                         {provider.enabled ? 'Available for manual claim' : 'Unavailable'}
-                      </Text>
+                      </AppText>
                     </View>
                     <View style={[styles.radioOuter, { borderColor: isSelected ? colors.primary : colors.border }]}>
                       {isSelected ? <View style={[styles.radioInner, { backgroundColor: colors.primary }]} /> : null}
@@ -519,15 +519,15 @@ export default function DriverPackagePaymentScreen() {
 
             <View style={[styles.notice, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <Feather name="shield" size={14} color={colors.primary} />
-              <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
+              <AppText style={[styles.noticeText, { color: colors.mutedForeground }]}>
                 Amount stays locked at {formatRwf(ridePackage.priceRwf)}.
-              </Text>
+              </AppText>
             </View>
 
             {manualClaimError ? (
               <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
                 <Feather name="alert-triangle" size={15} color={colors.destructive} />
-                <Text style={[styles.errorText, { color: colors.destructive }]}>{manualClaimError}</Text>
+                <AppText style={[styles.errorText, { color: colors.destructive }]}>{manualClaimError}</AppText>
               </View>
             ) : null}
 
@@ -555,7 +555,7 @@ export default function DriverPackagePaymentScreen() {
 
   if (paymentMode === 'disabled') {
     return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-      <GlassHeader title="Package Payment" subtitle="Review and complete your purchase" onBackPress={() => router.back()} />
+      <GlassHeader title="Package Payment" onBackPress={() => router.back()} />
       <ScrollView
         style={styles.root}
         contentContainerStyle={[
@@ -567,7 +567,7 @@ export default function DriverPackagePaymentScreen() {
         <PackagePaymentUnavailable
           offer={ridePackage}
           reasonText="Package payments are temporarily unavailable. Please try again later."
-          onBack={() => router.replace('/driver-packages')}
+          onBack={() => closeTemporaryScreen(router, '/driver-packages')}
         />
       </ScrollView>
     </View>;
