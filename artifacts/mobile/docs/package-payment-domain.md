@@ -7,6 +7,7 @@ Package payments are a separate responsibility from saved payment methods.
 - `domains/package-payments` owns payment mode, manual payment configuration, manual payment claims, transition rules, duplicate-reference policy, expiry policy, and future activation eligibility.
 
 MP2 adds the backend boundary prototype for package-payment configuration and manual claims, but the mobile checkout flow stays dormant and unchanged.
+MP3 adds a safe read path for payment configuration only. The query layer can observe automatic, manual, or disabled mode, but checkout behavior still falls back to automatic until a later phase deliberately branches UI.
 
 ## Payment Mode
 

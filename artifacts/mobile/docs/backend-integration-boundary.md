@@ -23,4 +23,6 @@ MP2 adds the backend/repository prototype only:
 - mapper layer between DTOs and domain
 - shadow repository diagnostics
 
+MP3 adds a read-only configuration query path that can observe backend-controlled payment mode while still falling back to automatic mode locally.
+
 It still does not wire driver UI, admin UI, activation authority, or ride-credit mutation.

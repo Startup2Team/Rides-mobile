@@ -22,4 +22,10 @@ MP2 adds the repository/backend boundary prototype:
 - DTO mapping layer
 - shadow repository diagnostics
 
+MP3 adds a read-only configuration query path:
+
+- the app can observe automatic, manual, or disabled mode
+- malformed, missing, or unavailable configuration falls back to automatic
+- checkout behavior does not branch yet
+
 That prototype is still dormant and does not change checkout runtime behavior.

@@ -5,6 +5,7 @@
 `domains/package-payments/repository.ts` defines the future package-payment repository contract.
 
 `data/remote/repositories/RemotePackagePaymentRepository.ts` is the current backend prototype for package-payment configuration and manual claim CRUD.
+`query/hooks/usePackagePaymentConfigQuery.ts` is the dormant read path for package-payment configuration. It always exposes a safe automatic fallback when configuration is missing, malformed, or unavailable.
 
 `data/remote/repositories/packagePaymentShadowRepository.ts` wraps a local repository and uses remote calls only for diagnostics.
 

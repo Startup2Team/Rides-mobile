@@ -14,6 +14,8 @@ It models:
 - claim submission, resubmission, and cancellation
 - admin review queue, detail, clarification, reject, and approve operations
 
+The configuration lookup is read-only and safe-falls back to automatic mode on the mobile client until a later phase chooses to branch checkout UI.
+
 The mobile driver client must not expose admin approval authority.
 
 The backend approval response is expected to be atomic with package activation in future backend work. The mobile client does not perform that activation.

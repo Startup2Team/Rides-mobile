@@ -5,6 +5,7 @@ export * from './manualPaymentClaimTransitions';
 export * from './manualPaymentClaimValidator';
 export * from './manualPaymentDuplicatePolicy';
 export * from './manualPaymentExpiryPolicy';
+export * from './packagePaymentConfiguration';
 export * from './manualPaymentUssdInstruction';
 export * from './packagePaymentMode';
 export * from './repository';
