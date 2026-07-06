@@ -74,6 +74,7 @@ function shadow<T>(
 export interface PackagePaymentShadowRepositoryOptions {
   localRepository?: PackagePaymentRepository;
   remoteRepository?: PackagePaymentRepository;
+  shadowWrites?: boolean;
 }
 
 export function createPackagePaymentShadowRepository(
@@ -81,6 +82,7 @@ export function createPackagePaymentShadowRepository(
 ): PackagePaymentRepository {
   const localRepository = options.localRepository ?? new InMemoryPackagePaymentRepository();
   const remoteRepository = options.remoteRepository ?? new InMemoryPackagePaymentRepository();
+  const shadowWrites = options.shadowWrites ?? false;
 
   return {
     getPaymentConfiguration() {
@@ -91,6 +93,9 @@ export function createPackagePaymentShadowRepository(
       );
     },
     createManualPaymentClaim(input: CreateManualPaymentClaimInput) {
+      if (!shadowWrites) {
+        return localRepository.createManualPaymentClaim(input);
+      }
       return shadow<ManualPaymentClaim>(
         'createManualPaymentClaim',
         () => localRepository.createManualPaymentClaim(input),
@@ -117,6 +122,9 @@ export function createPackagePaymentShadowRepository(
       );
     },
     submitManualPaymentClaim(input: SubmitManualPaymentClaimInput) {
+      if (!shadowWrites) {
+        return localRepository.submitManualPaymentClaim(input);
+      }
       return shadow<ManualPaymentClaim>(
         'submitManualPaymentClaim',
         () => localRepository.submitManualPaymentClaim(input),
@@ -129,6 +137,9 @@ export function createPackagePaymentShadowRepository(
       );
     },
     resubmitManualPaymentClaim(input: ResubmitManualPaymentClaimInput) {
+      if (!shadowWrites) {
+        return localRepository.resubmitManualPaymentClaim(input);
+      }
       return shadow<ManualPaymentClaim>(
         'resubmitManualPaymentClaim',
         () => localRepository.resubmitManualPaymentClaim(input),
@@ -141,6 +152,9 @@ export function createPackagePaymentShadowRepository(
       );
     },
     cancelManualPaymentClaim(input: CancelManualPaymentClaimInput) {
+      if (!shadowWrites) {
+        return localRepository.cancelManualPaymentClaim(input);
+      }
       return shadow<ManualPaymentClaim>(
         'cancelManualPaymentClaim',
         () => localRepository.cancelManualPaymentClaim(input),

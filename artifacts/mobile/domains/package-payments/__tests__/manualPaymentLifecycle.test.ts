@@ -162,9 +162,11 @@ describe('manual payment lifecycle policies', () => {
     const draft = makeClaim('draft');
     const submitted = submitManualPaymentClaim({ claim: draft, actorId: 'driver-1' }, config, now).data!;
     expect(submitted.status).toBe('submitted');
+    expect(submitted.version).toBe(2);
     const clarified = { ...submitted, status: 'needs_clarification' as const };
     const resubmitted = resubmitManualPaymentClaim({ claim: clarified, actorId: 'driver-1' }, config, now).data!;
     expect(resubmitted.status).toBe('pending_review');
+    expect(resubmitted.version).toBe(3);
     expect(resubmitted.activationId).toBeUndefined();
     expect(resubmitted.purchaseTransactionId).toBeUndefined();
   });

@@ -92,6 +92,7 @@ const manualPaymentClaimAuditEntrySchema = z.object({
 
 export const manualPaymentClaimsSchema = z.array(z.object({
   id: z.string(),
+  version: z.number().int().positive().default(1),
   driverId: z.string(),
   vehicleId: z.string(),
   vehicleType: vehicleTypeSchema,

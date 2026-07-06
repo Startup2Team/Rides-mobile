@@ -1,6 +1,7 @@
 import {
   buildManualPaymentUssdInstruction,
   createManualPaymentClaim,
+  submitManualPaymentClaim,
   validateManualPackagePaymentConfiguration,
   validateManualPaymentClaim,
   validateManualPaymentClaimForSubmission,
@@ -101,6 +102,7 @@ describe('manual payment claim and instruction policies', () => {
     expect(result.failure).toBeNull();
     expect(result.data).toMatchObject({
       id: 'RDP-2026-ABCDE',
+      version: 1,
       driverId: 'driver-1',
       packageId: offer.packageId,
       packageVersion: offer.packageVersion,
@@ -164,5 +166,19 @@ describe('manual payment claim and instruction policies', () => {
 
     const result = validateManualPaymentClaimForSubmission(created, manualConfig, now);
     expect(result.failure).toBeNull();
+  });
+
+  test('claim transitions increment version deterministically', () => {
+    const created = createManualPaymentClaim({
+      claimId: 'RDP-2026-ABCDE',
+      driverId: 'driver-1',
+      offer,
+      provider: 'mtn',
+      payerPhoneNumber: '+250788000000',
+      transactionReference: 'ABC123',
+    }, manualConfig).data!;
+
+    expect(created.version).toBe(1);
+    expect(submitManualPaymentClaim({ claim: created, actorId: 'driver-1' }, manualConfig, now).data?.version).toBe(2);
   });
 });

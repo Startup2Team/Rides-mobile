@@ -81,6 +81,7 @@ describe('packagePaymentRepositoryFactory', () => {
     });
     expect(created.failure).toBeNull();
     expect(created.data?.status).toBe('draft');
+    expect(created.data?.version).toBe(1);
 
     const storedClaim = {
       ...created.data!,
@@ -96,6 +97,7 @@ describe('packagePaymentRepositoryFactory', () => {
 
     expect(submitted.failure).toBeNull();
     expect(submitted.data?.status).toBe('submitted');
+    expect(submitted.data?.version).toBe(2);
     expect(mockSaveStoredManualPaymentClaims).toHaveBeenCalled();
   });
 
@@ -138,5 +140,33 @@ describe('packagePaymentRepositoryFactory', () => {
 
     expect(result.failure?.code).toBe('invalid_claim');
     expect(mockSaveStoredManualPaymentClaims).not.toHaveBeenCalled();
+  });
+
+  test('shadow remote mode keeps write diagnostics disabled by default', async () => {
+    const remoteCreate = jest.fn().mockResolvedValue({ data: null, failure: null });
+    const repository = createPackagePaymentRepository({
+      configuration,
+      mode: 'shadow_remote',
+      remoteRepository: {
+        getPaymentConfiguration: jest.fn().mockResolvedValue({ data: configuration, failure: null }),
+        createManualPaymentClaim: remoteCreate,
+        getManualPaymentClaim: jest.fn(),
+        listDriverManualPaymentClaims: jest.fn(),
+        submitManualPaymentClaim: jest.fn(),
+        resubmitManualPaymentClaim: jest.fn(),
+        cancelManualPaymentClaim: jest.fn(),
+      },
+    });
+
+    await repository.createManualPaymentClaim({
+      claimId: 'RDP-2026-ABC12',
+      driverId: 'driver-1',
+      offer,
+      provider: 'mtn',
+      payerPhoneNumber: '+250788000000',
+      transactionReference: 'MP123',
+    });
+
+    expect(remoteCreate).not.toHaveBeenCalled();
   });
 });

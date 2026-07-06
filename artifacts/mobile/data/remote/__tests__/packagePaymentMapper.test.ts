@@ -1,10 +1,16 @@
 import { BackendClientError } from '../backendClient';
 import {
   mapBackendPackagePaymentError,
+  mapAdminManualPaymentApproveClaimRequestToDto,
+  mapAdminManualPaymentClaimReviewResponseDtoToDomain,
+  mapAdminManualPaymentRejectClaimToDto,
+  mapAdminManualPaymentRequestClarificationToDto,
   mapCancelManualPaymentClaimInputToDto,
   mapManualPaymentClaimCreateInputToDto,
   mapManualPaymentClaimDtoToDomain,
+  mapManualPaymentApprovalResultDtoToDomain,
   mapPackagePaymentConfigurationDtoToDomain,
+  mapManualPaymentReviewQueueFiltersToDto,
   mapResubmitManualPaymentClaimInputToDto,
   mapSubmitManualPaymentClaimInputToDto,
 } from '../mappers/packagePaymentMapper';
@@ -42,8 +48,8 @@ const configurationDto: PackagePaymentConfigurationDto = {
   updatedAt: now.toISOString(),
   manual: {
     providers: [
-      { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
-      { provider: 'airtel', merchantCode: '3378888', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+      { provider: 'mtn', displayName: 'MTN MoMo', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+      { provider: 'airtel', displayName: 'Airtel Money', merchantCode: '3378888', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
     ],
     claimExpiresAfterMinutes: 30,
     transactionReferenceRequired: true,
@@ -84,8 +90,13 @@ describe('package payment mapper', () => {
         claimExpiresAfterMinutes: 30,
         transactionReferenceRequired: true,
         proofImageEnabled: true,
+        providers: [
+          { provider: 'mtn', merchantCode: '0202565', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+          { provider: 'airtel', merchantCode: '3378888', ussdTemplate: '*182*8*1*{merchantCode}*{amount}#', enabled: true },
+        ],
       },
     });
+    expect(domain.manual?.providers[0].displayName).toBe('MTN MoMo');
   });
 
   test('maps manual payment claim DTO to domain', () => {
@@ -107,6 +118,7 @@ describe('package payment mapper', () => {
     const domain = mapManualPaymentClaimDtoToDomain(claimDto);
     expect(domain).toMatchObject({
       id: 'RDP-2026-ABCDE',
+      version: 1,
       provider: 'mtn',
       merchantCodeSnapshot: '0202565',
       expectedAmountRwf: offer.priceRwf,
@@ -142,6 +154,66 @@ describe('package payment mapper', () => {
     });
   });
 
+  test('maps admin review DTO blueprints without leaking authority', () => {
+    const approvalRequest = {
+      claimId: 'RDP-2026-ABCDE',
+      expectedClaimVersion: 2,
+      verificationEvidence: {
+        method: 'merchant_message' as const,
+        verifiedAt: now.toISOString(),
+        verifiedBy: 'admin-1',
+        provider: 'mtn' as const,
+        amountMatched: true,
+        providerReferenceMatched: true,
+      },
+      idempotencyKey: 'manual-payment-claim:RDP-2026-ABCDE:approval',
+    };
+    const clarificationRequest = {
+      claimId: 'RDP-2026-ABCDE',
+      message: 'Please confirm the payment reference.',
+      expectedClaimVersion: 2,
+      idempotencyKey: 'manual-payment-claim:RDP-2026-ABCDE:approval',
+    };
+    const rejectionRequest = {
+      claimId: 'RDP-2026-ABCDE',
+      reasonCode: 'duplicate_reference',
+      message: 'Duplicate payment reference.',
+      expectedClaimVersion: 2,
+      idempotencyKey: 'manual-payment-claim:RDP-2026-ABCDE:approval',
+    };
+    const approvalResult = {
+      claimId: 'RDP-2026-ABCDE',
+      claimStatus: 'approved' as const,
+      claimVersion: 3,
+      packagePurchaseTransactionId: 'purchase-1',
+      packageActivationId: 'activation-1',
+      creditTransactionId: 'credit-1',
+      entitlement: {
+        packageId: 'growth',
+        packageVersion: 'v1',
+        vehicleId: 'vehicle-1',
+        remainingCredits: 20,
+        bonusCredits: 0,
+        activatedAt: now.toISOString(),
+        expiresAt: now.toISOString(),
+        version: 5,
+      },
+      eventId: 'event-1',
+    };
+
+    expect(mapAdminManualPaymentApproveClaimRequestToDto(approvalRequest)).toMatchObject(approvalRequest);
+    expect(mapAdminManualPaymentRequestClarificationToDto(clarificationRequest)).toMatchObject(clarificationRequest);
+    expect(mapAdminManualPaymentRejectClaimToDto(rejectionRequest)).toMatchObject({
+      ...rejectionRequest,
+      message: 'Duplicate payment reference.',
+    });
+    expect(mapManualPaymentApprovalResultDtoToDomain(approvalResult)).toMatchObject(approvalResult);
+    expect(mapManualPaymentReviewQueueFiltersToDto({ page: 1, pageSize: 20, status: ['pending_review'], provider: 'mtn' })).toMatchObject({ page: 1, pageSize: 20, status: ['pending_review'], provider: 'mtn' });
+    expect(mapAdminManualPaymentClaimReviewResponseDtoToDomain({ data: { claim: createClaim() as never, reviewResult: approvalResult as never, eventId: 'event-1' } })).toMatchObject({
+      eventId: 'event-1',
+    });
+  });
+
   test('maps typed backend errors to package-payment failures', () => {
     expect(mapBackendPackagePaymentError(new BackendClientError({
       kind: 'http',
@@ -158,5 +230,13 @@ describe('package payment mapper', () => {
       status: 404,
       message: 'Not found',
     }))).toMatchObject({ code: 'claim_not_found' });
+    expect(mapBackendPackagePaymentError(new BackendClientError({
+      kind: 'http',
+      service: 'package-payments',
+      operation: 'approveManualPaymentClaim',
+      status: 409,
+      code: 'claim_version_conflict',
+      message: 'Version conflict',
+    }))).toMatchObject({ code: 'claim_version_conflict' });
   });
 });

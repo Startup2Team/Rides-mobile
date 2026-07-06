@@ -38,6 +38,7 @@ describe('package payment repository and boundary', () => {
     expect('approveManualPaymentClaim' in repo).toBe(false);
     expect('rejectManualPaymentClaim' in repo).toBe(false);
     expect('forceActivatePackage' in repo).toBe(false);
+    expect('markPaymentVerified' in repo).toBe(false);
   });
 
   test('repository can return the current configuration, but not approve claims', async () => {

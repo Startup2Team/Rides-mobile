@@ -7,6 +7,7 @@ export type ManualPaymentProvider = 'mtn' | 'airtel';
 
 export interface ManualPaymentProviderConfiguration {
   provider: ManualPaymentProvider;
+  displayName?: string;
   merchantCode: string;
   ussdTemplate: string;
   enabled: boolean;
@@ -63,6 +64,7 @@ export interface ManualPaymentClaimAuditEntry {
 
 export interface ManualPaymentClaim {
   id: string;
+  version: number;
   driverId: string;
   vehicleId: string;
   vehicleType: VehicleType;
@@ -152,6 +154,26 @@ export type PackagePaymentFailureCode =
   | 'proof_required'
   | 'claim_not_found'
   | 'claim_not_activation_eligible'
+  | 'claim_version_conflict'
+  | 'claim_not_reviewable'
+  | 'claim_not_approvable'
+  | 'invalid_verification_evidence'
+  | 'verification_provider_mismatch'
+  | 'payment_amount_not_matched'
+  | 'provider_reference_not_matched'
+  | 'idempotency_conflict'
+  | 'approval_already_completed'
+  | 'activation_transaction_failed'
+  | 'package_purchase_transaction_failed'
+  | 'credit_transaction_failed'
+  | 'approval_transaction_failed'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'rate_limited'
+  | 'timeout'
+  | 'network_error'
+  | 'service_unavailable'
   | 'repository_unavailable';
 
 export interface PackagePaymentFailure {

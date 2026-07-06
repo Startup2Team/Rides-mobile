@@ -6,6 +6,10 @@ export function createManualPaymentClaimId(now = new Date()) {
   return `RDP-${year}-${suffix}`;
 }
 
+export function bumpManualPaymentClaimVersion(version: number) {
+  return Number.isInteger(version) && version > 0 ? version + 1 : 1;
+}
+
 export function createManualPaymentClaimAuditEntry(input: {
   claimId: string;
   at: string;

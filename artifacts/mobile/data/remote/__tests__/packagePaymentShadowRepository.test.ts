@@ -74,8 +74,18 @@ describe('package payment shadow repository', () => {
   });
 
   test('does not emit phone numbers, transaction references, proof ids, or support text', async () => {
+    const remoteCreate = jest.fn();
     const shadow = createPackagePaymentShadowRepository({
       localRepository: new InMemoryPackagePaymentRepository(config),
+      remoteRepository: {
+        getPaymentConfiguration: jest.fn(),
+        createManualPaymentClaim: remoteCreate,
+        getManualPaymentClaim: jest.fn(),
+        listDriverManualPaymentClaims: jest.fn(),
+        submitManualPaymentClaim: jest.fn(),
+        resubmitManualPaymentClaim: jest.fn(),
+        cancelManualPaymentClaim: jest.fn(),
+      },
     });
     await shadow.createManualPaymentClaim({
       claimId: 'RDP-2026-ABCDE',
@@ -93,5 +103,6 @@ describe('package payment shadow repository', () => {
     expect(combined).not.toContain('ABC123');
     expect(combined).not.toContain('proof-1');
     expect(combined).not.toContain('support');
+    expect(remoteCreate).not.toHaveBeenCalled();
   });
 });

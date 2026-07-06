@@ -5,11 +5,13 @@ import { assertNoDuplicateManualPaymentTransactionReference } from '@/domains/pa
 import { transitionManualPaymentClaim } from '@/domains/package-payments/manualPaymentClaimTransitions';
 import { loadStoredManualPaymentClaims, saveStoredManualPaymentClaims } from '@/persistence/manualPaymentClaimsPersistence';
 import { createPackagePaymentShadowRepository } from '@/data/remote/repositories/packagePaymentShadowRepository';
+import { normalizePackagePaymentRepositoryMode, type PackagePaymentRepositoryMode } from '@/domains/package-payments/packagePaymentRepositoryMode';
 
 export interface PackagePaymentRepositoryFactoryOptions {
   configuration?: PackagePaymentConfiguration | null;
   remoteRepository?: PackagePaymentRepository;
   enableRemoteDiagnostics?: boolean;
+  mode?: PackagePaymentRepositoryMode | null;
 }
 
 function success<T>(data: T): PackagePaymentOutcome<T> {
@@ -154,11 +156,19 @@ export function createPackagePaymentRepository(
   const localRepository = new LocalPackagePaymentRepository(
     options.configuration ?? null,
   );
+  const requestedMode = normalizePackagePaymentRepositoryMode(options.mode) ?? (
+    options.enableRemoteDiagnostics && options.remoteRepository ? 'shadow_remote' : 'local'
+  );
 
-  if (options.enableRemoteDiagnostics && options.remoteRepository) {
+  if (requestedMode === 'remote' && options.remoteRepository) {
+    return options.remoteRepository;
+  }
+
+  if (requestedMode === 'shadow_remote' && options.remoteRepository) {
     return createPackagePaymentShadowRepository({
       localRepository,
       remoteRepository: options.remoteRepository,
+      shadowWrites: false,
     });
   }
 

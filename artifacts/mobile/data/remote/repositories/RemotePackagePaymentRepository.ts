@@ -2,7 +2,7 @@ import type { BackendClient } from '../backendClient';
 import { BackendClientError } from '../backendClient';
 import type {
   ManualPaymentClaimDetailResponseDto,
-  ManualPaymentClaimListResponseDto,
+  ManualPaymentClaimCursorListResponseDto,
   ManualPaymentClaimMutationResponseDto,
   PackagePaymentConfigurationDto,
 } from '../contracts/api/packagePaymentApi';
@@ -11,7 +11,7 @@ import {
   mapCancelManualPaymentClaimInputToDto,
   mapManualPaymentClaimCreateInputToDto,
   mapManualPaymentClaimDetailResponseDtoToDomain,
-  mapManualPaymentClaimListResponseDtoToDomain,
+  mapManualPaymentClaimCursorListResponseDtoToDomain,
   mapPackagePaymentConfigurationDtoToDomain,
   mapResubmitManualPaymentClaimInputToDto,
   mapSubmitManualPaymentClaimInputToDto,
@@ -29,12 +29,12 @@ import {
 } from '@/domains/package-payments';
 
 const ENDPOINTS = {
-  configuration: '/package-payments/configuration',
-  claims: '/package-payments/claims',
-  claimDetail: (claimId: string) => `/package-payments/claims/${encodeURIComponent(claimId)}`,
-  submit: (claimId: string) => `/package-payments/claims/${encodeURIComponent(claimId)}/submit`,
-  resubmit: (claimId: string) => `/package-payments/claims/${encodeURIComponent(claimId)}/resubmit`,
-  cancel: (claimId: string) => `/package-payments/claims/${encodeURIComponent(claimId)}/cancel`,
+  configuration: '/v1/package-payments/configuration',
+  claims: '/v1/package-payments/manual-claims',
+  claimDetail: (claimId: string) => `/v1/package-payments/manual-claims/${encodeURIComponent(claimId)}`,
+  submit: (claimId: string) => `/v1/package-payments/manual-claims/${encodeURIComponent(claimId)}/submit`,
+  resubmit: (claimId: string) => `/v1/package-payments/manual-claims/${encodeURIComponent(claimId)}/resubmit`,
+  cancel: (claimId: string) => `/v1/package-payments/manual-claims/${encodeURIComponent(claimId)}/cancel`,
 };
 
 function success<T>(data: T): PackagePaymentOutcome<T> {
@@ -91,10 +91,9 @@ export class RemotePackagePaymentRepository implements PackagePaymentRepository 
 
   async listDriverManualPaymentClaims(driverId: string): Promise<PackagePaymentOutcome<ManualPaymentClaim[]>> {
     try {
-      const response = await this.client.get<ManualPaymentClaimListResponseDto>(
-        `${ENDPOINTS.claims}?driverId=${encodeURIComponent(driverId)}`,
-      );
-      return success(mapManualPaymentClaimListResponseDtoToDomain(response));
+      const response = await this.client.get<ManualPaymentClaimCursorListResponseDto>(ENDPOINTS.claims);
+      void driverId;
+      return success(mapManualPaymentClaimCursorListResponseDtoToDomain(response));
     } catch (error) {
       return failure(error);
     }

@@ -41,4 +41,23 @@ MP5 adds driver claim submission:
 - the mobile client still cannot approve, reject, or activate packages
 - credits still come only from the package entitlement path
 
-That prototype is still dormant and does not change checkout runtime behavior.
+MP6 adds the admin review and atomic approval boundary:
+
+- review policies model pending-review eligibility, version conflicts, and claim terminal states
+- verification evidence is typed and does not carry raw SMS text, credentials, or screenshots
+- approval is a backend/admin contract only
+- approval must bridge purchase, activation, credit grant, audit, and outbox event in one trusted transaction
+- the mobile driver repository still cannot approve, reject, or activate anything
+
+MP7 in this workspace is a backend handoff only. No Go backend source is present here, so no production approval implementation is possible in the mobile repository.
+
+MP8 finalizes the frontend/backend integration contract:
+
+- planned driver claim endpoints are documented in the OpenAPI spec as planned only
+- query hooks exist for future backend-backed claim reads
+- mutation hooks exist for create/submit/resubmit/cancel only
+- local prototype claims remain local prototype claims
+- local prototype claims do not auto-sync to the backend
+- remote claims are backend-authoritative when the backend team ships them
+
+That prototype is still dormant and does not change checkout runtime behavior. Driver submission remains submission-only until the trusted backend implements the approval transaction.

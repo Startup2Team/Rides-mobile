@@ -64,6 +64,7 @@ export function transitionManualPaymentClaim(
   const action = auditActionByStatus[nextStatus];
   const nextClaim: ManualPaymentClaim = {
     ...claim,
+    version: claim.version + 1,
     status: nextStatus,
     reviewedAt: nextStatus === 'approved' || nextStatus === 'rejected' || nextStatus === 'needs_clarification' ? at : claim.reviewedAt,
     reviewedBy: (nextStatus === 'approved' || nextStatus === 'rejected' || nextStatus === 'needs_clarification') ? input.actorId ?? claim.reviewedBy : claim.reviewedBy,

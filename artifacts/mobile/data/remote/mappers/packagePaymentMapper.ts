@@ -1,14 +1,21 @@
 import type {
   BackendErrorDto,
   BackendErrorResponseDto,
+  AdminManualPaymentApproveClaimRequestDto,
+  AdminManualPaymentClaimReviewResponseDto,
+  AdminManualPaymentRejectClaimRequestDto,
+  AdminManualPaymentRequestClarificationRequestDto,
   CreateManualPaymentClaimRequestDto,
   ManualPackagePaymentConfigurationDto,
   ManualPaymentClaimDto,
   ManualPaymentClaimDetailResponseDto,
   ManualPaymentClaimMutationResponseDto,
   ManualPaymentClaimListResponseDto,
+  ManualPaymentClaimCursorListResponseDto,
   ManualPaymentClaimQueueResponseDto,
+  ManualPaymentClaimReviewQueueFiltersDto,
   ManualPaymentClaimSummaryDto,
+  ManualPaymentApprovalResultDto,
   PackagePaymentConfigurationDto,
   PackagePaymentModeDto,
   ResubmitManualPaymentClaimRequestDto,
@@ -22,6 +29,7 @@ import {
   type ManualPaymentClaim,
   type ManualPaymentClaimAuditAction,
   type ManualPaymentProviderConfiguration,
+  type ManualPaymentVerificationEvidence,
   type ManualPaymentValidationResult,
   type PackagePaymentConfiguration,
   type PackagePaymentFailure,
@@ -48,6 +56,26 @@ const FAILURE_CODES = new Set<PackagePaymentFailureCode>([
   'proof_required',
   'claim_not_found',
   'claim_not_activation_eligible',
+  'claim_version_conflict',
+  'claim_not_reviewable',
+  'claim_not_approvable',
+  'invalid_verification_evidence',
+  'verification_provider_mismatch',
+  'payment_amount_not_matched',
+  'provider_reference_not_matched',
+  'idempotency_conflict',
+  'approval_already_completed',
+  'activation_transaction_failed',
+  'package_purchase_transaction_failed',
+  'credit_transaction_failed',
+  'approval_transaction_failed',
+  'unauthorized',
+  'forbidden',
+  'not_found',
+  'rate_limited',
+  'timeout',
+  'network_error',
+  'service_unavailable',
   'repository_unavailable',
 ]);
 
@@ -90,6 +118,7 @@ function mapManualPackagePaymentConfigurationDtoToDomain(
   return {
     providers: dto.providers.map((provider): ManualPaymentProviderConfiguration => ({
       provider: provider.provider,
+      displayName: provider.displayName ?? undefined,
       merchantCode: provider.merchantCode,
       ussdTemplate: provider.ussdTemplate,
       enabled: provider.enabled,
@@ -142,6 +171,7 @@ export function mapPackagePaymentConfigurationDomainToDto(
 export function mapManualPaymentClaimDtoToDomain(dto: ManualPaymentClaimDto): ManualPaymentClaim {
   return {
     id: dto.id,
+    version: dto.version ?? 1,
     driverId: dto.driverId,
     vehicleId: dto.vehicleId,
     vehicleType: dto.vehicleType,
@@ -159,9 +189,10 @@ export function mapManualPaymentClaimDtoToDomain(dto: ManualPaymentClaimDto): Ma
     createdAt: dto.createdAt,
     submittedAt: normalizeOptionalNullableString(dto.submittedAt),
     expiresAt: dto.expiresAt,
+    // The backend may later return a safer read model; current domain mapping keeps compatibility.
     reviewedAt: normalizeOptionalNullableString(dto.reviewedAt),
     reviewedBy: normalizeOptionalNullableString(dto.reviewedBy),
-    rejectionReason: normalizeOptionalNullableString(dto.rejectionReason),
+    rejectionReason: normalizeOptionalNullableString(dto.rejectionReason ?? dto.rejectionReasonCode ?? dto.rejectionMessage),
     clarificationMessage: normalizeOptionalNullableString(dto.clarificationMessage),
     supportNote: normalizeOptionalNullableString(dto.supportNote),
     activationId: normalizeOptionalNullableString(dto.activationId),
@@ -181,6 +212,7 @@ export function mapManualPaymentClaimDtoToDomain(dto: ManualPaymentClaimDto): Ma
 function mapManualPaymentClaimToDto(claim: ManualPaymentClaim): ManualPaymentClaimDto {
   return {
     id: claim.id,
+    version: claim.version,
     driverId: claim.driverId,
     vehicleId: claim.vehicleId,
     vehicleType: claim.vehicleType,
@@ -192,19 +224,29 @@ function mapManualPaymentClaimToDto(claim: ManualPaymentClaim): ManualPaymentCla
     provider: claim.provider,
     merchantCodeSnapshot: claim.merchantCodeSnapshot,
     payerPhoneNumber: claim.payerPhoneNumber,
+    maskedPayerPhone: normalizeRwandaPhoneNumber(claim.payerPhoneNumber)
+      ? `+250***${normalizeRwandaPhoneNumber(claim.payerPhoneNumber)?.slice(-4)}`
+      : null,
     transactionReference: claim.transactionReference ?? null,
+    transactionReferencePresent: Boolean(claim.transactionReference?.trim()),
+    maskedTransactionReference: claim.transactionReference ? `***${claim.transactionReference.trim().slice(-4)}` : null,
     proofImageId: claim.proofImageId ?? null,
     status: claim.status,
     createdAt: claim.createdAt,
     submittedAt: claim.submittedAt ?? null,
     expiresAt: claim.expiresAt,
+    updatedAt: claim.reviewedAt ?? claim.submittedAt ?? claim.createdAt,
     reviewedAt: claim.reviewedAt ?? null,
     reviewedBy: claim.reviewedBy ?? null,
     rejectionReason: claim.rejectionReason ?? null,
+    rejectionReasonCode: claim.rejectionReason ?? null,
+    rejectionMessage: claim.rejectionReason ?? null,
     clarificationMessage: claim.clarificationMessage ?? null,
     supportNote: claim.supportNote ?? null,
+    approvedAt: claim.status === 'approved' ? claim.reviewedAt ?? claim.submittedAt ?? claim.createdAt : null,
     activationId: claim.activationId ?? null,
     purchaseTransactionId: claim.purchaseTransactionId ?? null,
+    entitlementVersion: null,
     idempotencyKey: claim.idempotencyKey,
     auditLog: claim.auditLog.map(entry => ({
       id: entry.id,
@@ -281,10 +323,103 @@ export function mapManualPaymentClaimListResponseDtoToDomain(
   return response.data.items.map(mapManualPaymentClaimDtoToDomain);
 }
 
+export function mapManualPaymentClaimCursorListResponseDtoToDomain(
+  response: ManualPaymentClaimCursorListResponseDto,
+): ManualPaymentClaim[] {
+  return response.data.items.map(mapManualPaymentClaimDtoToDomain);
+}
+
 export function mapManualPaymentClaimQueueResponseDtoToDomain(
   response: ManualPaymentClaimQueueResponseDto,
 ): ManualPaymentClaimSummaryDto[] {
-  return response.data.items.map(item => ({ ...item }));
+  return response.data.items.map(item => ({ ...item, version: item.version ?? 1 }));
+}
+
+export function mapManualPaymentReviewQueueFiltersToDto(
+  input: ManualPaymentClaimReviewQueueFiltersDto,
+): ManualPaymentClaimReviewQueueFiltersDto {
+  return {
+    page: input.page,
+    pageSize: input.pageSize,
+    status: input.status ?? null,
+    provider: input.provider ?? null,
+    submittedFrom: input.submittedFrom ?? null,
+    submittedTo: input.submittedTo ?? null,
+    claimSearch: input.claimSearch ?? null,
+    driverSearch: input.driverSearch ?? null,
+  };
+}
+
+export function mapManualPaymentApprovalEvidenceToDto(
+  evidence: ManualPaymentVerificationEvidence,
+): ManualPaymentVerificationEvidence {
+  return { ...evidence };
+}
+
+export function mapAdminManualPaymentApproveClaimRequestToDto(
+  input: AdminManualPaymentApproveClaimRequestDto,
+): AdminManualPaymentApproveClaimRequestDto {
+  return {
+    claimId: input.claimId,
+    expectedClaimVersion: input.expectedClaimVersion,
+    verificationEvidence: mapManualPaymentApprovalEvidenceToDto(input.verificationEvidence),
+    idempotencyKey: input.idempotencyKey,
+  };
+}
+
+export function mapAdminManualPaymentRequestClarificationToDto(
+  input: AdminManualPaymentRequestClarificationRequestDto,
+): AdminManualPaymentRequestClarificationRequestDto {
+  return {
+    claimId: input.claimId,
+    message: input.message,
+    expectedClaimVersion: input.expectedClaimVersion,
+    idempotencyKey: input.idempotencyKey,
+  };
+}
+
+export function mapAdminManualPaymentRejectClaimToDto(
+  input: AdminManualPaymentRejectClaimRequestDto,
+): AdminManualPaymentRejectClaimRequestDto {
+  return {
+    claimId: input.claimId,
+    expectedClaimVersion: input.expectedClaimVersion,
+    reasonCode: input.reasonCode,
+    message: input.message ?? null,
+    idempotencyKey: input.idempotencyKey,
+  };
+}
+
+export function mapManualPaymentApprovalResultDtoToDomain(dto: ManualPaymentApprovalResultDto) {
+  return {
+    claimId: dto.claimId,
+    claimStatus: dto.claimStatus,
+    claimVersion: dto.claimVersion,
+    packagePurchaseTransactionId: dto.packagePurchaseTransactionId,
+    packageActivationId: dto.packageActivationId,
+    creditTransactionId: dto.creditTransactionId,
+    entitlement: {
+      packageId: dto.entitlement.packageId,
+      packageVersion: dto.entitlement.packageVersion,
+      vehicleId: dto.entitlement.vehicleId,
+      remainingCredits: dto.entitlement.remainingCredits,
+      bonusCredits: dto.entitlement.bonusCredits,
+      activatedAt: dto.entitlement.activatedAt,
+      expiresAt: dto.entitlement.expiresAt,
+      version: dto.entitlement.version,
+    },
+    eventId: dto.eventId,
+  };
+}
+
+export function mapAdminManualPaymentClaimReviewResponseDtoToDomain(
+  response: AdminManualPaymentClaimReviewResponseDto,
+) {
+  return {
+    claim: response.data.claim ? mapManualPaymentClaimDtoToDomain(response.data.claim) : null,
+    reviewResult: response.data.reviewResult ? mapManualPaymentApprovalResultDtoToDomain(response.data.reviewResult) : null,
+    eventId: response.data.eventId ?? null,
+  };
 }
 
 function isPackagePaymentFailureCode(value: string): value is PackagePaymentFailureCode {
@@ -313,10 +448,17 @@ export function mapBackendPackagePaymentError(error: unknown): PackagePaymentFai
       };
     }
 
+    if (error.kind === 'network') return { code: 'network_error', message: error.message, details: { kind: error.kind } };
+    if (error.kind === 'aborted') return { code: 'timeout', message: error.message, details: { kind: error.kind } };
+
+    if (error.status === 401) return { code: 'unauthorized', message: error.message, details: { status: error.status } };
+    if (error.status === 403) return { code: 'forbidden', message: error.message, details: { status: error.status } };
     if (error.status === 404) return { code: 'claim_not_found', message: error.message, details: { status: error.status } };
+    if (error.status === 408) return { code: 'timeout', message: error.message, details: { status: error.status } };
     if (error.status === 409) return { code: 'duplicate_transaction_reference', message: error.message, details: { status: error.status } };
     if (error.status === 422) return { code: 'invalid_claim', message: error.message, details: { status: error.status } };
-    if (error.status === 403) return { code: 'manual_payment_unavailable', message: error.message, details: { status: error.status } };
+    if (error.status === 429) return { code: 'rate_limited', message: error.message, details: { status: error.status } };
+    if (error.status === 503) return { code: 'service_unavailable', message: error.message, details: { status: error.status } };
 
     return {
       code: 'repository_unavailable',

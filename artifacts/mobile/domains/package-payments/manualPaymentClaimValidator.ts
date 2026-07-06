@@ -93,6 +93,9 @@ function asManualPackageConfiguration(
     const ussdTemplate = (provider.ussdTemplate as string).trim();
     providers.push({
       provider: provider.provider,
+      displayName: typeof provider.displayName === 'string' && provider.displayName.trim().length > 0
+        ? provider.displayName.trim()
+        : undefined,
       merchantCode,
       ussdTemplate,
       enabled: provider.enabled,
@@ -134,6 +137,9 @@ export function validateManualPaymentProviderConfiguration(
 
   return success({
     provider: provider.provider,
+    displayName: typeof provider.displayName === 'string' && provider.displayName.trim().length > 0
+      ? provider.displayName.trim()
+      : undefined,
     merchantCode,
     ussdTemplate,
     enabled: provider.enabled,
@@ -317,6 +323,7 @@ export function validateManualPaymentClaim(
   const claimId = input.claimId ?? createManualPaymentClaimId(new Date(validation.createdAt));
   return success({
     id: claimId,
+    version: 1,
     driverId: input.driverId.trim(),
     vehicleId: input.offer.vehicleId,
     vehicleType: input.offer.vehicleType,

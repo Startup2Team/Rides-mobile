@@ -39,7 +39,10 @@ export function createManualPaymentClaim(
 
   const validation = validateManualPaymentClaim(input, config.data);
   if (validation.failure || !validation.data) return outcome<ManualPaymentClaim>(null, validation.failure);
-  return outcome<ManualPaymentClaim>(validation.data, null);
+  return outcome<ManualPaymentClaim>({
+    ...validation.data,
+    version: 1,
+  }, null);
 }
 
 export function getManualPaymentClaimExpiry(
@@ -101,6 +104,7 @@ export function submitManualPaymentClaim(
   const submittedAt = input.submittedAt ?? now.toISOString();
   const submitted: ManualPaymentClaim = {
     ...claim,
+    version: claim.version + 1,
     transactionReference: validation.data.transactionReference,
     proofImageId: validation.data.proofImageId,
     status: 'submitted',
@@ -134,6 +138,7 @@ export function resubmitManualPaymentClaim(
   }
   return outcome<ManualPaymentClaim>({
     ...claim,
+    version: claim.version + 1,
     status: 'pending_review',
     submittedAt: input.submittedAt ?? now.toISOString(),
     auditLog: [
@@ -163,6 +168,7 @@ export function cancelManualPaymentClaim(
   const cancelledAt = input.cancelledAt ?? now.toISOString();
   return outcome<ManualPaymentClaim>({
     ...claim,
+    version: claim.version + 1,
     status: 'cancelled',
     auditLog: [
       ...claim.auditLog,
