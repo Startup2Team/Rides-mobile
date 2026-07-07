@@ -43,4 +43,3 @@ Any failure before commit must roll back the whole operation.
 Use row lock plus version check, or a single compare-and-swap update under transaction.
 
 If the claim version is stale, return claim_version_conflict.
-

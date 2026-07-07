@@ -33,4 +33,3 @@ Do not include:
 Outbox delivery happens after commit and must be idempotent.
 
 Notification delivery failure must not roll back committed activation.
-

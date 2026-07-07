@@ -16,4 +16,3 @@ export interface ManualPaymentClaimApprovedEvent {
   entitlementVersion: number;
   occurredAt: string;
 }
-

@@ -48,4 +48,3 @@ export function selectRelevantManualPaymentClaim(
   // Sort by updatedAt or createdAt (latest first) to choose the latest one.
   return relevant.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 }
-

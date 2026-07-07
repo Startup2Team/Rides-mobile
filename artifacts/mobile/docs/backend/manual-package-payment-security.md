@@ -26,4 +26,3 @@ Never log:
 Driver-facing responses should only expose safe, user-visible review state and safe explanations.
 
 Internal review notes and fraud diagnostics belong only in backend-admin storage and logs with strict controls.
-

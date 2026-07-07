@@ -249,7 +249,7 @@ export default function DriverPackagePaymentScreen() {
 
   const handleCancelClaim = async (claimId: string, version: number) => {
     if (!user?.id) return { failure: { code: 'unauthorized', message: 'Unauthorized' } };
-    
+
     const claimRes = await packagePaymentRepository.getManualPaymentClaim(claimId);
     if (claimRes.failure || !claimRes.data) {
       return claimRes;
@@ -260,7 +260,7 @@ export default function DriverPackagePaymentScreen() {
       cancelledAt: new Date().toISOString(),
       actorId: user.id,
     });
-    
+
     if (!cancelRes.failure) {
       showToast('Payment claim cancelled.', 'success');
     }
@@ -273,7 +273,7 @@ export default function DriverPackagePaymentScreen() {
     updates: { provider: 'mtn' | 'airtel'; phone: string; reference?: string }
   ) => {
     if (!user?.id) return { failure: { code: 'unauthorized', message: 'Unauthorized' } };
-    
+
     const claimRes = await packagePaymentRepository.getManualPaymentClaim(claimId);
     if (claimRes.failure || !claimRes.data) {
       return claimRes;

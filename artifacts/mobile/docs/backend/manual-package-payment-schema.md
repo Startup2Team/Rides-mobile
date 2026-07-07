@@ -114,4 +114,3 @@ Outbox row fields:
 - available_at
 - created_at
 - processed_at nullable
-

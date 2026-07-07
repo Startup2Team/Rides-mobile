@@ -73,4 +73,3 @@ Phase MP9 completes the actual driver-facing manual package payment user experie
 - **Cancellation**: Supports cancelling non-terminal claims with a warning dialog making it clear that cancellation does not refund Mobile Money payments.
 - **History Route**: Created `driver-package-payment-status.tsx` as a dedicated claim history route. Shows a list of recent confirmations and navigates to the checkout screen to view details.
 - **Privacy & Authority Boundary**: No raw reference or phone data is logged or printed. Local approved status remains a read-model presentation; actual activation/credits require trusted backend authority.
-

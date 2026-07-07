@@ -42,4 +42,3 @@ export interface ManualPaymentApprovalCommandState {
 export function getManualPaymentApprovalIdempotencyKey(claimId: string) {
   return createManualPaymentReviewIdempotencyKey(claimId, 'approval');
 }
-

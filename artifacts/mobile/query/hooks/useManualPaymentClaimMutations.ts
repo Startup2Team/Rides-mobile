@@ -133,4 +133,3 @@ export function useCancelManualPaymentClaimMutation(options: UseManualPaymentCla
     },
   });
 }
-

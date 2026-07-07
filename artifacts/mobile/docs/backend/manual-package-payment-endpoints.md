@@ -71,4 +71,3 @@ Use typed failures:
 - package_purchase_transaction_failed
 - credit_transaction_failed
 - approval_transaction_failed
-

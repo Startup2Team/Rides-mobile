@@ -83,4 +83,3 @@ export interface ManualPaymentReviewFailure {
 export function createManualPaymentReviewIdempotencyKey(claimId: string, action: 'approval' | 'activation' | 'purchase' | 'credits' | 'approved-event') {
   return `manual-payment-claim:${claimId}:${action}`;
 }
-

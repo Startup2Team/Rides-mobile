@@ -58,4 +58,3 @@ The backend implementation must match the mobile DTO contracts already defined i
 - `artifacts/mobile/data/remote/mappers/packagePaymentMapper.ts`
 
 Any mismatch must be resolved intentionally, not by silent drift.
-
