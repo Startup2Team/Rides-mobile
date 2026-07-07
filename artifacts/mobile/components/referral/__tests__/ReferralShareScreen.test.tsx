@@ -35,6 +35,15 @@ jest.mock('expo-symbols', () => {
   return { SymbolView: host('SymbolView') };
 });
 
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    LinearGradient: (props: any) => React.createElement(View, props),
+  };
+});
+
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
@@ -61,6 +70,14 @@ jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ user: mockAuthUser }),
 }));
 
+jest.mock('@/domains/profile', () => ({
+  useProfile: () => ({
+    user: mockAuthUser,
+    profile: mockAuthUser ? { fullName: mockAuthUser.name, profilePhoto: null } : null,
+    driverProfile: null,
+  }),
+}));
+
 jest.mock('@/context/ToastContext', () => ({
   useToast: () => ({ showToast: mockShowToast }),
 }));
@@ -80,9 +97,25 @@ jest.mock('@/persistence/referralEventsPersistence', () => ({
   appendStoredReferralEvent: (...args: unknown[]) => mockAppendEvent(...args),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///mock-cache/',
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+  EncodingType: { UTF8: 'utf8', Base64: 'base64' },
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
+  shareAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import ReferralShareScreen from '../ReferralShareScreen';
+import * as Sharing from 'expo-sharing';
 
 describe('ReferralShareScreen', () => {
   beforeEach(() => {
@@ -95,14 +128,14 @@ describe('ReferralShareScreen', () => {
     });
     mockClipboardWriteText.mockResolvedValue(undefined);
     mockSetStringAsync.mockResolvedValue(undefined);
+
   });
 
   test('renders the invite link and QR code', async () => {
     render(<ReferralShareScreen />);
 
-    expect(screen.getByText('Invite people to Rides')).toBeTruthy();
+    expect(screen.getAllByText('QR code').length).toBeGreaterThan(0);
     expect(screen.getByTestId('referral-qr')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('https://rides.rw/invite?ref=driver-123')).toBeTruthy());
     expect(mockAppendEvent).toHaveBeenCalledWith(expect.objectContaining({ name: 'referral_link_created' }));
     expect(mockAppendEvent).toHaveBeenCalledWith(expect.objectContaining({ name: 'referral_qr_displayed' }));
   });
@@ -110,7 +143,7 @@ describe('ReferralShareScreen', () => {
   test('copies the link when copy is available', async () => {
     render(<ReferralShareScreen />);
 
-    fireEvent.press(screen.getByLabelText('Copy invite link'));
+    fireEvent.press(screen.getAllByLabelText('Copy invite link')[0]);
 
     await waitFor(() => expect(mockSetStringAsync).toHaveBeenCalledWith('https://rides.rw/invite?ref=driver-123'));
     expect(mockAppendEvent).toHaveBeenCalledWith(expect.objectContaining({ name: 'referral_link_shared' }));
@@ -120,12 +153,24 @@ describe('ReferralShareScreen', () => {
   test('shares the invite link natively', async () => {
     render(<ReferralShareScreen />);
 
-    fireEvent.press(screen.getByText('Share'));
+    fireEvent.press(screen.getByText('Share link'));
 
     await waitFor(() => expect(mockShare).toHaveBeenCalled());
     expect(mockShare).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://rides.rw/invite?ref=driver-123',
     }));
+  });
+
+  test('shares the QR code image natively', async () => {
+    render(<ReferralShareScreen />);
+
+    fireEvent.press(screen.getByText('Share code'));
+
+    await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalled());
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      expect.stringContaining('rides_invite_qr.svg'),
+      expect.objectContaining({ mimeType: 'image/svg+xml' })
+    );
   });
 
   test('falls back when no auth user exists', () => {
