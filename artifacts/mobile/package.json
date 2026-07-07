@@ -4,6 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "eas-build-post-install": "node scripts/eas-link-expo.js",
     "dev": "pnpm exec expo start --dev-client",
     "dev:go": "pnpm exec expo start --go",
     "dev:android": "pnpm exec expo run:android",
@@ -34,7 +35,6 @@
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
-    "@rnmapbox/maps": "^10.3.1",
     "@rnx-kit/metro-resolver-symlinks": "^0.3.0",
     "@sentry/react-native": "~7.2.0",
     "@stardazed/streams-text-encoding": "^1.0.2",
@@ -104,6 +104,7 @@
     "expo-modules-core": "~3.0.30",
     "expo-secure-store": "~15.0.8",
     "expo-store-review": "~9.0.9",
+    "expo-updates": "~29.0.18",
     "invariant": "^2.2.4",
     "react-native-maps": "1.20.1",
     "whatwg-fetch": "^3.6.20"
