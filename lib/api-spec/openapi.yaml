@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: package-payments
+    description: Package payment operations
+  - name: admin-package-payments
+    description: Admin package payment review operations
 paths:
   /healthz:
     get:
@@ -24,13 +28,742 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /v1/package-payments/configuration:
+    get:
+      operationId: getPackagePaymentConfiguration
+      tags: [package-payments]
+      summary: Get package payment configuration
+      description: Planned backend contract for backend-controlled package payment mode and provider config.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Package payment configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagePaymentConfiguration"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/package-payments/manual-claims:
+    get:
+      operationId: listDriverManualPaymentClaims
+      tags: [package-payments]
+      summary: List current driver's manual payment claims
+      description: Planned backend contract for a driver's own manual payment claims using cursor pagination.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string, nullable: true }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, nullable: true }
+      responses:
+        "200":
+          description: Manual payment claim list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentClaimCursorListResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      operationId: createManualPaymentClaim
+      tags: [package-payments]
+      summary: Create a manual payment claim draft
+      description: Planned backend contract for creating a draft claim from a locked package offer snapshot. Client driverId and price fields are compatibility hints only.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManualPaymentClaimRequest"
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentClaimRead"
+        "409":
+          $ref: "#/components/responses/DuplicateReferenceError"
+        "422":
+          $ref: "#/components/responses/InvalidClaimError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /v1/package-payments/manual-claims/{claimId}:
+    get:
+      operationId: getManualPaymentClaim
+      tags: [package-payments]
+      summary: Get one manual payment claim
+      description: Planned backend contract for reading one authenticated driver's own claim.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Manual payment claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentClaimRead"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /v1/package-payments/manual-claims/{claimId}/submit:
+    post:
+      operationId: submitManualPaymentClaim
+      tags: [package-payments]
+      summary: Submit a manual payment claim
+      description: Planned backend contract for optimistic submission of a claim into pending review.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitManualPaymentClaimRequest"
+      responses:
+        "200":
+          description: Updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentClaimRead"
+        "409":
+          $ref: "#/components/responses/ClaimVersionConflictError"
+        "422":
+          $ref: "#/components/responses/InvalidClaimTransitionError"
+  /v1/package-payments/manual-claims/{claimId}/resubmit:
+    post:
+      operationId: resubmitManualPaymentClaim
+      tags: [package-payments]
+      summary: Resubmit a clarification response
+      description: Planned backend contract for resubmitting a clarified manual payment claim.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResubmitManualPaymentClaimRequest"
+      responses:
+        "200":
+          description: Updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentClaimRead"
+        "409":
+          $ref: "#/components/responses/ClaimVersionConflictError"
+        "422":
+          $ref: "#/components/responses/InvalidClaimTransitionError"
+  /v1/package-payments/manual-claims/{claimId}/cancel:
+    post:
+      operationId: cancelManualPaymentClaim
+      tags: [package-payments]
+      summary: Cancel a manual payment claim
+      description: Planned backend contract for cancelling a manual payment claim before approval.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelManualPaymentClaimRequest"
+      responses:
+        "200":
+          description: Updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentClaimRead"
+        "422":
+          $ref: "#/components/responses/InvalidClaimTransitionError"
+  /v1/admin/package-payments/manual-claims:
+    get:
+      operationId: listAdminManualPaymentClaims
+      tags: [admin-package-payments]
+      summary: List manual payment review queue
+      description: Planned backend/admin review queue contract.
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, nullable: true }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, nullable: true }
+      responses:
+        "200":
+          description: Review queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminManualPaymentReviewQueueResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+  /v1/admin/package-payments/manual-claims/{claimId}:
+    get:
+      operationId: getAdminManualPaymentClaim
+      tags: [admin-package-payments]
+      summary: Get manual payment review detail
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Review detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminManualPaymentReviewResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /v1/admin/package-payments/manual-claims/{claimId}/request-clarification:
+    post:
+      operationId: requestClarificationForManualPaymentClaim
+      tags: [admin-package-payments]
+      summary: Request clarification
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminManualPaymentClarificationRequest"
+      responses:
+        "200":
+          description: Clarification requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminManualPaymentReviewResponse"
+        "409":
+          $ref: "#/components/responses/ClaimVersionConflictError"
+  /v1/admin/package-payments/manual-claims/{claimId}/reject:
+    post:
+      operationId: rejectManualPaymentClaim
+      tags: [admin-package-payments]
+      summary: Reject manual payment claim
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminManualPaymentRejectRequest"
+      responses:
+        "200":
+          description: Claim rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminManualPaymentReviewResponse"
+        "409":
+          $ref: "#/components/responses/ClaimVersionConflictError"
+  /v1/admin/package-payments/manual-claims/{claimId}/approve:
+    post:
+      operationId: approveManualPaymentClaim
+      tags: [admin-package-payments]
+      summary: Approve manual payment claim
+      x-rides-implementation-status: planned
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualPaymentApprovalCommand"
+      responses:
+        "200":
+          description: Approved and activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualPaymentApprovalResult"
+        "409":
+          $ref: "#/components/responses/ClaimVersionConflictError"
+        "422":
+          $ref: "#/components/responses/InvalidVerificationEvidenceError"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    UnauthorizedError:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    ForbiddenError:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    NotFoundError:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    DuplicateReferenceError:
+      description: Duplicate transaction reference
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    InvalidClaimError:
+      description: Invalid claim
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    InvalidClaimTransitionError:
+      description: Invalid claim transition
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    ClaimVersionConflictError:
+      description: Claim version conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    InvalidVerificationEvidenceError:
+      description: Invalid verification evidence
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
+    ServiceUnavailableError:
+      description: Service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BackendErrorEnvelope"
   schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
+      required: [status]
+    BackendErrorEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            error:
+              $ref: "#/components/schemas/BackendError"
+          required: [error]
+      required: [data]
+    BackendError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required: [code, message]
+    PackagePaymentConfiguration:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [automatic, manual, disabled]
+        version:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        manual:
+          $ref: "#/components/schemas/ManualPackagePaymentConfiguration"
+          nullable: true
+      required: [mode, version, updatedAt]
+    ManualPackagePaymentConfiguration:
+      type: object
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManualPaymentProviderConfiguration"
+        claimExpiresAfterMinutes:
+          type: integer
+          minimum: 1
+        transactionReferenceRequired:
+          type: boolean
+        proofImageEnabled:
+          type: boolean
+      required: [providers, claimExpiresAfterMinutes, transactionReferenceRequired, proofImageEnabled]
+    ManualPaymentProviderConfiguration:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [mtn, airtel]
+        displayName:
+          type: string
+          nullable: true
+        merchantCode:
+          type: string
+        ussdTemplate:
+          type: string
+        enabled:
+          type: boolean
+      required: [provider, merchantCode, ussdTemplate, enabled]
+    ManualPaymentClaimRead:
+      type: object
+      properties:
+        id:
+          type: string
+        displayClaimId:
+          type: string
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [draft, submitted, pending_review, needs_clarification, approved, rejected, expired, cancelled]
+        packageId:
+          type: string
+        packageVersion:
+          type: string
+        packageName:
+          type: string
+        vehicleId:
+          type: string
+        vehicleType:
+          type: string
+        expectedAmountRwf:
+          type: integer
+          minimum: 1
+        provider:
+          type: string
+          enum: [mtn, airtel]
+        maskedPayerPhone:
+          type: string
+          nullable: true
+        transactionReferencePresent:
+          type: boolean
+        maskedTransactionReference:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        clarificationMessage:
+          type: string
+          nullable: true
+        rejectionReasonCode:
+          type: string
+          nullable: true
+        rejectionMessage:
+          type: string
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        activationId:
+          type: string
+          nullable: true
+        entitlementVersion:
+          type: integer
+          nullable: true
       required:
+        - id
+        - version
         - status
-
+        - packageId
+        - packageVersion
+        - packageName
+        - vehicleId
+        - vehicleType
+        - expectedAmountRwf
+        - provider
+        - transactionReferencePresent
+        - createdAt
+        - expiresAt
+    ManualPaymentClaimCursorListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManualPaymentClaimRead"
+        nextCursor:
+          type: string
+          nullable: true
+      required: [items, nextCursor]
+    CreateManualPaymentClaimRequest:
+      type: object
+      properties:
+        driverId:
+          type: string
+        vehicleId:
+          type: string
+        vehicleType:
+          type: string
+        offerId:
+          type: string
+        packageId:
+          type: string
+        packageVersion:
+          type: string
+        packageName:
+          type: string
+        expectedAmountRwf:
+          type: integer
+          minimum: 1
+        provider:
+          type: string
+          enum: [mtn, airtel]
+        payerPhoneNumber:
+          type: string
+        transactionReference:
+          type: string
+          nullable: true
+        proofImageId:
+          type: string
+          nullable: true
+        idempotencyKey:
+          type: string
+      required:
+        - driverId
+        - vehicleId
+        - vehicleType
+        - offerId
+        - packageId
+        - packageVersion
+        - packageName
+        - expectedAmountRwf
+        - provider
+        - payerPhoneNumber
+        - idempotencyKey
+    SubmitManualPaymentClaimRequest:
+      type: object
+      properties:
+        claimId:
+          type: string
+        idempotencyKey:
+          type: string
+      required: [claimId, idempotencyKey]
+    ResubmitManualPaymentClaimRequest:
+      type: object
+      properties:
+        claimId:
+          type: string
+        idempotencyKey:
+          type: string
+      required: [claimId, idempotencyKey]
+    CancelManualPaymentClaimRequest:
+      type: object
+      properties:
+        claimId:
+          type: string
+        idempotencyKey:
+          type: string
+      required: [claimId, idempotencyKey]
+    ManualPaymentVerificationEvidence:
+      type: object
+      properties:
+        method:
+          type: string
+          enum: [merchant_message, merchant_statement, provider_portal, provider_api, other_internal]
+        verifiedAt:
+          type: string
+          format: date-time
+        verifiedBy:
+          type: string
+        provider:
+          type: string
+          enum: [mtn, airtel]
+        amountMatched:
+          type: boolean
+        providerReferenceMatched:
+          type: boolean
+      required: [method, verifiedAt, verifiedBy, provider, amountMatched, providerReferenceMatched]
+    ManualPaymentApprovalCommand:
+      type: object
+      properties:
+        claimId:
+          type: string
+        expectedClaimVersion:
+          type: integer
+          minimum: 1
+        verificationEvidence:
+          $ref: "#/components/schemas/ManualPaymentVerificationEvidence"
+        idempotencyKey:
+          type: string
+      required: [claimId, expectedClaimVersion, verificationEvidence, idempotencyKey]
+    ManualPaymentApprovalResult:
+      type: object
+      properties:
+        claimId:
+          type: string
+        claimStatus:
+          type: string
+          enum: [approved]
+        claimVersion:
+          type: integer
+        packagePurchaseTransactionId:
+          type: string
+        packageActivationId:
+          type: string
+        creditTransactionId:
+          type: string
+        eventId:
+          type: string
+      required:
+        - claimId
+        - claimStatus
+        - claimVersion
+        - packagePurchaseTransactionId
+        - packageActivationId
+        - creditTransactionId
+        - eventId
+    AdminManualPaymentReviewQueueResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManualPaymentClaimRead"
+        nextCursor:
+          type: string
+          nullable: true
+      required: [items, nextCursor]
+    AdminManualPaymentReviewResponse:
+      type: object
+      properties:
+        claim:
+          $ref: "#/components/schemas/ManualPaymentClaimRead"
+          nullable: true
+        reviewResult:
+          $ref: "#/components/schemas/ManualPaymentApprovalResult"
+          nullable: true
+        eventId:
+          type: string
+          nullable: true
+      required: [claim, reviewResult, eventId]
+    AdminManualPaymentClarificationRequest:
+      type: object
+      properties:
+        claimId:
+          type: string
+        message:
+          type: string
+        expectedClaimVersion:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+      required: [claimId, message, expectedClaimVersion, idempotencyKey]
+    AdminManualPaymentRejectRequest:
+      type: object
+      properties:
+        claimId:
+          type: string
+        expectedClaimVersion:
+          type: integer
+          minimum: 1
+        reasonCode:
+          type: string
+        message:
+          type: string
+          nullable: true
+        idempotencyKey:
+          type: string
+      required: [claimId, expectedClaimVersion, reasonCode, idempotencyKey]

@@ -1,0 +1,17 @@
+{
+  "goBackendPresent": false,
+  "databaseAuthorityPresent": false,
+  "adminAuthPresent": false,
+  "packageAuthorityPresent": false,
+  "transactionalApprovalPresent": false,
+  "outboxPresent": false,
+  "productionReady": false,
+  "blockers": [
+    "No Go module or Go source files exist in this workspace.",
+    "No backend database layer or migrations are present.",
+    "No admin authorization system is present.",
+    "No backend package purchase or activation authority is present.",
+    "No transactional approval service is present.",
+    "No transactional outbox worker is present."
+  ]
+}
