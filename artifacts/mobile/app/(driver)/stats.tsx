@@ -15,7 +15,7 @@ import {
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
 } from '@/domain/driverRidePackages';
-import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { formatRwf } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
@@ -24,6 +24,7 @@ import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
+import { createDriverStatisticsViewModel } from '@/domains/driver-statistics';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -33,7 +34,7 @@ export default function DriverStats() {
   const headerMetrics = useGlassHeaderMetrics();
   const statsContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
   const { user, driverProfile } = useAuth();
-  const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
+  const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
   const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -70,22 +71,29 @@ export default function DriverStats() {
     };
   }, [user?.id]);
 
-  const dp = driverProfile ?? {
-    dailyRides: 0,
-    completedRides: 0,
-    acceptanceRate: 0,
-    dailyDeclines: 0,
-    earningsTotal: 0,
-  };
-  const declinesToday = dp.dailyDeclines ?? 0;
-  const dailyDecisionCount = dp.dailyRides + declinesToday;
-  const acceptanceRateValue = dailyDecisionCount > 0 ? `${dp.acceptanceRate}%` : 'No data yet';
-  const acceptanceRateNote = dailyDecisionCount > 0 ? 'Today' : 'No data yet';
-  const activitySummary = getDriverActivitySummary({ driverId: user?.id, driverProfile, entitlement, rideHistory });
+  const statistics = React.useMemo(() => createDriverStatisticsViewModel({
+    currentDriverId: user?.id,
+    driverEntitlement: entitlement,
+    driverProfile,
+    driverRatingSummary: ratingSummary,
+    now: new Date(),
+    rideHistory,
+    selectedPeriod: 'today',
+  }), [driverProfile, entitlement, ratingSummary, rideHistory, user?.id]);
+  const periodEarningsRwf = statistics.metrics.periodEarningsRwf.value;
+  const completedTrips = statistics.metrics.completedTrips.value;
+  const allTimeCompletedTrips = statistics.metrics.allTimeCompletedTrips.value;
+  const allTimeRideRevenueRwf = statistics.metrics.allTimeRideRevenueRwf.value;
+  const declinesToday = statistics.metrics.dailyDeclines.value;
+  const acceptanceRate = statistics.metrics.acceptanceRate.value;
+  const acceptanceRateValue = acceptanceRate !== null ? `${acceptanceRate}%` : 'No data yet';
+  const acceptanceRateNote = acceptanceRate !== null ? 'Local profile' : 'No data yet';
   const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
-  const priorityReduced = declinesToday >= 10;
+  const priorityReduced = statistics.metrics.priorityRisk.value.isReduced;
+  const priorityThreshold = statistics.metrics.priorityRisk.value.threshold;
+  const declinesUntilReduced = statistics.metrics.priorityRisk.value.declinesUntilReduced;
   const ratingValue = formatDriverRatingSummary(ratingSummary);
-  const hasTripsToday = activitySummary.completedRidesToday > 0;
+  const hasTripsToday = completedTrips > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -119,13 +127,13 @@ export default function DriverStats() {
             <AppText style={styles.heroEyebrow}>TODAY'S ACTIVITY</AppText>
           </View>
           <View>
-            <AppText style={styles.heroValue}>{formatRwf(activitySummary.todayEarningsRwf)}</AppText>
+            <AppText style={styles.heroValue}>{formatRwf(periodEarningsRwf)}</AppText>
             <AppText style={styles.heroCaption}>Activity Earnings</AppText>
           </View>
           <View style={styles.heroMetrics}>
-            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
+            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(completedTrips)} />
             <View style={styles.heroDivider} />
-            <HeroMetric label="Rides" value={isEntitlementLoading ? '...' : String(rideCredits)} />
+            <HeroMetric label="Rides" value={isEntitlementLoading ? '...' : String(statistics.metrics.rideBalance.value.remainingRideCredits)} />
             <View style={styles.heroDivider} />
             <HeroMetric label="Driver Rating" value={ratingSummary.ratingCount > 0 ? ratingValue : 'No ratings yet'} compact />
           </View>
@@ -140,7 +148,7 @@ export default function DriverStats() {
               icon="check-circle"
               label="Today"
               note="Completed trips"
-              value={String(activitySummary.completedRidesToday)}
+              value={String(completedTrips)}
               tone={colors.successHex}
             />
             <MetricTile
@@ -156,7 +164,7 @@ export default function DriverStats() {
               icon="award"
               label="All-time"
               note="Completed trips"
-              value={String(dp.completedRides)}
+              value={String(allTimeCompletedTrips)}
               tone={colors.primaryHex}
             />
             <MetricTile
@@ -174,12 +182,17 @@ export default function DriverStats() {
         <View style={styles.section}>
           <SectionHeader title="Driver Performance" />
           <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
-            <PerformanceStatus colors={colors} priorityReduced={priorityReduced} declinesToday={declinesToday} />
+            <PerformanceStatus
+              colors={colors}
+              priorityReduced={priorityReduced}
+              declinesUntilReduced={declinesUntilReduced}
+              threshold={priorityThreshold}
+            />
             <View style={[styles.softDivider, { backgroundColor: colors.border }]} />
             <View style={styles.performanceStats}>
               <CompactStat label="Daily Declines" value={String(declinesToday)} colors={colors} />
               <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
-              <CompactStat label="Completed Trips" value={String(dp.completedRides)} colors={colors} />
+              <CompactStat label="Completed Trips" value={String(allTimeCompletedTrips)} colors={colors} />
             </View>
           </View>
         </View>
@@ -187,12 +200,12 @@ export default function DriverStats() {
         <View style={styles.section}>
           <SectionHeader title="Activity Earnings" />
           <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
-            <DetailRow colors={colors} icon="trending-up" label="Ride Revenue" note="From completed trips" value={formatRwf(activitySummary.allTimeEarningsRwf)} />
+            <DetailRow colors={colors} icon="trending-up" label="Ride Revenue" note="From local profile" value={formatRwf(allTimeRideRevenueRwf)} />
             <DetailRow colors={colors} icon="smartphone" label="Mobile Money Details" value={paymentTarget} last />
           </View>
         </View>
 
-        <PurchaseHistoryCard purchases={entitlement.purchaseHistory} />
+        <PurchaseHistoryCard purchases={statistics.metrics.packagePurchaseHistory.value} />
       </GlassScrollView>
     </View>
   );
@@ -210,12 +223,11 @@ function MetricTile({ colors, icon, iconColor, label, note, tone, value }: {
 }) {
   return <View style={[styles.metricTile, styles.cardShadow, { backgroundColor: colors.card }]}>
     <View style={styles.metricTopRow}>
-      {icon === 'star' && iconColor
-        ? <AppText style={{ ...typography.h3, lineHeight: 22, color: iconColor }}>★</AppText>
-        : <Feather name={icon} size={icons.semantic.row} color={iconColor ?? colors.foreground} />}
+      <Feather name={icon} size={icons.semantic.row} color={iconColor ?? colors.foreground} />
       <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</AppText>
     </View>
     <AppText style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</AppText>
+    <AppText style={[styles.metricNote, { color: colors.mutedForeground }]} numberOfLines={1}>{note}</AppText>
   </View>;
 }
 
@@ -224,8 +236,8 @@ function SectionHeader({ title }: { title: string }) {
   return <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>;
 }
 
-function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
-  colors: ReturnType<typeof useColors>; declinesToday: number; priorityReduced: boolean;
+function PerformanceStatus({ colors, declinesUntilReduced, priorityReduced, threshold }: {
+  colors: ReturnType<typeof useColors>; declinesUntilReduced: number; priorityReduced: boolean; threshold: number;
 }) {
   return <View style={styles.performanceStatus}>
     <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={icons.size.lg} color={priorityReduced ? colors.destructive : colors.primary} />
@@ -235,8 +247,8 @@ function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
       </AppText>
       <AppText style={[styles.performanceStatusNote, { color: colors.mutedForeground }]}>
         {priorityReduced
-          ? 'Priority was reduced after 10 or more declines today.'
-          : `${10 - declinesToday} more declines before priority is reduced.`}
+          ? `Priority was reduced after ${threshold} or more declines today.`
+          : `${declinesUntilReduced} more declines before priority is reduced.`}
       </AppText>
     </View>
   </View>;

@@ -79,6 +79,18 @@ Each domain has a single repository contract.
   - billing profile projection
   - local-authoritative method storage until backend payment truth exists
 
+## Driver Statistics View Model
+
+`domains/driver-statistics` is a Phase 1 view-model boundary, not a
+repository. It normalizes local ride history, local driver profile values,
+local ratings, and local package entitlement state into a single statistics
+object for the driver Statistics screen.
+
+No backend-authoritative statistics repository exists yet. The view model
+accepts explicit inputs from the UI layer, uses local device time for `today`,
+`week`, and `month` period buckets, and carries source/confidence metadata on
+each metric so local prototype data is not presented as stronger than it is.
+
 - `SearchRepository`
   - search history
   - search suggestions
