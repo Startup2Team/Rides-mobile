@@ -20,6 +20,7 @@ import { fetchProfile } from '@/services/profile';
 import { switchUserMode } from '@/services/userMode';
 import { setDriverAvailability } from '@/services/driverAvailability';
 import { getDriverProfile } from '@/services/driverProfile';
+import { configurePushNotifications, registerPushToken, resetPushRegistration } from '@/services/pushRegistration';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   driverProfileRef.current = driverProfile;
 
   useEffect(() => {
+    configurePushNotifications();
     loadStoredData();
   }, []);
 
@@ -83,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (token) {
           setUser(storedUser.data);
           void syncProfileFromBackend();
+          void registerPushToken();
         } else {
           await clearAuthTokens();
         }
@@ -152,12 +155,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
     await saveStoredUser(newUser);
     void syncProfileFromBackend();
+    void registerPushToken();
   }, [syncProfileFromBackend]);
 
   const logout = useCallback(async () => {
     setUser(null);
     setDriverProfile(null);
     // Revoke the backend session + drop tokens, then wipe local sensitive data.
+    resetPushRegistration();
     await endSession();
     await clearSensitiveStorage();
   }, []);
