@@ -198,14 +198,11 @@ export default function DriverStatsDetail() {
         showBack={true}
         onBackPress={() => router.back()}
         right={
-          <View style={styles.headerRightActions}>
+          activeMetric === 'earnings' ? (
             <Pressable onPress={() => setCalendarVisible(true)} style={styles.headerBtn}>
               <Feather name="calendar" size={20} color={colors.foreground} />
             </Pressable>
-            <Pressable onPress={handleShare} style={styles.headerBtn}>
-              <Feather name="share" size={20} color={colors.foreground} />
-            </Pressable>
-          </View>
+          ) : undefined
         }
       />
 

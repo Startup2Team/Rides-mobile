@@ -36,9 +36,6 @@ export function DriverStatisticsInsightsCard({
           <AppText style={[styles.subtitle, { color: colors.mutedForeground }]}>Truthful local insights</AppText>
         </View>
         <View style={styles.headerRight}>
-          <View style={[styles.iconBadge, { backgroundColor: colors.primaryHex + '14' }]}>
-            <Feather name="activity" size={16} color={colors.primary} />
-          </View>
           {onPress && (
             <View style={[styles.chevronBadge, { backgroundColor: colors.border }]}>
               <Feather name="chevron-right" size={10} color={colors.mutedForeground} />
@@ -130,13 +127,6 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.tiny,
     marginTop: spacing[2],
-  },
-  iconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   emptyBody: {
     gap: spacing[8],

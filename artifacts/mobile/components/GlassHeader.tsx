@@ -100,6 +100,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     minHeight: 44,
     paddingHorizontal: semanticSpacing.cardPadding,
   },
