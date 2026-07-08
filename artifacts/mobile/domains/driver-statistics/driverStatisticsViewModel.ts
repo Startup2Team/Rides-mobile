@@ -90,7 +90,7 @@ export function createDriverStatisticsViewModel(input: DriverStatisticsInput): D
   return {
     period,
     buckets,
-    insights: getDriverStatisticsInsights({ buckets, completedTrips, earningsPerTripRwf }),
+    insights: getDriverStatisticsInsights({ buckets, completedTrips, earningsPerTripRwf, period }),
     metrics: {
       periodEarningsRwf: metric(periodEarningsRwf, localRideHistorySource),
       completedTrips: metric(completedTrips, localRideHistorySource),

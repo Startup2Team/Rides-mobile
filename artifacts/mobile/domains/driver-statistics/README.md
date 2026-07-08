@@ -1,6 +1,7 @@
 # Driver Statistics
 
 Phase 1 creates a local driver statistics view model for the driver Statistics screen.
+Phase 2 uses that model to create the driver-facing Summary experience.
 
 This domain is intentionally pure:
 
@@ -20,6 +21,21 @@ No backend-authoritative driver statistics source exists yet. The current view m
 - ride/package balance and package purchase history from local entitlement state.
 
 Every metric carries source metadata and confidence so the UI can avoid presenting weak local data as authoritative.
+
+## Phase 2 Summary UI
+
+The Statistics screen now focuses on driver performance instead of package or billing details:
+
+- period earnings;
+- completed trips;
+- earnings per trip;
+- driver rating and acceptance/profile performance;
+- truthful local insights;
+- supporting all-time/profile performance rows.
+
+The visual hierarchy is structurally inspired by high-quality native activity dashboards, but the presentation remains Rides-specific. Package history, Mobile Money details, remaining package rides, and bonus rides are no longer primary Statistics content.
+
+Mini visualizations are driven directly by Phase 1 buckets. They do not use fake trend arrays, random values, or smoothing. The circular earnings summary visual is a completed-trip summary for the selected period; it does not represent an earnings goal, completion percentage, driver rank, or target progress.
 
 ## Periods
 

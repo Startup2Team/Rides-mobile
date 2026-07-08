@@ -1,4 +1,5 @@
 import { formatDriverStatisticsRwf } from './driverStatisticsFormatting';
+import { formatDriverStatisticsBucketLabel } from './driverStatisticsSeries';
 import type { DriverStatisticsBucket, DriverStatisticsInsight } from './types';
 
 const derivedMedium = {
@@ -10,10 +11,12 @@ export function getDriverStatisticsInsights({
   buckets,
   completedTrips,
   earningsPerTripRwf,
+  period,
 }: {
   buckets: DriverStatisticsBucket[];
   completedTrips: number;
   earningsPerTripRwf: number | null;
+  period?: Parameters<typeof formatDriverStatisticsBucketLabel>[1];
 }): DriverStatisticsInsight[] {
   if (completedTrips <= 0) {
     return [{
@@ -44,7 +47,7 @@ export function getDriverStatisticsInsights({
   if (bestBucket) {
     insights.push({
       id: 'best-earning-bucket',
-      message: `Your strongest earning period was ${bestBucket.label}.`,
+      message: `Your strongest earning period was ${period ? formatDriverStatisticsBucketLabel(bestBucket, period) : bestBucket.label}.`,
       source: derivedMedium,
     });
   }

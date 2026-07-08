@@ -1,7 +1,10 @@
 import { EMPTY_DRIVER_ENTITLEMENT, type DriverEntitlement } from '@/domain/driverRidePackages';
 import {
   createDriverStatisticsViewModel,
+  getCompletedTripsSeries,
   getDriverStatisticsPeriodWindow,
+  getDriverStatisticsSparseLabels,
+  getEarningsPerTripSeries,
   type DriverStatisticsPeriod,
 } from '@/domains/driver-statistics';
 import type { DriverProfile, Ride } from '@/types';
@@ -176,6 +179,50 @@ describe('driver statistics buckets', () => {
 
     expect(vm.buckets).toHaveLength(31);
     expect(vm.buckets.every(bucket => bucket.completedTrips === 0 && bucket.earningsRwf === 0)).toBe(true);
+  });
+});
+
+describe('driver statistics presentation series', () => {
+  test('creates completed-trip series directly from buckets', () => {
+    const vm = viewModel({
+      rideHistory: [ride({ agreedFare: 1_500, completedAt: new Date(2026, 6, 8, 9, 15).toISOString() })],
+    });
+
+    const series = getCompletedTripsSeries(vm.buckets);
+
+    expect(series).toHaveLength(24);
+    expect(series[9]).toMatchObject({ value: 1, available: true });
+    expect(series[8]).toMatchObject({ value: 0, available: true });
+  });
+
+  test('creates earnings-per-trip series without dividing zero-trip buckets', () => {
+    const vm = viewModel({
+      rideHistory: [
+        ride({ agreedFare: 1_500, completedAt: new Date(2026, 6, 8, 9, 15).toISOString() }),
+        ride({ agreedFare: 500, completedAt: new Date(2026, 6, 8, 9, 30).toISOString() }),
+      ],
+    });
+
+    const series = getEarningsPerTripSeries(vm.buckets);
+
+    expect(series[9]).toMatchObject({ value: 1_000, available: true });
+    expect(series[8]).toMatchObject({ value: 0, available: false });
+    expect(Number.isNaN(series[8].value)).toBe(false);
+  });
+
+  test('creates deterministic sparse labels for today, week, and month', () => {
+    const today = viewModel({ period: 'today' });
+    const week = viewModel({ period: 'week' });
+    const month = viewModel({ period: 'month' });
+
+    expect(getDriverStatisticsSparseLabels(today.period, today.buckets)).toEqual([
+      { index: 0, label: '00' },
+      { index: 6, label: '06' },
+      { index: 12, label: '12' },
+      { index: 18, label: '18' },
+    ]);
+    expect(getDriverStatisticsSparseLabels(week.period, week.buckets).map(item => item.label)).toEqual(['M', 'T', 'W', 'T', 'F', 'S', 'S']);
+    expect(getDriverStatisticsSparseLabels(month.period, month.buckets).map(item => item.label)).toEqual(['1', '16', '31']);
   });
 });
 

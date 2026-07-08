@@ -120,6 +120,14 @@ bucketing. Future backend integration must provide authoritative driver
 analytics before the UI can claim server-backed trends, comparisons, or
 Rwanda-timezone business boundaries.
 
+Statistics Phase 2 turns that local model into the driver-facing Summary UI.
+The screen now emphasizes earnings, completed trips, earnings efficiency,
+rating/performance, truthful insights, and supporting profile totals. Package
+history, Mobile Money details, and package balances are no longer primary
+Statistics content. The mini visualizations are direct views of the Phase 1
+buckets, and the circular summary visual is not an earnings goal or completion
+progress indicator.
+
 Phase 12L adds remote search and map repository prototypes.
 Remote place search, autocomplete, place detail, reverse geocoding, route
 estimate/preview, distance/duration estimate, and fare-preview paths can now be

@@ -1,30 +1,35 @@
-import { typography } from '@/constants/typography';
-import { AppText } from '@/components/AppText';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { GlassScrollView } from '@/components/GlassScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
-import { useColors } from '@/hooks/useColors';
+import { GlassScrollView } from '@/components/GlassScrollView';
+import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
+import {
+  DriverStatisticsInsightsCard,
+  DriverStatisticsMetricCard,
+  DriverStatisticsSupportingCard,
+  EarningsSummaryCard,
+  type DriverStatisticsSupportingRow,
+} from '@/components/driver-statistics';
+import { AppText } from '@/components/AppText';
+import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
-import {
-  getPackagePurchaseSnapshot,
-  type DriverPackagePurchase,
-  type DriverPackagePurchaseStatus,
-} from '@/domain/driverRidePackages';
 import { formatRwf } from '@/domain/driverActivitySummary';
-import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
+import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
+import {
+  createDriverStatisticsViewModel,
+  getCompletedTripsSeries,
+  getDriverStatisticsSparseLabels,
+  getEarningsPerTripSeries,
+  type DriverStatisticsPeriod,
+} from '@/domains/driver-statistics';
+import { useColors } from '@/hooks/useColors';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
-import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
-import { elevation } from '@/constants/elevation';
-import { icons } from '@/constants/icons';
-import { radius } from '@/constants/radius';
-import { spacing, semanticSpacing } from '@/constants/spacing';
 import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
-import { createDriverStatisticsViewModel } from '@/domains/driver-statistics';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -34,10 +39,12 @@ export default function DriverStats() {
   const headerMetrics = useGlassHeaderMetrics();
   const statsContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
   const { user, driverProfile } = useAuth();
-  const { entitlement, isLoading: isEntitlementLoading } = useDriverEntitlement();
-  const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
+  const { entitlement } = useDriverEntitlement();
+  const { data: rideHistory = [], isLoading: isRideHistoryLoading, refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [selectedPeriod, setSelectedPeriod] = React.useState<DriverStatisticsPeriod>('today');
+  const [now] = React.useState(() => new Date());
 
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
@@ -76,29 +83,60 @@ export default function DriverStats() {
     driverEntitlement: entitlement,
     driverProfile,
     driverRatingSummary: ratingSummary,
-    now: new Date(),
+    now,
     rideHistory,
-    selectedPeriod: 'today',
-  }), [driverProfile, entitlement, ratingSummary, rideHistory, user?.id]);
-  const periodEarningsRwf = statistics.metrics.periodEarningsRwf.value;
+    selectedPeriod,
+  }), [driverProfile, entitlement, now, ratingSummary, rideHistory, selectedPeriod, user?.id]);
+
+  const isStatsLoading = isRideHistoryLoading && rideHistory.length === 0;
   const completedTrips = statistics.metrics.completedTrips.value;
-  const allTimeCompletedTrips = statistics.metrics.allTimeCompletedTrips.value;
-  const allTimeRideRevenueRwf = statistics.metrics.allTimeRideRevenueRwf.value;
-  const declinesToday = statistics.metrics.dailyDeclines.value;
+  const periodEarnings = statistics.metrics.periodEarningsRwf.value;
+  const earningsPerTrip = statistics.metrics.earningsPerTripRwf.value;
+  const rating = statistics.metrics.driverRating.value;
   const acceptanceRate = statistics.metrics.acceptanceRate.value;
-  const acceptanceRateValue = acceptanceRate !== null ? `${acceptanceRate}%` : 'No data yet';
-  const acceptanceRateNote = acceptanceRate !== null ? 'Local profile' : 'No data yet';
-  const paymentTarget = driverProfile?.momoCode || driverProfile?.merchantCode || 'Not set';
-  const priorityReduced = statistics.metrics.priorityRisk.value.isReduced;
-  const priorityThreshold = statistics.metrics.priorityRisk.value.threshold;
-  const declinesUntilReduced = statistics.metrics.priorityRisk.value.declinesUntilReduced;
-  const ratingValue = formatDriverRatingSummary(ratingSummary);
-  const hasTripsToday = completedTrips > 0;
+  const priorityRisk = statistics.metrics.priorityRisk.value;
+  const tripSeries = getCompletedTripsSeries(statistics.buckets);
+  const earningsPerTripSeries = getEarningsPerTripSeries(statistics.buckets);
+  const sparseLabels = getDriverStatisticsSparseLabels(statistics.period, statistics.buckets);
+  const periodLabel = statistics.period.label;
+  const localDateLabel = formatLocalSummaryDate(now);
+  const earningsLabel = isStatsLoading ? '...' : formatRwf(periodEarnings);
+  const completedTripsLabel = isStatsLoading ? '...' : String(completedTrips);
+  const earningsPerTripLabel = earningsPerTrip === null ? '--' : formatRwf(earningsPerTrip);
+  const ratingLabel = rating.ratingCount > 0 ? rating.averageRating?.toFixed(1) ?? 'No rating yet' : 'No rating yet';
+  const acceptanceLabel = acceptanceRate === null ? 'No data yet' : `${acceptanceRate}%`;
+  const priorityLabel = priorityRisk.isReduced ? 'Lower Priority' : 'High Priority';
+  const priorityNote = priorityRisk.isReduced
+    ? `Reduced after ${priorityRisk.threshold} local declines.`
+    : `${priorityRisk.declinesUntilReduced} declines before priority is reduced.`;
+  const supportingRows = React.useMemo<DriverStatisticsSupportingRow[]>(() => ([
+    {
+      label: 'All-time Trips',
+      value: String(statistics.metrics.allTimeCompletedTrips.value),
+      note: 'Local profile total',
+    },
+    {
+      label: 'All-time Ride Revenue',
+      value: formatRwf(statistics.metrics.allTimeRideRevenueRwf.value),
+      note: 'Local profile total',
+    },
+    {
+      label: 'Daily Declines',
+      value: String(statistics.metrics.dailyDeclines.value),
+      note: 'Local priority policy',
+    },
+    {
+      label: 'Priority Status',
+      value: priorityLabel,
+      note: priorityNote,
+    },
+  ]), [priorityLabel, priorityNote, statistics.metrics.allTimeCompletedTrips.value, statistics.metrics.allTimeRideRevenueRwf.value, statistics.metrics.dailyDeclines.value]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <GlassHeader
-        title="Statistics"
+        title="Summary"
+        subtitle={localDateLabel}
         showBack={false}
       />
       <GlassScrollView
@@ -117,283 +155,140 @@ export default function DriverStats() {
         refreshing={isRefreshing}
         refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
-        <LinearGradient
-          colors={[colors.primaryHex, colors.primaryHex + 'D9']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.heroCard, styles.heroShadow]}
-        >
-          <View style={styles.heroHeading}>
-            <AppText style={styles.heroEyebrow}>TODAY'S ACTIVITY</AppText>
-          </View>
-          <View>
-            <AppText style={styles.heroValue}>{formatRwf(periodEarningsRwf)}</AppText>
-            <AppText style={styles.heroCaption}>Activity Earnings</AppText>
-          </View>
-          <View style={styles.heroMetrics}>
-            <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(completedTrips)} />
-            <View style={styles.heroDivider} />
-            <HeroMetric label="Rides" value={isEntitlementLoading ? '...' : String(statistics.metrics.rideBalance.value.remainingRideCredits)} />
-            <View style={styles.heroDivider} />
-            <HeroMetric label="Driver Rating" value={ratingSummary.ratingCount > 0 ? ratingValue : 'No ratings yet'} compact />
-          </View>
-          {!hasTripsToday ? <AppText style={styles.heroEmptyText}>No trips completed today yet.</AppText> : null}
-        </LinearGradient>
+        <EarningsSummaryCard
+          periodLabel={periodLabel}
+          earningsLabel={earningsLabel}
+          completedTrips={completedTrips}
+          periodEarnings={periodEarnings}
+          onPress={() => {
+            router.push({
+              pathname: '/driver-stats-detail',
+              params: { metric: 'earnings', period: selectedPeriod },
+            });
+          }}
+        />
 
-        <View style={styles.section}>
-          <SectionHeader title="Performance Overview" />
-          <View style={styles.metricGrid}>
-            <MetricTile
-              colors={colors}
-              icon="check-circle"
-              label="Today"
-              note="Completed trips"
-              value={String(completedTrips)}
-              tone={colors.successHex}
-            />
-            <MetricTile
-              colors={colors}
-              icon="percent"
-              label="Acceptance"
-              note={acceptanceRateNote}
-              value={acceptanceRateValue}
-              tone={colors.primaryHex}
-            />
-            <MetricTile
-              colors={colors}
-              icon="award"
-              label="All-time"
-              note="Completed trips"
-              value={String(allTimeCompletedTrips)}
-              tone={colors.primaryHex}
-            />
-            <MetricTile
-              colors={colors}
-              icon="star"
-              iconColor={colors.primaryHex}
-              label="Rating"
-              note={ratingSummary.ratingCount > 0 ? `${ratingSummary.ratingCount} ratings` : 'No ratings yet'}
-              value={ratingValue}
-              tone={colors.primaryHex}
-            />
-          </View>
+        <View style={styles.cardRow}>
+          <DriverStatisticsMetricCard
+            title="Completed Trips"
+            periodLabel={periodLabel}
+            value={completedTripsLabel}
+            icon="check-circle"
+            values={tripSeries.map(point => point.value)}
+            labels={sparseLabels}
+            color="#A38DF8"
+            chartAccessibilityLabel={`Completed trips activity for ${periodLabel}. ${completedTrips} trips total.`}
+            onPress={() => {
+              router.push({
+                pathname: '/driver-stats-detail',
+                params: { metric: 'completedTrips', period: selectedPeriod },
+              });
+            }}
+          />
+          <DriverStatisticsMetricCard
+            title="Earnings / Trip"
+            periodLabel={periodLabel}
+            value={earningsPerTripLabel}
+            icon="trending-up"
+            note={earningsPerTrip === null ? 'Available after a completed trip' : undefined}
+            values={earningsPerTripSeries.map(point => point.value)}
+            labels={sparseLabels}
+            color="#2AC1E4"
+            chartAccessibilityLabel={`Earnings per trip activity for ${periodLabel}.`}
+            onPress={() => {
+              router.push({
+                pathname: '/driver-stats-detail',
+                params: { metric: 'earningsPerTrip', period: selectedPeriod },
+              });
+            }}
+          />
         </View>
 
-        <View style={styles.section}>
-          <SectionHeader title="Driver Performance" />
-          <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
-            <PerformanceStatus
-              colors={colors}
-              priorityReduced={priorityReduced}
-              declinesUntilReduced={declinesUntilReduced}
-              threshold={priorityThreshold}
-            />
-            <View style={[styles.softDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.performanceStats}>
-              <CompactStat label="Daily Declines" value={String(declinesToday)} colors={colors} />
-              <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
-              <CompactStat label="Completed Trips" value={String(allTimeCompletedTrips)} colors={colors} />
-            </View>
-          </View>
+        <View style={styles.cardRow}>
+          <DriverStatisticsMetricCard
+            title="Driver Rating"
+            value={ratingLabel}
+            icon="star"
+            note={rating.ratingCount > 0
+              ? `${rating.ratingCount} ${rating.ratingCount === 1 ? 'rating' : 'ratings'}`
+              : 'Your rating will appear after customers rate completed trips.'}
+            color="#FFCC00"
+            onPress={() => {
+              router.push({
+                pathname: '/driver-stats-detail',
+                params: { metric: 'rating', period: selectedPeriod },
+              });
+            }}
+          />
+          <DriverStatisticsMetricCard
+            title="Acceptance"
+            value={acceptanceLabel}
+            icon="percent"
+            note={acceptanceRate === null ? 'No local profile activity yet' : 'Local profile estimate'}
+            color="#8CE62A"
+            onPress={() => {
+              router.push({
+                pathname: '/driver-stats-detail',
+                params: { metric: 'acceptance', period: selectedPeriod },
+              });
+            }}
+          />
         </View>
 
-        <View style={styles.section}>
-          <SectionHeader title="Activity Earnings" />
-          <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
-            <DetailRow colors={colors} icon="trending-up" label="Ride Revenue" note="From local profile" value={formatRwf(allTimeRideRevenueRwf)} />
-            <DetailRow colors={colors} icon="smartphone" label="Mobile Money Details" value={paymentTarget} last />
-          </View>
-        </View>
+        <DriverStatisticsInsightsCard
+          insights={statistics.insights}
+          isNewDriverStatsState={statistics.isNewDriverStatsState}
+          emptyStateTitle={statistics.isNewDriverStatsState ? 'Keep driving to unlock your trends.' : statistics.emptyStateTitle}
+          emptyStateDescription={statistics.isNewDriverStatsState
+            ? 'Complete trips across more active periods and Rides will show when you perform best.'
+            : statistics.emptyStateDescription}
+          onPress={() => {
+            router.push({
+              pathname: '/driver-stats-detail',
+              params: { metric: 'trends', period: selectedPeriod },
+            });
+          }}
+        />
 
-        <PurchaseHistoryCard purchases={statistics.metrics.packagePurchaseHistory.value} />
+        <DriverStatisticsSupportingCard
+          rows={supportingRows}
+          onPress={() => {
+            router.push({
+              pathname: '/driver-stats-detail',
+              params: { metric: 'performance', period: selectedPeriod },
+            });
+          }}
+        />
       </GlassScrollView>
     </View>
   );
 }
 
-function HeroMetric({ compact = false, label, value }: { compact?: boolean; label: string; value: string }) {
-  return <View style={styles.heroMetric}>
-    <AppText style={[styles.heroMetricValue, compact && styles.heroMetricValueCompact]} numberOfLines={1}>{value}</AppText>
-    <AppText style={styles.heroMetricLabel} numberOfLines={1}>{label}</AppText>
-  </View>;
-}
-
-function MetricTile({ colors, icon, iconColor, label, note, tone, value }: {
-  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; iconColor?: string; label: string; note: string; tone: string; value: string;
-}) {
-  return <View style={[styles.metricTile, styles.cardShadow, { backgroundColor: colors.card }]}>
-    <View style={styles.metricTopRow}>
-      <Feather name={icon} size={icons.semantic.row} color={iconColor ?? colors.foreground} />
-      <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</AppText>
-    </View>
-    <AppText style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</AppText>
-    <AppText style={[styles.metricNote, { color: colors.mutedForeground }]} numberOfLines={1}>{note}</AppText>
-  </View>;
-}
-
-function SectionHeader({ title }: { title: string }) {
-  const colors = useColors();
-  return <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>;
-}
-
-function PerformanceStatus({ colors, declinesUntilReduced, priorityReduced, threshold }: {
-  colors: ReturnType<typeof useColors>; declinesUntilReduced: number; priorityReduced: boolean; threshold: number;
-}) {
-  return <View style={styles.performanceStatus}>
-    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={icons.size.lg} color={priorityReduced ? colors.destructive : colors.primary} />
-    <View style={styles.performanceStatusCopy}>
-      <AppText style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
-        {priorityReduced ? 'Lower Priority' : 'High Priority'}
-      </AppText>
-      <AppText style={[styles.performanceStatusNote, { color: colors.mutedForeground }]}>
-        {priorityReduced
-          ? `Priority was reduced after ${threshold} or more declines today.`
-          : `${declinesUntilReduced} more declines before priority is reduced.`}
-      </AppText>
-    </View>
-  </View>;
-}
-
-function CompactStat({ colors, label, value }: { colors: ReturnType<typeof useColors>; label: string; value: string }) {
-  return <View style={styles.compactStat}>
-    <AppText style={[styles.compactStatValue, { color: colors.foreground }]}>{value}</AppText>
-    <AppText style={[styles.compactStatLabel, { color: colors.mutedForeground }]}>{label}</AppText>
-  </View>;
-}
-
-function DetailRow({ colors, icon, label, last = false, note, value }: {
-  colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; note?: string; value: string;
-}) {
-  return <View style={[styles.detailRow, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-    <Feather name={icon} size={icons.semantic.row} color={colors.primary} />
-    <View style={styles.detailLabelGroup}>
-      <AppText style={[styles.detailLabel, { color: colors.foreground }]}>{label}</AppText>
-      {note ? <AppText style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</AppText> : null}
-    </View>
-    <AppText style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={1}>{value}</AppText>
-  </View>;
-}
-
-function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[] }) {
-  const colors = useColors();
-  const recentPurchases = purchases.slice(0, 3);
-
-  return <View style={styles.section}>
-    <SectionHeader title="Package History" />
-    <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
-      {recentPurchases.length === 0 ? (
-        <View style={styles.emptyHistory}>
-          <Feather name="clock" size={21} color={colors.mutedForeground} />
-          <AppText style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</AppText>
-        </View>
-      ) : recentPurchases.map((purchase, index) => {
-        const purchaseSnapshot = getPackagePurchaseSnapshot(purchase);
-        const statusColor = getPurchaseStatusColor(purchase.status, colors);
-        return <View
-          key={purchase.transactionId}
-          style={[styles.historyRow, index < recentPurchases.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-        >
-          <Feather name="package" size={icons.semantic.row} color={colors.primary} />
-          <View style={styles.historyLabelGroup}>
-            <AppText style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</AppText>
-            <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
-              {purchaseSnapshot ? `${purchaseSnapshot.ridesGranted} Rides + ${purchaseSnapshot.bonusRidesGranted} Bonus Rides` : 'Package snapshot unavailable'}
-            </AppText>
-            <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
-              {formatHistoryDate(purchaseSnapshot?.purchasedAt ?? purchase.purchasedAt ?? purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
-            </AppText>
-          </View>
-          <View style={styles.historyTotals}>
-            <AppText style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchaseSnapshot?.pricePaid ?? purchase.pricePaid ?? purchase.amount)}</AppText>
-            <View style={[styles.statusPill, { backgroundColor: statusColor + '12' }]}>
-              <AppText style={[styles.historyStatus, { color: statusColor }]}>{formatPurchaseStatus(purchase.status)}</AppText>
-            </View>
-          </View>
-        </View>;
-      })}
-    </View>
-  </View>;
-}
-
-function getPurchaseStatusColor(status: DriverPackagePurchaseStatus, colors: ReturnType<typeof useColors>) {
-  if (status === 'successful') return colors.successHex;
-  if (status === 'pending' || status === 'processing') return colors.warningHex;
-  if (status === 'failed' || status === 'cancelled' || status === 'expired') return colors.destructiveHex;
-  return colors.mutedForeground;
-}
-
-function formatPurchaseStatus(status: DriverPackagePurchaseStatus) {
-  if (status === 'successful') return 'Successful';
-  if (status === 'cancelled') return 'Cancelled';
-  if (status === 'expired') return 'Expired';
-  if (status === 'processing') return 'Processing';
-  if (status === 'pending') return 'Pending';
-  if (status === 'failed') return 'Failed';
-  return 'Idle';
-}
-
-function formatHistoryDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
+function formatLocalSummaryDate(value: Date) {
+  return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
     month: 'short',
-    year: 'numeric',
-  }).format(date);
+    weekday: 'long',
+  }).format(value);
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  todayChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.pill },
-  todayChipText: { ...typography.tiny,  },
-  heroCard: { borderRadius: 26, padding: semanticSpacing.screenPadding, gap: icons.semantic.row, overflow: 'hidden' },
-  heroShadow: { shadowColor: '#007AFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 18, elevation: 7 },
-  heroHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroEyebrow: { color: 'rgba(255,255,255,0.76)', ...typography.tiny, letterSpacing: 0.9 },
-  heroValue: { color: '#fff', ...typography.displayXL, lineHeight: 40, letterSpacing: -1 },
-  heroCaption: { color: 'rgba(255,255,255,0.72)', ...typography.caption, marginTop: spacing[2] },
-  heroMetrics: { flexDirection: 'row', alignItems: 'center' },
-  heroMetric: { flex: 1, minWidth: 0, gap: 3 },
-  heroMetricValue: { color: '#fff', ...typography.title,  },
-  heroMetricValueCompact: { ...typography.caption },
-  heroMetricLabel: { color: 'rgba(255,255,255,0.68)', ...typography.tiny,  },
-  heroDivider: { width: StyleSheet.hairlineWidth, height: 30, marginHorizontal: 9, backgroundColor: 'rgba(255,255,255,0.26)' },
-  heroEmptyText: { color: 'rgba(255,255,255,0.72)', ...typography.tiny, marginTop: -8 },
-  section: { gap: 11 },
-  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: spacing[2] },
-  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
-  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: radius.card, padding: spacing[10], gap: 3 },
-  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
-  metricValue: { ...typography.h3, lineHeight: 23, letterSpacing: -0.5, marginTop: spacing[2] },
-  metricLabel: { flex: 1, ...typography.tiny,  },
-  metricNote: { ...typography.tiny, lineHeight: 13 },
-  cardShadow: { ...elevation.card, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
-  surface: { borderRadius: radius['3xl'], overflow: 'hidden' },
-  performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap, padding: semanticSpacing.cardPadding },
-  performanceStatusCopy: { flex: 1, gap: spacing[4] },
-  performanceStatusTitle: { ...typography.body,  },
-  performanceStatusNote: { ...typography.tiny, lineHeight: 17 },
-  softDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.cardPadding },
-  performanceStats: { flexDirection: 'row', alignItems: 'center', padding: 15 },
-  compactStat: { flex: 1, alignItems: 'center', gap: 3 },
-  compactStatValue: { ...typography.h2, letterSpacing: -0.4 },
-  compactStatLabel: { ...typography.tiny,  },
-  verticalDivider: { width: StyleSheet.hairlineWidth, height: 30 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 15 },
-  detailLabelGroup: { flex: 1, gap: spacing[2] },
-  detailLabel: { ...typography.label,  },
-  detailNote: { ...typography.tiny,  },
-  detailValue: { maxWidth: '44%', textAlign: 'right', ...typography.label,  },
-  emptyHistory: { alignItems: 'center', gap: 9, padding: semanticSpacing.sectionGap },
-  emptyHistoryText: { ...typography.caption,  },
-  historyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: spacing[14] },
-  historyLabelGroup: { flex: 1, minWidth: 0 },
-  historyName: { ...typography.label,  },
-  historyMeta: { ...typography.tiny, marginTop: 3 },
-  historyTotals: { alignItems: 'flex-end', gap: 5 },
-  historyPrice: { ...typography.caption,  },
-  statusPill: { paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: spacing[4], borderRadius: radius.pill },
-  historyStatus: { ...typography.tiny,  },
+  container: {
+    flex: 1,
+  },
+  titleBlock: {
+    gap: spacing[2],
+  },
+  pageTitle: {
+    ...typography.displayXL,
+    lineHeight: 38,
+    letterSpacing: -0.8,
+  },
+  pageDate: {
+    ...typography.caption,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    gap: semanticSpacing.inlineGap,
+  },
 });
