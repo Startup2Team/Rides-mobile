@@ -66,6 +66,7 @@ export function formFromDriverProfile(profile: DriverProfile): DriverOnboardingF
     sector: profile.sector,
     cell: profile.cell ?? '',
     village: profile.village ?? '',
+    gender: '',
     momoProvider: profile.momoProvider,
     momoCode: profile.momoCode,
     merchantCode: profile.merchantCode ?? '',

@@ -116,6 +116,7 @@ export interface DriverApplicationInput {
   sector: string;
   cell: string;
   village: string;
+  gender?: 'male' | 'female' | 'other';
   passengerSeats?: number;
   loadCapacityKg?: number;
   licenseExpiryDate?: string;
@@ -139,6 +140,7 @@ export async function applyAsDriver(input: DriverApplicationInput): Promise<void
     cell: input.cell,
     village: input.village,
   };
+  if (input.gender) body.gender = input.gender;
   if (input.passengerSeats !== undefined) body.passenger_seats = input.passengerSeats;
   if (input.loadCapacityKg !== undefined) body.load_capacity_kg = input.loadCapacityKg;
   if (input.licenseExpiryDate) body.license_expiry_date = input.licenseExpiryDate;

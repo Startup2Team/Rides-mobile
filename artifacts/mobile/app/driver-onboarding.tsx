@@ -188,6 +188,7 @@ export default function DriverOnboarding() {
           sector: form.sector,
           cell: form.cell,
           village: form.village,
+          gender: form.gender || undefined,
           passengerSeats: form.passengerSeats ? Number(form.passengerSeats) : undefined,
           loadCapacityKg: form.loadCapacityKg ? Number(form.loadCapacityKg) : undefined,
           licenseExpiryDate: form.licenseExpiryDate || undefined,

@@ -29,6 +29,24 @@ export function PersonalInformationSection({ colors, errors, form, maxDobDate, s
     <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><AppText style={[styles.infoLabel, { color: colors.mutedForeground }]}>Phone</AppText><AppText style={[styles.infoValue, { color: colors.foreground }]}>{user?.phone}</AppText></View>
     <DatePickerField label="Date of Birth" value={form.dob} onChange={dob => update('dob', dob)} error={errors.dob} placeholder="DD/MM/YYYY" maximumDate={maxDobDate} />
     <AppInput label="National ID Number" placeholder="16-digit National ID" value={form.nationalId} onChangeText={text => update('nationalId', text.replace(/\D/g, '').slice(0, 16))} error={errors.nationalId} leftIcon="credit-card" keyboardType="numeric" maxLength={16} />
+    <View style={{ gap: 6 }}>
+      <AppText style={[styles.sectionSubtitle, { color: colors.foreground }]}>Gender</AppText>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {(['male', 'female', 'other'] as const).map(g => {
+          const selected = form.gender === g;
+          return (
+            <TouchableOpacity key={g} onPress={() => update('gender', g)} activeOpacity={0.8}
+              accessibilityRole="radio" accessibilityState={{ selected }}
+              style={{ flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center',
+                backgroundColor: selected ? colors.primary : colors.card,
+                borderColor: selected ? colors.primary : colors.border }}>
+              <AppText style={{ color: selected ? colors.primaryForeground : colors.foreground, textTransform: 'capitalize' }}>{g}</AppText>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {error('gender')}
+    </View>
     <AppText style={[styles.sectionSubtitle, { color: colors.foreground }]}>Identity Verification</AppText>
     <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Take a clear selfie so we can verify your identity.</AppText>
     {selfieUri ? <View style={styles.selfiePreviewRow}><Image source={{ uri: selfieUri }} style={styles.selfieImage} resizeMode="cover" /><View style={{ flex: 1, gap: 8 }}><View style={[styles.docUploaded, { backgroundColor: colors.primaryHex + '15', borderColor: colors.primaryHex + '30' }]}><Feather name="check-circle" size={14} color={colors.primary} /><AppText style={[styles.docUploadedText, { color: colors.primary }]}>Photo taken</AppText></View><TouchableOpacity style={[styles.selfieRetakeBtn, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={takeSelfie}><Feather name="camera" size={14} color={colors.mutedForeground} /><AppText style={[styles.docChangeBtnText, { color: colors.mutedForeground }]}>Retake selfie</AppText></TouchableOpacity></View></View>
