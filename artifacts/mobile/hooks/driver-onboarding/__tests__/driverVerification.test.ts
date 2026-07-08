@@ -62,9 +62,9 @@ describe('driver verification lifecycle', () => {
     });
   });
 
-  test('draft driver stays on resume form for fresh drafts and re-prompts after 7 days', () => {
+  test('draft driver stays on Resume Form for fresh drafts and re-prompts after 7 days', () => {
     expect(getDriverApplicationAction(profile({ verificationStatus: 'draft' }), new Date().toISOString())).toEqual({
-      label: 'Resume form',
+      label: 'Resume Form',
       route: '/driver-onboarding',
     });
     expect(getDriverApplicationAction(profile({ verificationStatus: 'draft' }), new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString())).toEqual({

@@ -1,0 +1,52 @@
+import { useMemo } from 'react';
+import { useOptionalAuth } from '@/context/AuthContext';
+import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { getDriverVehicles } from '@/domain/driverVehicles';
+import { useDriverVehiclesQuery } from '@/query/hooks/useDriverVehiclesQuery';
+import { resolveCapabilities } from './resolver';
+import type { CapabilityName, CapabilitySet } from './types';
+
+const defaultCapabilities: CapabilitySet = {
+  canBookRide: false,
+  canReceiveRideRequests: false,
+  canGoOnline: false,
+  canDrive: false,
+  canEditProfile: false,
+  canManageVehicles: false,
+  canBuyPackages: false,
+  canUseWallet: false,
+  canWithdrawEarnings: false,
+  canReceivePayments: false,
+  canInviteDrivers: false,
+  canOperateFleet: false,
+  canUseCorporateBilling: false,
+  canViewDriverDashboard: false,
+  canViewCustomerTrips: false,
+  canSwitchMode: false,
+  canBecomeDriver: false,
+};
+
+export function useCapabilities() {
+  const auth = useOptionalAuth();
+  const entitlement = useOptionalDriverEntitlement();
+  const vehiclesQuery = useDriverVehiclesQuery(auth?.user?.id ?? null);
+
+  return useMemo(() => {
+    if (!auth) {
+      return defaultCapabilities;
+    }
+    const queryVehicles = vehiclesQuery.data ?? getDriverVehicles(auth.driverProfile);
+    return resolveCapabilities({
+      user: auth.user,
+      driverProfile: auth.driverProfile,
+      driverEntitlement: entitlement?.entitlement ?? null,
+      vehicles: queryVehicles,
+      mode: auth.user?.mode ?? null,
+    }).capabilities;
+  }, [auth, entitlement?.entitlement, vehiclesQuery.data]);
+}
+
+export function useCapability(name: CapabilityName) {
+  const capabilities = useCapabilities();
+  return capabilities[name];
+}

@@ -1,8 +1,8 @@
 import { Alert, Pressable, Text, View } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const mockLogout = jest.fn(() => Promise.resolve());
 const mockReplace = jest.fn();
 let mockAlert: jest.Mock;
 
@@ -111,7 +111,6 @@ jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({
     user: { name: 'Driver User', phone: '250788000000', mode: 'driver' },
     driverProfile: { isVerified: true },
-    logout: mockLogout,
     switchMode: jest.fn(),
   }),
 }));
@@ -124,10 +123,30 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+jest.mock('@/domains/vehicle', () => ({
+  useVehicles: () => ({
+    vehicles: [],
+    isLoading: false,
+    isRefreshing: false,
+    refreshVehicles: jest.fn(),
+    addVehicle: jest.fn(),
+    updateVehicle: jest.fn(),
+    deleteVehicle: jest.fn(),
+    setPrimaryVehicle: jest.fn(),
+  }),
+}));
+
 jest.mock('@/context/RideContext', () => ({
   useRide: () => ({
     rideHistory: [],
     loadHistory: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
+jest.mock('@/query/hooks/useRideHistoryQuery', () => ({
+  useRideHistoryQuery: () => ({
+    data: [],
+    refetch: jest.fn(() => Promise.resolve({ data: [] })),
   }),
 }));
 
@@ -148,18 +167,56 @@ jest.mock('@/utils/communityActions', () => ({
   rateRides: jest.fn(),
 }));
 
-describe('DriverProfileScreen logout', () => {
+describe('DriverProfileScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('redirects to welcome after logout', async () => {
+  test('does not show a logout action', async () => {
     const DriverProfileScreen = require('../profile').default;
-    render(<DriverProfileScreen />);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DriverProfileScreen />
+      </QueryClientProvider>,
+    );
 
-    fireEvent.press(screen.getByText('Log Out'));
-    await waitFor(() => expect(mockAlert).toHaveBeenCalled());
-    await waitFor(() => expect(mockLogout).toHaveBeenCalled());
-    expect(mockReplace).toHaveBeenCalledWith('/(auth)/welcome');
+    expect(screen.queryByText('Log Out')).toBeNull();
+    expect(mockAlert).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  test('opens rating information from the driver rating area', async () => {
+    const DriverProfileScreen = require('../profile').default;
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DriverProfileScreen />
+      </QueryClientProvider>,
+    );
+
+    const ratingInfoButton = screen.getByLabelText('Open rating information');
+    fireEvent.press(ratingInfoButton);
+    fireEvent.press(ratingInfoButton);
+
+    await waitFor(() => {
+      const { router } = require('expo-router');
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/rating-information',
+        params: { mode: 'driver' },
+      });
+    });
+    const { router } = require('expo-router');
+    expect(router.push).toHaveBeenCalledTimes(1);
   });
 });

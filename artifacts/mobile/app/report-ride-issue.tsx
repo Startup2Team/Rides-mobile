@@ -7,6 +7,12 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
+import { openExternalUrl } from '@/utils/openExternalUrl';
+import { usePressGuard } from '@/hooks/usePressGuard';
+import { typography } from '@/constants/typography';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 const REPORT_TYPES = [
   {
@@ -58,18 +64,18 @@ export default function ReportRideIssueScreen() {
       'Pickup and destination:',
       'What happened:',
     ].join('\n');
-    void Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    void openExternalUrl(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GlassHeader title="Report a Ride Issue" subtitle="Tell us what happened" />
+      <GlassHeader title="Report a Ride Issue" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
+          paddingHorizontal: semanticSpacing.cardPadding,
           flexGrow: 1,
         }}
       >
@@ -82,25 +88,7 @@ export default function ReportRideIssueScreen() {
         <View style={styles.centeredContent}>
           <View style={[styles.card, { backgroundColor: colors.card }]}>
             {REPORT_TYPES.map((report, index) => (
-              <React.Fragment key={report.label}>
-                {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
-                <TouchableOpacity
-                  accessibilityLabel={report.label}
-                  accessibilityRole="button"
-                  activeOpacity={0.65}
-                  onPress={() => openReport(report.label, report.email)}
-                  style={styles.row}
-                >
-                  <View style={styles.icon}>
-                    <Feather name={report.icon} size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.copy}>
-                    <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>
-                    <Text style={[styles.detail, { color: colors.mutedForeground }]}>{report.detail}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              </React.Fragment>
+              <ReportRow key={report.label} index={index} colors={colors} report={report} onOpen={openReport} />
             ))}
           </View>
         </View>
@@ -115,22 +103,58 @@ export default function ReportRideIssueScreen() {
   );
 }
 
+function ReportRow({
+  colors,
+  index,
+  onOpen,
+  report,
+}: {
+  colors: ReturnType<typeof useColors>;
+  index: number;
+  onOpen: (label: string, email: string) => void;
+  report: typeof REPORT_TYPES[number];
+}) {
+  const guardedPress = usePressGuard(() => onOpen(report.label, report.email));
+
+  return (
+    <>
+      {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
+      <TouchableOpacity
+        accessibilityLabel={report.label}
+        accessibilityRole="button"
+        activeOpacity={0.65}
+        onPress={guardedPress}
+        style={styles.row}
+      >
+        <View style={styles.icon}>
+          <Feather name={report.icon} size={icons.size.lg} color={colors.primary} />
+        </View>
+        <View style={styles.copy}>
+          <Text style={[styles.label, { color: colors.foreground }]}>{report.label}</Text>
+          <Text style={[styles.detail, { color: colors.mutedForeground }]}>{report.detail}</Text>
+        </View>
+        <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  introWrap: { alignItems: 'center', paddingHorizontal: 20, marginBottom: 18 },
-  intro: { maxWidth: 320, fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19, textAlign: 'center' },
+  introWrap: { alignItems: 'center', paddingHorizontal: semanticSpacing.screenPadding, marginBottom: 18 },
+  intro: { maxWidth: 320, ...typography.label, fontFamily: typography.body.fontFamily, lineHeight: 19, textAlign: 'center' },
   centeredContent: { flex: 1, justifyContent: 'center' },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  row: { minHeight: 76, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 13 },
-  icon: { width: 28, alignItems: 'center', justifyContent: 'center' },
+  row: { minHeight: 76, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 13 },
+  icon: { width: spacing[28], alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, gap: 3 },
-  label: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-  detail: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  label: { ...typography.body, fontFamily: typography.title.fontFamily},
+  detail: { ...typography.tiny, fontFamily: typography.body.fontFamily, lineHeight: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 57 },
-  safetyNoteWrap: { alignItems: 'center', paddingHorizontal: 28, paddingTop: 16 },
-  safetyNote: { maxWidth: 300, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16, textAlign: 'center' },
+  safetyNoteWrap: { alignItems: 'center', paddingHorizontal: spacing[28], paddingTop: semanticSpacing.comfortableGap },
+  safetyNote: { maxWidth: 300, ...typography.tiny, fontFamily: typography.body.fontFamily, lineHeight: 16, textAlign: 'center' },
 });

@@ -19,13 +19,17 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
-  Easing,
   Keyboard,
   PanResponder,
   StyleSheet,
   View,
 } from 'react-native';
 import type { useColors } from '@/hooks/useColors';
+import { elevation } from '@/constants/elevation';
+import { duration, easing, spring } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing } from '@/constants/spacing';
 import { BookingCard, type BookingCardData } from './BookingCard';
 import { HomeCard, type HomeCardData } from './HomeCard';
 
@@ -33,10 +37,10 @@ export type { HomeCardData, BookingCardData };
 
 const DISMISS_THRESHOLD_RATIO = 0.28;
 const DISMISS_VELOCITY = 0.65;
-const DISMISS_DURATION_MS = 180;
+const DISMISS_DURATION_MS = duration.normal;
 
 const ENTRANCE_TRANSLATE_Y = 28;
-const ENTRANCE_SLIDE_MS = 180;
+const ENTRANCE_SLIDE_MS = duration.normal;
 const ENTRANCE_OPACITY_MS = 160;
 
 type Props = {
@@ -95,7 +99,7 @@ export function CustomerBottomSheet({
         toValue: 0,
         duration: ENTRANCE_SLIDE_MS,
         useNativeDriver: true,
-        easing: Easing.out(Easing.quad),
+        easing: easing.easeOutQuad,
       }),
       Animated.timing(enterOpacity, {
         toValue: 1,
@@ -137,7 +141,7 @@ export function CustomerBottomSheet({
               toValue: height,
               duration: DISMISS_DURATION_MS,
               useNativeDriver: true,
-              easing: Easing.in(Easing.cubic),
+              easing: easing.easeInCubic,
             }).start(() => {
               isAnimatingClose.current = false;
               onCloseBookingRef.current();
@@ -145,8 +149,7 @@ export function CustomerBottomSheet({
           } else {
             Animated.spring(slideAnim, {
               toValue: 0,
-              useNativeDriver: true,
-              bounciness: 4,
+              ...spring.sheet,
             }).start();
           }
         },
@@ -195,7 +198,7 @@ export function CustomerBottomSheet({
       testID="booking-sheet"
       style={[
         sheetStyles.shell,
-        { backgroundColor: colors.card },
+        { backgroundColor: colors.background },
         transform ? { transform } : undefined,
       ]}
       // Attach gesture only while booking card is active and stable.
@@ -237,13 +240,13 @@ export function CustomerBottomSheet({
 const sheetStyles = StyleSheet.create({
   shell: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    left: spacing[0],
+    right: spacing[0],
+    bottom: spacing[0],
+    borderTopLeftRadius: radius.sheetCompact,
+    borderTopRightRadius: radius.sheetCompact,
     overflow: 'visible',
-    shadowColor: '#000',
+    ...elevation.sheet,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.12,
     shadowRadius: 10,
@@ -251,12 +254,12 @@ const sheetStyles = StyleSheet.create({
   },
   handleBar: {
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: spacing[8],
   },
   handlePill: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: sizes.sheet.handleWidth,
+    height: sizes.sheet.handleHeight,
+    borderRadius: radius.xxs,
     backgroundColor: '#3A3A3A',
   },
 });

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { Linking, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -20,6 +21,107 @@ import DriverDashboard from '../index';
 let mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const mockAlert = jest.fn();
 const mockReact = React;
+
+type ScheduledHandle = {
+  id: number;
+  kind: 'timeout' | 'interval';
+  delay: number;
+  remaining: number;
+  token: number;
+  active: boolean;
+  callback: () => void;
+};
+
+function createScreenTimerManager() {
+  let session = 0;
+  let nextId = 0;
+  const handles = new Map<number, ScheduledHandle>();
+
+  const clearHandle = (handle: ScheduledHandle | null) => {
+    if (!handle) return;
+    handles.delete(handle.id);
+    handle.active = false;
+  };
+
+  const clearAll = () => {
+    handles.clear();
+  };
+
+  const startSession = () => {
+    clearAll();
+    session += 1;
+    return session;
+  };
+
+  const scheduleTimeout = (callback: () => void, delayMs: number, token = session) => {
+    const handle: ScheduledHandle = {
+      id: ++nextId,
+      kind: 'timeout',
+      delay: delayMs,
+      remaining: delayMs,
+      token,
+      active: true,
+      callback,
+    };
+    handles.set(handle.id, handle);
+    return handle;
+  };
+
+  const scheduleInterval = (callback: () => void, delayMs: number, token = session) => {
+    const handle: ScheduledHandle = {
+      id: ++nextId,
+      kind: 'interval',
+      delay: delayMs,
+      remaining: delayMs,
+      token,
+      active: true,
+      callback,
+    };
+    handles.set(handle.id, handle);
+    return handle;
+  };
+
+  const advance = (ms: number) => {
+    let remainingMs = ms;
+    while (remainingMs > 0) {
+      const activeHandles = [...handles.values()].filter(handle => handle.active && handle.token === session);
+      if (activeHandles.length === 0) break;
+      const step = Math.min(remainingMs, ...activeHandles.map(handle => handle.remaining));
+      activeHandles.forEach(handle => {
+        handle.remaining -= step;
+      });
+      activeHandles
+        .filter(handle => handle.remaining <= 0)
+        .sort((a, b) => a.id - b.id)
+        .forEach(handle => {
+          if (!handle.active || handle.token !== session) return;
+          if (handle.kind === 'timeout') {
+            clearHandle(handle);
+            handle.callback();
+            return;
+          }
+          handle.callback();
+          handle.remaining = handle.delay;
+        });
+      remainingMs -= step;
+    }
+  };
+
+  return {
+    startSession,
+    endSession: startSession,
+    currentSession: () => session,
+    isActive: (token: number) => token === session,
+    scheduleTimeout,
+    scheduleInterval,
+    clearTimeout: clearHandle,
+    clearInterval: clearHandle,
+    clearAll,
+    advance,
+  };
+}
+
+const mockScreenTimers = createScreenTimerManager();
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -80,10 +182,14 @@ jest.mock('expo-router', () => ({
   useFocusEffect: () => undefined,
 }));
 
+jest.mock('@/hooks/useScreenTimerManager', () => ({
+  useScreenTimerManager: () => mockScreenTimers,
+}));
+
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
-  const Icon = ({ name }: { name: string }) => <Text>{name}</Text>;
+  const Icon = ({ name, ...props }: { name: string }) => <Text {...props}>{name}</Text>;
   return { Feather: Icon, MaterialCommunityIcons: Icon };
 });
 
@@ -204,16 +310,24 @@ function rating(overrides: Partial<DriverRating>): DriverRating {
 }
 
 function DashboardProviders() {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
   return (
-    <AuthProvider>
-      <DriverEntitlementProvider>
-        <RideProvider>
-          <View testID="dashboard-root">
-            <DriverDashboard />
-          </View>
-        </RideProvider>
-      </DriverEntitlementProvider>
-    </AuthProvider>
+    <QueryClientProvider client={client}>
+      <AuthProvider>
+        <DriverEntitlementProvider>
+          <RideProvider>
+            <View testID="dashboard-root">
+              <DriverDashboard />
+            </View>
+          </RideProvider>
+        </DriverEntitlementProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -260,8 +374,11 @@ function makeVehicleEntitlement(vehicle: DriverVehicleProfile, rides: number, bo
 
 describe('DriverDashboard online state', () => {
   beforeEach(async () => {
+    jest.clearAllMocks();
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
+    mockScreenTimers.clearAll();
+    mockScreenTimers.startSession();
     mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     await AsyncStorage.clear();
     (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
@@ -290,7 +407,7 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('Go Offline')).toBeTruthy();
 
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
     expect(screen.getByText('Amina K.')).toBeTruthy();
@@ -322,7 +439,7 @@ describe('DriverDashboard online state', () => {
 
     render(<DashboardProviders />);
 
-    await waitFor(() => expect(screen.getByText('Hi, Test')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Test')).toBeTruthy());
     expect(screen.getByTestId('driver-verified-badge')).toBeTruthy();
     expect(screen.queryByText('Compact vehicle marker')).toBeNull();
     expect(screen.getByText('0.0')).toBeTruthy();
@@ -371,7 +488,7 @@ describe('DriverDashboard online state', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(6_000);
+      mockScreenTimers.advance(6_000);
     });
     expect(screen.queryByText('Incoming Ride')).toBeNull();
   });
@@ -382,7 +499,7 @@ describe('DriverDashboard online state', () => {
     render(<DashboardProviders />);
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
@@ -398,7 +515,7 @@ describe('DriverDashboard online state', () => {
     render(<DashboardProviders />);
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
@@ -413,16 +530,16 @@ describe('DriverDashboard online state', () => {
     render(<DashboardProviders />);
     await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
     act(() => {
-      jest.advanceTimersByTime(5_000);
+      mockScreenTimers.advance(5_000);
     });
     await waitFor(() => expect(screen.getByText('Incoming Ride Request')).toBeTruthy());
 
     act(() => {
-      jest.advanceTimersByTime(15_000);
+      mockScreenTimers.advance(16_000);
     });
 
-    await waitFor(() => expect(screen.queryByText('Incoming Ride Request')).toBeNull());
-  });
+    expect(screen.queryByText('Incoming Ride Request')).toBeNull();
+  }, 10_000);
 
   test('does not allow pending drivers or approved drivers with zero credits to go online', async () => {
     await seedDriverState({
@@ -433,6 +550,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(screen.getByText('Offline')).toBeTruthy();
+    expect(router.push).not.toHaveBeenCalled();
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -447,6 +565,7 @@ describe('DriverDashboard online state', () => {
 
     fireEvent.press(screen.getByText('Go Online'));
     expect(screen.getByText('Offline')).toBeTruthy();
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/(driver)/packages'));
     await expect(loadStoredDriverProfile()).resolves.toMatchObject({
       data: expect.objectContaining({ isOnline: false }),
     });
@@ -596,9 +715,7 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
-
-    expect(screen.getByText('3,500 RWF')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('3,500 RWF')).toBeTruthy());
     expect(screen.getByText('Trips')).toBeTruthy();
     expect(screen.getByText('Rides')).toBeTruthy();
     expect(screen.getByText('30')).toBeTruthy();
@@ -619,9 +736,7 @@ describe('DriverDashboard online state', () => {
     ]);
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Earnings')).toBeTruthy());
-
-    expect(screen.getByText('0 RWF')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('0 RWF')).toBeTruthy());
     expect(screen.queryByText('3,500 RWF')).toBeNull();
     expect(screen.queryByText('4,200 RWF')).toBeNull();
     expect(screen.queryByText('1,900 RWF')).toBeNull();
@@ -643,7 +758,7 @@ describe('DriverDashboard online state', () => {
     await seedDriverState();
 
     render(<DashboardProviders />);
-    await waitFor(() => expect(screen.getByText('Hi, Test')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Test')).toBeTruthy());
 
     expect(screen.getByTestId('driver-status-card').props.style).toEqual(
       expect.arrayContaining([
@@ -666,7 +781,7 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByTestId('dashboard-ad-bralirwa')).toBeTruthy();
 
     fireEvent.press(screen.getByText('View Packages'));
-    expect(router.push).toHaveBeenCalledWith('/driver-packages');
+    expect(router.push).toHaveBeenCalledWith('/(driver)/packages');
 
     fireEvent.press(screen.getByTestId('dashboard-ad-airtel'));
     expect(Linking.openURL).toHaveBeenCalledWith('https://www.airtel.co.rw/');

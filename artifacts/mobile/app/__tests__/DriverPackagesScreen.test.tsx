@@ -62,6 +62,7 @@ jest.mock('react-native', () => {
     Animated: {
       Value,
       View: host('AnimatedView'),
+      createAnimatedComponent: (Component: any) => Component,
       timing: jest.fn(animation),
     },
     Easing: {
@@ -70,7 +71,10 @@ jest.mock('react-native', () => {
       out: jest.fn((value: unknown) => value),
     },
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
-    ScrollView: host('ScrollView'),
+    RefreshControl: host('RefreshControl'),
+    ScrollView: React.forwardRef(({ children, refreshControl, ...props }: any, ref: any) =>
+      React.createElement('ScrollView', { ...props, ref }, refreshControl, children)
+    ),
     StyleSheet: {
       create: (styles: object) => styles,
       flatten: (style: object) => style,
@@ -112,6 +116,25 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+jest.mock('@/components/GlassScrollView', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    GlassScrollView: React.forwardRef(({ children, onRefresh, refreshing, ...props }: any, ref: any) => (
+      <View
+        ref={ref}
+        testID="packages-refresh-control"
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        {...props}
+      >
+        {children}
+      </View>
+    )),
+  };
+});
+
+
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');
@@ -119,8 +142,8 @@ jest.mock('@expo/vector-icons', () => {
   return { Feather: Icon };
 });
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({
+jest.mock('@/context/AuthContext', () => {
+  const auth = {
     user: { id: 'driver-user-1' },
     driverProfile: {
       isVerified: true,
@@ -128,6 +151,19 @@ jest.mock('@/context/AuthContext', () => ({
       momoProvider: 'mtn',
       verificationStatus: 'approved',
     },
+  };
+  return {
+    useAuth: () => auth,
+    useOptionalAuth: () => auth,
+  };
+});
+
+jest.mock('@/query/hooks/useManualPaymentClaimsQuery', () => ({
+  useManualPaymentClaimsQuery: () => ({
+    claims: [],
+    isLoading: false,
+    isFetching: false,
+    refetch: jest.fn(),
   }),
 }));
 
@@ -242,6 +278,22 @@ describe('DriverPackagesScreen', () => {
     });
   });
 
+  test('activates free packages without opening the payment screen', async () => {
+    render(<DriverPackagesScreen />);
+
+    fireEvent.press(screen.getByText('Launch Starter Package'));
+    await waitFor(() => expect(mockSaveLockedPackageOffer).toHaveBeenCalled());
+    fireEvent.press(screen.getByText('Activate Package'));
+
+    await waitFor(() => expect(mockActivatePackage).toHaveBeenCalledWith(expect.objectContaining({
+      packageId: 'launch_starter',
+      priceRwf: 0,
+    })));
+    expect(require('expo-router').router.push).not.toHaveBeenCalledWith(expect.objectContaining({
+      pathname: '/driver-package-payment',
+    }));
+  });
+
   test('deselects a package when it is pressed again', async () => {
     render(<DriverPackagesScreen />);
 
@@ -261,7 +313,7 @@ describe('DriverPackagesScreen', () => {
     mockSyncGeneration = 'generation-2';
     view.rerender(<DriverPackagesScreen />);
 
-    expect(await screen.findByText('Package offers were refreshed. Please select again.')).toBeTruthy();
+    expect(screen.queryByText('Package offers were refreshed. Please select again.')).toBeNull();
     fireEvent.press(screen.getByText('Buy Selected Package'));
     expect(require('expo-router').router.push).not.toHaveBeenCalled();
   });
@@ -343,20 +395,21 @@ describe('DriverPackagesScreen', () => {
   });
 
   test('shows campaign values when a promotion is active', () => {
-    mockGetActiveDriverRideCampaigns.mockReturnValue([{
+    mockCampaigns = [{
       campaignId: 'world-cup',
       campaignName: 'World Cup',
       campaignType: 'global',
       status: 'active',
       startDate: '2026-06-01T00:00:00.000Z',
-      endDate: '2026-07-01T00:00:00.000Z',
+      endDate: '2026-07-31T00:00:00.000Z',
       createdAt: '2026-06-01T00:00:00.000Z',
       description: 'Temporary promotion',
       packageIds: ['growth'],
       priceRwf: 1_500,
       ridesGranted: 40,
       bonusRidesGranted: 5,
-    }]);
+    }];
+    mockGetActiveDriverRideCampaigns.mockReturnValue(mockCampaigns);
 
     render(<DriverPackagesScreen />);
 
@@ -364,6 +417,18 @@ describe('DriverPackagesScreen', () => {
     expect(screen.getByLabelText('40 Rides + 5 Bonus Rides')).toBeTruthy();
     expect(screen.getByText('1,500 RWF')).toBeTruthy();
     expect(screen.getByText('Promotional Offer')).toBeTruthy();
+  });
+
+  test('shows admin-marked free trial packages as free now', () => {
+    mockCatalog = DRIVER_RIDE_PACKAGE_CATALOG
+      .filter(entry => entry.packageId === 'growth' && entry.vehicleType === 'moto')
+      .map(entry => ({ ...entry, isFreeTrial: true }));
+
+    render(<DriverPackagesScreen />);
+
+    expect(screen.getByText('Growth Package')).toBeTruthy();
+    expect(screen.getByText('FREE NOW')).toBeTruthy();
+    expect(screen.getByText('2,000 RWF')).toBeTruthy();
   });
 
   test('renders variable package counts and unknown package IDs from the supplied catalog', () => {
@@ -432,7 +497,7 @@ describe('DriverPackagesScreen', () => {
     render(<DriverPackagesScreen />);
 
     expect(screen.getByText('Using cached package data')).toBeTruthy();
-    fireEvent.press(screen.getByText('Refresh'));
+    fireEvent(screen.getByTestId('packages-refresh-control'), 'refresh');
     expect(mockRefreshPackages).toHaveBeenCalled();
   });
 });

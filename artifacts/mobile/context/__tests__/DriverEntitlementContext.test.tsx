@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
@@ -11,15 +12,23 @@ import { resolvePackageOffer } from '@/domain/driverRideCampaigns';
 let mockRideDriverProfile: any = null;
 
 jest.mock('@/context/AuthContext', () => ({
-  useOptionalAuth: () => mockRideDriverProfile ? { driverProfile: mockRideDriverProfile } : null,
+  useAuth: () => mockRideDriverProfile ? { user: { id: 'driver-1' }, driverProfile: mockRideDriverProfile } : { user: { id: 'driver-1' }, driverProfile: null },
+  useOptionalAuth: () => ({ user: { id: 'driver-1' }, driverProfile: mockRideDriverProfile }),
 }));
 
-const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <DriverEntitlementProvider>{children}</DriverEntitlementProvider>
-);
-const rideWrapper = ({ children }: { children: React.ReactNode }) => (
-  <DriverEntitlementProvider><RideProvider>{children}</RideProvider></DriverEntitlementProvider>
-);
+function createWrapper(children: React.ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={client}>
+      <DriverEntitlementProvider>{children}</DriverEntitlementProvider>
+    </QueryClientProvider>
+  );
+}
+
+const wrapper = ({ children }: { children: React.ReactNode }) => createWrapper(children);
+const rideWrapper = ({ children }: { children: React.ReactNode }) => createWrapper(<RideProvider>{children}</RideProvider>);
 
 function launchOffer(vehicle = { vehicleId: 'driver-vehicle:legacy', vehicleType: 'moto' as const }) {
   return createPackageOfferSnapshot(resolvePackageOffer({

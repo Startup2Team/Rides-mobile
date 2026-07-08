@@ -19,17 +19,47 @@ import type { RideLocation } from '@/types';
 
 let mockAuthDriverProfile: any = null;
 let mockDriverEntitlement: any = null;
+const mockShadowWireRequestRideCommand = jest.fn();
+const mockShadowWireCancelRideCommand = jest.fn();
+const mockShadowWireAcceptRideCommand = jest.fn();
+const mockShadowWireDeclineRideCommand = jest.fn();
+const mockShadowWireStartRideCommand = jest.fn();
+const mockShadowWireCompleteRideCommand = jest.fn();
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useOptionalAuth: () => mockAuthDriverProfile ? { driverProfile: mockAuthDriverProfile } : null,
+  useOptionalAuth: () => mockAuthDriverProfile ? {
+    user: {
+      id: 'driver-1',
+      mode: 'driver',
+    },
+    driverProfile: mockAuthDriverProfile,
+  } : null,
 }));
 
 jest.mock('@/context/DriverEntitlementContext', () => ({
   useOptionalDriverEntitlement: () => mockDriverEntitlement,
+}));
+
+jest.mock('@/capabilities', () => ({
+  resolveCapabilities: () => ({
+    capabilities: {},
+    state: {},
+    mode: 'customer',
+  }),
+}));
+
+jest.mock('@/domains/ride/commandPipeline', () => ({
+  shadowWireRequestRideCommand: (...args: unknown[]) => mockShadowWireRequestRideCommand(...args),
+  shadowWireCancelRideCommand: (...args: unknown[]) => mockShadowWireCancelRideCommand(...args),
+  shadowWireAcceptRideCommand: (...args: unknown[]) => mockShadowWireAcceptRideCommand(...args),
+  shadowWireDeclineRideCommand: (...args: unknown[]) => mockShadowWireDeclineRideCommand(...args),
+  shadowWireStartRideCommand: (...args: unknown[]) => mockShadowWireStartRideCommand(...args),
+  shadowWireCompleteRideCommand: (...args: unknown[]) => mockShadowWireCompleteRideCommand(...args),
+  shadowWireSubmitRatingCommand: jest.fn(),
 }));
 
 const pickup: RideLocation = {
@@ -80,6 +110,12 @@ describe('RideProvider lifecycle orchestration', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0);
     mockAuthDriverProfile = null;
     mockDriverEntitlement = null;
+    mockShadowWireRequestRideCommand.mockReset();
+    mockShadowWireCancelRideCommand.mockReset();
+    mockShadowWireAcceptRideCommand.mockReset();
+    mockShadowWireDeclineRideCommand.mockReset();
+    mockShadowWireStartRideCommand.mockReset();
+    mockShadowWireCompleteRideCommand.mockReset();
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -101,6 +137,7 @@ describe('RideProvider lifecycle orchestration', () => {
     await act(async () => {
       await result.current.createRide(pickup, destination, 'moto', destination.address);
     });
+    expect(mockShadowWireRequestRideCommand).toHaveBeenCalledTimes(1);
 
     const createdRideId = result.current.currentRide?.id;
     expect(result.current.currentRide).toEqual(expect.objectContaining({
@@ -166,10 +203,12 @@ describe('RideProvider lifecycle orchestration', () => {
 
     act(() => result.current.startJourney());
     expect(result.current.currentRide?.status).toBe('in_progress');
+    expect(mockShadowWireStartRideCommand).toHaveBeenCalledTimes(1);
 
     act(() => result.current.completeRide());
     expect(result.current.currentRide).toBeNull();
     expect(result.current.driverLocation).toBeNull();
+    expect(mockShadowWireCompleteRideCommand).toHaveBeenCalledTimes(1);
     expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
       id: createdRideId,
       status: 'completed',
@@ -219,6 +258,7 @@ describe('RideProvider lifecycle orchestration', () => {
     const cancelledRideId = result.current.currentRide?.id;
 
     act(() => result.current.cancelRide());
+    expect(mockShadowWireCancelRideCommand).toHaveBeenCalledTimes(1);
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       id: cancelledRideId,
       status: 'cancelled',
@@ -239,6 +279,156 @@ describe('RideProvider lifecycle orchestration', () => {
     expect(await loadRideHistory()).toBeNull();
   });
 
+  test('shadow wiring failure does not block ride creation or cancellation', async () => {
+    mockShadowWireRequestRideCommand.mockImplementationOnce(() => {
+      throw new Error('shadow request failed');
+    });
+    mockShadowWireCancelRideCommand.mockImplementationOnce(() => {
+      throw new Error('shadow cancel failed');
+    });
+
+    const { result } = renderRideProvider();
+
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'searching',
+    }));
+
+    act(() => result.current.cancelRide());
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'cancelled',
+    }));
+  });
+
+  test('shadow-wires driver accept and decline without changing live behavior', async () => {
+    mockAuthDriverProfile = {
+      id: 'driver-1',
+      isOnline: true,
+      isVerified: true,
+      verificationStatus: 'approved',
+      vehicleType: 'moto',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: 'LIC001',
+      vehicles: [{
+        id: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        status: 'approved',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: 'LIC001',
+        submittedAt: '2026-06-08T09:00:00.000Z',
+      }],
+      activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+    };
+    mockDriverEntitlement = {
+      entitlement: {
+        ...EMPTY_DRIVER_ENTITLEMENT,
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        remainingRideCredits: 3,
+        vehicleEntitlements: [{
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
+          activePackageId: null,
+          remainingRideCredits: 3,
+          remainingBonusRides: 0,
+          activations: [],
+          creditTransactions: [],
+          purchaseHistory: [],
+          updatedAt: '2026-06-08T09:00:00.000Z',
+          authority: 'local_prototype',
+        }],
+      },
+    };
+
+    const { result } = renderRideProvider();
+
+    await act(async () => {
+      result.current.simulateIncomingRideRequest();
+    });
+    await waitFor(() => expect(result.current.pendingRequest).toEqual(expect.objectContaining({
+      id: expect.any(String),
+      status: 'searching',
+    })));
+
+    act(() => result.current.acceptRideRequest());
+    expect(mockShadowWireAcceptRideCommand).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'negotiating',
+    })));
+
+    await act(async () => {
+      result.current.simulateIncomingRideRequest();
+    });
+    act(() => result.current.declineRideRequest());
+    expect(mockShadowWireDeclineRideCommand).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingRequest).toBeNull();
+  });
+
+  test('shadow wiring failure does not block driver accept or decline', async () => {
+    mockAuthDriverProfile = {
+      id: 'driver-1',
+      isOnline: true,
+      isVerified: true,
+      verificationStatus: 'approved',
+      vehicleType: 'moto',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: 'LIC001',
+      vehicles: [{
+        id: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        status: 'approved',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: 'LIC001',
+        submittedAt: '2026-06-08T09:00:00.000Z',
+      }],
+      activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+    };
+    mockDriverEntitlement = {
+      entitlement: {
+        ...EMPTY_DRIVER_ENTITLEMENT,
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        remainingRideCredits: 3,
+        vehicleEntitlements: [{
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
+          activePackageId: null,
+          remainingRideCredits: 3,
+          remainingBonusRides: 0,
+          activations: [],
+          creditTransactions: [],
+          purchaseHistory: [],
+          updatedAt: '2026-06-08T09:00:00.000Z',
+          authority: 'local_prototype',
+        }],
+      },
+    };
+    mockShadowWireAcceptRideCommand.mockImplementationOnce(() => {
+      throw new Error('shadow accept failed');
+    });
+    mockShadowWireDeclineRideCommand.mockImplementationOnce(() => {
+      throw new Error('shadow decline failed');
+    });
+
+    const { result } = renderRideProvider();
+
+    await act(async () => {
+      result.current.simulateIncomingRideRequest();
+    });
+    act(() => result.current.acceptRideRequest());
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'negotiating',
+    })));
+
+    await act(async () => {
+      result.current.simulateIncomingRideRequest();
+    });
+    act(() => result.current.declineRideRequest());
+    expect(result.current.pendingRequest).toBeNull();
+  });
+
   test('guarded invalid transitions do not replace or advance active ride state', async () => {
     const { result } = renderRideProvider();
     await createAndMatchRide(result);
@@ -251,6 +441,7 @@ describe('RideProvider lifecycle orchestration', () => {
 
     act(() => result.current.startJourney());
     expect(result.current.currentRide).toBe(activeRide);
+    expect(mockShadowWireStartRideCommand).not.toHaveBeenCalled();
 
     act(() => result.current.sendDriverOffer(0));
     expect(result.current.currentRide).toBe(activeRide);
@@ -344,6 +535,8 @@ describe('RideProvider lifecycle orchestration', () => {
       vehicleId: 'driver-vehicle:moto:rad-001-a',
       vehicleType: 'moto',
     }));
+
+    expect(mockShadowWireCompleteRideCommand).toHaveBeenCalledTimes(1);
 
     await waitFor(() => expect(result.current.rideHistory[0]).toEqual(expect.objectContaining({
       driverId: 'driver-1',

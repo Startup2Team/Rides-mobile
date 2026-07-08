@@ -1,11 +1,14 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
-import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { GlassScrollView } from '@/components/GlassScrollView';
+import { FORM_BOTTOM_PADDING, TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { usePackageSync } from '@/context/PackageSyncContext';
@@ -20,20 +23,18 @@ import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePacka
 import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
+import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
 
-function formatLastUpdated(value: string | null) {
-  if (!value) return 'Never';
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
-  if (minutes < 1) return 'just now';
-  if (minutes === 1) return '1 minute ago';
-  return `${minutes} minutes ago`;
-}
 
-export default function DriverPackagesScreen() {
+
+export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
@@ -41,8 +42,8 @@ export default function DriverPackagesScreen() {
   const { driverProfile, user } = useAuth();
   const {
     isLoading: isEntitlementLoading,
+    activatePackage,
     entitlement,
-    rideCredits,
   } = useDriverEntitlement();
   const {
     campaigns,
@@ -57,15 +58,19 @@ export default function DriverPackagesScreen() {
     syncGeneration,
   } = usePackageSync();
   const [selectedOffer, setSelectedOffer] = useState<DriverPackageOfferSnapshot | null>(null);
-  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
   const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const { claims } = useManualPaymentClaimsQuery({ driverId: user?.id });
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
   const packages = offerSourceReady ? getActivePackages(vehicleType, catalog) : [];
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
   const activeCampaigns = getActiveDriverRideCampaigns(campaigns);
+  const bottomPadding = showBack ? FORM_BOTTOM_PADDING : TAB_BAR_SCREEN_BOTTOM_PADDING;
+  const packagesContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
 
   useEffect(() => {
     if (generationRef.current === null) {
@@ -76,7 +81,7 @@ export default function DriverPackagesScreen() {
       generationRef.current = syncGeneration;
       if (selectedOffer) {
         setSelectedOffer(null);
-        setSelectionNotice('Package offers were refreshed. Please select again.');
+        setActivationError(null);
       }
     }
   }, [selectedOffer, syncGeneration]);
@@ -84,6 +89,7 @@ export default function DriverPackagesScreen() {
   const handleSelectPackage = async (offer: DriverRidePackageOffer) => {
     if (selectedOffer?.packageId === offer.packageId) {
       setSelectedOffer(null);
+      setActivationError(null);
       return;
     }
     const vehicle = activeVehicle
@@ -98,19 +104,30 @@ export default function DriverPackagesScreen() {
     try {
       await saveLockedPackageOffer(lockedOffer, catalog, offer);
       if (generationRef.current !== selectionGeneration) {
-        setSelectionNotice('Package offers were refreshed. Please select again.');
         return;
       }
-      setSelectionNotice(null);
       setSelectedOffer(lockedOffer);
+      setActivationError(null);
     } catch (lockError) {
       setSelectedOffer(null);
-      setSelectionNotice(lockError instanceof Error ? lockError.message : 'Unable to lock this package offer.');
     }
   };
 
-  const handleBuySelectedPackage = () => {
+  const handleBuySelectedPackage = async () => {
     if (!selectedOffer) return;
+    if (selectedOffer.priceRwf === 0) {
+      setIsActivating(true);
+      setActivationError(null);
+      try {
+        await activatePackage(selectedOffer);
+        navigateToDriverHomeAfterCompletion(router);
+      } catch (activationFailure) {
+        setActivationError(activationFailure instanceof Error ? activationFailure.message : 'Unable to activate this package.');
+      } finally {
+        setIsActivating(false);
+      }
+      return;
+    }
     router.push({
       pathname: '/driver-package-payment',
       params: { offerId: selectedOffer.offerId },
@@ -120,47 +137,55 @@ export default function DriverPackagesScreen() {
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader
       title="Ride Packages"
-      subtitle={`Choose a package for your ${vehicleLabel}`}
+      showBack={showBack}
       onBackPress={() => router.back()}
     />
-    <ScrollView
+
+    <GlassScrollView
       style={styles.root}
-      contentContainerStyle={{ paddingTop: headerMetrics.contentTop, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
-      scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+      indicatorTop={headerMetrics.indicatorTop}
+      contentContainerStyle={{
+        paddingTop: Platform.OS === 'ios' ? 0 : packagesContentTop,
+        paddingBottom: insets.bottom + bottomPadding,
+      }}
+      contentInset={Platform.OS === 'ios' ? { top: packagesContentTop } : undefined}
+      contentOffset={Platform.OS === 'ios' ? { x: 0, y: -packagesContentTop } : undefined}
+      showsVerticalScrollIndicator={false}
+      onRefresh={refresh}
+      refreshing={isRefreshing}
+      refreshIndicatorTop={headerMetrics.headerInset + 44}
     >
 
-    <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
-      <View>
-        <Text style={styles.balanceLabel}>AVAILABLE RIDES</Text>
-        <Text style={styles.balanceValue}>{isEntitlementLoading ? '...' : rideCredits}</Text>
+    {(syncWarning && offerSourceReady) ? (
+      <View style={styles.syncRow}>
+        <View style={styles.syncCopy}>
+          {syncWarning && offerSourceReady ? (
+            <AppText style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</AppText>
+          ) : null}
+        </View>
       </View>
-      <View style={styles.approvedBadge}><Feather name="shield" size={14} color="#fff" /><Text style={styles.approvedText}>{driverProfile?.isVerified ? 'Approved driver' : 'Driver'}</Text></View>
-    </View>
+    ) : null}
 
-    <View style={styles.syncRow}>
-      <View style={styles.syncCopy}>
-        <Text style={[styles.syncText, { color: colors.mutedForeground }]}>
-          Last updated: {formatLastUpdated(lastSyncedAt)}
-        </Text>
-        {syncWarning && offerSourceReady ? (
-          <Text style={[styles.syncWarning, { color: colors.warning }]}>Using cached package data</Text>
-        ) : null}
-        {selectionNotice ? (
-          <Text style={[styles.syncWarning, { color: colors.warning }]}>{selectionNotice}</Text>
-        ) : null}
-      </View>
+    {claims && claims.length > 0 ? (
       <TouchableOpacity
         accessibilityRole="button"
-        accessibilityLabel="Refresh packages"
-        disabled={isRefreshing}
-        onPress={() => void refresh()}
-        style={[styles.refreshButton, { borderColor: colors.border, opacity: isRefreshing ? 0.55 : 1 }]}
+        accessibilityLabel="View payment confirmations"
+        style={[styles.historyLink, { backgroundColor: cardFill, borderColor: colors.border }]}
+        onPress={() => router.push('/driver-package-payment-status')}
       >
-        <Feather name="refresh-cw" size={14} color={colors.primary} />
-        <Text style={[styles.refreshText, { color: colors.primary }]}>
-          {isRefreshing ? 'Refreshing...' : 'Refresh'}
-        </Text>
+        <Feather name="clock" size={16} color={colors.primary} />
+        <AppText style={[styles.historyLinkText, { color: colors.foreground }]}>Payment confirmations</AppText>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 'auto' }} />
       </TouchableOpacity>
+    ) : null}
+
+    <View style={styles.introCopy}>
+      <AppText style={[styles.introText, { color: colors.foreground }]}>
+        Buy a package to go online and start receiving ride requests.
+      </AppText>
+      <AppText style={[styles.introText, { color: colors.foreground }]}>
+        One completed trip uses one ride; declined requests do not count.
+      </AppText>
     </View>
 
     {isCatalogLoading && !hasCatalogSnapshot ? (
@@ -206,16 +231,24 @@ export default function DriverPackagesScreen() {
         />
       );
     })}
+    {activationError ? (
+      <View style={[styles.activationError, { borderColor: colors.destructiveHex + '30' }]}>
+        <Feather name="alert-triangle" size={15} color={colors.destructive} />
+        <AppText style={[styles.activationErrorText, { color: colors.destructive }]}>{activationError}</AppText>
+      </View>
+    ) : null}
     {packages.length > 0 ? <View style={styles.buyButtonContainer}>
       <AppButton
-        title="Buy Selected Package"
-        onPress={handleBuySelectedPackage}
-        disabled={!selectedOffer}
+        title={selectedOffer?.priceRwf === 0 ? 'Activate Package' : 'Buy Selected Package'}
+        onPress={() => void handleBuySelectedPackage()}
+        disabled={!selectedOffer || isActivating}
+        loading={isActivating}
         fullWidth
         size="lg"
       />
     </View> : null}
-   </ScrollView>
+    <View style={styles.scrollTail} />
+    </GlassScrollView>
   </View>;
 }
 
@@ -241,36 +274,36 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
     ]}
   >
     <View style={styles.packageContent}>
-      <Text style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</Text>
+      <AppText style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</AppText>
       <View
         accessibilityLabel={`${ridePackage.ridesGranted} Rides + ${ridePackage.bonusRidesGranted} Bonus Rides`}
         style={styles.creditRow}
       >
-        <Text style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.ridesGranted} Rides</Text>
-        <Text style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRidesGranted} Bonus Rides</Text>
+        <AppText style={[styles.creditTotal, { color: colors.foreground }]}>{ridePackage.ridesGranted} Rides</AppText>
+        <AppText style={[styles.bonusCredits, { color: colors.primary }]}>+ {ridePackage.bonusRidesGranted} Bonus Rides</AppText>
       </View>
       {ridePackage.campaignName ? (
         <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
           <Feather name="tag" size={11} color={colors.primary} />
-          <Text style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</Text>
+          <AppText style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</AppText>
         </View>
       ) : null}
-      <Text style={[styles.planLabel, { color: colors.mutedForeground }]}>
+      <AppText style={[styles.planLabel, { color: colors.mutedForeground }]}>
         {ridePackage.isPromotional
           ? 'Promotional Offer'
           : ridePackage.priceRwf === 0
             ? 'Launch Offer'
             : 'Ride Package'}
-      </Text>
+      </AppText>
       <View style={styles.priceRow}>
-        <Text style={[styles.price, { color: ridePackage.priceRwf === 0 ? colors.primary : colors.foreground }]}>
+        <AppText style={[styles.price, { color: ridePackage.priceRwf === 0 ? colors.primary : colors.foreground }]}>
           {ridePackage.priceRwf === 0 ? 'FREE NOW' : formatRwf(ridePackage.priceRwf)}
-        </Text>
+        </AppText>
         {ridePackage.basePriceRwf !== ridePackage.priceRwf ? (
-          <Text style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.basePriceRwf)}</Text>
+          <AppText style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.basePriceRwf)}</AppText>
         ) : null}
       </View>
-      {disabled ? <Text style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</Text> : null}
+      {disabled ? <AppText style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</AppText> : null}
     </View>
     <View style={[
       styles.selectionControl,
@@ -289,40 +322,54 @@ function PackageState({ colors, detail, icon, title }: {
 }) {
   return <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <Feather name={icon} size={22} color={colors.mutedForeground} />
-    <Text style={[styles.stateTitle, { color: colors.foreground }]}>{title}</Text>
-    <Text style={[styles.stateDetail, { color: colors.mutedForeground }]}>{detail}</Text>
+    <AppText style={[styles.stateTitle, { color: colors.foreground }]}>{title}</AppText>
+    <AppText style={[styles.stateDetail, { color: colors.mutedForeground }]}>{detail}</AppText>
   </View>;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  balanceCard: { marginHorizontal: 16, marginBottom: 14, borderRadius: 18, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  balanceLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8 },
-  balanceValue: { color: '#fff', fontSize: 40, fontFamily: 'Inter_700Bold', marginTop: 3 },
-  approvedBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
-  approvedText: { color: '#fff', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  syncRow: { marginHorizontal: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  syncRow: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
   syncCopy: { flex: 1, gap: 3 },
-  syncText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
-  syncWarning: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  refreshButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 17, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  refreshText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
-  stateCard: { marginHorizontal: 16, borderRadius: 18, borderWidth: 1, padding: 22, alignItems: 'center', gap: 8 },
-  stateTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  stateDetail: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18, textAlign: 'center' },
-  packageCard: { minHeight: 132, marginHorizontal: 16, marginBottom: 14, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 20, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  syncWarning: { ...typography.tiny,  },
+  introCopy: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], gap: spacing[4] },
+  introText: { ...typography.caption, lineHeight: 18 },
+
+  stateCard: { marginHorizontal: semanticSpacing.cardPadding, borderRadius: 18, borderWidth: 1, padding: radius.sheetCompact, alignItems: 'center', gap: semanticSpacing.inlineGap },
+  stateTitle: { ...typography.title, textAlign: 'center' },
+  stateDetail: { ...typography.caption, lineHeight: 18, textAlign: 'center' },
+  packageCard: { minHeight: 132, marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[14], borderRadius: radius.sheetCompact, paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: semanticSpacing.screenPadding, borderWidth: 1.5, flexDirection: 'row', alignItems: 'flex-start', gap: spacing[14] },
   packageContent: { flex: 1, gap: 9 },
-  packageName: { fontSize: 23, fontFamily: 'Inter_700Bold', lineHeight: 29 },
+  packageName: { ...typography.h2, lineHeight: 29 },
   creditRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 },
-  creditTotal: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 19 },
-  bonusCredits: { fontSize: 13, fontFamily: 'Inter_700Bold', lineHeight: 18 },
-  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
-  campaignBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  planLabel: { fontSize: 12, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  price: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  normalPrice: { fontSize: 11, fontFamily: 'Inter_500Medium', textDecorationLine: 'line-through' },
-  unavailableText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  buyButtonContainer: { marginHorizontal: 16, marginTop: 4 },
+  creditTotal: { ...typography.bodySmall, lineHeight: 19 },
+  bonusCredits: { ...typography.label, lineHeight: 18 },
+  campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing[4], alignSelf: 'flex-start', paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 5, borderRadius: radius.pill },
+  campaignBadgeText: { ...typography.tiny,  },
+  planLabel: { ...typography.caption, textTransform: 'uppercase', letterSpacing: 0.5 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
+  price: { ...typography.body,  },
+  normalPrice: { ...typography.tiny, textDecorationLine: 'line-through' },
+  unavailableText: { ...typography.tiny, marginTop: 2 },
+  selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: spacing[2] },
+  activationError: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[10], borderWidth: 1, borderRadius: radius.lg, padding: spacing[10], flexDirection: 'row', alignItems: 'center', gap: spacing[8] },
+  activationErrorText: { ...typography.caption, flex: 1, lineHeight: 18 },
+  buyButtonContainer: { marginHorizontal: semanticSpacing.cardPadding, marginTop: spacing[4] },
+  scrollTail: { height: spacing[32] },
+  historyLink: {
+    marginHorizontal: semanticSpacing.cardPadding,
+    marginBottom: spacing[14],
+    borderRadius: radius.sheetCompact,
+    borderWidth: 1,
+    paddingHorizontal: spacing[20],
+    paddingVertical: spacing[16],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[10],
+  },
+  historyLinkText: {
+    ...typography.bodySmall,
+  },
 });
+
+export default DriverPackagesScreen;

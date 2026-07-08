@@ -8,6 +8,7 @@ export interface DriverRidePackageCatalogEntry {
   packageName: string;
   vehicleType: VehicleType;
   priceRwf: number;
+  isFreeTrial?: boolean;
   ridesGranted: number;
   bonusRidesGranted: number;
   status: DriverRidePackageCatalogStatus;
@@ -299,6 +300,7 @@ export function isValidPackageCatalogEntry(value: unknown): value is DriverRideP
     && typeof entry.priceRwf === 'number'
     && Number.isFinite(entry.priceRwf)
     && entry.priceRwf >= 0
+    && (entry.isFreeTrial === undefined || typeof entry.isFreeTrial === 'boolean')
     && typeof entry.ridesGranted === 'number'
     && Number.isInteger(entry.ridesGranted)
     && entry.ridesGranted >= 0

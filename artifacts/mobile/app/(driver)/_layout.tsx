@@ -30,6 +30,13 @@ export default function DriverTabLayout() {
           tabBarIcon: driverTabBarIcons.stats,
         }}
       />
+      <Tabs.Screen
+        name="packages"
+        options={{
+          title: 'Packages',
+          tabBarIcon: driverTabBarIcons.packages,
+        }}
+      />
 
       <Tabs.Screen
         name="profile"

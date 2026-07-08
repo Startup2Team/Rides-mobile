@@ -6,7 +6,6 @@ import {
   Linking,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -17,14 +16,24 @@ import { GlassScrollView } from '@/components/GlassScrollView';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { useAuth } from '@/context/AuthContext';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
+import { AppText } from '@/components/AppText';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { usePressGuard } from '@/hooks/usePressGuard';
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
+  const { logout } = useAuth();
   const { savedPlaces } = useSavedLocations();
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
@@ -63,28 +72,41 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        onPress: async () => {
+          await logout();
+          replaceAuthBoundary(router, '/(auth)/welcome');
+        },
+      },
+    ]);
+  };
+
   const savedAddress = (label: string) =>
     savedPlaces.find(place => place.label.toLowerCase() === label.toLowerCase())?.address;
 
   return (
     <View style={[styles.root, { backgroundColor: pageBackground }]}>
-      <GlassHeader title="Settings" subtitle="Preferences and account controls" />
+      <GlassHeader title="Settings" />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 22,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: radius.sheetCompact,
         }}
       >
         <Section title="Preferences">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
             <View style={styles.languageRow}>
-              <View style={styles.rowIcon}><Feather name="globe" size={20} color={colors.primary} /></View>
+              <View style={styles.rowIcon}><Feather name="globe" size={icons.size.lg} color={colors.primary} /></View>
               <View style={styles.rowCopy}>
-                <Text style={[styles.rowLabel, { color: colors.foreground }]}>Language</Text>
-                <Text style={[styles.rowDetail, { color: colors.mutedForeground }]}>Choose your preferred language</Text>
+                <AppText variant="body" style={[styles.rowLabel, { color: colors.foreground }]}>Language</AppText>
+                <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]}>Choose your preferred language</AppText>
               </View>
               <LanguageSelector />
             </View>
@@ -103,11 +125,11 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Account & Support">
+        <Section title="Account and Support">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
-            <SettingsRow icon="shield" label="Privacy & Security" onPress={() => router.push('/privacy-security')} />
+            <SettingsRow icon="shield" label="Privacy and Security" onPress={() => router.push('/privacy-security')} />
             <Divider />
-            <SettingsRow icon="help-circle" label="Help & Support" onPress={() => router.push('/help-support')} />
+            <SettingsRow icon="help-circle" label="Help and Support" onPress={() => router.push('/help-support')} />
             <Divider />
             <SettingsRow icon="external-link" label="Visit Our Website" detail="rides.rw" onPress={() => void Linking.openURL(WEBSITE_URL)} />
             <Divider />
@@ -117,6 +139,8 @@ export default function SettingsScreen() {
 
         <Section title="Danger zone">
           <View style={[styles.card, { backgroundColor: cardFill }]}>
+            <SettingsRow icon="log-out" label="Log Out" detail="Sign out of your account" onPress={handleLogout} destructive />
+            <Divider />
             <SettingsRow icon="trash-2" label="Delete Account" detail="Permanently remove your account" onPress={handleDeleteAccount} destructive />
           </View>
         </Section>
@@ -128,7 +152,7 @@ export default function SettingsScreen() {
 function Section({ children, title }: { children: React.ReactNode; title: string }) {
   const colors = useColors();
   return <View style={styles.section}>
-    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>
+    <AppText variant="h3" style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>
     {children}
   </View>;
 }
@@ -147,38 +171,39 @@ function SettingsRow({ destructive = false, detail, iconFamily = 'feather', icon
   onPress: () => void;
 }) {
   const colors = useColors();
+  const guardedPress = usePressGuard(onPress);
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
+    <TouchableOpacity style={styles.row} onPress={guardedPress} activeOpacity={0.62} accessibilityRole="button" accessibilityLabel={label}>
       <View style={styles.rowIcon}>
         {iconFamily === 'mci' ? (
-          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={20} color={colors.primary} />
+          <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />
         ) : (
-          <Feather name={icon as keyof typeof Feather.glyphMap} size={20} color={colors.primary} />
+          <Feather name={icon as keyof typeof Feather.glyphMap} size={icons.size.lg} color={destructive ? colors.destructive : colors.primary} />
         )}
       </View>
       <View style={styles.rowCopy}>
-        <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
-        {detail ? <Text style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</Text> : null}
+        <AppText variant="body" style={[styles.rowLabel, { color: destructive ? colors.destructive : colors.foreground }]}>{label}</AppText>
+        {detail ? <AppText variant="tiny" style={[styles.rowDetail, { color: colors.mutedForeground }]} numberOfLines={1}>{detail}</AppText> : null}
       </View>
-      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      <Feather name="chevron-right" size={icons.semantic.row} color={colors.mutedForeground} />
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  section: { gap: 10 },
-  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
+  section: { gap: spacing[10] },
+  sectionTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily, letterSpacing: -0.2, marginLeft: spacing[2] },
   card: {
-    borderRadius: 14,
+    borderRadius: radius.card,
     overflow: 'hidden',
     ...Platform.select({ ios: { borderCurve: 'continuous' } }),
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 58, paddingHorizontal: 16, paddingVertical: 12 },
-  languageRow: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 66, paddingHorizontal: 16, paddingVertical: 10 },
-  rowIcon: { width: 24, alignItems: 'center', justifyContent: 'center' },
-  rowCopy: { flex: 1, minWidth: 0, gap: 2 },
-  rowLabel: { fontSize: 15, fontFamily: 'Inter_500Medium' },
-  rowDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 58, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[12] },
+  languageRow: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: spacing[64] + spacing[2], paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[10] },
+  rowIcon: { width: icons.size.xl, alignItems: 'center', justifyContent: 'center' },
+  rowCopy: { flex: 1, minWidth: 0, gap: spacing[2] },
+  rowLabel: { ...typography.body, fontFamily: typography.label.fontFamily },
+  rowDetail: { ...typography.tiny, fontFamily: typography.caption.fontFamily },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 53 },
 });

@@ -6,12 +6,17 @@ import { AppButton } from '@/components/AppButton';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
+import { duration } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { showCancelSearchAlert } from '@/utils/cancelSearchAlert';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import {
   VEHICLE_MAP_MARKER_IMAGES,
   VEHICLE_SEARCHING_IMAGE_SIZE,
 } from '@/constants/vehicles';
 import { VEHICLE_LABELS } from '@/types';
+import { typography } from '@/constants/typography';
 
 export default function SearchingScreen() {
   const colors = useColors();
@@ -35,7 +40,7 @@ export default function SearchingScreen() {
           }),
           Animated.timing(anim, {
             toValue: 0,
-            duration: 0,
+            duration: duration.instant,
             useNativeDriver: true,
           }),
         ])
@@ -53,7 +58,7 @@ export default function SearchingScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)');
+      navigateToCustomerHomeAfterCompletion(router);
     }
   };
 
@@ -95,8 +100,8 @@ export default function SearchingScreen() {
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0),
-          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0),
+          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : spacing[0]),
+          paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : spacing[0]),
         },
       ]}
     >
@@ -200,25 +205,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
+    ...typography.h1,
+    fontFamily: typography.badge.fontFamily,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
     textAlign: 'center',
   },
   routeCard: {
-    borderRadius: 16,
-    padding: 14,
-    gap: 8,
-    marginTop: 8,
+    borderRadius: radius['2xl'],
+    padding: semanticSpacing.listItemPadding,
+    gap: semanticSpacing.inlineGap,
+    marginTop: spacing[8],
   },
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing[10],
   },
   routeDot: {
     width: 10,
@@ -229,13 +233,12 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   routeLine: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginLeft: 20,
   },
   routeText: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
+    ...typography.bodySmall,
   },
   footer: {
     width: '100%',

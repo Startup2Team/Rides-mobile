@@ -1,35 +1,34 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   StyleSheet,
-  Text,
   TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
+import { AppText } from '@/components/AppText';
+
 import { buttonCornerRadius } from '@/constants/buttons';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { typography } from '@/constants/typography';
+import { createMapPickerSessionId, useMapPicker } from '@/context/MapPickerContext';
 import { useSavedLocations } from '@/context/SavedLocationsContext';
 import { useColors } from '@/hooks/useColors';
 import { useLocationSearch } from '@/hooks/home/useLocationSearch';
 import { KIGALI_CENTER, type RideLocation, type SavedLocation } from '@/types';
-import { formatReverseGeocodeAddress } from '@/utils/locationUtils';
 
 type SavedPlaceLabel = 'Home' | 'Work' | 'School' | 'Church' | 'Other';
-const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
-type AppMapType = typeof MAP_TYPES[number];
-const MAP_LOCATION_DELTA = 0.012;
 
 export default function SavedPlaceSelectorScreen() {
   const colors = useColors();
@@ -54,6 +53,8 @@ export default function SavedPlaceSelectorScreen() {
   }>();
 
   const { savedPlaces, persistSavedPlaces } = useSavedLocations();
+  const { consumeResult, clearResult } = useMapPicker();
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
   const existing = useMemo(() => {
     if (mode === 'edit' && savedPlaceId) {
@@ -100,12 +101,6 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   }, [initialAddress, existing]);
 
-  const [uiMode, setUiMode] = useState<'search' | 'map'>('search');
-  const [mapCoords, setMapCoords] = useState(initialCoords);
-  const [mapAddress, setMapAddress] = useState(initialAddressStr);
-  const [isDragging, setIsDragging] = useState(false);
-  const [mapType, setMapType] = useState<AppMapType>('standard');
-
   const [customLabel, setCustomLabel] = useState(() => {
     if (displayLabel === 'Other') {
       if (mode === 'add' && label === 'Other') {
@@ -116,7 +111,6 @@ export default function SavedPlaceSelectorScreen() {
     return '';
   });
 
-  const mapRef = useRef<MapView>(null);
   const inputRef = useRef<TextInput>(null);
   const {
     text: searchText,
@@ -129,14 +123,7 @@ export default function SavedPlaceSelectorScreen() {
   } = useLocationSearch(initialCoords);
 
   useEffect(() => {
-    if (initialCoords && (initialCoords.latitude !== KIGALI_CENTER.latitude || initialCoords.longitude !== KIGALI_CENTER.longitude)) {
-      setMapCoords(initialCoords);
-    }
-  }, [initialCoords]);
-
-  useEffect(() => {
     if (initialAddressStr) {
-      setMapAddress(initialAddressStr);
       setSearchText(initialAddressStr);
     }
   }, [initialAddressStr, setSearchText]);
@@ -154,29 +141,37 @@ export default function SavedPlaceSelectorScreen() {
           style={[
             styles.searchBody,
             {
-              paddingTop: headerMetrics.contentTop + 24,
+              paddingTop: headerMetrics.contentTop + spacing[24],
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 16,
+              gap: semanticSpacing.cardPadding,
             },
           ]}
         >
-          <Feather name="alert-triangle" size={48} color={colors.destructive} />
-          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.foreground, textAlign: 'center' }}>
+          <Feather name="alert-triangle" size={icons.size.hero} color={colors.destructive} />
+          <AppText variant="title" style={{ color: colors.foreground, textAlign: 'center' }}>
             Saved place not found or has been deleted.
-          </Text>
+          </AppText>
           <TouchableOpacity
-            style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.primary }}
+            style={{ paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: spacing[10], borderRadius: radius['3xl'], backgroundColor: colors.primary }}
             onPress={() => router.back()}
           >
-            <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Go Back</Text>
+            <AppText variant="button" style={{ color: colors.primaryForeground }}>Go Back</AppText>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  const savePlace = async (place: RideLocation) => {
+  useEffect(() => {
+    return () => {
+      if (pendingSessionId) {
+        clearResult(pendingSessionId);
+      }
+    };
+  }, [clearResult, pendingSessionId]);
+
+  const savePlace = useCallback(async (place: RideLocation) => {
     const finalLabel = displayLabel === 'Other' ? customLabel.trim() : label;
     if (!finalLabel) {
       Alert.alert('Name this place', 'Enter a label before saving this location.');
@@ -198,7 +193,63 @@ export default function SavedPlaceSelectorScreen() {
     ];
     await persistSavedPlaces(next);
     router.back();
-  };
+  }, [customLabel, displayLabel, existing, label, mode, persistSavedPlaces, savedPlaces]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!pendingSessionId) return undefined;
+      const result = consumeResult(pendingSessionId);
+      if (!result) return undefined;
+      setPendingSessionId(null);
+
+      const expectedResultMode = mode === 'edit' ? 'saved-place-edit' : 'saved-place-add';
+      const expectedSavedPlaceId = mode === 'edit' ? existing?.id ?? savedPlaceId : undefined;
+
+      if (result.mode !== expectedResultMode) return undefined;
+      if (expectedSavedPlaceId && result.savedPlaceId !== expectedSavedPlaceId) return undefined;
+      if (!expectedSavedPlaceId && result.savedPlaceId && result.savedPlaceId.length > 0) {
+        return undefined;
+      }
+
+      void savePlace({
+        latitude: result.latitude,
+        longitude: result.longitude,
+        address: result.address,
+        locationType: 'precise',
+      });
+      return undefined;
+    }, [consumeResult, existing?.id, mode, pendingSessionId, savePlace, savedPlaceId]),
+  );
+
+  if (mode === 'edit' && !existing) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <GlassHeader title="Edit Place" />
+        <View
+          style={[
+            styles.searchBody,
+            {
+              paddingTop: headerMetrics.contentTop + spacing[24],
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: semanticSpacing.cardPadding,
+            },
+          ]}
+        >
+          <Feather name="alert-triangle" size={icons.size.hero} color={colors.destructive} />
+          <AppText variant="title" style={{ color: colors.foreground, textAlign: 'center' }}>
+            Saved place not found or has been deleted.
+          </AppText>
+          <TouchableOpacity
+            style={{ paddingHorizontal: semanticSpacing.screenPadding, paddingVertical: spacing[10], borderRadius: radius['3xl'], backgroundColor: colors.primary }}
+            onPress={() => router.back()}
+          >
+            <AppText variant="button" style={{ color: colors.primaryForeground }}>Go Back</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   const deletePlace = () => {
     if (!existing) return;
@@ -220,65 +271,25 @@ export default function SavedPlaceSelectorScreen() {
     );
   };
 
-  const openMap = async () => {
-    let coords: { latitude: number; longitude: number } = initialCoords;
-    try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-    } catch {}
-    setMapCoords(coords);
-    setMapAddress(initialAddressStr);
-    setUiMode('map');
-    Keyboard.dismiss();
-    requestAnimationFrame(() => {
-      mapRef.current?.animateToRegion(
-        { ...coords, latitudeDelta: MAP_LOCATION_DELTA, longitudeDelta: MAP_LOCATION_DELTA },
-        300,
-      );
+  const openMap = () => {
+    const routeLabel = displayLabel === 'Other' ? (customLabel.trim() || label) : label;
+    const sessionId = createMapPickerSessionId();
+    clearResult();
+    setPendingSessionId(sessionId);
+    router.push({
+      pathname: '/map-picker',
+      params: {
+        target: 'saved-place',
+        mode: mode === 'edit' ? 'saved-place-edit' : 'saved-place-add',
+        sessionId,
+        savedPlaceId: mode === 'edit' && existing ? existing.id : undefined,
+        label: routeLabel,
+        initialLatitude: initialCoords.latitude.toString(),
+        initialLongitude: initialCoords.longitude.toString(),
+        initialAddress: searchText.trim() || initialAddressStr,
+      },
     });
   };
-
-  const syncMapAddress = async (coords: typeof KIGALI_CENTER) => {
-    const [geo] = await Location.reverseGeocodeAsync(coords).catch(() => [null]);
-    setMapAddress(formatReverseGeocodeAddress(geo, 'Selected location'));
-  };
-
-  if (uiMode === 'map') {
-    return (
-      <MapPickerOverlay
-          target="savedLocation"
-          mapRef={mapRef}
-          pinCoords={mapCoords}
-          mapType={mapType}
-          colors={colors}
-          topInset={insets.top}
-          bottomInset={insets.bottom}
-          isDragging={isDragging}
-          onLayout={() => {}}
-          onDragStart={() => setIsDragging(true)}
-          onRegionChangeComplete={(region: Region) => {
-            const coords = { latitude: region.latitude, longitude: region.longitude };
-            setIsDragging(false);
-            setMapCoords(coords);
-            void syncMapAddress(coords);
-          }}
-          onClose={() => setUiMode('search')}
-          onCycleMapType={() => setMapType(previous => MAP_TYPES[(MAP_TYPES.indexOf(previous) + 1) % MAP_TYPES.length])}
-          onCenterUser={() => mapRef.current?.animateToRegion({
-            ...mapCoords,
-            latitudeDelta: MAP_LOCATION_DELTA,
-            longitudeDelta: MAP_LOCATION_DELTA,
-          }, 600)}
-          onConfirm={() => savePlace({
-            ...mapCoords,
-            address: mapAddress || 'Selected location',
-            locationType: 'precise',
-          })}
-          savedLocationHint={`Drag the map to set your ${label.toLowerCase()} location`}
-          savedLocationConfirmTitle={`Confirm ${label} Location`}
-        />
-    );
-  }
 
   const hasQuery = searchText.trim().length >= 2;
   return (
@@ -287,32 +298,25 @@ export default function SavedPlaceSelectorScreen() {
         title={displayLabel === 'Other' ? (mode === 'edit' ? 'Edit Place' : 'Add Place') : `${mode === 'edit' ? 'Edit' : 'Add'} ${label}`}
         right={
           mode === 'edit' && existing ? (
-            <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={styles.headerActionSlot}>
               <TouchableOpacity
                 onPress={deletePlace}
                 activeOpacity={0.8}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: colors.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={[styles.headerDeleteButton, { backgroundColor: colors.primary }]}
                 accessibilityRole="button"
                 accessibilityLabel="Delete saved place"
                 testID="header-delete-button"
               >
-                <Feather name="trash-2" size={16} color={colors.primaryForeground} />
+                <Feather name="trash-2" size={icons.semantic.button} color={colors.primaryForeground} />
               </TouchableOpacity>
             </View>
           ) : undefined
         }
       />
-      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - 4 }]}>
+      <View style={[styles.searchBody, { paddingTop: headerMetrics.contentTop - spacing[8] }]}>
         {displayLabel === 'Other' ? (
           <View style={[styles.labelInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="bookmark" size={18} color={colors.mutedForeground} />
+            <Feather name="bookmark" size={icons.semantic.row} color={colors.mutedForeground} />
             <TextInput
               autoFocus
               value={customLabel}
@@ -328,7 +332,7 @@ export default function SavedPlaceSelectorScreen() {
           </View>
         ) : null}
         <View style={[styles.searchInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="search" size={18} color={colors.mutedForeground} />
+          <Feather name="search" size={icons.semantic.row} color={colors.mutedForeground} />
           <TextInput
             ref={inputRef}
             autoFocus={displayLabel !== 'Other'}
@@ -351,7 +355,7 @@ export default function SavedPlaceSelectorScreen() {
               onPress={clearSearchText}
               accessibilityLabel="Clear address search"
             >
-              <Feather name="x" size={16} color={colors.mutedForeground} />
+              <Feather name="x" size={icons.semantic.button} color={colors.mutedForeground} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -360,15 +364,17 @@ export default function SavedPlaceSelectorScreen() {
           <View style={[styles.mapOptionIcon, { backgroundColor: colors.muted }]}>
             <MaterialCommunityIcons name="map-marker-radius-outline" size={22} color={colors.foreground} />
           </View>
-          <Text style={[styles.mapOptionText, { color: colors.foreground }]}>Set location on map</Text>
+          <AppText variant="h3" style={[styles.mapOptionText, { color: colors.foreground }]}>Set location on map</AppText>
         </TouchableOpacity>
 
         <GlassScrollView
           style={styles.results}
-          indicatorTop={8}
+          indicatorTop={spacing[8]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
+          contentInset={{ top: 0 }}
+          contentOffset={{ x: 0, y: 0 }}
+          contentContainerStyle={{ paddingTop: 1, paddingBottom: insets.bottom + FORM_BOTTOM_PADDING }}
         >
           {hasQuery ? (
             <TouchableOpacity
@@ -377,10 +383,10 @@ export default function SavedPlaceSelectorScreen() {
             >
               <Feather name="edit-2" size={17} color={colors.foreground} />
               <View style={styles.resultCopy}>
-                <Text style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>
+                <AppText variant="bodySmall" style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>
                   Use "{searchText.trim()}"
-                </Text>
-                <Text style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>Save the typed address</Text>
+                </AppText>
+                <AppText variant="tiny" style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>Save the typed address</AppText>
               </View>
             </TouchableOpacity>
           ) : null}
@@ -397,18 +403,18 @@ export default function SavedPlaceSelectorScreen() {
             >
               <MaterialCommunityIcons name="map-marker-outline" size={19} color={colors.foreground} />
               <View style={styles.resultCopy}>
-                <Text style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>{suggestion.title}</Text>
-                <Text style={[styles.resultSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
+                <AppText variant="bodySmall" style={[styles.resultTitle, { color: colors.foreground }]} numberOfLines={1}>{suggestion.title}</AppText>
+                <AppText variant="tiny" style={[styles.resultSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
                   {suggestion.subtitle ?? suggestion.place_name}
-                </Text>
+                </AppText>
               </View>
             </TouchableOpacity>
           ))}
 
           {hasQuery && !searchLoading && searchSuggestions.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            <AppText variant="caption" style={[styles.emptyText, { color: colors.mutedForeground }]}>
               No matches yet. Try a full place name, street address, or set the location on the map.
-            </Text>
+            </AppText>
           ) : null}
 
 
@@ -426,43 +432,55 @@ function normalizeLabel(value?: string): SavedPlaceLabel {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  searchBody: { flex: 1, paddingHorizontal: 16 },
+  searchBody: { flex: 1, paddingHorizontal: semanticSpacing.cardPadding },
   searchInputWrap: {
-    height: 52,
-    borderRadius: buttonCornerRadius(52),
+    height: sizes.input.lg,
+    borderRadius: buttonCornerRadius(sizes.input.lg),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
+    gap: spacing[10],
+    paddingHorizontal: semanticSpacing.listItemPadding,
   },
   labelInputWrap: {
-    height: 52,
-    borderRadius: buttonCornerRadius(52),
+    height: sizes.input.lg,
+    borderRadius: buttonCornerRadius(sizes.input.lg),
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    gap: spacing[10],
+    paddingHorizontal: semanticSpacing.listItemPadding,
+    marginBottom: spacing[10],
   },
-  searchInput: { flex: 1, fontSize: 16, fontFamily: 'Inter_500Medium' },
+  searchInput: { flex: 1, ...typography.title, fontFamily: typography.label.fontFamily },
   searchClear: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: sizes.avatar.xs,
+    height: sizes.avatar.xs,
+    borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mapOption: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 18 },
-  mapOptionIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  mapOptionText: { flex: 1, fontSize: 17, fontFamily: 'Inter_600SemiBold' },
+  headerActionSlot: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  headerDeleteButton: {
+    width: sizes.avatar.xs,
+    height: sizes.avatar.xs,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapOption: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: radius['3xl'] - spacing[2] },
+  mapOptionIcon: { width: sizes.iconButton.md, height: sizes.iconButton.md, borderRadius: radius.sheetCompact, alignItems: 'center', justifyContent: 'center' },
+  mapOptionText: { flex: 1, ...typography.h3 },
   results: { flex: 1 },
   resultRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   resultCopy: { flex: 1, gap: 3 },
-  resultTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  resultSubtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
-  emptyText: { paddingVertical: 22, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  resultTitle: { ...typography.bodySmall, fontFamily: typography.title.fontFamily },
+  resultSubtitle: { ...typography.tiny, fontFamily: typography.caption.fontFamily },
+  emptyText: { paddingVertical: radius.sheetCompact, ...typography.caption },
 
 });

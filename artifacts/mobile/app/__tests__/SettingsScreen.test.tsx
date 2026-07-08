@@ -79,6 +79,12 @@ jest.mock('@/context/SavedLocationsContext', () => ({
   }),
 }));
 
+jest.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({
+    logout: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
 describe('SettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -91,6 +97,7 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('KG 10 Street')).toBeTruthy();
     expect(screen.getByText('Add work address')).toBeTruthy();
     expect(screen.getByText('Visit Our Website')).toBeTruthy();
+    expect(screen.getByText('Log Out')).toBeTruthy();
     expect(screen.getByText('Delete Account')).toBeTruthy();
   });
 
@@ -103,5 +110,16 @@ describe('SettingsScreen', () => {
       pathname: '/saved-place-selector',
       params: expect.objectContaining({ mode: 'edit', savedPlaceId: 'home' }),
     }));
+  });
+
+  test('guards support navigation against rapid double taps', () => {
+    render(<SettingsScreen />);
+
+    const supportButton = screen.getByLabelText('Help and Support');
+    fireEvent.press(supportButton);
+    fireEvent.press(supportButton);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/help-support');
   });
 });

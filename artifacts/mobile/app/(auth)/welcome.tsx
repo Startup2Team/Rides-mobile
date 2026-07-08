@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Image, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
+import { AppText } from '@/components/AppText';
 import { useColors } from '@/hooks/useColors';
 
 const { width } = Dimensions.get('window');
@@ -32,11 +33,11 @@ export default function WelcomeScreen() {
         <Image source={ONBOARDING_IMAGE} style={styles.illustration} resizeMode="contain" />
 
         <Animated.View style={[styles.copy, { transform: [{ translateY: slideAnim }] }]}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Book Your Ride Easily</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+          <AppText variant="h1" style={[styles.title, { color: colors.foreground }]}>Book Your Ride Easily</AppText>
+          <AppText variant="title" style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Book motos, cabs, and trucks, negotiate your fare, and track every
             trip from your phone.
-          </Text>
+          </AppText>
         </Animated.View>
 
       </Animated.View>
@@ -57,9 +58,9 @@ export default function WelcomeScreen() {
           size="lg"
         />
         <View style={styles.row}>
-          <Text style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </Text>
+          <AppText variant="bodySmall" style={[styles.hint, { color: colors.mutedForeground }]}>Already have an account? </AppText>
           <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
-            <Text style={[styles.hint, { color: colors.primary }]}>Log in</Text>
+            <AppText variant="bodySmall" style={[styles.hint, { color: colors.primary }]}>Log in</AppText>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -86,14 +87,10 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   title: {
-    fontSize: 23,
-    fontFamily: 'Inter_700Bold',
     textAlign: 'center',
     letterSpacing: 0,
   },
   subtitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
     lineHeight: 25,
     textAlign: 'center',
     maxWidth: 330,
@@ -106,8 +103,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
   },
-  hint: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-  },
+  hint: {},
 });

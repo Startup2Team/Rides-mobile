@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import type { Ride } from '@/types';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 
 export function useDriverNegotiationActions({
   canSendOffer,
@@ -38,10 +39,10 @@ export function useDriverNegotiationActions({
       'Decline ride',
       'Why do you want to decline this negotiation?',
       [
-        { text: 'Price is too low', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
-        { text: 'Too far from pickup', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
-        { text: 'Busy right now', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
-        { text: 'Other reason', onPress: () => { cancelRide(); router.replace('/(driver)'); } },
+        { text: 'Price is too low', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
+        { text: 'Too far from pickup', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
+        { text: 'Busy right now', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
+        { text: 'Other reason', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
         { text: 'Keep negotiating', style: 'cancel' },
       ],
       { cancelable: true },

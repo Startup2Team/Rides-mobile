@@ -1,5 +1,7 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Image, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Image, Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
 import type { DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
@@ -21,10 +23,10 @@ export function ReviewSubmissionSection({ colors, form, onOpenImagePreview, prev
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Review Your Application</Text>
-      <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
+      <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Review Your Application</AppText>
+      <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
         Take a moment to confirm everything looks correct before submitting.
-      </Text>
+      </AppText>
 
       {/* Personal */}
       <ReviewCard icon="user" title="Personal Information" cardFill={cardFill}  colors={colors}>
@@ -69,17 +71,17 @@ export function ReviewSubmissionSection({ colors, form, onOpenImagePreview, prev
             ]}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[reviewStyles.docName, { color: colors.foreground }]}>{image.title ?? 'Submitted image'}</Text>
-              <Text style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>
+              <AppText style={[reviewStyles.docName, { color: colors.foreground }]}>{image.title ?? 'Submitted image'}</AppText>
+              <AppText style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>
                 {image.subtitle ?? 'Tap to preview'}
-              </Text>
+              </AppText>
             </View>
             <Image source={{ uri: image.uri ?? undefined }} style={reviewStyles.thumb} resizeMode="cover" />
           </TouchableOpacity>
         )) : (
           <View style={reviewStyles.emptyState}>
             <Feather name="image" size={16} color={colors.mutedForeground} />
-            <Text style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>No images attached</Text>
+            <AppText style={[reviewStyles.docSub, { color: colors.mutedForeground }]}>No images attached</AppText>
           </View>
         )}
         <ReviewRow label="Total images" value={`${previewImages.length} attached`} separatorColor={separatorColor} colors={colors} last />
@@ -89,7 +91,7 @@ export function ReviewSubmissionSection({ colors, form, onOpenImagePreview, prev
       <ReviewCard icon="credit-card" title="Mobile Money Details" cardFill={cardFill} colors={colors}>
         <View style={[reviewStyles.providerBadge, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor }]}>
           <Image source={PAYMENT_PROVIDER_LOGOS[form.momoProvider]} style={reviewStyles.providerLogo} resizeMode="contain" />
-          <Text style={[reviewStyles.providerLabel, { color: colors.foreground }]}>{providerLabel}</Text>
+          <AppText style={[reviewStyles.providerLabel, { color: colors.foreground }]}>{providerLabel}</AppText>
           <Feather name="check-circle" size={16} color={colors.primary} />
         </View>
         {form.momoCode ? <ReviewRow label="Phone Number" value={form.momoCode} separatorColor={separatorColor} colors={colors} /> : null}
@@ -103,9 +105,9 @@ export function ReviewSubmissionSection({ colors, form, onOpenImagePreview, prev
       <View style={[reviewStyles.notice, { backgroundColor: colors.primaryHex + '10', borderColor: colors.primaryHex + '25' }]}>
         <Feather name="info" size={16} color={colors.primary} style={{ marginTop: 1 }} />
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={[reviewStyles.noticeTitle, { color: colors.primary }]}>What happens next?</Text>
-          <Text style={[reviewStyles.noticeText, { color: colors.mutedForeground }]}>
-            Our team will review your application as quickly as possible. You'll receive a notification once it's approved or if any corrections are needed. </Text>
+          <AppText style={[reviewStyles.noticeTitle, { color: colors.primary }]}>What happens next?</AppText>
+          <AppText style={[reviewStyles.noticeText, { color: colors.mutedForeground }]}>
+            Our team will review your application as quickly as possible. You'll receive a notification once it's approved or if any corrections are needed. </AppText>
         </View>
       </View>
     </View>
@@ -123,7 +125,7 @@ function ReviewCard({ icon, title, cardFill, colors, children }: {
     <View style={[reviewStyles.card, { backgroundColor: cardFill }]}>
       <View style={reviewStyles.cardHeader}>
         <Feather name={icon} size={16} color={colors.primary} />
-        <Text style={[reviewStyles.cardTitle, { color: colors.foreground }]}>{title}</Text>
+        <AppText style={[reviewStyles.cardTitle, { color: colors.foreground }]}>{title}</AppText>
       </View>
       <View style={[reviewStyles.cardDivider, { backgroundColor: colors.border }]} />
       {children}
@@ -140,8 +142,8 @@ function ReviewRow({ label, value, separatorColor, colors, last = false }: {
 }) {
   return (
     <View style={[reviewStyles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor }]}>
-      <Text style={[reviewStyles.rowLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <Text style={[reviewStyles.rowValue, { color: colors.foreground }]} numberOfLines={2}>{value || '—'}</Text>
+      <AppText style={[reviewStyles.rowLabel, { color: colors.mutedForeground }]}>{label}</AppText>
+      <AppText style={[reviewStyles.rowValue, { color: colors.foreground }]} numberOfLines={2}>{value || '—'}</AppText>
     </View>
   );
 }
@@ -161,8 +163,7 @@ const reviewStyles = StyleSheet.create({
     paddingVertical: 12,
   },
   cardTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.bodySmall,
   },
   cardDivider: {
     height: 1,
@@ -177,13 +178,11 @@ const reviewStyles = StyleSheet.create({
     gap: 12,
   },
   rowLabel: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
     flexShrink: 0,
   },
   rowValue: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
+    ...typography.body,
     flex: 1,
     textAlign: 'right',
   },
@@ -196,12 +195,10 @@ const reviewStyles = StyleSheet.create({
     gap: 12,
   },
   docName: {
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
+    ...typography.body,
   },
   docSub: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     marginTop: 2,
   },
   imageRow: {
@@ -238,8 +235,7 @@ const reviewStyles = StyleSheet.create({
   },
   providerLabel: {
     flex: 1,
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.label,
   },
   notice: {
     flexDirection: 'row',
@@ -250,12 +246,10 @@ const reviewStyles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   noticeTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.label,
   },
   noticeText: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
+    ...typography.caption,
     lineHeight: 18,
   },
 });

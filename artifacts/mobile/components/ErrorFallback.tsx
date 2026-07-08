@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { typography } from '@/constants/typography';
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -188,13 +189,13 @@ const styles = StyleSheet.create({
     maxWidth: 600,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
+    ...typography.h1,
+    fontFamily: typography.badge.fontFamily,
     textAlign: "center",
     lineHeight: 40,
   },
   message: {
-    fontSize: 16,
+    ...typography.title,
     textAlign: "center",
     lineHeight: 24,
   },
@@ -224,9 +225,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   buttonText: {
-    fontWeight: "600",
+    ...typography.title,
     textAlign: "center",
-    fontSize: 16,
   },
   modalOverlay: {
     flex: 1,
@@ -249,8 +249,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
+    ...typography.h2,
+    fontFamily: typography.title.fontFamily,
   },
   closeButton: {
     width: 44,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   errorText: {
-    fontSize: 12,
+    ...typography.caption,
     lineHeight: 18,
     width: "100%",
   },

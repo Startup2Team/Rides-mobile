@@ -1,7 +1,10 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, Image, Modal, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
@@ -13,7 +16,7 @@ import {
   type GalleryImage,
 } from '@/components/ImageGalleryPreview';
 import { useAuth } from '@/context/AuthContext';
-import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, getVehicleById, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
+import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
 import {
   getAuthorizationComplianceMessage,
   getAuthorizationComplianceStatus,
@@ -25,9 +28,13 @@ import {
 } from '@/domain/vehicleCompliance';
 import { submitVehicleDocumentUpdate as submitVerificationVehicleDocumentUpdate } from '@/domain/verificationSubmissions';
 import { useColors } from '@/hooks/useColors';
+import { useVehicle } from '@/domains/vehicle';
 import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDocumentSet } from '@/types';
 import { parseDateDdMmYyyy } from '@/utils/dateUtils';
 import { isValidImageAsset } from '@/utils/documentValidation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 
 type PreviewTarget = { index: number } | null;
 type UpdateTarget =
@@ -41,10 +48,27 @@ export default function DriverVehicleDetailsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { driverProfile, user, saveDriverProfile } = useAuth();
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      // Simulate status check/reload delay
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, []);
   const params = useLocalSearchParams<{ vehicleId?: string; updateDocument?: string }>();
   const vehicleId = typeof params.vehicleId === 'string' ? params.vehicleId : null;
   const requestedUpdateDocument = typeof params.updateDocument === 'string' ? params.updateDocument : null;
-  const vehicle = getVehicleById(driverProfile, vehicleId);
+  const vehicle = useVehicle(vehicleId);
   const [previewTarget, setPreviewTarget] = React.useState<PreviewTarget>(null);
   const [updateTarget, setUpdateTarget] = React.useState<UpdateTarget | null>(null);
   const [draftDocuments, setDraftDocuments] = React.useState<DriverVehicleDocumentSet | null>(null);
@@ -81,10 +105,10 @@ export default function DriverVehicleDetailsScreen() {
   if (!vehicle) {
     return (
       <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
-        <GlassHeader title="Vehicle Details" subtitle="Review vehicle information and documents" onBackPress={() => router.back()} />
+        <GlassHeader title="Vehicle Details" onBackPress={() => router.back()} />
         <View style={styles.emptyState}>
-          <Text style={[styles.emptyStateTitle, { color: colors.foreground }]}>Vehicle not found</Text>
-          <Text style={[styles.emptyStateText, { color: colors.mutedForeground }]}>This vehicle is no longer available in your account.</Text>
+          <AppText style={[styles.emptyStateTitle, { color: colors.foreground }]}>Vehicle not found</AppText>
+          <AppText style={[styles.emptyStateText, { color: colors.mutedForeground }]}>This vehicle is no longer available in your account.</AppText>
         </View>
       </View>
     );
@@ -248,19 +272,22 @@ export default function DriverVehicleDetailsScreen() {
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
       <GlassHeader
         title="Vehicle Details"
-        subtitle="Review vehicle information and documents"
         onBackPress={() => router.back()}
       />
-      <ScrollView
+      <GlassScrollView
         contentContainerStyle={{
           paddingTop: headerMetrics.contentTop,
           paddingBottom: insets.bottom + FORM_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 16,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: semanticSpacing.cardPadding,
         }}
+        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</AppText>
           <InfoRow label="Vehicle Type" value={VEHICLE_LABELS[vehicle.vehicleType]} />
           <InfoRow label="Brand" value={vehicle.brand ?? 'Not set'} />
           <InfoRow label="Model" value={vehicle.model ?? 'Not set'} />
@@ -269,15 +296,15 @@ export default function DriverVehicleDetailsScreen() {
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Status</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Status</AppText>
           <StatusPanel colors={colors} vehicle={vehicle} />
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Compliance</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Compliance</AppText>
+          <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
             Review the current validity of each compliance document.
-          </Text>
+          </AppText>
           <ComplianceRow
             colors={colors}
             label="Driver License"
@@ -300,20 +327,20 @@ export default function DriverVehicleDetailsScreen() {
 
         {pendingDocumentUpdate ? (
           <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Document Update</Text>
-            <Text style={[styles.updateBanner, { color: colors.warningHex }]}>Updated documents submitted for review</Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Document Update</AppText>
+            <AppText style={[styles.updateBanner, { color: colors.warningHex }]}>Updated documents submitted for review</AppText>
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               The current approved documents remain active until this update is reviewed.
-            </Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+            </AppText>
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Submitted {pendingDocumentUpdate.submittedAt}
-            </Text>
+            </AppText>
           </View>
         ) : null}
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Documents</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>Tap any thumbnail to preview the full image.</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Documents</AppText>
+          <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>Tap any thumbnail to preview the full image.</AppText>
           {documentCards.map(card => (
             <DocumentBlock
               key={card.key}
@@ -335,7 +362,7 @@ export default function DriverVehicleDetailsScreen() {
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Photos</Text>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Photos</AppText>
           {photoCards.map(photo => (
             <PhotoBlock
               key={photo.key}
@@ -356,10 +383,10 @@ export default function DriverVehicleDetailsScreen() {
 
         {canReplaceDocuments && hasUnsavedChanges ? (
           <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Changes Ready</Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Changes Ready</AppText>
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Submit the updated photos and document details for review.
-            </Text>
+            </AppText>
             <AppButton
               title="Resubmit Application"
               onPress={() => void submitVehicleDocumentUpdate()}
@@ -372,10 +399,10 @@ export default function DriverVehicleDetailsScreen() {
         ) : null}
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle History</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle History</AppText>
+          <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
             {reviewHistory.length > 0 ? 'Submission and review events for this vehicle.' : 'No review history available yet.'}
-          </Text>
+          </AppText>
           {timeline.length > 0 ? (
             <View style={styles.timeline}>
               {timeline.map((entry, index) => (
@@ -385,8 +412,8 @@ export default function DriverVehicleDetailsScreen() {
                     {index < timeline.length - 1 ? <View style={[styles.timelineLine, { backgroundColor: colors.border }]} /> : null}
                   </View>
                   <View style={styles.timelineCopy}>
-                    <Text style={[styles.timelineTitle, { color: colors.foreground }]}>{formatTimelineLabel(entry.type)}</Text>
-                    <Text style={[styles.timelineMeta, { color: colors.mutedForeground }]}>{formatTimelineDetail(entry)}</Text>
+                    <AppText style={[styles.timelineTitle, { color: colors.foreground }]}>{formatTimelineLabel(entry.type)}</AppText>
+                    <AppText style={[styles.timelineMeta, { color: colors.mutedForeground }]}>{formatTimelineDetail(entry)}</AppText>
                   </View>
                 </View>
               ))}
@@ -396,10 +423,10 @@ export default function DriverVehicleDetailsScreen() {
 
         {vehicle.status === 'rejected' ? (
           <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Rejected</Text>
-            <Text style={[styles.rejectionReason, { color: colors.destructive }]}>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Rejected</AppText>
+            <AppText style={[styles.rejectionReason, { color: colors.destructive }]}>
               Reason: {vehicle.rejectionReason ?? 'No rejection reason provided.'}
-            </Text>
+            </AppText>
             <View style={styles.buttonRow}>
               <AppButton
                 title="Update Application"
@@ -418,7 +445,7 @@ export default function DriverVehicleDetailsScreen() {
           </View>
         ) : null}
 
-      </ScrollView>
+      </GlassScrollView>
 
       <ImageGalleryPreview
         images={galleryItems}
@@ -432,20 +459,20 @@ export default function DriverVehicleDetailsScreen() {
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setUpdateTarget(null)} activeOpacity={1} />
           <View style={[styles.previewSheet, { backgroundColor: colors.card }]}>
             <View style={styles.previewHeader}>
-              <Text style={[styles.previewTitle, { color: colors.foreground }]} numberOfLines={1}>
+              <AppText style={[styles.previewTitle, { color: colors.foreground }]} numberOfLines={1}>
                 {updateTarget?.label ?? 'Update'}
-              </Text>
+              </AppText>
               <TouchableOpacity onPress={() => setUpdateTarget(null)} accessibilityLabel="Close update editor">
                 <Feather name="x" size={22} color={colors.foreground} />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               {updateTarget?.kind === 'photo'
                 ? 'Replace the vehicle photo.'
                 : updateTarget?.face === 0
                   ? 'Replace the front image.'
                   : 'Replace the back image.'}
-            </Text>
+            </AppText>
             <View style={styles.updateActions}>
               <AppButton
                 title="Upload from Gallery"
@@ -469,13 +496,13 @@ export default function DriverVehicleDetailsScreen() {
         <View style={styles.previewOverlay}>
           <View style={[styles.previewSheet, { backgroundColor: colors.card }]}>
             <View style={styles.previewHeader}>
-              <Text style={[styles.previewTitle, { color: colors.foreground }]}>
+              <AppText style={[styles.previewTitle, { color: colors.foreground }]}>
                 New Expiry Date
-              </Text>
+              </AppText>
             </View>
-            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Enter the expiry date shown on the new {expiryTarget?.label.toLowerCase()} photo.
-            </Text>
+            </AppText>
             <DatePickerField
               label="Expiry date"
               value={replacementExpiryDate}
@@ -528,8 +555,8 @@ function DocumentBlock({
     <View style={styles.block}>
       <View style={styles.blockHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.blockTitle, { color: colors.foreground }]}>{label}</Text>
-          <Text style={[styles.blockStatus, { color: statusColor }]}>{statusLabel}</Text>
+          <AppText style={[styles.blockTitle, { color: colors.foreground }]}>{label}</AppText>
+          <AppText style={[styles.blockStatus, { color: statusColor }]}>{statusLabel}</AppText>
         </View>
       </View>
       <View style={styles.documentFaces}>
@@ -544,9 +571,9 @@ function DocumentBlock({
               style={[styles.thumbnail, { backgroundColor: colors.muted }]}
               placeholderColor={colors.mutedForeground}
             />
-            <Text style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>
               {faces === 2 ? (index === 0 ? 'Front photo' : 'Back photo') : 'Document photo'}
-            </Text>
+            </AppText>
             {onReplaceFace ? (
               <ReplaceFaceButton
                 colors={colors}
@@ -556,7 +583,7 @@ function DocumentBlock({
           </View>
         ))}
       </View>
-      {warningText ? <Text style={[styles.warningText, { color: colors.warningHex }]}>{warningText}</Text> : null}
+      {warningText ? <AppText style={[styles.warningText, { color: colors.warningHex }]}>{warningText}</AppText> : null}
     </View>
   );
 }
@@ -583,7 +610,7 @@ function ReplaceFaceButton({
       accessibilityLabel="Replace photo"
     >
       <Feather name="camera" size={15} color={colors.primary} />
-      <Text style={[styles.replaceFaceButtonText, { color: colors.primary }]}>Replace</Text>
+      <AppText style={[styles.replaceFaceButtonText, { color: colors.primary }]}>Replace</AppText>
     </TouchableOpacity>
   );
 }
@@ -607,8 +634,8 @@ function PhotoBlock({
     <View style={styles.block}>
       <View style={styles.blockHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.blockTitle, { color: colors.foreground }]}>{label}</Text>
-          <Text style={[styles.blockStatus, { color: uri ? colors.successHex : colors.mutedForeground }]}>{uri ? 'Saved' : 'Missing'}</Text>
+          <AppText style={[styles.blockTitle, { color: colors.foreground }]}>{label}</AppText>
+          <AppText style={[styles.blockStatus, { color: uri ? colors.successHex : colors.mutedForeground }]}>{uri ? 'Saved' : 'Missing'}</AppText>
         </View>
       </View>
       <View style={styles.documentFaceRow}>
@@ -621,7 +648,7 @@ function PhotoBlock({
           style={[styles.thumbnailLarge, { backgroundColor: colors.muted }]}
           placeholderColor={colors.mutedForeground}
         />
-        <Text style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>Vehicle photo</Text>
+        <AppText style={[styles.documentFaceLabel, { color: colors.mutedForeground }]}>Vehicle photo</AppText>
         {onReplace ? <ReplaceFaceButton colors={colors} onPress={onReplace} /> : null}
       </View>
     </View>
@@ -660,19 +687,19 @@ function PreviewThumbnail({
       {uri ? (
         <Image source={{ uri }} style={styles.thumbnailImage} testID={imageTestID} resizeMode="cover" />
       ) : (
-        <Feather name="image" size={18} color={placeholderColor} />
+        <Feather name="image" size={icons.semantic.row} color={placeholderColor} />
       )}
     </TouchableOpacity>
   );
 }
 
-function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>; vehicle: NonNullable<ReturnType<typeof getVehicleById>> }) {
+function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>; vehicle: NonNullable<ReturnType<typeof useVehicle>> }) {
   if (vehicle.status === 'approved') {
     return (
       <View style={[styles.statusBox, { borderColor: colors.successHex, backgroundColor: colors.successHex + '12' }]}>
-        <Text style={[styles.statusBoxTitle, { color: colors.successHex }]}>Approved</Text>
-        <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Approval date: {vehicle.approvedAt ?? vehicle.submittedAt ?? 'Not set'}</Text>
-        <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Approved for rides</Text>
+        <AppText style={[styles.statusBoxTitle, { color: colors.successHex }]}>Approved</AppText>
+        <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Approval date: {vehicle.approvedAt ?? vehicle.submittedAt ?? 'Not set'}</AppText>
+        <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Approved for rides</AppText>
       </View>
     );
   }
@@ -680,9 +707,9 @@ function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>
   if (vehicle.status === 'pending_review') {
     return (
       <View style={[styles.statusBox, { borderColor: colors.warningHex, backgroundColor: colors.warningHex + '12' }]}>
-        <Text style={[styles.statusBoxTitle, { color: colors.warningHex }]}>Pending Review</Text>
-        <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Submitted date: {vehicle.submittedAt ?? 'Not set'}</Text>
-        <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Under Review</Text>
+        <AppText style={[styles.statusBoxTitle, { color: colors.warningHex }]}>Pending Review</AppText>
+        <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Submitted date: {vehicle.submittedAt ?? 'Not set'}</AppText>
+        <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Under Review</AppText>
       </View>
     );
   }
@@ -690,17 +717,17 @@ function StatusPanel({ colors, vehicle }: { colors: ReturnType<typeof useColors>
   if (vehicle.status === 'rejected') {
     return (
       <View style={[styles.statusBox, { borderColor: colors.destructiveHex, backgroundColor: colors.destructiveHex + '12' }]}>
-        <Text style={[styles.statusBoxTitle, { color: colors.destructiveHex }]}>Rejected</Text>
-        <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Rejected date: {vehicle.rejectedAt ?? vehicle.submittedAt ?? 'Not set'}</Text>
-        <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Reason: {vehicle.rejectionReason ?? 'No rejection reason provided.'}</Text>
+        <AppText style={[styles.statusBoxTitle, { color: colors.destructiveHex }]}>Rejected</AppText>
+        <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Rejected date: {vehicle.rejectedAt ?? vehicle.submittedAt ?? 'Not set'}</AppText>
+        <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Reason: {vehicle.rejectionReason ?? 'No rejection reason provided.'}</AppText>
       </View>
     );
   }
 
   return (
     <View style={[styles.statusBox, { borderColor: colors.mutedForeground, backgroundColor: colors.muted + '16' }]}>
-      <Text style={[styles.statusBoxTitle, { color: colors.mutedForeground }]}>Draft</Text>
-      <Text style={[styles.statusBoxText, { color: colors.foreground }]}>Waiting for submission</Text>
+      <AppText style={[styles.statusBoxTitle, { color: colors.mutedForeground }]}>Draft</AppText>
+      <AppText style={[styles.statusBoxText, { color: colors.foreground }]}>Waiting for submission</AppText>
     </View>
   );
 }
@@ -728,11 +755,11 @@ function ComplianceRow({
   return (
     <View style={styles.complianceRow}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.complianceLabel, { color: colors.foreground }]}>{label}</Text>
-        {message ? <Text style={[styles.complianceMessage, { color: status === 'expired' ? colors.destructiveHex : colors.warningHex }]}>{message}</Text> : null}
+        <AppText style={[styles.complianceLabel, { color: colors.foreground }]}>{label}</AppText>
+        {message ? <AppText style={[styles.complianceMessage, { color: status === 'expired' ? colors.destructiveHex : colors.warningHex }]}>{message}</AppText> : null}
       </View>
       <View style={[styles.compliancePill, { borderColor: statusColor, backgroundColor: `${statusColor}14` }]}>
-        <Text style={[styles.compliancePillText, { color: statusColor }]}>{getComplianceStatusLabel(status)}</Text>
+        <AppText style={[styles.compliancePillText, { color: statusColor }]}>{getComplianceStatusLabel(status)}</AppText>
       </View>
     </View>
   );
@@ -743,8 +770,8 @@ function InfoRow({ label, last = false, value }: { label: string; last?: boolean
   return (
     <>
       <View style={styles.infoRow}>
-        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</Text>
-        <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{value}</Text>
+        <AppText style={[styles.infoLabel, { color: colors.mutedForeground }]}>{label}</AppText>
+        <AppText style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{value}</AppText>
       </View>
       {!last ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
     </>
@@ -800,61 +827,61 @@ function getDocumentExpiryWarning(label: string, expiryDate?: string) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  sectionCard: { borderRadius: 18, padding: 14, gap: 12 },
-  sectionTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
-  sectionSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
-  complianceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  complianceLabel: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  complianceMessage: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 15, marginTop: 2 },
-  compliancePill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
-  compliancePillText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  infoLabel: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
-  infoValue: { fontSize: 12, fontFamily: 'Inter_600SemiBold', flexShrink: 1, textAlign: 'right' },
+  sectionCard: { borderRadius: 18, padding: spacing[14], gap: semanticSpacing.rowGap },
+  sectionTitle: { ...typography.title,  },
+  sectionSubtitle: { ...typography.caption, lineHeight: 17 },
+  complianceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
+  complianceLabel: { ...typography.label,  },
+  complianceMessage: { ...typography.tiny, lineHeight: 15, marginTop: spacing[2] },
+  compliancePill: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing[10], paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
+  compliancePillText: { ...typography.tiny,  },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.rowGap },
+  infoLabel: { flex: 1, ...typography.caption,  },
+  infoValue: { ...typography.caption, flexShrink: 1, textAlign: 'right' },
   divider: { height: StyleSheet.hairlineWidth },
-  statusBox: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
-  statusBoxTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  statusBoxText: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
-  block: { gap: 8, paddingTop: 4 },
-  blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  blockTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  blockStatus: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
-  thumbnailRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statusBox: { borderWidth: 1, borderRadius: radius.card, padding: semanticSpacing.rowGap, gap: spacing[4] },
+  statusBoxTitle: { ...typography.bodySmall,  },
+  statusBoxText: { ...typography.caption, lineHeight: 17 },
+  block: { gap: semanticSpacing.inlineGap, paddingTop: spacing[4] },
+  blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.inlineGap },
+  blockTitle: { ...typography.label,  },
+  blockStatus: { ...typography.tiny, marginTop: 2 },
+  thumbnailRow: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
   thumbnail: { width: 66, height: 66, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailLarge: { width: 106, height: 84, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbnailImage: { width: '100%', height: '100%' },
-  documentFaces: { gap: 10 },
-  documentFaceRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  documentFaceLabel: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
+  documentFaces: { gap: spacing[10] },
+  documentFaceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
+  documentFaceLabel: { flex: 1, ...typography.caption,  },
   replaceFaceButton: {
     minHeight: 42,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    paddingHorizontal: spacing[14],
+    borderRadius: radius.input,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
   },
-  replaceFaceButtonText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  warningText: { fontSize: 11, fontFamily: 'Inter_600SemiBold', lineHeight: 16 },
-  timeline: { gap: 14 },
-  timelineRow: { flexDirection: 'row', gap: 12 },
-  timelineMarkerColumn: { width: 16, alignItems: 'center' },
-  timelineDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  replaceFaceButtonText: { ...typography.button },
+  warningText: { ...typography.tiny, lineHeight: 16 },
+  timeline: { gap: spacing[14] },
+  timelineRow: { flexDirection: 'row', gap: semanticSpacing.rowGap },
+  timelineMarkerColumn: { width: spacing[16], alignItems: 'center' },
+  timelineDot: { width: spacing[10], height: spacing[10], borderRadius: 5, marginTop: spacing[4] },
   timelineLine: { flex: 1, width: 2, minHeight: 22, marginTop: 4, borderRadius: 1 },
   timelineCopy: { flex: 1, gap: 2 },
-  timelineTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  timelineMeta: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
-  rejectionReason: { fontSize: 13, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
-  updateBanner: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  updateActions: { gap: 10 },
-  buttonRow: { gap: 10 },
-  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: 18 },
-  previewSheet: { borderRadius: 20, padding: 14, gap: 14, maxHeight: '88%' },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  previewTitle: { flex: 1, fontSize: 16, fontFamily: 'Inter_700Bold' },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
-  emptyStateTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
-  emptyStateText: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 18 },
+  timelineTitle: { ...typography.label,  },
+  timelineMeta: { ...typography.tiny, lineHeight: 16 },
+  rejectionReason: { ...typography.label, lineHeight: 18 },
+  updateBanner: { ...typography.label,  },
+  updateActions: { gap: spacing[10] },
+  buttonRow: { gap: spacing[10] },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: icons.semantic.row },
+  previewSheet: { borderRadius: radius['3xl'], padding: spacing[14], gap: spacing[14], maxHeight: '88%' },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
+  previewTitle: { flex: 1, ...typography.title,  },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: semanticSpacing.inlineGap, padding: semanticSpacing.sectionGap },
+  emptyStateTitle: { ...typography.h3,  },
+  emptyStateText: { ...typography.label, textAlign: 'center', lineHeight: 18 },
 });

@@ -7,6 +7,7 @@ import {
   getRideFlowNavigationDecision,
   isCustomerHomePath,
 } from './rideFlowNavigation';
+import { replaceFlowScreen } from './navigationPolicy';
 
 export function useRideFlowNavigation() {
   const pathname = usePathname();
@@ -39,7 +40,7 @@ export function useRideFlowNavigation() {
       if (router.canGoBack()) {
         router.back();
       } else {
-        router.replace(CUSTOMER_HOME_ROUTE);
+        replaceFlowScreen(router, CUSTOMER_HOME_ROUTE);
       }
       return;
     }

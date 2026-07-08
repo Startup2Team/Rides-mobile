@@ -20,8 +20,10 @@ import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useProfileActions } from '@/domains/profile';
 import { useColors } from '@/hooks/useColors';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { typography } from '@/constants/typography';
 
 const OTP_LENGTH = 6;
 
@@ -29,7 +31,8 @@ export default function ChangePhoneNumberScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { updateUser, user } = useAuth();
+  const { user } = useAuth();
+  const { updateUser } = useProfileActions();
   const { showToast } = useToast();
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState('');
@@ -89,7 +92,6 @@ export default function ChangePhoneNumberScreen() {
     >
       <GlassHeader
         title="Change Phone Number"
-        subtitle={pendingPhone ? 'Verify your new number' : 'Enter your new number'}
       />
       <GlassScrollView
         indicatorTop={headerMetrics.indicatorTop}
@@ -210,12 +212,12 @@ const styles = StyleSheet.create({
   phoneForm: { gap: 18 },
   iconWrap: { alignSelf: 'center', width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   copy: { alignItems: 'center', gap: 8, paddingHorizontal: 10 },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  description: { fontSize: 15, fontFamily: 'Inter_400Regular', lineHeight: 21 },
+  title: { ...typography.h2, fontFamily: typography.badge.fontFamily},
+  description: { ...typography.body, fontFamily: typography.body.fontFamily, lineHeight: 21 },
   otpRow: { flexDirection: 'row', justifyContent: 'center', gap: 7 },
-  otpBox: { width: 45, height: 54, borderRadius: 12, borderWidth: 1.5, fontSize: 21, fontFamily: 'Inter_700Bold' },
+  otpBox: { width: 45, height: 54, borderRadius: 12, borderWidth: 1.5, ...typography.h2, fontFamily: typography.badge.fontFamily},
   otpAction: { width: 305, alignSelf: 'center' },
   secondaryActions: { alignItems: 'center', gap: 15 },
-  expiryText: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center' },
-  secondaryAction: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  expiryText: { ...typography.caption, fontFamily: typography.body.fontFamily, textAlign: 'center' },
+  secondaryAction: { ...typography.label, fontFamily: typography.title.fontFamily},
 });

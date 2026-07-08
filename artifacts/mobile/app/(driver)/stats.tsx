@@ -1,6 +1,8 @@
+import { typography } from '@/constants/typography';
+import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { router } from 'expo-router';
+import { Platform, StyleSheet, View } from 'react-native';
+import { GlassScrollView } from '@/components/GlassScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,11 +15,15 @@ import {
   type DriverPackagePurchase,
   type DriverPackagePurchaseStatus,
 } from '@/domain/driverRidePackages';
-import { useRide } from '@/context/RideContext';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
 import { formatDriverRatingSummary, getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 
 const EMPTY_RATING_SUMMARY: DriverRatingSummary = { averageRating: null, ratingCount: 0 };
 
@@ -25,14 +31,31 @@ export default function DriverStats() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
+  const statsContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
   const { user, driverProfile } = useAuth();
   const { entitlement, isLoading: isEntitlementLoading, rideCredits } = useDriverEntitlement();
-  const { rideHistory, loadHistory } = useRide();
+  const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
   const [ratingSummary, setRatingSummary] = React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  React.useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    const start = Date.now();
+    try {
+      await refetchRideHistory();
+      const storedRatings = await loadStoredDriverRatings();
+      const summary = user?.id ? getDriverRatingSummary(storedRatings.data ?? [], user.id) : EMPTY_RATING_SUMMARY;
+      setRatingSummary(summary);
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+      const remaining = minDuration - elapsed;
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setIsRefreshing(false);
+    }
+  }, [refetchRideHistory, user?.id]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -68,19 +91,23 @@ export default function DriverStats() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <GlassHeader
         title="Statistics"
-        subtitle="Track your driver performance"
         showBack={false}
       />
-      <ScrollView
+      <GlassScrollView
         style={styles.container}
+        indicatorTop={headerMetrics.indicatorTop}
         contentContainerStyle={{
-          paddingTop: headerMetrics.contentTop,
-          paddingBottom: TAB_BAR_SCREEN_BOTTOM_PADDING,
-          paddingHorizontal: 16,
-          gap: 24,
+          paddingTop: Platform.OS === 'ios' ? 0 : statsContentTop,
+          paddingBottom: insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING,
+          paddingHorizontal: semanticSpacing.cardPadding,
+          gap: semanticSpacing.sectionGap,
         }}
-        scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
+        contentInset={Platform.OS === 'ios' ? { top: statsContentTop } : undefined}
+        contentOffset={Platform.OS === 'ios' ? { x: 0, y: -statsContentTop } : undefined}
         showsVerticalScrollIndicator={false}
+        onRefresh={handleRefresh}
+        refreshing={isRefreshing}
+        refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <LinearGradient
           colors={[colors.primaryHex, colors.primaryHex + 'D9']}
@@ -89,11 +116,11 @@ export default function DriverStats() {
           style={[styles.heroCard, styles.heroShadow]}
         >
           <View style={styles.heroHeading}>
-            <Text style={styles.heroEyebrow}>TODAY'S ACTIVITY</Text>
+            <AppText style={styles.heroEyebrow}>TODAY'S ACTIVITY</AppText>
           </View>
           <View>
-            <Text style={styles.heroValue}>{formatRwf(activitySummary.todayEarningsRwf)}</Text>
-            <Text style={styles.heroCaption}>Activity Earnings</Text>
+            <AppText style={styles.heroValue}>{formatRwf(activitySummary.todayEarningsRwf)}</AppText>
+            <AppText style={styles.heroCaption}>Activity Earnings</AppText>
           </View>
           <View style={styles.heroMetrics}>
             <HeroMetric label={hasTripsToday ? 'Completed Trips' : 'No trips yet'} value={String(activitySummary.completedRidesToday)} />
@@ -102,7 +129,7 @@ export default function DriverStats() {
             <View style={styles.heroDivider} />
             <HeroMetric label="Driver Rating" value={ratingSummary.ratingCount > 0 ? ratingValue : 'No ratings yet'} compact />
           </View>
-          {!hasTripsToday ? <Text style={styles.heroEmptyText}>No trips completed today yet.</Text> : null}
+          {!hasTripsToday ? <AppText style={styles.heroEmptyText}>No trips completed today yet.</AppText> : null}
         </LinearGradient>
 
         <View style={styles.section}>
@@ -145,32 +172,6 @@ export default function DriverStats() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title="Ride Package" />
-          <TouchableOpacity
-            style={[styles.packageCard, styles.cardShadow, { backgroundColor: colors.card }]}
-            onPress={() => router.push('/driver-packages')}
-            activeOpacity={0.72}
-            accessibilityRole="button"
-            accessibilityLabel="View ride packages"
-          >
-            <Feather name="layers" size={20} color={colors.primary} />
-            <View style={styles.packageHeader}>
-              <View style={styles.packageTitleGroup}>
-                <Text style={[styles.packageName, { color: colors.foreground }]}>
-                  Ride Packages
-                </Text>
-                <Text style={[styles.packageMeta, { color: colors.mutedForeground }]}>
-                  Explore package options for your driving needs
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.packageAction, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.packageActionText, { color: colors.primaryForeground }]}>View Packages</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
           <SectionHeader title="Driver Performance" />
           <View style={[styles.surface, styles.cardShadow, { backgroundColor: colors.card }]}>
             <PerformanceStatus colors={colors} priorityReduced={priorityReduced} declinesToday={declinesToday} />
@@ -192,15 +193,15 @@ export default function DriverStats() {
         </View>
 
         <PurchaseHistoryCard purchases={entitlement.purchaseHistory} />
-      </ScrollView>
+      </GlassScrollView>
     </View>
   );
 }
 
 function HeroMetric({ compact = false, label, value }: { compact?: boolean; label: string; value: string }) {
   return <View style={styles.heroMetric}>
-    <Text style={[styles.heroMetricValue, compact && styles.heroMetricValueCompact]} numberOfLines={1}>{value}</Text>
-    <Text style={styles.heroMetricLabel} numberOfLines={1}>{label}</Text>
+    <AppText style={[styles.heroMetricValue, compact && styles.heroMetricValueCompact]} numberOfLines={1}>{value}</AppText>
+    <AppText style={styles.heroMetricLabel} numberOfLines={1}>{label}</AppText>
   </View>;
 }
 
@@ -210,41 +211,41 @@ function MetricTile({ colors, icon, iconColor, label, note, tone, value }: {
   return <View style={[styles.metricTile, styles.cardShadow, { backgroundColor: colors.card }]}>
     <View style={styles.metricTopRow}>
       {icon === 'star' && iconColor
-        ? <Text style={{ fontSize: 18, lineHeight: 22, color: iconColor }}>★</Text>
-        : <Feather name={icon} size={18} color={iconColor ?? colors.foreground} />}
-      <Text style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text>
+        ? <AppText style={{ ...typography.h3, lineHeight: 22, color: iconColor }}>★</AppText>
+        : <Feather name={icon} size={icons.semantic.row} color={iconColor ?? colors.foreground} />}
+      <AppText style={[styles.metricLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</AppText>
     </View>
-    <Text style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    <AppText style={[styles.metricValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</AppText>
   </View>;
 }
 
 function SectionHeader({ title }: { title: string }) {
   const colors = useColors();
-  return <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>;
+  return <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</AppText>;
 }
 
 function PerformanceStatus({ colors, declinesToday, priorityReduced }: {
   colors: ReturnType<typeof useColors>; declinesToday: number; priorityReduced: boolean;
 }) {
   return <View style={styles.performanceStatus}>
-    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={20} color={priorityReduced ? colors.destructive : colors.primary} />
+    <Feather name={priorityReduced ? 'alert-triangle' : 'zap'} size={icons.size.lg} color={priorityReduced ? colors.destructive : colors.primary} />
     <View style={styles.performanceStatusCopy}>
-      <Text style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
+      <AppText style={[styles.performanceStatusTitle, { color: priorityReduced ? colors.destructive : colors.foreground }]}>
         {priorityReduced ? 'Lower Priority' : 'High Priority'}
-      </Text>
-      <Text style={[styles.performanceStatusNote, { color: colors.mutedForeground }]}>
+      </AppText>
+      <AppText style={[styles.performanceStatusNote, { color: colors.mutedForeground }]}>
         {priorityReduced
           ? 'Priority was reduced after 10 or more declines today.'
           : `${10 - declinesToday} more declines before priority is reduced.`}
-      </Text>
+      </AppText>
     </View>
   </View>;
 }
 
 function CompactStat({ colors, label, value }: { colors: ReturnType<typeof useColors>; label: string; value: string }) {
   return <View style={styles.compactStat}>
-    <Text style={[styles.compactStatValue, { color: colors.foreground }]}>{value}</Text>
-    <Text style={[styles.compactStatLabel, { color: colors.mutedForeground }]}>{label}</Text>
+    <AppText style={[styles.compactStatValue, { color: colors.foreground }]}>{value}</AppText>
+    <AppText style={[styles.compactStatLabel, { color: colors.mutedForeground }]}>{label}</AppText>
   </View>;
 }
 
@@ -252,12 +253,12 @@ function DetailRow({ colors, icon, label, last = false, note, value }: {
   colors: ReturnType<typeof useColors>; icon: keyof typeof Feather.glyphMap; label: string; last?: boolean; note?: string; value: string;
 }) {
   return <View style={[styles.detailRow, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-    <Feather name={icon} size={18} color={colors.primary} />
+    <Feather name={icon} size={icons.semantic.row} color={colors.primary} />
     <View style={styles.detailLabelGroup}>
-      <Text style={[styles.detailLabel, { color: colors.foreground }]}>{label}</Text>
-      {note ? <Text style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</Text> : null}
+      <AppText style={[styles.detailLabel, { color: colors.foreground }]}>{label}</AppText>
+      {note ? <AppText style={[styles.detailNote, { color: colors.mutedForeground }]}>{note}</AppText> : null}
     </View>
-    <Text style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={1}>{value}</Text>
+    <AppText style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={1}>{value}</AppText>
   </View>;
 }
 
@@ -271,7 +272,7 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
       {recentPurchases.length === 0 ? (
         <View style={styles.emptyHistory}>
           <Feather name="clock" size={21} color={colors.mutedForeground} />
-          <Text style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</Text>
+          <AppText style={[styles.emptyHistoryText, { color: colors.mutedForeground }]}>No package history yet</AppText>
         </View>
       ) : recentPurchases.map((purchase, index) => {
         const purchaseSnapshot = getPackagePurchaseSnapshot(purchase);
@@ -280,20 +281,20 @@ function PurchaseHistoryCard({ purchases }: { purchases: DriverPackagePurchase[]
           key={purchase.transactionId}
           style={[styles.historyRow, index < recentPurchases.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
         >
-          <Feather name="package" size={18} color={colors.primary} />
+          <Feather name="package" size={icons.semantic.row} color={colors.primary} />
           <View style={styles.historyLabelGroup}>
-            <Text style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</Text>
-            <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+            <AppText style={[styles.historyName, { color: colors.foreground }]}>{purchaseSnapshot?.packageName ?? purchase.packageId}</AppText>
+            <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
               {purchaseSnapshot ? `${purchaseSnapshot.ridesGranted} Rides + ${purchaseSnapshot.bonusRidesGranted} Bonus Rides` : 'Package snapshot unavailable'}
-            </Text>
-            <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
+            </AppText>
+            <AppText style={[styles.historyMeta, { color: colors.mutedForeground }]}>
               {formatHistoryDate(purchaseSnapshot?.purchasedAt ?? purchase.purchasedAt ?? purchase.createdAt)} - {purchase.provider === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.historyTotals}>
-            <Text style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchaseSnapshot?.pricePaid ?? purchase.pricePaid ?? purchase.amount)}</Text>
+            <AppText style={[styles.historyPrice, { color: colors.foreground }]}>{formatRwf(purchaseSnapshot?.pricePaid ?? purchase.pricePaid ?? purchase.amount)}</AppText>
             <View style={[styles.statusPill, { backgroundColor: statusColor + '12' }]}>
-              <Text style={[styles.historyStatus, { color: statusColor }]}>{formatPurchaseStatus(purchase.status)}</Text>
+              <AppText style={[styles.historyStatus, { color: statusColor }]}>{formatPurchaseStatus(purchase.status)}</AppText>
             </View>
           </View>
         </View>;
@@ -333,61 +334,54 @@ function formatHistoryDate(value: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  todayChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100 },
-  todayChipText: { fontSize: 9, fontFamily: 'Inter_700Bold' },
-  heroCard: { borderRadius: 26, padding: 20, gap: 18, overflow: 'hidden' },
+  todayChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.pill },
+  todayChipText: { ...typography.tiny,  },
+  heroCard: { borderRadius: 26, padding: semanticSpacing.screenPadding, gap: icons.semantic.row, overflow: 'hidden' },
   heroShadow: { shadowColor: '#007AFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 18, elevation: 7 },
   heroHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroEyebrow: { color: 'rgba(255,255,255,0.76)', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.9 },
-  heroValue: { color: '#fff', fontSize: 34, lineHeight: 40, fontFamily: 'Inter_700Bold', letterSpacing: -1 },
-  heroCaption: { color: 'rgba(255,255,255,0.72)', fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  heroEyebrow: { color: 'rgba(255,255,255,0.76)', ...typography.tiny, letterSpacing: 0.9 },
+  heroValue: { color: '#fff', ...typography.displayXL, lineHeight: 40, letterSpacing: -1 },
+  heroCaption: { color: 'rgba(255,255,255,0.72)', ...typography.caption, marginTop: spacing[2] },
   heroMetrics: { flexDirection: 'row', alignItems: 'center' },
   heroMetric: { flex: 1, minWidth: 0, gap: 3 },
-  heroMetricValue: { color: '#fff', fontSize: 17, fontFamily: 'Inter_700Bold' },
-  heroMetricValueCompact: { fontSize: 12 },
-  heroMetricLabel: { color: 'rgba(255,255,255,0.68)', fontSize: 9, fontFamily: 'Inter_500Medium' },
+  heroMetricValue: { color: '#fff', ...typography.title,  },
+  heroMetricValueCompact: { ...typography.caption },
+  heroMetricLabel: { color: 'rgba(255,255,255,0.68)', ...typography.tiny,  },
   heroDivider: { width: StyleSheet.hairlineWidth, height: 30, marginHorizontal: 9, backgroundColor: 'rgba(255,255,255,0.26)' },
-  heroEmptyText: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  heroEmptyText: { color: 'rgba(255,255,255,0.72)', ...typography.tiny, marginTop: -8 },
   section: { gap: 11 },
-  sectionTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.2, marginLeft: 2 },
-  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: 14, padding: 10, gap: 3 },
-  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metricValue: { fontSize: 19, lineHeight: 23, fontFamily: 'Inter_700Bold', letterSpacing: -0.5, marginTop: 2 },
-  metricLabel: { flex: 1, fontSize: 9, fontFamily: 'Inter_600SemiBold' },
-  metricNote: { fontSize: 9, fontFamily: 'Inter_400Regular', lineHeight: 13 },
-  cardShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
-  surface: { borderRadius: 20, overflow: 'hidden' },
-  packageCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, padding: 16 },
-  packageHeader: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  packageTitleGroup: { flex: 1, gap: 3 },
-  packageName: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  packageMeta: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  packageAction: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 100 },
-  packageActionText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16 },
-  performanceStatusCopy: { flex: 1, gap: 4 },
-  performanceStatusTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  performanceStatusNote: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 17 },
-  softDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  sectionTitle: { ...typography.title, letterSpacing: -0.2, marginLeft: spacing[2] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: semanticSpacing.inlineGap },
+  metricTile: { flexGrow: 1, flexBasis: '47%', minWidth: 120, minHeight: 88, borderRadius: radius.card, padding: spacing[10], gap: 3 },
+  metricTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
+  metricValue: { ...typography.h3, lineHeight: 23, letterSpacing: -0.5, marginTop: spacing[2] },
+  metricLabel: { flex: 1, ...typography.tiny,  },
+  metricNote: { ...typography.tiny, lineHeight: 13 },
+  cardShadow: { ...elevation.card, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.07, shadowRadius: 14, ...Platform.select({ web: { boxShadow: '0 6px 18px rgba(0,0,0,0.08)' } }) },
+  surface: { borderRadius: radius['3xl'], overflow: 'hidden' },
+  performanceStatus: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap, padding: semanticSpacing.cardPadding },
+  performanceStatusCopy: { flex: 1, gap: spacing[4] },
+  performanceStatusTitle: { ...typography.body,  },
+  performanceStatusNote: { ...typography.tiny, lineHeight: 17 },
+  softDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: semanticSpacing.cardPadding },
   performanceStats: { flexDirection: 'row', alignItems: 'center', padding: 15 },
   compactStat: { flex: 1, alignItems: 'center', gap: 3 },
-  compactStatValue: { fontSize: 22, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
-  compactStatLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  compactStatValue: { ...typography.h2, letterSpacing: -0.4 },
+  compactStatLabel: { ...typography.tiny,  },
   verticalDivider: { width: StyleSheet.hairlineWidth, height: 30 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 15 },
-  detailLabelGroup: { flex: 1, gap: 2 },
-  detailLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  detailNote: { fontSize: 10, fontFamily: 'Inter_400Regular' },
-  detailValue: { maxWidth: '44%', textAlign: 'right', fontSize: 13, fontFamily: 'Inter_700Bold' },
-  emptyHistory: { alignItems: 'center', gap: 9, padding: 24 },
-  emptyHistoryText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
+  detailLabelGroup: { flex: 1, gap: spacing[2] },
+  detailLabel: { ...typography.label,  },
+  detailNote: { ...typography.tiny,  },
+  detailValue: { maxWidth: '44%', textAlign: 'right', ...typography.label,  },
+  emptyHistory: { alignItems: 'center', gap: 9, padding: semanticSpacing.sectionGap },
+  emptyHistoryText: { ...typography.caption,  },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: spacing[14] },
   historyLabelGroup: { flex: 1, minWidth: 0 },
-  historyName: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  historyMeta: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  historyName: { ...typography.label,  },
+  historyMeta: { ...typography.tiny, marginTop: 3 },
   historyTotals: { alignItems: 'flex-end', gap: 5 },
-  historyPrice: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100 },
-  historyStatus: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  historyPrice: { ...typography.caption,  },
+  statusPill: { paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: spacing[4], borderRadius: radius.pill },
+  historyStatus: { ...typography.tiny,  },
 });

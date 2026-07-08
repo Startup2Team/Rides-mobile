@@ -121,7 +121,15 @@ jest.mock('@/components/SheetBackdrop', () => {
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { BottomActionSheet, SHEET_PADDING_H } from '../BottomActionSheet';
+import {
+  BottomActionSheet,
+  SHEET_HANDLE_AREA_PADDING_TOP,
+  SHEET_HANDLE_HEIGHT,
+  SHEET_HANDLE_WIDTH,
+  SHEET_PADDING_H,
+} from '../BottomActionSheet';
+import { sizes } from '@/constants/sizes';
+import { spacing } from '@/constants/spacing';
 
 const colors = {
   card: '#fff', foreground: '#111', mutedForeground: '#777', muted: '#eee',
@@ -150,6 +158,9 @@ describe('BottomActionSheet — no close button', () => {
       </BottomActionSheet>,
     );
     expect(getByText('Test sheet')).toBeTruthy();
+    expect(SHEET_HANDLE_WIDTH).toBe(sizes.sheet.handleWidth);
+    expect(SHEET_HANDLE_HEIGHT).toBe(sizes.sheet.handleHeight);
+    expect(SHEET_HANDLE_AREA_PADDING_TOP).toBe(spacing[8]);
   });
 });
 

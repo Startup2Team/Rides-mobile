@@ -22,6 +22,10 @@ let mockDocs: Record<DocumentKey, DocFaces> = {
   authorization: ['authorization-front://photo', null],
 };
 
+const mockUseVehicle = jest.fn((vehicleId?: string | null) => (
+  mockDriverProfile?.vehicles?.find(vehicle => vehicle.id === vehicleId) ?? null
+));
+
 jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
@@ -56,6 +60,10 @@ jest.mock('@/context/AuthContext', () => ({
     driverProfile: mockDriverProfile,
     saveDriverProfile: mockSaveDriverProfile,
   }),
+}));
+
+jest.mock('@/domains/vehicle', () => ({
+  useVehicle: (vehicleId?: string | null) => mockUseVehicle(vehicleId),
 }));
 
 jest.mock('@/domain/verificationSubmissions', () => ({
@@ -109,6 +117,14 @@ jest.mock('@/components/DatePickerField', () => ({
 jest.mock('@/components/GlassHeader', () => ({
   GlassHeader: () => null,
   useGlassHeaderMetrics: () => ({ contentTop: 0, indicatorTop: 0 }),
+}));
+
+jest.mock('@/components/GlassScrollView', () => ({
+  GlassScrollView: ({ children }: { children?: React.ReactNode }) => {
+    const React = require('react');
+    const { View } = require('react-native');
+    return React.createElement(View, null, children);
+  },
 }));
 
 jest.mock('@expo/vector-icons', () => {
@@ -166,6 +182,7 @@ describe('DriverAddVehicleScreen', () => {
     jest.clearAllMocks();
     mockParams = {};
     mockVehicleType = 'cab';
+    mockUseVehicle.mockClear();
     mockDocs = {
       license: ['license-front://photo', 'license-back://photo'],
       nationalId: ['national-front://photo', 'national-back://photo'],
@@ -323,6 +340,7 @@ describe('DriverAddVehicleScreen', () => {
       activeVehicle: { vehicleId: null },
     };
     mockParams = { sourceVehicleId: sourceVehicle.id };
+    mockUseVehicle.mockImplementation((vehicleId?: string | null) => mockDriverProfile?.vehicles?.find(vehicle => vehicle.id === vehicleId) ?? null);
 
     const useStateSpy = jest.spyOn(React, 'useState') as any;
     useStateSpy

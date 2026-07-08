@@ -1,6 +1,10 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { RideStatus } from '@/types';
+import { AppText } from '@/components/AppText';
+import { radius } from '@/constants/radius';
+import { spacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 
 const STATUS_LABELS: Record<RideStatus, string> = {
@@ -81,28 +85,28 @@ export function StatusChip({ status, variant = 'default', compact = false }: Sta
         { backgroundColor: isRideHeader ? 'transparent' : chip.bg },
       ]}
     >
-      <Text
+      <AppText
+        variant={isCompact ? 'tiny' : 'badge'}
         style={[styles.text, isCompact && styles.textCompact, { color: chip.text }]}
         numberOfLines={1}
         adjustsFontSizeToFit={isCompact}
         minimumFontScale={0.85}
       >
         {label}
-      </Text>
+      </AppText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 100,
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[4],
+    borderRadius: radius.full,
     alignSelf: 'flex-start',
   },
   text: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.badge,
   },
   chipCompact: {
     paddingHorizontal: 7,
@@ -110,11 +114,10 @@ const styles = StyleSheet.create({
     maxWidth: 108,
   },
   chipPlain: {
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    paddingHorizontal: spacing[0],
+    paddingVertical: spacing[0],
   },
   textCompact: {
-    fontSize: 11,
-    lineHeight: 14,
+    ...typography.tiny,
   },
 });

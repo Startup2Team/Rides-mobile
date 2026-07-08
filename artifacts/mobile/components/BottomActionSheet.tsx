@@ -20,13 +20,18 @@
  *   </Animated.View>
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { AppText } from '@/components/AppText';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
 import type { useColors } from '@/hooks/useColors';
 
 export const SHEET_PADDING_H = 22;
-export const SHEET_HANDLE_HEIGHT = 4;
-export const SHEET_HANDLE_WIDTH = 40;
-export const SHEET_HANDLE_AREA_PADDING_TOP = 8;
+export const SHEET_HANDLE_HEIGHT = sizes.sheet.handleHeight;
+export const SHEET_HANDLE_WIDTH = sizes.sheet.handleWidth;
+export const SHEET_HANDLE_AREA_PADDING_TOP = spacing[8];
 
 type Props = {
   colors: ReturnType<typeof useColors>;
@@ -72,29 +77,31 @@ export function BottomActionSheet({
 
         {/* Title row — symmetric horizontal padding (no close button slot). */}
         <View style={sheetStyles.titleRow}>
-          <Text
+          <AppText
+            variant="title"
             style={[sheetStyles.title, { color: colors.foreground }]}
             numberOfLines={1}
           >
             {title}
-          </Text>
+          </AppText>
         </View>
 
         {/* Optional subheader */}
         {(subtitle !== undefined || hint !== undefined) ? (
           <View style={sheetStyles.subheader}>
             {subtitle !== undefined ? (
-              <Text
+              <AppText
+                variant="label"
                 style={[sheetStyles.subtitle, { color: colors.mutedForeground }]}
                 numberOfLines={2}
               >
                 {subtitle}
-              </Text>
+              </AppText>
             ) : null}
             {hint !== undefined ? (
-              <Text style={[sheetStyles.hint, { color: colors.mutedForeground }]}>
+              <AppText variant="label" style={[sheetStyles.hint, { color: colors.mutedForeground }]}>
                 {hint}
-              </Text>
+              </AppText>
             ) : null}
           </View>
         ) : null}
@@ -124,12 +131,12 @@ const sheetStyles = StyleSheet.create({
   handleArea: {
     alignItems: 'center',
     paddingTop: SHEET_HANDLE_AREA_PADDING_TOP,
-    paddingBottom: 0,
+    paddingBottom: spacing[0],
   },
   handle: {
     width: SHEET_HANDLE_WIDTH,
     height: SHEET_HANDLE_HEIGHT,
-    borderRadius: SHEET_HANDLE_HEIGHT / 2,
+    borderRadius: radius.xxs,
     backgroundColor: '#3A3A3A',
   },
   titleRow: {
@@ -138,28 +145,25 @@ const sheetStyles = StyleSheet.create({
     // Symmetric padding — no right-side close button to offset for.
     paddingLeft: SHEET_PADDING_H,
     paddingRight: SHEET_PADDING_H,
-    paddingTop: 10,
-    paddingBottom: 6,
-    minHeight: 44,
+    paddingTop: spacing[10],
+    paddingBottom: semanticSpacing.compactGap,
+    minHeight: sizes.iconButton.md,
   },
   title: {
     flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.title,
   },
   subheader: {
     paddingLeft: SHEET_PADDING_H,
     paddingRight: SHEET_PADDING_H,
-    paddingBottom: 10,
-    gap: 4,
+    paddingBottom: spacing[10],
+    gap: spacing[4],
   },
   subtitle: {
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 18,
+    ...typography.label,
+    fontFamily: typography.bodySmall.fontFamily,
   },
   hint: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    ...typography.label,
   },
 });

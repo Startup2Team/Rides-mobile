@@ -24,6 +24,12 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { spring } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
 import {
   DRIVER_CTA_FADE_MS,
   DRIVER_CTA_MESSAGES,
@@ -32,18 +38,21 @@ import {
 } from '@/constants/homeDriverCta';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
-import { loadStoredProfileImage } from '@/persistence/profilePersistence';
-import { loadNotificationReadState } from '@/persistence/notificationPersistence';
 import { formatHomeHeaderLocation } from '@/utils/locationUtils';
 import { getDriverApplicationAction } from '@/utils/driverVerification';
 import type { DriverVerificationStatus } from '@/types';
+import { typography } from '@/constants/typography';
+import { zIndex } from '@/constants/zIndex';
+import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
 
-const AVATAR_SIZE = 44;
-const CTA_AVATAR_SIZE = 34;
+const AVATAR_SIZE = sizes.iconButton.md;
+const CTA_AVATAR_SIZE = sizes.iconButton.sm;
 const CTA_AVATAR_INSET = 5;
 const PILL_HEIGHT = BUTTON_HEIGHT.sm;
-const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
-const CTA_PILL_PADDING_RIGHT = 6;
+const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + spacing[6];
+const CTA_PILL_PADDING_RIGHT = spacing[6];
 const CTA_LABEL_SLOT_WIDTH = DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const FADE_HALF_MS = DRIVER_CTA_FADE_MS / 2;
@@ -73,8 +82,8 @@ export type HomeTopHeaderProps = {
 
 /** Shared caption size for CTA label and compact location line. */
 const HEADER_CAPTION_TEXT = {
-  fontSize: 12.5,
-  fontFamily: 'Inter_600SemiBold' as const,
+  ...typography.caption,
+  fontFamily: typography.title.fontFamily,
   lineHeight: 16,
 };
 
@@ -91,11 +100,11 @@ export function HomeTopHeader({
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
   const { driverProfile, switchMode } = useAuth();
-  const [profileImage, setProfileImage] = useState<string | null>(driverProfile?.profileImage ?? null);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const { profileImage, refreshProfileImage } = useProfilePhotoActions(driverProfile?.profileImage ?? null);
   const [messageIndex, setMessageIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+  const { data: unreadNotificationCount = 0 } = useUnreadNotificationCountQuery();
   const messageOpacity = useSharedValue(1);
   const rotationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageIndexRef = useRef(0);
@@ -157,26 +166,16 @@ export function HomeTopHeader({
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, [canSwitchToDriverMode]);
 
-  useEffect(() => {
-    if (driverProfile?.profileImage) setProfileImage(driverProfile.profileImage);
-  }, [driverProfile?.profileImage]);
-
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      void loadStoredProfileImage().then(stored => {
-        if (active) setProfileImage(stored.data ?? driverProfile?.profileImage ?? null);
-      });
-      void loadNotificationReadState().then(state => {
-        if (active) setHasUnreadNotifications(state.unread.size > 0);
-      });
       switchModeAvatarSlide.setValue(0);
       setIsSwitchingMode(false);
-      return () => {
-        active = false;
-      };
-    }, [driverProfile?.profileImage, switchModeAvatarSlide]),
+    }, [switchModeAvatarSlide]),
   );
+
+  useEffect(() => {
+    void refreshProfileImage().catch(() => {});
+  }, [driverProfile?.profileImage, refreshProfileImage]);
 
   useFocusEffect(
     useCallback(() => {
@@ -219,20 +218,19 @@ export function HomeTopHeader({
     return (
       <View style={frameStyle}>
         <View style={[styles.avatarCircle, { width: size, height: size, borderRadius: radius }]}>
+          <LinearGradient
+            colors={['#9DBBE0', '#7984C3']}
+            style={[styles.avatarFallback, { width: size, height: size, borderRadius: radius }]}
+          >
+            <Text style={[styles.avatarInitial, { fontSize: size * 0.4 }]}>{profileInitial}</Text>
+          </LinearGradient>
           {profileImage ? (
             <Image
               key={profileImage}
               source={{ uri: profileImage }}
-              style={{ width: size, height: size }}
+              style={[StyleSheet.absoluteFill, { width: size, height: size }]}
             />
-          ) : (
-            <LinearGradient
-              colors={['#9DBBE0', '#7984C3']}
-              style={[styles.avatarFallback, { width: size, height: size, borderRadius: radius }]}
-            >
-              <Text style={[styles.avatarInitial, { fontSize: size * 0.4 }]}>{profileInitial}</Text>
-            </LinearGradient>
-          )}
+          ) : null}
         </View>
       </View>
     );
@@ -262,9 +260,7 @@ export function HomeTopHeader({
   const animateSwitchAvatarToStart = useCallback(() => {
     RNAnimated.spring(switchModeAvatarSlide, {
       toValue: 0,
-      useNativeDriver: true,
-      bounciness: 8,
-      speed: 18,
+      ...spring.card,
     }).start();
   }, [switchModeAvatarSlide]);
 
@@ -279,7 +275,7 @@ export function HomeTopHeader({
       void (async () => {
         try {
           await switchMode('driver');
-          router.replace('/(driver)');
+          navigateToDriverHomeAfterCompletion(router);
         } catch {
           switchModeAvatarSlide.setValue(0);
           setIsSwitchingMode(false);
@@ -449,9 +445,9 @@ export function HomeTopHeader({
           </View>
         </Pressable>
       )}
-      <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.card }]}>
+      <View style={[styles.locationCard, styles.locationCardCompact, { backgroundColor: colors.background }]}>
         <View style={styles.locationRowCompact}>
-          <Feather name="map-pin" size={16} color={colors.primary} />
+          <Feather name="map-pin" size={icons.semantic.button} color={colors.primary} />
           <Text
             style={[styles.locationCompactText, HEADER_CAPTION_TEXT, { color: colors.foreground }]}
             numberOfLines={1}
@@ -463,18 +459,18 @@ export function HomeTopHeader({
       </View>
 
       <TouchableOpacity
-        style={[styles.notifBtn, { backgroundColor: colors.card }]}
+        style={[styles.notifBtn, { backgroundColor: colors.background }]}
         onPress={() => router.push('/notifications')}
         activeOpacity={0.82}
         accessibilityRole="button"
         accessibilityLabel="Notifications"
       >
-        <Feather name="bell" size={20} color={colors.foreground} />
-        {hasUnreadNotifications && (
+        <Feather name="bell" size={icons.size.lg} color={colors.foreground} />
+        {unreadNotificationCount > 0 && (
           <View
             style={[
               styles.notifBadge,
-              { backgroundColor: colors.destructive, borderColor: colors.card },
+              { backgroundColor: colors.destructive, borderColor: colors.background },
             ]}
           />
         )}
@@ -486,14 +482,14 @@ export function HomeTopHeader({
 const styles = StyleSheet.create({
   topBar: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    top: spacing[0],
+    left: spacing[0],
+    right: spacing[0],
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    gap: 10,
-    zIndex: 100,
+    paddingHorizontal: semanticSpacing.cardPadding,
+    gap: spacing[10],
+    zIndex: zIndex.tooltip,
   },
   driverCtaPill: {
     height: PILL_HEIGHT,
@@ -502,10 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: CTA_PILL_PADDING_RIGHT,
     flexShrink: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 14,
-    elevation: 6,
+    ...elevation.lg,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
@@ -549,9 +542,9 @@ const styles = StyleSheet.create({
   },
   ctaLabelMask: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
+    top: spacing[0],
+    bottom: spacing[0],
+    left: spacing[0],
     width: CTA_LABEL_SLOT_WIDTH,
     zIndex: 2,
   },
@@ -576,10 +569,8 @@ const styles = StyleSheet.create({
   },
   avatarShadow: {
     flexShrink: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    ...elevation.md,
     shadowRadius: 6,
-    elevation: 4,
     ...Platform.select({
       ios: { borderCurve: 'continuous' },
       default: {},
@@ -593,7 +584,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: typography.title.fontFamily,
     color: '#FFFFFF',
   },
   locationCard: {
@@ -609,13 +600,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   locationCardCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[6],
   },
   locationRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: semanticSpacing.compactGap,
     minWidth: 0,
   },
   locationCompactText: {
@@ -638,11 +629,11 @@ const styles = StyleSheet.create({
   },
   notifBadge: {
     position: 'absolute',
-    top: 10,
+    top: spacing[10],
     right: 11,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: spacing[8],
+    height: spacing[8],
+    borderRadius: radius.xs,
     borderWidth: 1.5,
   },
 });
