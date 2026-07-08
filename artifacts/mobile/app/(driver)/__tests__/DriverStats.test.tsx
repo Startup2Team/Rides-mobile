@@ -248,7 +248,7 @@ describe('DriverStats Summary UI', () => {
     expect(screen.getAllByText(/Wednesday/).length).toBeGreaterThan(0);
     expect(screen.getByText('Earnings')).toBeTruthy();
     expect(screen.getByText('Completed Trips')).toBeTruthy();
-    expect(screen.getByText('Earnings / Trip')).toBeTruthy();
+    expect(screen.getByText('Earnings Per Trip')).toBeTruthy();
     expect(screen.getByText('Driver Rating')).toBeTruthy();
     expect(screen.getByText('Acceptance')).toBeTruthy();
     expect(screen.getByText('Trends')).toBeTruthy();

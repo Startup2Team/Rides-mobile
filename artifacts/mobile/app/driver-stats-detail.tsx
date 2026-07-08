@@ -38,7 +38,7 @@ interface MetricConfig {
 const METRIC_CONFIGS: Record<MetricType, MetricConfig> = {
   earnings: { title: 'Earnings', color: '#FF2D55', target: 30000, unit: 'RWF', targetLabel: 'Daily Target: 30K RWF' },
   completedTrips: { title: 'Trips', color: '#A38DF8', target: 8, unit: 'trips', targetLabel: 'Daily Target: 8 Trips' },
-  earningsPerTrip: { title: 'Earnings / Trip', color: '#2AC1E4', target: 5000, unit: 'RWF', targetLabel: 'Daily Target: 5K / Trip' },
+  earningsPerTrip: { title: 'Earnings Per Trip', color: '#2AC1E4', target: 5000, unit: 'RWF', targetLabel: 'Daily Target: 5K / Trip' },
   rating: { title: 'Driver Rating', color: '#FFCC00', target: 5.0, unit: '★', targetLabel: 'Rating Goal: 5.0' },
   acceptance: { title: 'Acceptance', color: '#8CE62A', target: 90, unit: '%', targetLabel: 'Acceptance Target: 90%' },
   trends: { title: 'Trends', color: '#FF2D55', target: 1, unit: 'insight', targetLabel: 'Explore insights' },
@@ -50,7 +50,16 @@ export default function DriverStatsDetail() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ metric: string; period: string }>();
   const activeMetric: MetricType = (params.metric as MetricType) || 'earnings';
-  const config = METRIC_CONFIGS[activeMetric];
+  const config = useMemo(() => {
+    const baseConfig = METRIC_CONFIGS[activeMetric];
+    if (activeMetric === 'earnings') {
+      return {
+        ...baseConfig,
+        color: colors.primaryHex,
+      };
+    }
+    return baseConfig;
+  }, [activeMetric, colors.primary]);
 
   const { user, driverProfile } = useAuth();
   const { entitlement } = useDriverEntitlement();
@@ -245,7 +254,6 @@ export default function DriverStatsDetail() {
                   strokeWidth={3}
                   progress={dayProgress}
                   color={config.color}
-                  trackColor="rgba(255, 255, 255, 0.08)"
                 >
                   <View style={[
                     styles.dayTextBubble,
@@ -274,11 +282,11 @@ export default function DriverStatsDetail() {
         {/* Center: Large Progress Ring */}
         <View style={styles.ringContainer}>
           <ProgressRing
-            size={180}
-            strokeWidth={18}
+            size={250}
+            strokeWidth={36}
             progress={progressRatio}
             color={config.color}
-            trackColor="rgba(255, 255, 255, 0.05)"
+            showArrow={activeMetric === 'earnings'}
           >
             <View style={styles.ringCenterText}>
               <AppText style={[styles.ringMetricTitle, { color: colors.mutedForeground }]}>
@@ -519,16 +527,18 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   ringMetricTitle: {
-    fontSize: 12,
+    fontSize: 14,
     textTransform: 'uppercase',
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   ringValue: {
-    fontSize: 28,
+    fontSize: 36,
+    lineHeight: 42,
     fontWeight: '800',
   },
   ringSub: {
-    fontSize: 11,
+    fontSize: 13,
   },
   chartCard: {
     borderRadius: radius['3xl'],

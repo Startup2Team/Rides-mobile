@@ -186,7 +186,7 @@ export default function DriverStats() {
             }}
           />
           <DriverStatisticsMetricCard
-            title="Earnings / Trip"
+            title="Earnings Per Trip"
             periodLabel={periodLabel}
             value={earningsPerTripLabel}
             icon="trending-up"

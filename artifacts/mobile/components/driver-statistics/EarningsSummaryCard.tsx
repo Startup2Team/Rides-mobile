@@ -17,9 +17,6 @@ interface EarningsSummaryCardProps {
   targetEarnings?: number;
   onPress?: () => void;
 }
-
-const PINK_RED = '#FF2D55';
-
 export function EarningsSummaryCard({
   completedTrips,
   earningsLabel,
@@ -41,6 +38,7 @@ export function EarningsSummaryCard({
 
   const progress = activeTarget > 0 ? periodEarnings / activeTarget : 0;
   const targetLabel = formatRwf(activeTarget);
+  const displayEarnings = earningsLabel.replace(/\s*RWF/gi, '');
 
   return (
     <Pressable
@@ -57,35 +55,40 @@ export function EarningsSummaryCard({
         },
       ]}
     >
+      {/* Header Block at the Top */}
+      <View style={styles.header}>
+        <View style={styles.titleGroup}>
+          <AppText style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+            Earnings
+          </AppText>
+          {periodLabel && periodLabel.toLowerCase() !== 'today' ? (
+            <AppText style={[styles.period, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {periodLabel}
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+
       <View style={styles.content}>
         {/* Progress Ring on the Left */}
         <View style={styles.ringWrapper}>
           <ProgressRing
-            size={100}
-            strokeWidth={12}
+            size={140}
+            strokeWidth={28}
             progress={progress}
-            color={PINK_RED}
-            trackColor="rgba(255, 45, 85, 0.12)"
-          >
-            {/* Small arrow inside the ring matching the visual style */}
-            <Feather name="arrow-right" size={16} color={PINK_RED} style={styles.ringArrow} />
-          </ProgressRing>
+            color={colors.primaryHex}
+            showArrow={true}
+          />
         </View>
 
-        {/* Copy Block on the Right */}
-        <View style={styles.copy}>
-          <AppText style={[styles.eyebrow, { color: colors.mutedForeground }]}>Earnings</AppText>
+        {/* Value on the Right */}
+        <View style={styles.valueWrapper}>
+          <AppText style={[styles.targetLabel, { color: colors.foreground }]}>Target</AppText>
           <View style={styles.valuesContainer}>
-            <AppText style={[styles.value, { color: PINK_RED }]} numberOfLines={1} adjustsFontSizeToFit>
-              {earningsLabel}
-            </AppText>
-            <AppText style={[styles.target, { color: colors.mutedForeground }]}>
-              / {targetLabel}
+            <AppText style={[styles.value, { color: colors.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+              {`${displayEarnings} / ${targetLabel}`}
             </AppText>
           </View>
-          <AppText style={[styles.context, { color: colors.mutedForeground }]}>
-            {completedTrips} completed {completedTrips === 1 ? 'trip' : 'trips'}
-          </AppText>
         </View>
       </View>
 
@@ -120,38 +123,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  ringArrow: {
-    transform: [{ rotate: '-45deg' }],
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing[8],
+    paddingRight: spacing[24],
+    marginBottom: spacing[12],
   },
-  copy: {
+  titleGroup: {
     flex: 1,
     minWidth: 0,
     gap: spacing[2],
   },
-  eyebrow: {
+  title: {
     ...typography.label,
-    fontSize: 12,
+    fontSize: 13,
+  },
+  period: {
+    ...typography.tiny,
+  },
+  targetLabel: {
+    ...typography.tiny,
     textTransform: 'uppercase',
+    marginBottom: spacing[2],
+  },
+  valueWrapper: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   valuesContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    flexWrap: 'wrap',
   },
   value: {
     ...typography.h1,
     fontSize: 26,
     lineHeight: 32,
     fontWeight: '700',
-  },
-  target: {
-    ...typography.caption,
-    fontSize: 14,
-    marginLeft: spacing[4],
-  },
-  context: {
-    ...typography.caption,
-    fontSize: 13,
   },
   chevronBadge: {
     position: 'absolute',

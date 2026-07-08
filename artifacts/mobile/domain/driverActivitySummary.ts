@@ -30,7 +30,7 @@ function matchesVehicle(ride: Ride, vehicleId?: string | null, vehicleType?: Veh
 }
 
 export function formatRwf(amount: number) {
-  return `${Math.max(0, Math.round(amount)).toLocaleString('en-RW')} RWF`;
+  return `${Math.max(0, Math.round(amount)).toLocaleString('en-US')} RWF`;
 }
 
 export function getDriverActivitySummary({
