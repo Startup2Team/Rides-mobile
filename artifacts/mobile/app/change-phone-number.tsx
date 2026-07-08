@@ -22,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useProfileActions } from '@/domains/profile';
 import { useColors } from '@/hooks/useColors';
+import { requestPhoneChange, verifyPhoneChange } from '@/services/phoneChange';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 import { typography } from '@/constants/typography';
 
@@ -40,6 +41,7 @@ export default function ChangePhoneNumberScreen() {
   const [code, setCode] = useState<string[]>(() => Array(OTP_LENGTH).fill(''));
   const [expiryTimer, setExpiryTimer] = useState(0);
   const [verifying, setVerifying] = useState(false);
+  const [sending, setSending] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
@@ -48,7 +50,27 @@ export default function ChangePhoneNumberScreen() {
     return () => clearTimeout(timeout);
   }, [expiryTimer]);
 
-  const sendCode = () => {
+  // Ask the backend to send an OTP to `target` (E.164). On success starts/refreshes
+  // the code step + expiry timer; surfaces the backend message on failure.
+  const sendOtpTo = async (target: string): Promise<boolean> => {
+    setSending(true);
+    try {
+      await requestPhoneChange(target);
+      setCode(Array(OTP_LENGTH).fill(''));
+      setExpiryTimer(OTP_VALIDITY_SECONDS);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not send the verification code.';
+      setPhoneError(message);
+      showToast(message, 'error');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const sendCode = async () => {
     const normalized = normalizeRwandaPhoneNumber(phone);
     if (!normalized) {
       setPhoneError('Enter a valid Rwanda phone number');
@@ -60,9 +82,9 @@ export default function ChangePhoneNumberScreen() {
       return;
     }
     setPhoneError('');
-    setPendingPhone(normalized);
-    setCode(Array(OTP_LENGTH).fill(''));
-    setExpiryTimer(OTP_VALIDITY_SECONDS);
+    if (await sendOtpTo(normalized)) {
+      setPendingPhone(normalized);
+    }
   };
 
   const handleDigit = (value: string, index: number) => {
@@ -78,11 +100,21 @@ export default function ChangePhoneNumberScreen() {
     if (code.join('').length !== OTP_LENGTH) return;
     if (expiryTimer <= 0) return;
     setVerifying(true);
-    await new Promise(resolve => setTimeout(resolve, 700));
-    await updateUser({ phone: pendingPhone });
-    setVerifying(false);
-    showToast('Phone number verified and updated', 'info');
-    router.back();
+    try {
+      await verifyPhoneChange(pendingPhone, code.join(''));
+      await updateUser({ phone: pendingPhone });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('Phone number verified and updated', 'info');
+      router.back();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'That code was not correct. Try again.';
+      showToast(message, 'error');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setCode(Array(OTP_LENGTH).fill(''));
+      inputRefs.current[0]?.focus();
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -126,7 +158,7 @@ export default function ChangePhoneNumberScreen() {
                 value={phone}
               />
             </View>
-            <AppButton fullWidth size="lg" title="Send Verification Code" onPress={sendCode} />
+            <AppButton fullWidth size="lg" title="Send Verification Code" loading={sending} disabled={sending} onPress={sendCode} />
           </View>
         ) : (
           <View style={styles.content}>
@@ -177,10 +209,8 @@ export default function ChangePhoneNumberScreen() {
             <View style={styles.secondaryActions}>
               {expiryTimer <= 0 ? (
                 <TouchableOpacity
-                  onPress={() => {
-                    setCode(Array(OTP_LENGTH).fill(''));
-                    setExpiryTimer(OTP_VALIDITY_SECONDS);
-                  }}
+                  disabled={sending}
+                  onPress={() => { void sendOtpTo(pendingPhone); }}
                 >
                   <Text style={[styles.secondaryAction, { color: colors.primary }]}>Resend code</Text>
                 </TouchableOpacity>
