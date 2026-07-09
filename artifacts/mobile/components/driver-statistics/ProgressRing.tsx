@@ -363,11 +363,22 @@ export function ProgressRing({
           <Svg width={size} height={size}>
             <G transform={`translate(${size / 2}, ${strokeWidth / 2})`}>
               <Path
-                d="M -7,0 H 7 M 2,-5 L 8,0 L 2,5"
+                d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
                 stroke="#000000"
-                strokeWidth={2.5}
+                strokeWidth={3.75}
+                strokeOpacity={0.45}
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                fill="none"
+                transform="translate(0 1.2)"
+              />
+              <Path
+                d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
+                stroke="#FFFFFF"
+                strokeWidth={2.15}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
               />
             </G>
           </Svg>
