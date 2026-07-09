@@ -74,6 +74,8 @@ jest.mock('react-native-svg', () => {
     Path: MockSvg,
     G: MockSvg,
     Defs: MockSvg,
+    Filter: MockSvg,
+    FeGaussianBlur: MockSvg,
     RadialGradient: MockSvg,
     Stop: MockSvg,
     Ellipse: MockSvg,

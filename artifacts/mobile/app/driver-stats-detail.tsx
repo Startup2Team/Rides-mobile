@@ -133,6 +133,7 @@ export default function DriverStatsDetail() {
     if (config.target <= 0) return 0;
     return currentValue / config.target;
   }, [currentValue, config.target]);
+  const mainRingStrokeWidth = activeMetric === 'earnings' ? 50 : 36;
 
   // Build calendar month days (July 2026 or Current Month)
   const calendarDays = useMemo(() => {
@@ -283,7 +284,7 @@ export default function DriverStatsDetail() {
         <View style={styles.ringContainer}>
           <ProgressRing
             size={250}
-            strokeWidth={36}
+            strokeWidth={mainRingStrokeWidth}
             progress={progressRatio}
             color={config.color}
             showArrow={activeMetric === 'earnings'}

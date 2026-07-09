@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
-import Svg, { Circle, G, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent
   ? Animated.createAnimatedComponent(Circle)
@@ -25,15 +25,15 @@ interface ProgressRingProps {
 const LAP_RESET_EPSILON = 0.0001;
 const DEFAULT_TRACK_COLOR = '#111827';
 const SHADOW_ARC_DEGREES = 14;
+const CAP_BRIDGE_ARC_DEGREES = 6;
 const CAP_POSITION_STEPS_PER_LAP = 72;
 const SHADOW_PATH_STEPS = 8;
 const SHADOW_SEGMENTS = [
-  { start: 0, end: SHADOW_ARC_DEGREES, opacity: 0.018 },
-  { start: 0, end: 11, opacity: 0.026 },
-  { start: 0, end: 8, opacity: 0.034 },
-  { start: 0, end: 5.5, opacity: 0.044 },
-  { start: 0, end: 3, opacity: 0.052 },
-  { start: 0, end: 1.4, opacity: 0.058 },
+  { start: 0, end: 2.8, opacity: 0.34 },
+  { start: 1.6, end: 5.4, opacity: 0.22 },
+  { start: 3.8, end: 8.5, opacity: 0.11 },
+  { start: 6.8, end: 11.7, opacity: 0.052 },
+  { start: 10.2, end: SHADOW_ARC_DEGREES, opacity: 0.022 },
 ];
 const MIN_SHADOW_SIZE = 64;
 const MIN_SHADOW_STROKE_WIDTH = 8;
@@ -92,11 +92,16 @@ function buildLapPositionInterpolation(maxLaps: number, cx: number, cy: number, 
       describeArc(cx, cy, r, segment.start, segment.end),
     ],
   }));
+  const capBridgePathRange = [
+    describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0),
+    describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0),
+  ];
 
   for (let lap = 1; lap < maxLaps; lap++) {
     inputRange.push(lap + LAP_RESET_EPSILON);
     capXRange.push(cx);
     capYRange.push(cy - r);
+    capBridgePathRange.push(describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0));
     shadowPathRanges.forEach(({ segment, outputRange }) => {
       outputRange.push(describeArc(cx, cy, r, segment.start, segment.end));
     });
@@ -110,13 +115,14 @@ function buildLapPositionInterpolation(maxLaps: number, cx: number, cy: number, 
       inputRange.push(progress);
       capXRange.push(point.x);
       capYRange.push(point.y);
+      capBridgePathRange.push(describeArc(cx, cy, r, leadingAngleDeg - CAP_BRIDGE_ARC_DEGREES, leadingAngleDeg));
       shadowPathRanges.forEach(({ segment, outputRange }) => {
         outputRange.push(describeArc(cx, cy, r, leadingAngleDeg + segment.start, leadingAngleDeg + segment.end));
       });
     }
   }
 
-  return { inputRange, capXRange, capYRange, shadowPathRanges };
+  return { inputRange, capXRange, capYRange, capBridgePathRange, shadowPathRanges };
 }
 
 export function ProgressRing({
@@ -201,6 +207,11 @@ export function ProgressRing({
   const capY = animatedProgress.interpolate({
     inputRange: capPositionInterpolation.inputRange,
     outputRange: capPositionInterpolation.capYRange,
+    extrapolate: 'clamp',
+  });
+  const capBridgePath = animatedProgress.interpolate({
+    inputRange: capPositionInterpolation.inputRange,
+    outputRange: capPositionInterpolation.capBridgePathRange,
     extrapolate: 'clamp',
   });
   const shadowPaths = capPositionInterpolation.shadowPathRanges.map(({ segment, outputRange }) => ({
@@ -292,10 +303,30 @@ export function ProgressRing({
         </View>
       )}
 
+      {/* Layer 3.5: same-color sleeve that blends the raised cap into the flat overflow arc. */}
+      {isOverflow && (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+          <Svg width={size} height={size}>
+            <AnimatedPath
+              d={capBridgePath as unknown as string}
+              stroke={color}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              fill="none"
+            />
+          </Svg>
+        </Animated.View>
+      )}
+
       {/* Layer 4: short crescent shadow trailing the raised cap. Omitted on tiny rings to avoid artifacts. */}
       {isOverflow && shouldRenderShadow && (
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
           <Svg width={size} height={size}>
+            <Defs>
+              <Filter id="progressRingShadowBlur">
+                <FeGaussianBlur stdDeviation={0.85} />
+              </Filter>
+            </Defs>
             {shadowPaths.map(({ segment, d }) => (
               <AnimatedPath
                 key={`${segment.start}-${segment.end}`}
@@ -305,6 +336,7 @@ export function ProgressRing({
                 strokeLinecap="round"
                 strokeOpacity={segment.opacity}
                 fill="none"
+                filter="url(#progressRingShadowBlur)"
               />
             ))}
           </Svg>
