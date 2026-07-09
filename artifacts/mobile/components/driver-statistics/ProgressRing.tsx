@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
 
@@ -140,15 +140,42 @@ export function ProgressRing({
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const animatedProgress = useRef(new Animated.Value(0)).current;
-  const maxLaps = Math.max(2, Math.ceil(clampedProgress) + 2);
+  const previousProgressRef = useRef(clampedProgress);
+  const isMountedRef = useRef(false);
+  const [renderedHasProgress, setRenderedHasProgress] = useState(clampedProgress > 0);
+  const [renderedIsOverflow, setRenderedIsOverflow] = useState(clampedProgress > 1);
+  const maxLaps = Math.max(2, Math.ceil(Math.max(clampedProgress, previousProgressRef.current)) + 2);
   const capPositionInterpolation = buildLapPositionInterpolation(maxLaps, center, center, radius);
 
   useEffect(() => {
-    Animated.timing(animatedProgress, {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (clampedProgress > 0) {
+      setRenderedHasProgress(true);
+    }
+    if (clampedProgress > 1 || previousProgressRef.current > 1) {
+      setRenderedIsOverflow(true);
+    }
+
+    const animation = Animated.timing(animatedProgress, {
       toValue: clampedProgress,
       duration: 850,
       useNativeDriver: false,
-    }).start();
+    });
+
+    animation.start(({ finished }) => {
+      if (!finished || !isMountedRef.current) return;
+
+      previousProgressRef.current = clampedProgress;
+      setRenderedHasProgress(clampedProgress > 0);
+      setRenderedIsOverflow(clampedProgress > 1);
+    });
   }, [animatedProgress, clampedProgress]);
 
   useEffect(() => {
@@ -223,7 +250,8 @@ export function ProgressRing({
     }),
   }));
 
-  const isOverflow = clampedProgress > 1;
+  const hasProgress = renderedHasProgress;
+  const isOverflow = renderedIsOverflow;
   const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
   const shouldRenderShadow = size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH;
 
@@ -265,7 +293,7 @@ export function ProgressRing({
                 opacity={baseCompleteOpacity as unknown as number}
               />
             </>
-          ) : (
+          ) : hasProgress ? (
             <AnimatedCircle
               cx={size / 2}
               cy={size / 2}
@@ -277,7 +305,7 @@ export function ProgressRing({
               strokeDashoffset={baseStrokeDashoffset as unknown as number}
               strokeLinecap="round"
             />
-          )}
+          ) : null}
         </G>
       </Svg>
 
@@ -361,25 +389,46 @@ export function ProgressRing({
       {showArrow && (
         <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
           <Svg width={size} height={size}>
+            {!hasProgress && (
+              <Circle
+                cx={size / 2}
+                cy={strokeWidth / 2}
+                r={strokeWidth / 2}
+                fill={color}
+              />
+            )}
             <G transform={`translate(${size / 2}, ${strokeWidth / 2})`}>
-              <Path
-                d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
-                stroke="#000000"
-                strokeWidth={3.75}
-                strokeOpacity={0.45}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-                transform="translate(0 1.2)"
-              />
-              <Path
-                d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
-                stroke="#FFFFFF"
-                strokeWidth={2.15}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
+              {hasProgress ? (
+                <>
+                  <Path
+                    d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
+                    stroke="#000000"
+                    strokeWidth={3.75}
+                    strokeOpacity={0.45}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                    transform="translate(0 1.2)"
+                  />
+                  <Path
+                    d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
+                    stroke="#FFFFFF"
+                    strokeWidth={2.15}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </>
+              ) : (
+                <Path
+                  d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
+                  stroke="#000000"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              )}
             </G>
           </Svg>
         </View>

@@ -79,16 +79,19 @@ export default function DriverStatsDetail() {
     void loadRatings();
   }, [user?.id]);
 
-  // Build last 7 days for the weekday ring selector
+  // Build the visible week in Monday-to-Sunday order.
   const weekDays = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(d);
-    }
-    return days;
-  }, []);
+    const startOfWeek = new Date(selectedDate);
+    const dayIndex = startOfWeek.getDay();
+    const mondayOffset = dayIndex === 0 ? -6 : 1 - dayIndex;
+    startOfWeek.setDate(startOfWeek.getDate() + mondayOffset);
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + index);
+      return date;
+    });
+  }, [selectedDate]);
 
   // Compute daily metrics specifically for a given date
   const getDailyStatsForDate = useCallback((date: Date) => {
