@@ -288,19 +288,21 @@ export default function DriverStatsDetail() {
             color={config.color}
             showArrow={activeMetric === 'earnings'}
           >
-            <View style={styles.ringCenterText}>
-              <AppText style={[styles.ringMetricTitle, { color: colors.mutedForeground }]}>
-                {config.title}
-              </AppText>
-              <AppText style={[styles.ringValue, { color: config.color }]}>
-                {displayValueStr}
-              </AppText>
-              <AppText style={[styles.ringSub, { color: colors.mutedForeground }]}>
-                {activeMetric === 'earnings' || activeMetric === 'completedTrips'
-                  ? `Goal: ${config.target}`
-                  : config.targetLabel}
-              </AppText>
-            </View>
+            {activeMetric !== 'earnings' && (
+              <View style={styles.ringCenterText}>
+                <AppText style={[styles.ringMetricTitle, { color: colors.mutedForeground }]}>
+                  {config.title}
+                </AppText>
+                <AppText style={[styles.ringValue, { color: config.color }]}>
+                  {displayValueStr}
+                </AppText>
+                <AppText style={[styles.ringSub, { color: colors.mutedForeground }]}>
+                  {activeMetric === 'completedTrips'
+                    ? `Goal: ${config.target}`
+                    : config.targetLabel}
+                </AppText>
+              </View>
+            )}
           </ProgressRing>
         </View>
 

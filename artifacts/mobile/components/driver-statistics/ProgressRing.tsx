@@ -1,32 +1,15 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
-import Svg, { Circle, G, Path, Defs, Mask } from 'react-native-svg';
+import { View, StyleSheet, Animated } from 'react-native';
+import Svg, { Circle, G, Path } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent
   ? Animated.createAnimatedComponent(Circle)
   : Circle;
 
-const AnimatedG = Animated.createAnimatedComponent
-  ? Animated.createAnimatedComponent(G)
-  : G;
+const AnimatedPath = Animated.createAnimatedComponent
+  ? Animated.createAnimatedComponent(Path)
+  : Path;
 
-const SafeDefs = Defs || G;
-const SafeMask = Mask || G;
-
-const SafeEasing = Easing || {
-  out: (f: any) => f,
-  back: (s?: number) => (t: number) => t,
-  quad: (t: number) => t,
-};
-
-const SPARK_COUNT = 8;
-const SPARKS = Array.from({ length: SPARK_COUNT }, (_, i) => {
-  const angle = (i * 2 * Math.PI) / SPARK_COUNT;
-  return {
-    dx: Math.cos(angle),
-    dy: Math.sin(angle),
-  };
-});
 
 interface ProgressRingProps {
   size: number;
@@ -39,68 +22,148 @@ interface ProgressRingProps {
   showArrow?: boolean;
 }
 
+const LAP_RESET_EPSILON = 0.0001;
+const DEFAULT_TRACK_COLOR = '#111827';
+const SHADOW_ARC_DEGREES = 14;
+const CAP_POSITION_STEPS_PER_LAP = 72;
+const SHADOW_PATH_STEPS = 8;
+const SHADOW_SEGMENTS = [
+  { start: 0, end: SHADOW_ARC_DEGREES, opacity: 0.018 },
+  { start: 0, end: 11, opacity: 0.026 },
+  { start: 0, end: 8, opacity: 0.034 },
+  { start: 0, end: 5.5, opacity: 0.044 },
+  { start: 0, end: 3, opacity: 0.052 },
+  { start: 0, end: 1.4, opacity: 0.058 },
+];
+const MIN_SHADOW_SIZE = 64;
+const MIN_SHADOW_STROKE_WIDTH = 8;
+const DEBUG_PROGRESS_RING_GEOMETRY = false;
+
+function pointOnCircle(cx: number, cy: number, r: number, angleDegrees: number) {
+  const angleRadians = angleDegrees * (Math.PI / 180);
+  return {
+    x: cx + r * Math.sin(angleRadians),
+    y: cy - r * Math.cos(angleRadians),
+  };
+}
+
+function describeArc(cx: number, cy: number, r: number, startDegrees: number, endDegrees: number) {
+  const points = Array.from({ length: SHADOW_PATH_STEPS + 1 }, (_, index) => {
+    const progress = index / SHADOW_PATH_STEPS;
+    return pointOnCircle(cx, cy, r, startDegrees + (endDegrees - startDegrees) * progress);
+  });
+  const [first, ...rest] = points;
+
+  return [
+    `M ${first.x} ${first.y}`,
+    ...rest.map(point => `L ${point.x} ${point.y}`),
+  ].join(' ');
+}
+
+function getLapProgress(progress: number) {
+  const lapProgress = progress % 1;
+  return lapProgress === 0 && progress > 0 ? 1 : lapProgress;
+}
+
+function getRingGeometrySnapshot(progress: number, cx: number, cy: number, r: number) {
+  const lapProgress = getLapProgress(progress);
+  const leadingAngleDeg = lapProgress * 360;
+  const cap = pointOnCircle(cx, cy, r, leadingAngleDeg);
+
+  return {
+    progress,
+    lapProgress,
+    leadingAngleDeg,
+    capX: cap.x,
+    capY: cap.y,
+    shadowStart: leadingAngleDeg,
+    shadowEnd: leadingAngleDeg + SHADOW_ARC_DEGREES,
+  };
+}
+
+function buildLapPositionInterpolation(maxLaps: number, cx: number, cy: number, r: number) {
+  const inputRange: number[] = [0, 1];
+  const capXRange: number[] = [cx, cx];
+  const capYRange: number[] = [cy - r, cy - r];
+  const shadowPathRanges = SHADOW_SEGMENTS.map(segment => ({
+    segment,
+    outputRange: [
+      describeArc(cx, cy, r, segment.start, segment.end),
+      describeArc(cx, cy, r, segment.start, segment.end),
+    ],
+  }));
+
+  for (let lap = 1; lap < maxLaps; lap++) {
+    inputRange.push(lap + LAP_RESET_EPSILON);
+    capXRange.push(cx);
+    capYRange.push(cy - r);
+    shadowPathRanges.forEach(({ segment, outputRange }) => {
+      outputRange.push(describeArc(cx, cy, r, segment.start, segment.end));
+    });
+
+    for (let step = 1; step <= CAP_POSITION_STEPS_PER_LAP; step++) {
+      const lapProgress = step / CAP_POSITION_STEPS_PER_LAP;
+      const progress = lap + lapProgress;
+      const leadingAngleDeg = lapProgress * 360;
+      const point = pointOnCircle(cx, cy, r, leadingAngleDeg);
+
+      inputRange.push(progress);
+      capXRange.push(point.x);
+      capYRange.push(point.y);
+      shadowPathRanges.forEach(({ segment, outputRange }) => {
+        outputRange.push(describeArc(cx, cy, r, leadingAngleDeg + segment.start, leadingAngleDeg + segment.end));
+      });
+    }
+  }
+
+  return { inputRange, capXRange, capYRange, shadowPathRanges };
+}
+
 export function ProgressRing({
   size,
   strokeWidth,
   progress,
   color,
   trackColor,
-  trackOpacity = 0.12,
+  trackOpacity = 0.72,
   children,
   showArrow = false,
 }: ProgressRingProps) {
+  const clampedProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
+  const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-
-  // Animated values for progress and sparkles
   const animatedProgress = useRef(new Animated.Value(0)).current;
-  const sparkleAnim = useRef(new Animated.Value(0)).current;
+  const maxLaps = Math.max(2, Math.ceil(clampedProgress) + 2);
+  const capPositionInterpolation = buildLapPositionInterpolation(maxLaps, center, center, radius);
 
   useEffect(() => {
-    // If progress is 0, use a tiny minimum progress (0.005) to render a round cap dot around the arrow
-    const targetProgress = progress <= 0 ? 0.005 : progress;
+    Animated.timing(animatedProgress, {
+      toValue: clampedProgress,
+      duration: 850,
+      useNativeDriver: false,
+    }).start();
+  }, [animatedProgress, clampedProgress]);
 
-    animatedProgress.setValue(0);
-    sparkleAnim.setValue(0);
+  useEffect(() => {
+    if (!DEBUG_PROGRESS_RING_GEOMETRY) return;
 
-    const startAnimation = Animated.spring || Animated.timing;
-    startAnimation(animatedProgress, {
-      toValue: targetProgress,
-      friction: 7, // Spring friction for elastic bounce
-      tension: 40, // Spring tension
-      duration: 1000, // Fallback timing duration
-      easing: SafeEasing.out(SafeEasing.back(1.0)), // Fallback timing easing
-      useNativeDriver: false, // Must be false for custom SVG attributes
-    } as any).start(({ finished }) => {
-      if (finished && targetProgress >= 1.0) {
-        Animated.timing(sparkleAnim, {
-          toValue: 1,
-          duration: 600,
-          easing: SafeEasing.out(SafeEasing.quad),
-          useNativeDriver: false,
-        }).start();
-      }
-    });
-  }, [progress, animatedProgress, sparkleAnim]);
+    const snapshot = getRingGeometrySnapshot(clampedProgress, center, center, radius);
+    console.debug('[ProgressRing geometry]', snapshot);
+  }, [center, clampedProgress, radius]);
 
-  // Interpolate progress to strokeDashoffset for base ring (0 to 100%)
   const baseStrokeDashoffset = animatedProgress.interpolate({
-    inputRange: [0, 1, 2],
+    inputRange: [0, 1, maxLaps],
     outputRange: [circumference, 0, 0],
     extrapolate: 'clamp',
   });
 
-  // Dynamically generate the sawtooth input and output ranges for overflow laps
-  const maxLaps = Math.max(10, Math.ceil(progress) + 2);
   const overflowInputRange: number[] = [0, 1];
   const overflowOutputRange: number[] = [circumference, circumference];
 
   for (let i = 1; i < maxLaps; i++) {
-    // At the boundary i (e.g. 1.0001, 2.0001), it starts at circumference (0% progress)
-    overflowInputRange.push(i + 0.0001);
+    overflowInputRange.push(i + LAP_RESET_EPSILON);
     overflowOutputRange.push(circumference);
-
-    // At the boundary i + 1 (e.g. 2, 3), it ends at 0 (100% progress)
     overflowInputRange.push(i + 1);
     overflowOutputRange.push(0);
   }
@@ -111,71 +174,87 @@ export function ProgressRing({
     extrapolate: 'clamp',
   });
 
-  // Interpolate progress to rotation angle for the arrow and moving progress head (in degrees)
-  const arrowRotation = animatedProgress.interpolate({
-    inputRange: [0, maxLaps],
-    outputRange: [0, maxLaps * 360],
+  const overflowOpacity = animatedProgress.interpolate({
+    inputRange: [0, 1, 1 + LAP_RESET_EPSILON, maxLaps],
+    outputRange: [0, 0, 1, 1],
     extrapolate: 'clamp',
   });
 
-  // Sparkle particle burst interpolations
-  const sparkRadius = sparkleAnim.interpolate({
-    inputRange: [0, 0.15, 1],
-    outputRange: [0, 4, 0],
+  const baseProgressOpacity = animatedProgress.interpolate({
+    inputRange: [0, 1, 1 + LAP_RESET_EPSILON, maxLaps],
+    outputRange: [1, 1, 0, 0],
     extrapolate: 'clamp',
   });
 
-  const sparkOpacity = sparkleAnim.interpolate({
-    inputRange: [0, 0.1, 0.8, 1],
-    outputRange: [0, 1, 1, 0],
+  const baseCompleteOpacity = animatedProgress.interpolate({
+    inputRange: [0, 1, 1 + LAP_RESET_EPSILON, maxLaps],
+    outputRange: [0, 0, 1, 1],
     extrapolate: 'clamp',
   });
 
-  const isOverflow = progress > 1;
+  const capX = animatedProgress.interpolate({
+    inputRange: capPositionInterpolation.inputRange,
+    outputRange: capPositionInterpolation.capXRange,
+    extrapolate: 'clamp',
+  });
+
+  const capY = animatedProgress.interpolate({
+    inputRange: capPositionInterpolation.inputRange,
+    outputRange: capPositionInterpolation.capYRange,
+    extrapolate: 'clamp',
+  });
+  const shadowPaths = capPositionInterpolation.shadowPathRanges.map(({ segment, outputRange }) => ({
+    segment,
+    d: animatedProgress.interpolate({
+      inputRange: capPositionInterpolation.inputRange,
+      outputRange,
+      extrapolate: 'clamp',
+    }),
+  }));
+
+  const isOverflow = clampedProgress > 1;
+  const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
+  const shouldRenderShadow = size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH;
 
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <Svg width={size} height={size}>
-        <SafeDefs>
-          {/* Mask to ensure the drop shadow is constrained only within the ring path */}
-          <SafeMask id={`ringMask-${size}`}>
-            <Circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke="white"
-              strokeWidth={strokeWidth}
-              fill="transparent"
-            />
-          </SafeMask>
-        </SafeDefs>
-
-        {/* Rotated group for the progress circles - natively rotated via react-native-svg */}
+      {/* Layer 1: inactive track. Layer 2: base progress ring. */}
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
-          {/* Background Circle */}
           <Circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={trackColor || color}
+            stroke={ringTrackColor}
             strokeWidth={strokeWidth}
             fill="transparent"
             strokeOpacity={trackOpacity}
           />
-          {/* Base Progress Circle (Animated up to 100%) */}
-          <AnimatedCircle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            fill="transparent"
-            strokeDasharray={circumference}
-            strokeDashoffset={baseStrokeDashoffset as unknown as number}
-            strokeLinecap="round"
-          />
-          {/* Overflow Progress Circle (Animated above 100% on top of the base circle) */}
-          {isOverflow && (
+          {isOverflow ? (
+            <>
+              <AnimatedCircle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke={color}
+                strokeWidth={strokeWidth}
+                fill="transparent"
+                strokeDasharray={circumference}
+                strokeDashoffset={baseStrokeDashoffset as unknown as number}
+                strokeLinecap="round"
+                opacity={baseProgressOpacity as unknown as number}
+              />
+              <AnimatedCircle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke={color}
+                strokeWidth={strokeWidth}
+                fill="none"
+                opacity={baseCompleteOpacity as unknown as number}
+              />
+            </>
+          ) : (
             <AnimatedCircle
               cx={size / 2}
               cy={size / 2}
@@ -184,133 +263,84 @@ export function ProgressRing({
               strokeWidth={strokeWidth}
               fill="transparent"
               strokeDasharray={circumference}
-              strokeDashoffset={overflowStrokeDashoffset as unknown as number}
+              strokeDashoffset={baseStrokeDashoffset as unknown as number}
               strokeLinecap="round"
             />
           )}
         </G>
+      </Svg>
 
-        {/* Stationary start-cap shadow at 12 o'clock under the start of the overflow lap */}
-        {isOverflow && (
-          <G mask={`url(#ringMask-${size})`}>
-            {/* Softer, larger outer shadow */}
-            <AnimatedCircle
-              cx={size / 2 - 4}
-              cy={strokeWidth / 2 + 1.5}
-              r={strokeWidth / 2 + 3}
-              fill="black"
-              opacity={animatedProgress.interpolate({
-                inputRange: [1, 1.05, 2],
-                outputRange: [0, 0.15, 0.15],
-                extrapolate: 'clamp',
-              }) as unknown as number}
-            />
-            {/* Sharper, darker inner shadow */}
-            <AnimatedCircle
-              cx={size / 2 - 4}
-              cy={strokeWidth / 2 + 0.5}
-              r={strokeWidth / 2}
-              fill="black"
-              opacity={animatedProgress.interpolate({
-                inputRange: [1, 1.05, 2],
-                outputRange: [0, 0.35, 0.35],
-                extrapolate: 'clamp',
-              }) as unknown as number}
-            />
-          </G>
-        )}
-
-        {/* Animated group that rotates the moving head (shadow, cap, arrow) clockwise */}
-        <AnimatedG
-          rotation={arrowRotation as unknown as number}
-          origin={`${size / 2}, ${size / 2}`}
-        >
-          {/* Soft Drop Shadows under the overflow end cap - Masked to the ring path */}
-          {isOverflow && (
-            <G mask={`url(#ringMask-${size})`}>
-              {/* Softer, larger outer shadow */}
+      {/* Layer 3: overflow/current lap arc with flat ends. */}
+      {isOverflow && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <Svg width={size} height={size}>
+            <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
               <AnimatedCircle
-                cx={size / 2 - 4}
-                cy={strokeWidth / 2 + 1.5}
-                r={strokeWidth / 2 + 3}
-                fill="black"
-                opacity={animatedProgress.interpolate({
-                  inputRange: [1, 1.05, 2],
-                  outputRange: [0, 0.15, 0.15],
-                  extrapolate: 'clamp',
-                }) as unknown as number}
-              />
-              {/* Sharper, darker inner shadow */}
-              <AnimatedCircle
-                cx={size / 2 - 4}
-                cy={strokeWidth / 2 + 0.5}
-                r={strokeWidth / 2}
-                fill="black"
-                opacity={animatedProgress.interpolate({
-                  inputRange: [1, 1.05, 2],
-                  outputRange: [0, 0.35, 0.35],
-                  extrapolate: 'clamp',
-                }) as unknown as number}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke={color}
+                strokeWidth={strokeWidth}
+                fill="transparent"
+                strokeDasharray={circumference}
+                strokeDashoffset={overflowStrokeDashoffset as unknown as number}
+                strokeLinecap="butt"
+                opacity={overflowOpacity as unknown as number}
               />
             </G>
-          )}
+          </Svg>
+        </View>
+      )}
 
-          {/* Masking cap circle to keep the overlay cap colored solid on top of shadow */}
-          {isOverflow && (
+      {/* Layer 4: short crescent shadow trailing the raised cap. Omitted on tiny rings to avoid artifacts. */}
+      {isOverflow && shouldRenderShadow && (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+          <Svg width={size} height={size}>
+            {shadowPaths.map(({ segment, d }) => (
+              <AnimatedPath
+                key={`${segment.start}-${segment.end}`}
+                d={d as unknown as string}
+                stroke="#000000"
+                strokeWidth={strokeWidth * 0.88}
+                strokeLinecap="round"
+                strokeOpacity={segment.opacity}
+                fill="none"
+              />
+            ))}
+          </Svg>
+        </Animated.View>
+      )}
+
+      {/* Layer 5: raised rounded cap. */}
+      {isOverflow && (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+          <Svg width={size} height={size}>
             <AnimatedCircle
-              cx={size / 2}
-              cy={strokeWidth / 2}
+              cx={capX as unknown as number}
+              cy={capY as unknown as number}
               r={strokeWidth / 2}
               fill={color}
-              opacity={animatedProgress.interpolate({
-                inputRange: [1, 1.05, 2],
-                outputRange: [0, 1, 1],
-                extrapolate: 'clamp',
-              }) as unknown as number}
             />
-          )}
-        </AnimatedG>
+          </Svg>
+        </Animated.View>
+      )}
 
-        {/* Stationary Arrow at the 12 o'clock position (always static) */}
-        {showArrow && (
-          <G transform={`translate(${size / 2}, ${strokeWidth / 2})`}>
-            <Path
-              d="M -5,0 H 5 M 1,-4 L 5,0 L 1,4"
-              stroke="black"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </G>
-        )}
-
-        {/* Sparkle Particle Burst at 12 o'clock */}
-        {progress >= 1.0 && (
-          <G transform={`translate(${size / 2}, ${strokeWidth / 2})`}>
-            {SPARKS.map((spark, idx) => {
-              const cx = sparkleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, spark.dx * 28],
-              });
-              const cy = sparkleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, spark.dy * 28],
-              });
-
-              return (
-                <AnimatedCircle
-                  key={idx}
-                  cx={cx as unknown as number}
-                  cy={cy as unknown as number}
-                  r={sparkRadius as unknown as number}
-                  fill={color}
-                  opacity={sparkOpacity as unknown as number}
-                />
-              );
-            })}
-          </G>
-        )}
-      </Svg>
+      {/* Layer 6: fixed arrow at 12 o'clock. */}
+      {showArrow && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <Svg width={size} height={size}>
+            <G transform={`translate(${size / 2}, ${strokeWidth / 2})`}>
+              <Path
+                d="M -7,0 H 7 M 2,-5 L 8,0 L 2,5"
+                stroke="#000000"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </G>
+          </Svg>
+        </View>
+      )}
 
       {children ? (
         <View style={[StyleSheet.absoluteFillObject, styles.center]}>

@@ -73,6 +73,11 @@ jest.mock('react-native-svg', () => {
     Circle: MockSvg,
     Path: MockSvg,
     G: MockSvg,
+    Defs: MockSvg,
+    RadialGradient: MockSvg,
+    Stop: MockSvg,
+    Ellipse: MockSvg,
+    ClipPath: MockSvg,
   };
 });
 
@@ -152,7 +157,8 @@ describe('DriverStatsDetail UI', () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
     expect(screen.getAllByText('Earnings').length).toBeGreaterThan(0);
-    expect(screen.getByText('Goal: 30000')).toBeTruthy();
+    expect(screen.queryByText('Goal: 30000')).toBeNull();
+    expect(screen.getByText('Activity breakdown')).toBeTruthy();
     expect(screen.getByText('Daily Metrics Summary')).toBeTruthy();
   });
 });
