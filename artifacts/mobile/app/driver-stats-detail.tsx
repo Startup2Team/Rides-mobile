@@ -7,7 +7,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
@@ -19,8 +19,16 @@ import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
+import {
+  DEFAULT_DAILY_GOAL_RWF,
+  isCurrentLocalDate,
+  resolveDailyGoalForDate,
+  toLocalDateString,
+  type DriverDailyGoalRecord,
+} from '@/domains/driver-statistics';
 import { createDriverStatisticsViewModel } from '@/domains/driver-statistics';
 import { formatRwf } from '@/domain/driverActivitySummary';
+import { loadStoredDriverDailyGoals } from '@/persistence/driverDailyGoalPersistence';
 import { spacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { radius } from '@/constants/radius';
@@ -66,6 +74,7 @@ export default function DriverStatsDetail() {
   const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery(user?.id);
 
   const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>({ averageRating: null, ratingCount: 0 });
+  const [dailyGoalRecords, setDailyGoalRecords] = useState<DriverDailyGoalRecord[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [calendarVisible, setCalendarVisible] = useState(false);
 
@@ -78,6 +87,17 @@ export default function DriverStatsDetail() {
     }
     void loadRatings();
   }, [user?.id]);
+
+  const refreshDailyGoals = useCallback(async () => {
+    const stored = await loadStoredDriverDailyGoals();
+    setDailyGoalRecords(stored.data ?? []);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshDailyGoals();
+    }, [refreshDailyGoals]),
+  );
 
   // Build the visible week in Monday-to-Sunday order.
   const weekDays = useMemo(() => {
@@ -132,10 +152,21 @@ export default function DriverStatsDetail() {
     }
   }, [activeMetric, activeStats, ratingSummary, driverProfile]);
 
+  const selectedLocalDate = useMemo(() => toLocalDateString(selectedDate), [selectedDate]);
+  const isSelectedToday = useMemo(() => isCurrentLocalDate(selectedDate), [selectedDate]);
+  const selectedDateGoal = useMemo(() => {
+    if (activeMetric !== 'earnings') return config.target;
+    return resolveDailyGoalForDate({
+      records: dailyGoalRecords,
+      selectedLocalDate,
+      fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+    });
+  }, [activeMetric, config.target, dailyGoalRecords, selectedLocalDate]);
+
   const progressRatio = useMemo(() => {
-    if (config.target <= 0) return 0;
-    return currentValue / config.target;
-  }, [currentValue, config.target]);
+    if (selectedDateGoal <= 0) return 0;
+    return currentValue / selectedDateGoal;
+  }, [currentValue, selectedDateGoal]);
   const mainRingStrokeWidth = activeMetric === 'earnings' ? 50 : 36;
 
   // Build calendar month days (July 2026 or Current Month)
@@ -202,12 +233,21 @@ export default function DriverStatsDetail() {
     }
     return String(currentValue);
   }, [currentValue, activeMetric]);
+  const targetProgressLabel = useMemo(() => {
+    if (activeMetric === 'earnings' || activeMetric === 'earningsPerTrip') {
+      const displayAmount = displayValueStr.replace(/\s*RWF/gi, '');
+      return `${displayAmount}/${formatRwf(selectedDateGoal)}`;
+    }
+
+    return `${displayValueStr}/${selectedDateGoal} ${config.unit}`;
+  }, [activeMetric, config.unit, displayValueStr, selectedDateGoal]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Detail Screen Header */}
       <GlassHeader
         title={config.title}
+        subtitle={formattedDateTitle}
         showBack={true}
         onBackPress={() => router.back()}
         right={
@@ -239,9 +279,14 @@ export default function DriverStatsDetail() {
             // Calculate progress ring percentage for this day
             let dayProgress = 0;
             if (activeMetric === 'earnings' && dayStats.earnings > 0) {
-              dayProgress = dayStats.earnings / config.target;
+              const dayGoal = resolveDailyGoalForDate({
+                records: dailyGoalRecords,
+                selectedLocalDate: toLocalDateString(date),
+                fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+              });
+              dayProgress = dayGoal > 0 ? dayStats.earnings / dayGoal : 0;
             } else if (activeMetric === 'completedTrips' && dayStats.tripsCount > 0) {
-              dayProgress = dayStats.tripsCount / config.target;
+              dayProgress = selectedDateGoal > 0 ? dayStats.tripsCount / selectedDateGoal : 0;
             }
 
             return (
@@ -276,13 +321,6 @@ export default function DriverStatsDetail() {
           })}
         </View>
 
-        {/* Selected Date Header */}
-        <View style={styles.dateBlock}>
-          <AppText style={[styles.dateTitle, { color: colors.foreground }]}>
-            {formattedDateTitle}
-          </AppText>
-        </View>
-
         {/* Center: Large Progress Ring */}
         <View style={styles.ringContainer}>
           <ProgressRing
@@ -302,12 +340,40 @@ export default function DriverStatsDetail() {
                 </AppText>
                 <AppText style={[styles.ringSub, { color: colors.mutedForeground }]}>
                   {activeMetric === 'completedTrips'
-                    ? `Goal: ${config.target}`
+                    ? `Goal: ${selectedDateGoal}`
                     : config.targetLabel}
                 </AppText>
               </View>
             )}
           </ProgressRing>
+        </View>
+
+        <View style={styles.goalSummary}>
+          <AppText style={[styles.goalSummaryLabel, { color: colors.mutedForeground }]}>Goal</AppText>
+          <View style={styles.goalSummaryRow}>
+            <AppText style={[styles.goalSummaryValue, { color: config.color }]} numberOfLines={1} adjustsFontSizeToFit>
+              {targetProgressLabel}
+            </AppText>
+            {activeMetric === 'earnings' && isSelectedToday ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change daily earnings goal"
+                hitSlop={8}
+                onPress={() => router.push('/driver-daily-goal')}
+                style={({ pressed }) => [
+                  styles.goalEditButton,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <View style={styles.goalIconStack}>
+                  <Feather name="target" size={20} color={colors.foreground} />
+                  <View style={[styles.goalIconEditBadge, { backgroundColor: colors.background }]}>
+                    <Feather name="edit-2" size={9} color={colors.foreground} />
+                  </View>
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         {/* Metric Chart */}
@@ -427,9 +493,14 @@ export default function DriverStatsDetail() {
                 
                 let dayProgress = 0;
                 if (activeMetric === 'earnings' && dayStats.earnings > 0) {
-                  dayProgress = dayStats.earnings / config.target;
+                  const dayGoal = resolveDailyGoalForDate({
+                    records: dailyGoalRecords,
+                    selectedLocalDate: toLocalDateString(date),
+                    fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+                  });
+                  dayProgress = dayGoal > 0 ? dayStats.earnings / dayGoal : 0;
                 } else if (activeMetric === 'completedTrips' && dayStats.tripsCount > 0) {
-                  dayProgress = dayStats.tripsCount / config.target;
+                  dayProgress = selectedDateGoal > 0 ? dayStats.tripsCount / selectedDateGoal : 0;
                 }
 
                 return (
@@ -514,14 +585,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  dateBlock: {
-    marginTop: 4,
-  },
-  dateTitle: {
-    ...typography.h2,
-    fontSize: 20,
-    fontWeight: '700',
-  },
   ringContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -554,6 +617,51 @@ const styles = StyleSheet.create({
   },
   chartHeader: {
     gap: 2,
+  },
+  goalSummary: {
+    paddingHorizontal: 4,
+    gap: 2,
+  },
+  goalSummaryLabel: {
+    ...typography.tiny,
+    textTransform: 'uppercase',
+  },
+  goalSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  goalSummaryValue: {
+    ...typography.h2,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  goalEditButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+  },
+  goalIconStack: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  goalIconEditBadge: {
+    position: 'absolute',
+    right: -1,
+    bottom: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chartTitle: {
     ...typography.title,

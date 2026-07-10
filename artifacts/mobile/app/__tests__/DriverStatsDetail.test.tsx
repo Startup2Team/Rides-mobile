@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import DriverStatsDetail from '../driver-stats-detail';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
+import { loadStoredDriverDailyGoals } from '@/persistence/driverDailyGoalPersistence';
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -130,6 +132,10 @@ jest.mock('@/persistence/driverRatingPersistence', () => ({
   loadStoredDriverRatings: jest.fn(() => Promise.resolve({ data: [] })),
 }));
 
+jest.mock('@/persistence/driverDailyGoalPersistence', () => ({
+  loadStoredDriverDailyGoals: jest.fn(() => Promise.resolve({ data: [] })),
+}));
+
 function renderWithQueryClient(ui: React.ReactElement) {
   const client = new QueryClient({
     defaultOptions: {
@@ -162,5 +168,26 @@ describe('DriverStatsDetail UI', () => {
     expect(screen.queryByText('Goal: 30000')).toBeNull();
     expect(screen.getByText('Activity breakdown')).toBeTruthy();
     expect(screen.getByText('Daily Metrics Summary')).toBeTruthy();
+  });
+
+  test('shows daily goal action for today and opens the goal screen', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+
+    await waitFor(() => expect(loadStoredDriverDailyGoals).toHaveBeenCalled());
+
+    const goalAction = screen.getByLabelText('Change daily earnings goal');
+    expect(goalAction).toBeTruthy();
+
+    fireEvent.press(goalAction);
+    expect(router.push).toHaveBeenCalledWith('/driver-daily-goal');
+  });
+
+  test('hides daily goal action for past selected dates', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+
+    await waitFor(() => expect(loadStoredDriverDailyGoals).toHaveBeenCalled());
+    fireEvent.press(screen.getAllByText('7')[0]);
+
+    expect(screen.queryByLabelText('Change daily earnings goal')).toBeNull();
   });
 });

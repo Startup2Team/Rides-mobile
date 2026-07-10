@@ -505,6 +505,15 @@ const driverRatingSchema = z.object({
 
 export const driverRatingsSchema = z.array(driverRatingSchema);
 
+const driverDailyGoalRecordSchema = z.object({
+  amountRwf: z.number().int().min(1_000).max(1_000_000),
+  effectiveFromLocalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).passthrough();
+
+export const driverDailyGoalsSchema = z.array(driverDailyGoalRecordSchema);
+
 const vehicleEntitlementSchema = z.object({
   vehicleId: z.string(),
   vehicleType: vehicleTypeSchema,

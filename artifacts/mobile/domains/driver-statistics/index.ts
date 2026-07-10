@@ -5,3 +5,4 @@ export * from './driverStatisticsInsights';
 export * from './driverStatisticsPeriods';
 export * from './driverStatisticsSeries';
 export * from './driverStatisticsViewModel';
+export * from './driverDailyGoals';

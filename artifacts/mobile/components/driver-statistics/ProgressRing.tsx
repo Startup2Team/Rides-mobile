@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, View, StyleSheet, Animated, Easing } from 'react-native';
+import { AccessibilityInfo, InteractionManager, View, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent
@@ -31,6 +31,18 @@ const SHADOW_ARC_DEGREES = 14;
 const CAP_BRIDGE_ARC_DEGREES = 6;
 const CAP_POSITION_STEPS_PER_LAP = 72;
 const SHADOW_PATH_STEPS = 8;
+const PROGRESS_ANIMATION_DURATION_MS = 850;
+const ARROW_ANIMATION_DURATION_MS = 560;
+const ARROW_CONTACT_DURATION_MS = 200;
+const ARROW_FORM_DURATION_MS = 190;
+const ARROW_FORWARD_BOUNCE_DURATION_MS = 70;
+const ARROW_REBOUND_DURATION_MS = 60;
+const ARROW_SETTLE_DURATION_MS =
+  ARROW_ANIMATION_DURATION_MS -
+  ARROW_CONTACT_DURATION_MS -
+  ARROW_FORM_DURATION_MS -
+  ARROW_FORWARD_BOUNCE_DURATION_MS -
+  ARROW_REBOUND_DURATION_MS;
 const SHADOW_SEGMENTS = [
   { start: 0, end: 2.8, opacity: 0.34 },
   { start: 1.6, end: 5.4, opacity: 0.22 },
@@ -41,27 +53,30 @@ const SHADOW_SEGMENTS = [
 const MIN_SHADOW_SIZE = 64;
 const MIN_SHADOW_STROKE_WIDTH = 8;
 const DEBUG_PROGRESS_RING_GEOMETRY = false;
-const ARROW_MORPH_INPUT_RANGE = [0, 1, 2, 3];
+const ARROW_MORPH_INPUT_RANGE = [0, 0.08, 0.21, 0.35, 0.63, 0.8, 0.92, 1];
 const ARROW_KEYFRAMES = {
   shaft: [
+    'M -13 0 L -13 0',
+    'M -13 0 L -11 0',
+    'M -13 0 L -6 0',
+    'M -13 0 L 3.4 0',
     'M -13 0 L 8 0',
-    'M -13 0 L 6.7 0',
-    'M -13.4 0 L 8.8 0',
+    'M -13 0 L 8 0',
+    'M -13 0 L 8 0',
     'M -13 0 L 8 0',
   ],
-  upperHead: [
-    'M 0 -11.25 L 9.5 0',
-    'M 1.2 -11.7 L 8.2 0',
-    'M -0.6 -11.6 L 10.3 0',
-    'M 0 -11.25 L 9.5 0',
-  ],
-  lowerHead: [
-    'M 9.5 0 L 0 11.25',
-    'M 8.2 0 L 1.7 11.6',
-    'M 10.3 0 L -0.6 11.6',
-    'M 9.5 0 L 0 11.25',
+  head: [
+    'M 0 -11.25 L 0.8 0 L 0 11.25',
+    'M 0 -11.25 L 1.0 0 L 0 11.25',
+    'M 0 -11.25 L 1.8 0 L 0 11.25',
+    'M 0 -11.25 L 3.4 0 L 0 11.25',
+    'M 0 -11.25 L 9.5 0 L 0 11.25',
+    'M 0 -11.25 L 10.0 0 L 0 11.25',
+    'M 0 -11.25 L 9.35 0 L 0 11.25',
+    'M 0 -11.25 L 9.5 0 L 0 11.25',
   ],
 };
+const ARROW_BOUNCE_TRANSLATE_X = [0, 0, 0, 0, 0, 1.5, -0.35, 0];
 const ARROW_BASE_BADGE_DIAMETER = 44;
 const ARROW_STROKE_TO_BADGE_RATIO = 0.045;
 
@@ -212,7 +227,7 @@ export function ProgressRing({
 
     const animation = Animated.timing(animatedProgress, {
       toValue: clampedProgress,
-      duration: 850,
+      duration: PROGRESS_ANIMATION_DURATION_MS,
       useNativeDriver: false,
     });
 
@@ -229,35 +244,78 @@ export function ProgressRing({
     if (!showArrow) return;
 
     if (isReduceMotionEnabled) {
-      animatedArrow.setValue(0);
+      animatedArrow.setValue(1);
       return;
     }
 
-    animatedArrow.setValue(0);
-    Animated.timing(animatedArrow, {
-      toValue: 1,
-      duration: 140,
-      easing: Easing?.inOut?.(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (!finished) return;
+    let isCancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const startArrowAnimation = () => {
+      if (isCancelled) return;
 
+      animatedArrow.stopAnimation?.();
+      animatedArrow.setValue(0);
       Animated.timing(animatedArrow, {
-        toValue: 2,
-        duration: 190,
+        toValue: 0.35,
+        duration: ARROW_CONTACT_DURATION_MS,
         easing: Easing?.out?.(Easing.cubic),
         useNativeDriver: false,
-      }).start(({ finished: didExpand }) => {
-        if (!didExpand) return;
+      }).start(({ finished }) => {
+        if (!finished || isCancelled) return;
 
         Animated.timing(animatedArrow, {
-          toValue: 3,
-          duration: 220,
-          easing: Easing?.out?.(Easing.cubic),
+          toValue: 0.63,
+          duration: ARROW_FORM_DURATION_MS,
+          easing: Easing?.inOut?.(Easing.cubic),
           useNativeDriver: false,
-        }).start();
+        }).start(({ finished: didForm }) => {
+          if (!didForm || isCancelled) return;
+
+          Animated.timing(animatedArrow, {
+            toValue: 0.8,
+            duration: ARROW_FORWARD_BOUNCE_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic),
+            useNativeDriver: false,
+          }).start(({ finished: didOvershoot }) => {
+            if (!didOvershoot || isCancelled) return;
+
+            Animated.timing(animatedArrow, {
+              toValue: 0.92,
+              duration: ARROW_REBOUND_DURATION_MS,
+              easing: Easing?.out?.(Easing.cubic),
+              useNativeDriver: false,
+            }).start(({ finished: didRebound }) => {
+              if (!didRebound || isCancelled) return;
+
+              Animated.timing(animatedArrow, {
+                toValue: 1,
+                duration: ARROW_SETTLE_DURATION_MS,
+                easing: Easing?.out?.(Easing.cubic),
+                useNativeDriver: false,
+              }).start();
+            });
+          });
+        });
       });
-    });
+    };
+    const scheduleArrowAnimation = () => {
+      timeoutId = setTimeout(() => {
+        startArrowAnimation();
+      }, 0);
+    };
+    const interactionHandle = InteractionManager?.runAfterInteractions?.(scheduleArrowAnimation);
+
+    if (!interactionHandle) {
+      scheduleArrowAnimation();
+    }
+
+    return () => {
+      isCancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      interactionHandle?.cancel?.();
+    };
   }, [animatedArrow, clampedProgress, isReduceMotionEnabled, showArrow]);
 
   useEffect(() => {
@@ -336,14 +394,14 @@ export function ProgressRing({
     outputRange: ARROW_KEYFRAMES.shaft,
     extrapolate: 'clamp',
   });
-  const arrowUpperHeadPath = animatedArrow.interpolate({
+  const arrowHeadPath = animatedArrow.interpolate({
     inputRange: ARROW_MORPH_INPUT_RANGE,
-    outputRange: ARROW_KEYFRAMES.upperHead,
+    outputRange: ARROW_KEYFRAMES.head,
     extrapolate: 'clamp',
   });
-  const arrowLowerHeadPath = animatedArrow.interpolate({
+  const arrowBounceTranslateX = animatedArrow.interpolate({
     inputRange: ARROW_MORPH_INPUT_RANGE,
-    outputRange: ARROW_KEYFRAMES.lowerHead,
+    outputRange: ARROW_BOUNCE_TRANSLATE_X,
     extrapolate: 'clamp',
   });
 
@@ -486,31 +544,38 @@ export function ProgressRing({
 
       {/* Layer 6: fixed arrow at 12 o'clock. */}
       {showArrow && (
-        <AnimatedView style={StyleSheet.absoluteFillObject} pointerEvents="none">
-          <Svg width={size} height={size}>
-            {!hasProgress && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          {!hasProgress && (
+            <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
               <Circle
                 cx={size / 2}
                 cy={strokeWidth / 2}
                 r={strokeWidth / 2}
                 fill={color}
               />
-            )}
-            <G transform={`translate(${size / 2}, ${strokeWidth / 2}) scale(${arrowScale})`}>
-              {[arrowShaftPath, arrowUpperHeadPath, arrowLowerHeadPath].map((d, index) => (
-                <AnimatedPath
-                  key={`arrow-${index}`}
-                  d={d as unknown as string}
-                  stroke="#000000"
-                  strokeWidth={arrowStrokeWidth / arrowScale}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              ))}
-            </G>
-          </Svg>
-        </AnimatedView>
+            </Svg>
+          )}
+          <AnimatedView
+            style={[StyleSheet.absoluteFillObject, { transform: [{ translateX: arrowBounceTranslateX }] }]}
+            pointerEvents="none"
+          >
+            <Svg width={size} height={size}>
+              <G transform={`translate(${size / 2}, ${strokeWidth / 2}) scale(${arrowScale})`}>
+                {[arrowShaftPath, arrowHeadPath].map((d, index) => (
+                  <AnimatedPath
+                    key={`arrow-${index}`}
+                    d={d as unknown as string}
+                    stroke="#000000"
+                    strokeWidth={arrowStrokeWidth / arrowScale}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                ))}
+              </G>
+            </Svg>
+          </AnimatedView>
+        </View>
       )}
 
       {children ? (

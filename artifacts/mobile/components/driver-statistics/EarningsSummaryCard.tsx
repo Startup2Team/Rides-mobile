@@ -86,7 +86,7 @@ export function EarningsSummaryCard({
           <AppText style={[styles.targetLabel, { color: colors.foreground }]}>Target</AppText>
           <View style={styles.valuesContainer}>
             <AppText style={[styles.value, { color: colors.primary }]} numberOfLines={1} adjustsFontSizeToFit>
-              {`${displayEarnings} / ${targetLabel}`}
+              {`${displayEarnings}/${targetLabel}`}
             </AppText>
           </View>
         </View>
@@ -159,8 +159,8 @@ const styles = StyleSheet.create({
   },
   value: {
     ...typography.h1,
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '700',
   },
   chevronBadge: {
