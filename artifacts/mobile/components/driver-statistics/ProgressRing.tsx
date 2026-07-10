@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { AccessibilityInfo, View, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent
@@ -10,6 +10,9 @@ const AnimatedPath = Animated.createAnimatedComponent
   ? Animated.createAnimatedComponent(Path)
   : Path;
 
+const AnimatedView = Animated.createAnimatedComponent
+  ? Animated.createAnimatedComponent(View)
+  : View;
 
 interface ProgressRingProps {
   size: number;
@@ -38,6 +41,29 @@ const SHADOW_SEGMENTS = [
 const MIN_SHADOW_SIZE = 64;
 const MIN_SHADOW_STROKE_WIDTH = 8;
 const DEBUG_PROGRESS_RING_GEOMETRY = false;
+const ARROW_MORPH_INPUT_RANGE = [0, 1, 2, 3];
+const ARROW_KEYFRAMES = {
+  shaft: [
+    'M -13 0 L 8 0',
+    'M -13 0 L 6.7 0',
+    'M -13.4 0 L 8.8 0',
+    'M -13 0 L 8 0',
+  ],
+  upperHead: [
+    'M 0 -11.25 L 9.5 0',
+    'M 1.2 -11.7 L 8.2 0',
+    'M -0.6 -11.6 L 10.3 0',
+    'M 0 -11.25 L 9.5 0',
+  ],
+  lowerHead: [
+    'M 9.5 0 L 0 11.25',
+    'M 8.2 0 L 1.7 11.6',
+    'M 10.3 0 L -0.6 11.6',
+    'M 9.5 0 L 0 11.25',
+  ],
+};
+const ARROW_BASE_BADGE_DIAMETER = 44;
+const ARROW_STROKE_TO_BADGE_RATIO = 0.045;
 
 function pointOnCircle(cx: number, cy: number, r: number, angleDegrees: number) {
   const angleRadians = angleDegrees * (Math.PI / 180);
@@ -140,8 +166,10 @@ export function ProgressRing({
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const animatedProgress = useRef(new Animated.Value(0)).current;
+  const animatedArrow = useRef(new Animated.Value(0)).current;
   const previousProgressRef = useRef(clampedProgress);
   const isMountedRef = useRef(false);
+  const [isReduceMotionEnabled, setIsReduceMotionEnabled] = useState(false);
   const [renderedHasProgress, setRenderedHasProgress] = useState(clampedProgress > 0);
   const [renderedIsOverflow, setRenderedIsOverflow] = useState(clampedProgress > 1);
   const maxLaps = Math.max(2, Math.ceil(Math.max(clampedProgress, previousProgressRef.current)) + 2);
@@ -152,6 +180,25 @@ export function ProgressRing({
 
     return () => {
       isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    Promise.resolve(AccessibilityInfo?.isReduceMotionEnabled?.() ?? false)
+      .then(enabled => {
+        if (isActive) {
+          setIsReduceMotionEnabled(enabled);
+        }
+      })
+      .catch(() => undefined);
+
+    const subscription = AccessibilityInfo?.addEventListener?.('reduceMotionChanged', setIsReduceMotionEnabled);
+
+    return () => {
+      isActive = false;
+      subscription?.remove?.();
     };
   }, []);
 
@@ -177,6 +224,41 @@ export function ProgressRing({
       setRenderedIsOverflow(clampedProgress > 1);
     });
   }, [animatedProgress, clampedProgress]);
+
+  useEffect(() => {
+    if (!showArrow) return;
+
+    if (isReduceMotionEnabled) {
+      animatedArrow.setValue(0);
+      return;
+    }
+
+    animatedArrow.setValue(0);
+    Animated.timing(animatedArrow, {
+      toValue: 1,
+      duration: 140,
+      easing: Easing?.inOut?.(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      Animated.timing(animatedArrow, {
+        toValue: 2,
+        duration: 190,
+        easing: Easing?.out?.(Easing.cubic),
+        useNativeDriver: false,
+      }).start(({ finished: didExpand }) => {
+        if (!didExpand) return;
+
+        Animated.timing(animatedArrow, {
+          toValue: 3,
+          duration: 220,
+          easing: Easing?.out?.(Easing.cubic),
+          useNativeDriver: false,
+        }).start();
+      });
+    });
+  }, [animatedArrow, clampedProgress, isReduceMotionEnabled, showArrow]);
 
   useEffect(() => {
     if (!DEBUG_PROGRESS_RING_GEOMETRY) return;
@@ -249,11 +331,28 @@ export function ProgressRing({
       extrapolate: 'clamp',
     }),
   }));
+  const arrowShaftPath = animatedArrow.interpolate({
+    inputRange: ARROW_MORPH_INPUT_RANGE,
+    outputRange: ARROW_KEYFRAMES.shaft,
+    extrapolate: 'clamp',
+  });
+  const arrowUpperHeadPath = animatedArrow.interpolate({
+    inputRange: ARROW_MORPH_INPUT_RANGE,
+    outputRange: ARROW_KEYFRAMES.upperHead,
+    extrapolate: 'clamp',
+  });
+  const arrowLowerHeadPath = animatedArrow.interpolate({
+    inputRange: ARROW_MORPH_INPUT_RANGE,
+    outputRange: ARROW_KEYFRAMES.lowerHead,
+    extrapolate: 'clamp',
+  });
 
   const hasProgress = renderedHasProgress;
   const isOverflow = renderedIsOverflow;
   const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
   const shouldRenderShadow = size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH;
+  const arrowScale = strokeWidth / ARROW_BASE_BADGE_DIAMETER;
+  const arrowStrokeWidth = Math.max(1.1, strokeWidth * ARROW_STROKE_TO_BADGE_RATIO);
 
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
@@ -333,7 +432,7 @@ export function ProgressRing({
 
       {/* Layer 3.5: same-color sleeve that blends the raised cap into the flat overflow arc. */}
       {isOverflow && (
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+        <AnimatedView pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
           <Svg width={size} height={size}>
             <AnimatedPath
               d={capBridgePath as unknown as string}
@@ -343,12 +442,12 @@ export function ProgressRing({
               fill="none"
             />
           </Svg>
-        </Animated.View>
+        </AnimatedView>
       )}
 
       {/* Layer 4: short crescent shadow trailing the raised cap. Omitted on tiny rings to avoid artifacts. */}
       {isOverflow && shouldRenderShadow && (
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+        <AnimatedView pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
           <Svg width={size} height={size}>
             <Defs>
               <Filter id="progressRingShadowBlur">
@@ -368,12 +467,12 @@ export function ProgressRing({
               />
             ))}
           </Svg>
-        </Animated.View>
+        </AnimatedView>
       )}
 
       {/* Layer 5: raised rounded cap. */}
       {isOverflow && (
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+        <AnimatedView pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
           <Svg width={size} height={size}>
             <AnimatedCircle
               cx={capX as unknown as number}
@@ -382,12 +481,12 @@ export function ProgressRing({
               fill={color}
             />
           </Svg>
-        </Animated.View>
+        </AnimatedView>
       )}
 
       {/* Layer 6: fixed arrow at 12 o'clock. */}
       {showArrow && (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <AnimatedView style={StyleSheet.absoluteFillObject} pointerEvents="none">
           <Svg width={size} height={size}>
             {!hasProgress && (
               <Circle
@@ -397,41 +496,21 @@ export function ProgressRing({
                 fill={color}
               />
             )}
-            <G transform={`translate(${size / 2}, ${strokeWidth / 2})`}>
-              {hasProgress ? (
-                <>
-                  <Path
-                    d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
-                    stroke="#000000"
-                    strokeWidth={3.75}
-                    strokeOpacity={0.45}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                    transform="translate(0 1.2)"
-                  />
-                  <Path
-                    d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
-                    stroke="#FFFFFF"
-                    strokeWidth={2.15}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                </>
-              ) : (
-                <Path
-                  d="M -8,0 H 5 M 2,-5.5 L 8,0 L 2,5.5"
+            <G transform={`translate(${size / 2}, ${strokeWidth / 2}) scale(${arrowScale})`}>
+              {[arrowShaftPath, arrowUpperHeadPath, arrowLowerHeadPath].map((d, index) => (
+                <AnimatedPath
+                  key={`arrow-${index}`}
+                  d={d as unknown as string}
                   stroke="#000000"
-                  strokeWidth={2.5}
+                  strokeWidth={arrowStrokeWidth / arrowScale}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   fill="none"
                 />
-              )}
+              ))}
             </G>
           </Svg>
-        </View>
+        </AnimatedView>
       )}
 
       {children ? (
