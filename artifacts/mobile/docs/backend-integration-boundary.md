@@ -102,6 +102,32 @@ response shape, mismatch category, and masked phone suffix, but it must not
 contain OTP codes, raw access tokens, raw refresh tokens, full phone numbers,
 session secrets, or device secrets.
 
+## Driver Statistics
+
+The driver Statistics Phase 1 work adds only a local view model in
+`domains/driver-statistics`. It does not add a backend statistics endpoint,
+remote repository, DTO, mapper, or persistence source.
+
+Current statistics remain local prototype data:
+
+- period earnings and completed trips from local ride history;
+- all-time totals and acceptance/decline values from the local driver profile;
+- rating from local rating storage;
+- package balance and purchase history from local entitlement state.
+
+The view model uses source/confidence metadata and local device timezone
+bucketing. Future backend integration must provide authoritative driver
+analytics before the UI can claim server-backed trends, comparisons, or
+Rwanda-timezone business boundaries.
+
+Statistics Phase 2 turns that local model into the driver-facing Summary UI.
+The screen now emphasizes earnings, completed trips, earnings efficiency,
+rating/performance, truthful insights, and supporting profile totals. Package
+history, Mobile Money details, and package balances are no longer primary
+Statistics content. The mini visualizations are direct views of the Phase 1
+buckets, and the circular summary visual is not an earnings goal or completion
+progress indicator.
+
 Phase 12L adds remote search and map repository prototypes.
 Remote place search, autocomplete, place detail, reverse geocoding, route
 estimate/preview, distance/duration estimate, and fare-preview paths can now be
