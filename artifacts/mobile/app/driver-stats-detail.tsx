@@ -8,6 +8,7 @@ import {
   View,
   useColorScheme,
   Image,
+  PanResponder,
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -159,6 +160,31 @@ export default function DriverStatsDetail() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [calendarVisible, setCalendarVisible] = useState(false);
 
+  const shiftVisibleWeek = useCallback((weekOffset: number) => {
+    setSelectedDate((currentDate) => {
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(currentDate.getDate() + weekOffset * 7);
+      return nextDate;
+    });
+  }, []);
+
+  const weekSwipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 8 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx <= -40) {
+            shiftVisibleWeek(1);
+          } else if (gestureState.dx >= 40) {
+            shiftVisibleWeek(-1);
+          }
+        },
+      }),
+    [shiftVisibleWeek],
+  );
+
   // Load rating summary
   React.useEffect(() => {
     async function loadRatings() {
@@ -195,7 +221,6 @@ export default function DriverStatsDetail() {
       return date;
     });
   }, [selectedDate]);
-
   // Compute daily metrics specifically for a given date
   const getDailyStatsForDate = useCallback(
     (date: Date) => {
@@ -373,11 +398,18 @@ export default function DriverStatsDetail() {
         showsVerticalScrollIndicator={false}
       >
         {/* Horizontal Weekly Day Selector */}
-        <View style={styles.weekdayRow}>
+        <View
+          accessibilityLabel="Weekly date selector. Swipe left for next week or right for previous week."
+          testID="weekly-date-selector"
+          style={styles.weekdayRow}
+          {...weekSwipeResponder.panHandlers}
+        >
           {weekDays.map((date, idx) => {
             const isSelected =
               date.getDate() === selectedDate.getDate() &&
-              date.getMonth() === selectedDate.getMonth();
+              date.getMonth() === selectedDate.getMonth() &&
+              date.getFullYear() === selectedDate.getFullYear();
+            const isToday = isCurrentLocalDate(date);
             const dayName = date.toLocaleDateString("en-US", {
               weekday: "narrow",
             });
@@ -411,7 +443,18 @@ export default function DriverStatsDetail() {
                 <AppText
                   style={[
                     styles.weekdayLabel,
-                    { color: colors.mutedForeground },
+                    {
+                      color: isSelected
+                        ? "#FFFFFF"
+                        : isToday
+                          ? config.color
+                          : colors.mutedForeground,
+                    },
+                    isSelected && {
+                      backgroundColor: isToday
+                        ? config.color
+                        : colors.mutedForeground,
+                    },
                   ]}
                 >
                   {dayName}
@@ -423,15 +466,12 @@ export default function DriverStatsDetail() {
                   color={config.color}
                 >
                   <View
-                    style={[
-                      styles.dayTextBubble,
-                      isSelected && { backgroundColor: config.color },
-                    ]}
+                    style={styles.dayTextBubble}
                   >
                     <AppText
                       style={[
                         styles.dayText,
-                        { color: isSelected ? "#FFFFFF" : colors.foreground },
+                        { color: colors.foreground },
                       ]}
                     >
                       {date.getDate()}
@@ -815,6 +855,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   weekdayLabel: {
+    width: 22,
+    height: 22,
+    lineHeight: 22,
+    borderRadius: 11,
+    textAlign: "center",
+    overflow: "hidden",
     fontSize: 10,
     fontWeight: "600",
     textTransform: "uppercase",

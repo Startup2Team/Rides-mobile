@@ -24,6 +24,9 @@ jest.mock('react-native', () => {
     View: host('View'),
     Modal: host('Modal'),
     Image: host('Image'),
+    PanResponder: {
+      create: (handlers: object) => ({ panHandlers: handlers }),
+    },
     Animated: {
       Value: jest.fn(() => ({
         interpolate: jest.fn(() => ({})),
@@ -192,5 +195,22 @@ describe('DriverStatsDetail UI', () => {
     fireEvent.press(screen.getAllByText('7')[0]);
 
     expect(screen.queryByLabelText('Change daily earnings goal')).toBeNull();
+  });
+
+  test('swipes between the previous and next weeks', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+
+    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
+    const weekSelector = screen.getByTestId('weekly-date-selector');
+
+    act(() => {
+      weekSelector.props.onPanResponderRelease(null, { dx: -60, dy: 2 });
+    });
+    expect(screen.getAllByText('15').length).toBeGreaterThan(0);
+
+    act(() => {
+      weekSelector.props.onPanResponderRelease(null, { dx: 60, dy: 2 });
+    });
+    expect(screen.getAllByText('8').length).toBeGreaterThan(0);
   });
 });
