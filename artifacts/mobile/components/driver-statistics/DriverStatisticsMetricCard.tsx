@@ -45,13 +45,10 @@ export function DriverStatisticsMetricCard({
         </View>
         {!onPress && icon ? <Feather name={icon} size={16} color={themeColor} /> : null}
       </View>
-      
       <AppText style={[styles.value, { color: themeColor }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </AppText>
-      
       {note ? <AppText style={[styles.note, { color: colors.mutedForeground }]} numberOfLines={2}>{note}</AppText> : null}
-      
       {values ? (
         <DriverStatisticsMiniBars
           values={values}
