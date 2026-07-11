@@ -83,6 +83,8 @@ export function EarningsSummaryCard({
             strokeWidth={28}
             progress={progress}
             color={colors.primaryHex}
+            trackColor={colors.primaryHex}
+            trackOpacity={0.24}
             showArrow={true}
           />
         </View>

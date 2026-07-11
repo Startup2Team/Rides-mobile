@@ -34,6 +34,7 @@ interface GlassHeaderProps {
   onBackPress?: () => void;
   right?: React.ReactNode;
   titleAccessory?: React.ReactNode;
+  bottom?: React.ReactNode;
 }
 
 export function GlassHeader({
@@ -43,6 +44,7 @@ export function GlassHeader({
   onBackPress,
   right,
   titleAccessory,
+  bottom,
 }: GlassHeaderProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -83,6 +85,7 @@ export function GlassHeader({
 
         {right ?? <View style={styles.sideSlot} />}
       </View>
+      {bottom}
     </View>
   );
 }

@@ -23,6 +23,8 @@ interface ProgressRingProps {
   trackOpacity?: number;
   children?: React.ReactNode;
   showArrow?: boolean;
+  allowSmallOverflowShadow?: boolean;
+  showStartCapAtZero?: boolean;
 }
 
 const LAP_RESET_EPSILON = 0.0001;
@@ -175,6 +177,8 @@ export function ProgressRing({
   trackOpacity = 0.72,
   children,
   showArrow = false,
+  allowSmallOverflowShadow = false,
+  showStartCapAtZero = false,
 }: ProgressRingProps) {
   const clampedProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
   const center = size / 2;
@@ -408,7 +412,9 @@ export function ProgressRing({
   const hasProgress = renderedHasProgress;
   const isOverflow = renderedIsOverflow;
   const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
-  const shouldRenderShadow = size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH;
+  const shouldRenderShadow =
+    allowSmallOverflowShadow ||
+    (size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH);
   const arrowScale = strokeWidth / ARROW_BASE_BADGE_DIAMETER;
   const arrowStrokeWidth = Math.max(1.1, strokeWidth * ARROW_STROKE_TO_BADGE_RATIO);
 
@@ -578,6 +584,32 @@ export function ProgressRing({
         </View>
       )}
 
+      {!hasProgress && showStartCapAtZero && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <Svg width={size} height={size}>
+            <Defs>
+              <Filter id="progressRingStartCapShadow">
+                <FeGaussianBlur stdDeviation={0.85} />
+              </Filter>
+            </Defs>
+            <Circle
+              cx={size / 2 + strokeWidth * 0.18}
+              cy={strokeWidth / 2 + strokeWidth * 0.18}
+              r={strokeWidth / 2}
+              fill="#000000"
+              fillOpacity={0.28}
+              filter="url(#progressRingStartCapShadow)"
+            />
+            <Circle
+              cx={size / 2}
+              cy={strokeWidth / 2}
+              r={strokeWidth / 2}
+              fill={color}
+            />
+          </Svg>
+        </View>
+      )}
+
       {children ? (
         <View style={[StyleSheet.absoluteFillObject, styles.center]}>
           {children}
@@ -591,5 +623,6 @@ const styles = StyleSheet.create({
   center: {
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
 });

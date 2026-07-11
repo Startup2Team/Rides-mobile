@@ -28,6 +28,7 @@ jest.mock('react-native', () => {
       create: (handlers: object) => ({ panHandlers: handlers }),
     },
     Animated: {
+      View: host('AnimatedView'),
       Value: jest.fn(() => ({
         interpolate: jest.fn(() => ({})),
         setValue: jest.fn(),
@@ -45,7 +46,10 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('expo-router', () => ({
   router: { back: jest.fn(), push: jest.fn(), navigate: jest.fn() },
-  useFocusEffect: jest.fn((cb) => cb()),
+  useFocusEffect: jest.fn((cb) => {
+    const React = require('react');
+    React.useEffect(() => cb(), [cb]);
+  }),
   useLocalSearchParams: () => ({ metric: 'earnings', period: 'today' }),
 }));
 
@@ -192,25 +196,38 @@ describe('DriverStatsDetail UI', () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
     await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
-    fireEvent.press(screen.getAllByText('7')[0]);
+    fireEvent.press(
+      screen.getByLabelText(
+        'Select Tuesday, 7 July 2026 from weekday label',
+      ),
+    );
 
     expect(screen.queryByLabelText('Change daily earnings goal')).toBeNull();
   });
 
-  test('swipes between the previous and next weeks', async () => {
+  test('swipes between past weeks without navigating into the future', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
     await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
     const weekSelector = screen.getByTestId('weekly-date-selector');
-
-    act(() => {
-      weekSelector.props.onPanResponderRelease(null, { dx: -60, dy: 2 });
-    });
-    expect(screen.getAllByText('15').length).toBeGreaterThan(0);
+    expect(
+      screen.getByLabelText('Select Thursday, 9 July 2026').props
+        .accessibilityState.disabled,
+    ).toBe(true);
 
     act(() => {
       weekSelector.props.onPanResponderRelease(null, { dx: 60, dy: 2 });
     });
-    expect(screen.getAllByText('8').length).toBeGreaterThan(0);
+    expect(screen.getByText(/8 Jul 2026/)).toBeTruthy();
+
+    act(() => {
+      weekSelector.props.onPanResponderRelease(null, { dx: 140, dy: 2 });
+    });
+    expect(screen.getByText(/1 Jul 2026/)).toBeTruthy();
+
+    act(() => {
+      weekSelector.props.onPanResponderRelease(null, { dx: -140, dy: 2 });
+    });
+    expect(screen.getByText(/8 Jul 2026/)).toBeTruthy();
   });
 });

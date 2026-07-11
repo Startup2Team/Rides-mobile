@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   Modal,
   Platform,
@@ -6,9 +6,9 @@ import {
   ScrollView,
   StyleSheet,
   View,
-  useColorScheme,
   Image,
   PanResponder,
+  Animated,
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -38,8 +38,6 @@ import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersist
 import { spacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
 import { radius } from "@/constants/radius";
-
-import { DailyGoalIcon } from "@/components/DailyGoalIcon";
 
 type MetricType =
   | "earnings"
@@ -110,6 +108,14 @@ const METRIC_CONFIGS: Record<MetricType, MetricConfig> = {
   },
 };
 
+function isFutureLocalDate(date: Date) {
+  const candidate = new Date(date);
+  candidate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return candidate.getTime() > today.getTime();
+}
+
 export default function DriverStatsDetail() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -159,14 +165,59 @@ export default function DriverStatsDetail() {
   });
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [weekPagerWidth, setWeekPagerWidth] = useState(320);
+  const weekPagerWidthRef = useRef(320);
+  const weekTranslateX = useRef(new Animated.Value(-320)).current;
+  const isWeekAnimating = useRef(false);
 
   const shiftVisibleWeek = useCallback((weekOffset: number) => {
     setSelectedDate((currentDate) => {
       const nextDate = new Date(currentDate);
       nextDate.setDate(currentDate.getDate() + weekOffset * 7);
-      return nextDate;
+      return isFutureLocalDate(nextDate) ? new Date() : nextDate;
     });
   }, []);
+
+  const canShiftVisibleWeek = useCallback(
+    (weekOffset: number) => {
+      const nextDate = new Date(selectedDate);
+      nextDate.setDate(selectedDate.getDate() + weekOffset * 7);
+      return !isFutureLocalDate(nextDate);
+    },
+    [selectedDate],
+  );
+
+  const settleWeekSwipe = useCallback(
+    (weekOffset: number) => {
+      if (isWeekAnimating.current) return;
+
+      if (!canShiftVisibleWeek(weekOffset)) {
+        Animated.timing(weekTranslateX, {
+          toValue: -weekPagerWidth,
+          duration: 180,
+          useNativeDriver: true,
+        }).start();
+        return;
+      }
+
+      isWeekAnimating.current = true;
+      Animated.timing(weekTranslateX, {
+        toValue: weekOffset > 0 ? -weekPagerWidth * 2 : 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) {
+          isWeekAnimating.current = false;
+          return;
+        }
+
+        shiftVisibleWeek(weekOffset);
+        weekTranslateX.setValue(-weekPagerWidth);
+        isWeekAnimating.current = false;
+      });
+    },
+    [canShiftVisibleWeek, shiftVisibleWeek, weekPagerWidth, weekTranslateX],
+  );
 
   const weekSwipeResponder = useMemo(
     () =>
@@ -174,15 +225,37 @@ export default function DriverStatsDetail() {
         onMoveShouldSetPanResponder: (_, gestureState) =>
           Math.abs(gestureState.dx) > 8 &&
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderMove: (_, gestureState) => {
+          const movingTowardFuture =
+            gestureState.dx < 0 && !canShiftVisibleWeek(1);
+          weekTranslateX.setValue(
+            -weekPagerWidth +
+              (movingTowardFuture ? gestureState.dx * 0.22 : gestureState.dx),
+          );
+        },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx <= -40) {
-            shiftVisibleWeek(1);
-          } else if (gestureState.dx >= 40) {
-            shiftVisibleWeek(-1);
+          const pageChangeThreshold = weekPagerWidth * 0.35;
+          if (gestureState.dx <= -pageChangeThreshold) {
+            settleWeekSwipe(1);
+          } else if (gestureState.dx >= pageChangeThreshold) {
+            settleWeekSwipe(-1);
+          } else {
+            Animated.timing(weekTranslateX, {
+              toValue: -weekPagerWidth,
+              duration: 180,
+              useNativeDriver: true,
+            }).start();
           }
         },
+        onPanResponderTerminate: () => {
+          Animated.timing(weekTranslateX, {
+            toValue: -weekPagerWidth,
+            duration: 180,
+            useNativeDriver: true,
+          }).start();
+        },
       }),
-    [shiftVisibleWeek],
+    [canShiftVisibleWeek, settleWeekSwipe, weekPagerWidth, weekTranslateX],
   );
 
   // Load rating summary
@@ -204,8 +277,18 @@ export default function DriverStatsDetail() {
 
   useFocusEffect(
     useCallback(() => {
+      const resetWeekPager = () => {
+        isWeekAnimating.current = false;
+        weekTranslateX.stopAnimation?.();
+        weekTranslateX.setValue(-weekPagerWidthRef.current);
+        setSelectedDate(new Date());
+      };
+
+      resetWeekPager();
       void refreshDailyGoals();
-    }, [refreshDailyGoals]),
+
+      return resetWeekPager;
+    }, [refreshDailyGoals, weekTranslateX]),
   );
 
   // Build the visible week in Monday-to-Sunday order.
@@ -221,6 +304,22 @@ export default function DriverStatsDetail() {
       return date;
     });
   }, [selectedDate]);
+  const carouselWeeks = useMemo(
+    () =>
+      [-1, 0, 1].map((weekOffset) => {
+        const weekDate = new Date(selectedDate);
+        weekDate.setDate(selectedDate.getDate() + weekOffset * 7);
+        const dayIndex = weekDate.getDay();
+        const mondayOffset = dayIndex === 0 ? -6 : 1 - dayIndex;
+        weekDate.setDate(weekDate.getDate() + mondayOffset);
+        return Array.from({ length: 7 }, (_, index) => {
+          const date = new Date(weekDate);
+          date.setDate(weekDate.getDate() + index);
+          return date;
+        });
+      }),
+    [selectedDate],
+  );
   // Compute daily metrics specifically for a given date
   const getDailyStatsForDate = useCallback(
     (date: Date) => {
@@ -366,6 +465,8 @@ export default function DriverStatsDetail() {
 
     return `${displayValueStr}/${selectedDateGoal} ${config.unit}`;
   }, [activeMetric, config.unit, displayValueStr, selectedDateGoal]);
+  const headerBottom =
+    insets.top + (Platform.OS === "web" ? 67 : 0) + 44;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -385,103 +486,144 @@ export default function DriverStatsDetail() {
             </Pressable>
           ) : undefined
         }
+        bottom={
+          <View style={styles.weekdayPager}>
+            <View style={styles.weekdayLabelsRow}>
+              {weekDays.map((date) => {
+                const isSelected =
+                  date.getDate() === selectedDate.getDate() &&
+                  date.getMonth() === selectedDate.getMonth() &&
+                  date.getFullYear() === selectedDate.getFullYear();
+                const isToday = isCurrentLocalDate(date);
+                const isFuture = isFutureLocalDate(date);
+                return (
+                <Pressable
+                  key={toLocalDateString(date)}
+                  onPress={() => setSelectedDate(date)}
+                  disabled={isFuture}
+                  accessibilityState={{ disabled: isFuture }}
+                  accessibilityLabel={`Select ${new Intl.DateTimeFormat("en-GB", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  }).format(date)} from weekday label`}
+                  style={styles.weekdayLabelItem}
+                >
+                  <AppText
+                    style={[
+                      styles.weekdayLabel,
+                      {
+                        color: isSelected
+                          ? "#FFFFFF"
+                          : isToday
+                            ? config.color
+                            : colors.mutedForeground,
+                      },
+                      isSelected && {
+                        backgroundColor: isToday
+                          ? config.color
+                          : colors.mutedForeground,
+                      },
+                    ]}
+                  >
+                    {date.toLocaleDateString("en-US", { weekday: "narrow" })}
+                  </AppText>
+                </Pressable>
+                );
+              })}
+            </View>
+            <View
+              onLayout={(event) => {
+                const width = event.nativeEvent.layout.width;
+                if (width > 0 && width !== weekPagerWidth) {
+                  weekPagerWidthRef.current = width;
+                  setWeekPagerWidth(width);
+                  weekTranslateX.setValue(-width);
+                }
+              }}
+              style={styles.weekdayRingsViewport}
+            >
+            <Animated.View
+              accessibilityLabel="Weekly date selector. Swipe left for next week or right for previous week."
+              testID="weekly-date-selector"
+              style={[
+                styles.weekdayRingsTrack,
+                { transform: [{ translateX: weekTranslateX }] },
+              ]}
+              {...weekSwipeResponder.panHandlers}
+            >
+              {carouselWeeks.map((carouselWeek, weekIndex) => (
+                <View
+                  key={weekIndex}
+                  style={[styles.weekdayRingsRow, { width: weekPagerWidth }]}
+                >
+              {carouselWeek.map((date) => {
+                const isFuture = isFutureLocalDate(date);
+                const dayStats = getDailyStatsForDate(date);
+                let dayProgress = 0;
+                if (activeMetric === "earnings" && dayStats.earnings > 0) {
+                  const dayGoal = resolveDailyGoalForDate({
+                    records: dailyGoalRecords,
+                    selectedLocalDate: toLocalDateString(date),
+                    fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+                  });
+                  dayProgress = dayGoal > 0 ? dayStats.earnings / dayGoal : 0;
+                } else if (
+                  activeMetric === "completedTrips" &&
+                  dayStats.tripsCount > 0
+                ) {
+                  dayProgress =
+                    selectedDateGoal > 0
+                      ? dayStats.tripsCount / selectedDateGoal
+                      : 0;
+                }
+
+                return (
+                  <Pressable
+                    key={toLocalDateString(date)}
+                    onPress={() => setSelectedDate(date)}
+                    disabled={isFuture}
+                    accessibilityState={{ disabled: isFuture }}
+                    accessibilityLabel={`Select ${new Intl.DateTimeFormat("en-GB", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    }).format(date)}`}
+                    style={styles.weekdayItem}
+                  >
+                    <ProgressRing
+                      size={40}
+                      strokeWidth={9}
+                      progress={isFuture ? 0 : dayProgress}
+                      color={config.color}
+                      trackColor={config.color}
+                      trackOpacity={0.24}
+                      allowSmallOverflowShadow={!isFuture}
+                      showStartCapAtZero={!isFuture}
+                    />
+                  </Pressable>
+                );
+              })}
+                </View>
+              ))}
+            </Animated.View>
+            </View>
+          </View>
+        }
       />
 
       <ScrollView
         contentContainerStyle={[
           styles.scrollContainer,
           {
-            paddingTop: Platform.OS === "ios" ? 100 : 120,
+            paddingTop: headerBottom + 92 + spacing[20],
             paddingBottom: insets.bottom + spacing[20],
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Horizontal Weekly Day Selector */}
-        <View
-          accessibilityLabel="Weekly date selector. Swipe left for next week or right for previous week."
-          testID="weekly-date-selector"
-          style={styles.weekdayRow}
-          {...weekSwipeResponder.panHandlers}
-        >
-          {weekDays.map((date, idx) => {
-            const isSelected =
-              date.getDate() === selectedDate.getDate() &&
-              date.getMonth() === selectedDate.getMonth() &&
-              date.getFullYear() === selectedDate.getFullYear();
-            const isToday = isCurrentLocalDate(date);
-            const dayName = date.toLocaleDateString("en-US", {
-              weekday: "narrow",
-            });
-            const dayStats = getDailyStatsForDate(date);
-
-            // Calculate progress ring percentage for this day
-            let dayProgress = 0;
-            if (activeMetric === "earnings" && dayStats.earnings > 0) {
-              const dayGoal = resolveDailyGoalForDate({
-                records: dailyGoalRecords,
-                selectedLocalDate: toLocalDateString(date),
-                fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
-              });
-              dayProgress = dayGoal > 0 ? dayStats.earnings / dayGoal : 0;
-            } else if (
-              activeMetric === "completedTrips" &&
-              dayStats.tripsCount > 0
-            ) {
-              dayProgress =
-                selectedDateGoal > 0
-                  ? dayStats.tripsCount / selectedDateGoal
-                  : 0;
-            }
-
-            return (
-              <Pressable
-                key={idx}
-                onPress={() => setSelectedDate(date)}
-                style={styles.weekdayItem}
-              >
-                <AppText
-                  style={[
-                    styles.weekdayLabel,
-                    {
-                      color: isSelected
-                        ? "#FFFFFF"
-                        : isToday
-                          ? config.color
-                          : colors.mutedForeground,
-                    },
-                    isSelected && {
-                      backgroundColor: isToday
-                        ? config.color
-                        : colors.mutedForeground,
-                    },
-                  ]}
-                >
-                  {dayName}
-                </AppText>
-                <ProgressRing
-                  size={32}
-                  strokeWidth={3}
-                  progress={dayProgress}
-                  color={config.color}
-                >
-                  <View
-                    style={styles.dayTextBubble}
-                  >
-                    <AppText
-                      style={[
-                        styles.dayText,
-                        { color: colors.foreground },
-                      ]}
-                    >
-                      {date.getDate()}
-                    </AppText>
-                  </View>
-                </ProgressRing>
-              </Pressable>
-            );
-          })}
-        </View>
 
         {/* Center: Large Progress Ring */}
         <View style={styles.ringContainer}>
@@ -490,6 +632,8 @@ export default function DriverStatsDetail() {
             strokeWidth={mainRingStrokeWidth}
             progress={progressRatio}
             color={config.color}
+            trackColor={config.color}
+            trackOpacity={0.24}
             showArrow={activeMetric === "earnings"}
           >
             {activeMetric !== "earnings" && (
@@ -531,19 +675,36 @@ export default function DriverStatsDetail() {
             >
               {targetProgressLabel}
             </AppText>
-            {activeMetric === "earnings" && isSelectedToday ? (
-              <Pressable
+            {activeMetric === "earnings" ? (
+              isSelectedToday ? (
+                <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Change daily earnings goal"
                 hitSlop={8}
                 onPress={() => router.push("/driver-daily-goal")}
                 style={({ pressed }) => [
                   styles.goalEditButton,
-                  { opacity: pressed ? 0.6 : 1 },
+                  {
+                    opacity: pressed ? 0.6 : 1,
+                    backgroundColor: colors.foreground,
+                  },
                 ]}
               >
-                <DailyGoalIcon color={colors.foreground} />
-              </Pressable>
+                <AppText
+                  style={[
+                    styles.goalEditButtonText,
+                    { color: colors.background },
+                  ]}
+                >
+                  Change goal
+                </AppText>
+                </Pressable>
+              ) : (
+                <View
+                  pointerEvents="none"
+                  style={[styles.goalEditButton, styles.goalEditButtonPlaceholder]}
+                />
+              )
             ) : null}
           </View>
         </View>
@@ -759,6 +920,7 @@ export default function DriverStatsDetail() {
                   date.getDate() === selectedDate.getDate() &&
                   date.getMonth() === selectedDate.getMonth();
                 const dayStats = getDailyStatsForDate(date);
+                const isFuture = isFutureLocalDate(date);
 
                 let dayProgress = 0;
                 if (activeMetric === "earnings" && dayStats.earnings > 0) {
@@ -785,8 +947,20 @@ export default function DriverStatsDetail() {
                       setSelectedDate(date);
                       setCalendarVisible(false);
                     }}
+                    disabled={isFuture}
+                    accessibilityState={{ disabled: isFuture }}
                     style={styles.calendarGridSlot}
                   >
+                    {isFuture ? (
+                      <AppText
+                        style={[
+                          styles.calendarDayText,
+                          { color: colors.mutedForeground, opacity: 0.45 },
+                        ]}
+                      >
+                        {date.getDate()}
+                      </AppText>
+                    ) : (
                     <ProgressRing
                       size={32}
                       strokeWidth={3}
@@ -816,6 +990,7 @@ export default function DriverStatsDetail() {
                         </AppText>
                       </View>
                     </ProgressRing>
+                    )}
                   </Pressable>
                 );
               })}
@@ -845,14 +1020,32 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  weekdayRow: {
+  weekdayPager: {
+    gap: 6,
+    paddingVertical: 12,
+  },
+  weekdayLabelsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  weekdayLabelItem: {
+    width: 40,
+    alignItems: "center",
+  },
+  weekdayRingsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  weekdayRingsViewport: {
+    overflow: "hidden",
+  },
+  weekdayRingsTrack: {
+    flexDirection: "row",
   },
   weekdayItem: {
     alignItems: "center",
-    gap: 6,
   },
   weekdayLabel: {
     width: 22,
@@ -864,17 +1057,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     textTransform: "uppercase",
-  },
-  dayTextBubble: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  dayText: {
-    fontSize: 12,
-    fontWeight: "700",
   },
   ringContainer: {
     alignItems: "center",
@@ -931,11 +1113,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   goalEditButton: {
-    width: 44,
-    height: 44,
+    minHeight: 36,
+    minWidth: 92,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: "auto",
+  },
+  goalEditButtonPlaceholder: {
+    opacity: 0,
+  },
+  goalEditButtonText: {
+    ...typography.label,
+    fontSize: 12,
+    fontWeight: "700",
   },
   chartTitle: {
     ...typography.title,
