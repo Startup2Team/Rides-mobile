@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/components/AppText";
 import { GlassHeader, useGlassHeaderMetrics } from "@/components/GlassHeader";
@@ -76,6 +77,7 @@ export default function DriverDailyGoalScreen() {
   const [saving, setSaving] = useState(false);
   const todayLocalDate = useMemo(() => toLocalDateString(new Date()), []);
   const preEditValueRef = React.useRef(draftGoal);
+  const inputRef = React.useRef<TextInput>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -87,13 +89,14 @@ export default function DriverDailyGoalScreen() {
         selectedLocalDate: todayLocalDate,
         fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
       });
-      if (!mounted) return;
-      setRecords(nextRecords);
-      setInitialGoal(goal);
-      setDraftGoal(goal);
-      setInputText(String(goal));
+      if (mounted) {
+        setRecords(nextRecords);
+        setInitialGoal(goal);
+        setDraftGoal(goal);
+        setInputText(String(goal));
+      }
     }
-    void loadGoal();
+    loadGoal();
     return () => {
       mounted = false;
     };
@@ -110,6 +113,13 @@ export default function DriverDailyGoalScreen() {
           base = initialGoal;
         }
         const next = base + direction * DAILY_GOAL_STEP_RWF;
+        if (next < MIN_DAILY_GOAL_RWF || next > MAX_DAILY_GOAL_RWF) {
+          void Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Warning,
+          );
+        } else {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
         const clamped = Math.min(
           MAX_DAILY_GOAL_RWF,
           Math.max(MIN_DAILY_GOAL_RWF, next),
@@ -129,16 +139,25 @@ export default function DriverDailyGoalScreen() {
     setSelection({ start: 0, end: textVal.length });
   }, [draftGoal]);
 
-  const handleInputChange = useCallback((text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
-    setInputText(cleaned);
-    if (cleaned === "") {
-      setDraftGoal(0);
-    } else {
+  const handleInputChange = useCallback(
+    (text: string) => {
+      const cleaned = text.replace(/[^0-9]/g, '');
+      if (cleaned === '') {
+        setInputText('');
+        setDraftGoal(0);
+        return;
+      }
       const parsed = parseInt(cleaned, 10);
+      if (!isNaN(parsed) && parsed > MAX_DAILY_GOAL_RWF) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        inputRef.current?.setNativeProps({ text: inputText });
+        return;
+      }
+      setInputText(cleaned);
       setDraftGoal(isNaN(parsed) ? 0 : parsed);
-    }
-  }, []);
+    },
+    [inputText],
+  );
 
   const handleBlur = useCallback(() => {
     setIsEditing(false);
@@ -179,6 +198,7 @@ export default function DriverDailyGoalScreen() {
       amountRwf: draftGoal,
     });
     await saveStoredDriverDailyGoals(nextRecords);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("Daily goal updated", "success");
     setSaving(false);
     router.back();
@@ -254,6 +274,7 @@ export default function DriverDailyGoalScreen() {
               >
                 {isEditing ? (
                   <TextInput
+                    ref={inputRef}
                     testID="daily-goal-amount-input"
                     accessibilityLabel="Daily goal amount input"
                     value={inputText}

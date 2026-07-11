@@ -176,8 +176,8 @@ describe("DriverDailyGoalScreen", () => {
     fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
     const input = screen.getByTestId("daily-goal-amount-input");
 
-    // Under minimum limit
-    fireEvent.changeText(input, "500");
+    // Under minimum limit (which is now 500)
+    fireEvent.changeText(input, "400");
     const saveBtn = screen.getByLabelText("Save daily earnings goal");
     expect(saveBtn.props.disabled).toBe(true);
   });
@@ -251,11 +251,11 @@ describe("DriverDailyGoalScreen", () => {
   });
 
   test("11. Minimum and maximum rules still apply", async () => {
-    // Override persistence to load minimum goal
+    // Override persistence to load minimum goal (500)
     (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValueOnce({
       data: [
         {
-          amountRwf: 1000,
+          amountRwf: 500,
           effectiveFromLocalDate: "2026-07-10",
           createdAt: "2026-07-10T08:00:00.000Z",
           updatedAt: "2026-07-10T08:00:00.000Z",
@@ -264,23 +264,40 @@ describe("DriverDailyGoalScreen", () => {
     });
 
     render(<DriverDailyGoalScreen />);
-    await screen.findByText("1,000");
+    await screen.findByText("500");
 
     // Decrease at min should not go below min
     fireEvent.press(screen.getByLabelText("Decrease daily earnings goal"));
-    expect(screen.getByText("1,000")).toBeTruthy();
+    expect(screen.getByText("500")).toBeTruthy();
 
-    // Now edit to over max
+    // Now edit to under min
     fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
     const input = screen.getByTestId("daily-goal-amount-input");
-    fireEvent.changeText(input, "2000000"); // 2 million
+    fireEvent.changeText(input, "400"); // under min
 
     // Save button should be disabled
     const saveBtn = screen.getByLabelText("Save daily earnings goal");
     expect(saveBtn.props.disabled).toBe(true);
 
-    // Blur should clamp to max limit (1,000,000)
+    // Blur should clamp to min limit (500)
     fireEvent(input, "blur");
-    await screen.findByText("1,000,000");
+    await screen.findByText("500");
+  });
+
+  test("12. Input exceeding max limit is rejected", async () => {
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+
+    fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
+    const input = screen.getByTestId("daily-goal-amount-input");
+
+    // Type 1,000,000 (valid)
+    fireEvent.changeText(input, "1000000");
+    expect(input.props.value).toBe("1000000");
+
+    // Try to type another '0' (10,000,000 - invalid)
+    fireEvent.changeText(input, "10000000");
+    // It should keep the previous value
+    expect(input.props.value).toBe("1000000");
   });
 });

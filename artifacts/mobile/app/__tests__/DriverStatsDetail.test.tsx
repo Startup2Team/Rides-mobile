@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, act } from '@testing-library/react-native';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from 'expo-router';
@@ -23,6 +23,7 @@ jest.mock('react-native', () => {
     useColorScheme: () => 'light',
     View: host('View'),
     Modal: host('Modal'),
+    Image: host('Image'),
     Animated: {
       Value: jest.fn(() => ({
         interpolate: jest.fn(() => ({})),
@@ -164,6 +165,8 @@ describe('DriverStatsDetail UI', () => {
   test('renders detail hierarchy with large ring and metric cards', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
+    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
+
     expect(screen.getAllByText('Earnings').length).toBeGreaterThan(0);
     expect(screen.queryByText('Goal: 30000')).toBeNull();
     expect(screen.getByText('Activity breakdown')).toBeTruthy();
@@ -173,7 +176,7 @@ describe('DriverStatsDetail UI', () => {
   test('shows daily goal action for today and opens the goal screen', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
-    await waitFor(() => expect(loadStoredDriverDailyGoals).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
 
     const goalAction = screen.getByLabelText('Change daily earnings goal');
     expect(goalAction).toBeTruthy();
@@ -185,7 +188,7 @@ describe('DriverStatsDetail UI', () => {
   test('hides daily goal action for past selected dates', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
-    await waitFor(() => expect(loadStoredDriverDailyGoals).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
     fireEvent.press(screen.getAllByText('7')[0]);
 
     expect(screen.queryByLabelText('Change daily earnings goal')).toBeNull();
