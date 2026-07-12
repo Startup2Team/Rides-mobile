@@ -27,14 +27,20 @@ import {
 } from "@/domain/driverWallet";
 import {
   DEFAULT_DAILY_GOAL_RWF,
-  isCurrentLocalDate,
+  addLocalDays,
+  buildDriverDailyStatisticsIndex,
+  createEmptyDriverDailyStatistics,
+  isFutureLocalDateString,
+  localDateStringToLocalDate,
   resolveDailyGoalForDate,
   toLocalDateString,
   type DriverDailyGoalRecord,
 } from "@/domains/driver-statistics";
-import { createDriverStatisticsViewModel } from "@/domains/driver-statistics";
 import { formatRwf } from "@/domain/driverActivitySummary";
 import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersistence";
+import { getDriverDailyGoalUpdateVersion } from "@/persistence/driverDailyGoalUpdateSignal";
+import { useCurrentLocalDate } from "@/hooks/useCurrentLocalDate";
+import { useReducedMotionPreference } from "@/hooks/useReducedMotionPreference";
 import { spacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
 import { radius } from "@/constants/radius";
@@ -108,16 +114,9 @@ const METRIC_CONFIGS: Record<MetricType, MetricConfig> = {
   },
 };
 
-function isFutureLocalDate(date: Date) {
-  const candidate = new Date(date);
-  candidate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return candidate.getTime() > today.getTime();
-}
-
 export default function DriverStatsDetail() {
   const colors = useColors();
+  const reducedMotion = useReducedMotionPreference();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     metric: string;
@@ -138,8 +137,7 @@ export default function DriverStatsDetail() {
 
   const { user, driverProfile } = useAuth();
   const { entitlement } = useDriverEntitlement();
-  const { data: rideHistory = [], refetch: refetchRideHistory } =
-    useRideHistoryQuery(user?.id);
+  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
 
   const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>({
     averageRating: null,
@@ -163,28 +161,47 @@ export default function DriverStatsDetail() {
     }
     return [];
   });
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const { currentLocalDate, refreshCurrentLocalDate } = useCurrentLocalDate();
+  const [selectedLocalDate, setSelectedLocalDate] = useState(() =>
+    toLocalDateString(new Date()),
+  );
+  const selectedDate = localDateStringToLocalDate(selectedLocalDate) ?? new Date();
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [weekPagerWidth, setWeekPagerWidth] = useState(320);
   const weekPagerWidthRef = useRef(320);
   const weekTranslateX = useRef(new Animated.Value(-320)).current;
   const isWeekAnimating = useRef(false);
+  const lastObservedGoalUpdateVersionRef = useRef(
+    getDriverDailyGoalUpdateVersion(),
+  );
+  const previousCurrentLocalDateRef = useRef(currentLocalDate);
+  const hasMountedInitialWeekRef = useRef(false);
+
+  React.useEffect(() => {
+    hasMountedInitialWeekRef.current = true;
+  }, []);
+
+  const centerWeekPager = useCallback(() => {
+    isWeekAnimating.current = false;
+    weekTranslateX.stopAnimation?.();
+    weekTranslateX.setValue(-weekPagerWidthRef.current);
+  }, [weekTranslateX]);
 
   const shiftVisibleWeek = useCallback((weekOffset: number) => {
-    setSelectedDate((currentDate) => {
-      const nextDate = new Date(currentDate);
-      nextDate.setDate(currentDate.getDate() + weekOffset * 7);
-      return isFutureLocalDate(nextDate) ? new Date() : nextDate;
+    setSelectedLocalDate((currentDate) => {
+      const nextDate = addLocalDays(currentDate, weekOffset * 7);
+      return isFutureLocalDateString(nextDate, currentLocalDate)
+        ? currentLocalDate
+        : nextDate;
     });
-  }, []);
+  }, [currentLocalDate]);
 
   const canShiftVisibleWeek = useCallback(
     (weekOffset: number) => {
-      const nextDate = new Date(selectedDate);
-      nextDate.setDate(selectedDate.getDate() + weekOffset * 7);
-      return !isFutureLocalDate(nextDate);
+      const nextDate = addLocalDays(selectedLocalDate, weekOffset * 7);
+      return !isFutureLocalDateString(nextDate, currentLocalDate);
     },
-    [selectedDate],
+    [currentLocalDate, selectedLocalDate],
   );
 
   const settleWeekSwipe = useCallback(
@@ -270,26 +287,42 @@ export default function DriverStatsDetail() {
     void loadRatings();
   }, [user?.id]);
 
-  const refreshDailyGoals = useCallback(async () => {
-    const stored = await loadStoredDriverDailyGoals();
-    setDailyGoalRecords(stored.data ?? []);
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
-      const resetWeekPager = () => {
+      let active = true;
+      const todayLocalDate = refreshCurrentLocalDate();
+      const goalUpdateVersion = getDriverDailyGoalUpdateVersion();
+      const returningFromGoal =
+        goalUpdateVersion !== lastObservedGoalUpdateVersionRef.current;
+      lastObservedGoalUpdateVersionRef.current = goalUpdateVersion;
+
+      if (returningFromGoal) {
+        setSelectedLocalDate(todayLocalDate);
+        centerWeekPager();
+      }
+
+      void loadStoredDriverDailyGoals().then(stored => {
+        if (active) setDailyGoalRecords(stored.data ?? []);
+      });
+
+      return () => {
+        active = false;
         isWeekAnimating.current = false;
         weekTranslateX.stopAnimation?.();
-        weekTranslateX.setValue(-weekPagerWidthRef.current);
-        setSelectedDate(new Date());
       };
-
-      resetWeekPager();
-      void refreshDailyGoals();
-
-      return resetWeekPager;
-    }, [refreshDailyGoals, weekTranslateX]),
+    }, [centerWeekPager, refreshCurrentLocalDate, weekTranslateX]),
   );
+
+  React.useEffect(() => {
+    const previousToday = previousCurrentLocalDateRef.current;
+    if (currentLocalDate !== previousToday) {
+      if (selectedLocalDate === previousToday) {
+        setSelectedLocalDate(currentLocalDate);
+        centerWeekPager();
+      }
+      previousCurrentLocalDateRef.current = currentLocalDate;
+    }
+  }, [centerWeekPager, currentLocalDate, selectedLocalDate]);
 
   // Build the visible week in Monday-to-Sunday order.
   const weekDays = useMemo(() => {
@@ -303,7 +336,7 @@ export default function DriverStatsDetail() {
       date.setDate(startOfWeek.getDate() + index);
       return date;
     });
-  }, [selectedDate]);
+  }, [selectedLocalDate]);
   const carouselWeeks = useMemo(
     () =>
       [-1, 0, 1].map((weekOffset) => {
@@ -318,33 +351,19 @@ export default function DriverStatsDetail() {
           return date;
         });
       }),
-    [selectedDate],
+    [selectedLocalDate],
   );
-  // Compute daily metrics specifically for a given date
+  const dailyStatisticsIndex = useMemo(
+    () => buildDriverDailyStatisticsIndex({ rides: rideHistory, driverId: user?.id }),
+    [rideHistory, user?.id],
+  );
   const getDailyStatsForDate = useCallback(
     (date: Date) => {
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      const dayRides = rideHistory.filter((ride) => {
-        const rideDate = new Date(ride.createdAt);
-        return rideDate >= startOfDay && rideDate <= endOfDay;
-      });
-
-      const tripsCount = dayRides.filter(
-        (r) => r.status === "completed",
-      ).length;
-      const earnings = dayRides.reduce(
-        (sum, r) => sum + (r.agreedFare ?? 0),
-        0,
-      );
-      const earningsPerTrip = tripsCount > 0 ? earnings / tripsCount : 0;
-
-      return { tripsCount, earnings, earningsPerTrip };
+      const localDate = toLocalDateString(date);
+      return dailyStatisticsIndex.get(localDate)
+        ?? createEmptyDriverDailyStatistics(localDate);
     },
-    [rideHistory],
+    [dailyStatisticsIndex],
   );
 
   const activeStats = useMemo(
@@ -356,11 +375,11 @@ export default function DriverStatsDetail() {
   const currentValue = useMemo(() => {
     switch (activeMetric) {
       case "earnings":
-        return activeStats.earnings;
+        return activeStats.earningsRwf;
       case "completedTrips":
-        return activeStats.tripsCount;
+        return activeStats.completedTrips;
       case "earningsPerTrip":
-        return activeStats.earningsPerTrip;
+        return activeStats.earningsPerTripRwf ?? 0;
       case "rating":
         return ratingSummary.averageRating ?? 0;
       case "acceptance":
@@ -370,14 +389,7 @@ export default function DriverStatsDetail() {
     }
   }, [activeMetric, activeStats, ratingSummary, driverProfile]);
 
-  const selectedLocalDate = useMemo(
-    () => toLocalDateString(selectedDate),
-    [selectedDate],
-  );
-  const isSelectedToday = useMemo(
-    () => isCurrentLocalDate(selectedDate),
-    [selectedDate],
-  );
+  const isSelectedToday = selectedLocalDate === currentLocalDate;
   const selectedDateGoal = useMemo(() => {
     if (activeMetric !== "earnings") return config.target;
     return resolveDailyGoalForDate({
@@ -411,27 +423,31 @@ export default function DriverStatsDetail() {
       days.push(new Date(year, month, i));
     }
     return days;
-  }, [selectedDate]);
+  }, [selectedLocalDate]);
 
   const handleShare = () => {
     // Shared mock action
     alert("Sharing statistics report!");
   };
 
-  // Mock hourly data for the chart based on selected date and active stats
   const hourlyData = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, i) => ({ hour: i, value: 0 }));
-    // Spread the active stats across midday peak hours for visualization
-    if (currentValue > 0) {
-      hours[8].value = currentValue * 0.15;
-      hours[9].value = currentValue * 0.25;
-      hours[12].value = currentValue * 0.1;
-      hours[13].value = currentValue * 0.2;
-      hours[17].value = currentValue * 0.18;
-      hours[18].value = currentValue * 0.12;
-    }
-    return hours;
-  }, [currentValue]);
+    return Array.from({ length: 24 }, (_, hour) => {
+      if (activeMetric === "earnings") {
+        return { hour, value: activeStats.hourlyEarningsRwf[hour] };
+      }
+      if (activeMetric === "completedTrips") {
+        return { hour, value: activeStats.hourlyCompletedTrips[hour] };
+      }
+      if (activeMetric === "earningsPerTrip") {
+        const trips = activeStats.hourlyCompletedTrips[hour];
+        return {
+          hour,
+          value: trips > 0 ? activeStats.hourlyEarningsRwf[hour] / trips : 0,
+        };
+      }
+      return { hour, value: 0 };
+    });
+  }, [activeMetric, activeStats]);
 
   const maxHourlyValue = useMemo(() => {
     const max = Math.max(...hourlyData.map((h) => h.value));
@@ -480,6 +496,8 @@ export default function DriverStatsDetail() {
           activeMetric === "earnings" ? (
             <Pressable
               onPress={() => setCalendarVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open earnings calendar"
               style={styles.headerBtn}
             >
               <Feather name="calendar" size={20} color={colors.foreground} />
@@ -494,12 +512,13 @@ export default function DriverStatsDetail() {
                   date.getDate() === selectedDate.getDate() &&
                   date.getMonth() === selectedDate.getMonth() &&
                   date.getFullYear() === selectedDate.getFullYear();
-                const isToday = isCurrentLocalDate(date);
-                const isFuture = isFutureLocalDate(date);
+                const dateLocalDate = toLocalDateString(date);
+                const isToday = dateLocalDate === currentLocalDate;
+                const isFuture = isFutureLocalDateString(dateLocalDate, currentLocalDate);
                 return (
                 <Pressable
                   key={toLocalDateString(date)}
-                  onPress={() => setSelectedDate(date)}
+                  onPress={() => setSelectedLocalDate(dateLocalDate)}
                   disabled={isFuture}
                   accessibilityState={{ disabled: isFuture }}
                   accessibilityLabel={`Select ${new Intl.DateTimeFormat("en-GB", {
@@ -559,30 +578,31 @@ export default function DriverStatsDetail() {
                   style={[styles.weekdayRingsRow, { width: weekPagerWidth }]}
                 >
               {carouselWeek.map((date) => {
-                const isFuture = isFutureLocalDate(date);
+                const dateLocalDate = toLocalDateString(date);
+                const isFuture = isFutureLocalDateString(dateLocalDate, currentLocalDate);
                 const dayStats = getDailyStatsForDate(date);
                 let dayProgress = 0;
-                if (activeMetric === "earnings" && dayStats.earnings > 0) {
+                if (activeMetric === "earnings" && dayStats.earningsRwf > 0) {
                   const dayGoal = resolveDailyGoalForDate({
                     records: dailyGoalRecords,
                     selectedLocalDate: toLocalDateString(date),
                     fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
                   });
-                  dayProgress = dayGoal > 0 ? dayStats.earnings / dayGoal : 0;
+                  dayProgress = dayGoal > 0 ? dayStats.earningsRwf / dayGoal : 0;
                 } else if (
                   activeMetric === "completedTrips" &&
-                  dayStats.tripsCount > 0
+                  dayStats.completedTrips > 0
                 ) {
                   dayProgress =
                     selectedDateGoal > 0
-                      ? dayStats.tripsCount / selectedDateGoal
+                      ? dayStats.completedTrips / selectedDateGoal
                       : 0;
                 }
 
                 return (
                   <Pressable
                     key={toLocalDateString(date)}
-                    onPress={() => setSelectedDate(date)}
+                    onPress={() => setSelectedLocalDate(dateLocalDate)}
                     disabled={isFuture}
                     accessibilityState={{ disabled: isFuture }}
                     accessibilityLabel={`Select ${new Intl.DateTimeFormat("en-GB", {
@@ -602,6 +622,17 @@ export default function DriverStatsDetail() {
                       trackOpacity={0.24}
                       allowSmallOverflowShadow={!isFuture}
                       showStartCapAtZero={!isFuture}
+                      animationMode={
+                        weekIndex === 1
+                          ? hasMountedInitialWeekRef.current
+                            ? "updates-only"
+                            : "entry-and-updates"
+                          : "none"
+                      }
+                      animateArrow={false}
+                      detailLevel="compact"
+                      reducedMotion={reducedMotion}
+                      testID={`weekly-progress-ring-${weekIndex}-${dateLocalDate}`}
                     />
                   </Pressable>
                 );
@@ -635,6 +666,11 @@ export default function DriverStatsDetail() {
             trackColor={config.color}
             trackOpacity={0.24}
             showArrow={activeMetric === "earnings"}
+            animationMode="entry-and-updates"
+            animateArrow={activeMetric === "earnings"}
+            detailLevel="full"
+            reducedMotion={reducedMotion}
+            testID="earnings-big-progress-ring"
           >
             {activeMetric !== "earnings" && (
               <View style={styles.ringCenterText}>
@@ -758,6 +794,9 @@ export default function DriverStatsDetail() {
                     >
                       {barHeight > 0 && (
                         <View
+                          testID={`hourly-activity-bar-${h.hour}`}
+                          accessibilityLabel={`${String(h.hour).padStart(2, "0")}:00 activity`}
+                          accessibilityValue={{ now: h.value }}
                           style={[
                             styles.chartBarFill,
                             {
@@ -814,7 +853,7 @@ export default function DriverStatsDetail() {
                 Completed Rides
               </AppText>
               <AppText style={[styles.subValue, { color: colors.foreground }]}>
-                {activeStats.tripsCount}
+                {activeStats.completedTrips}
               </AppText>
             </View>
             <View
@@ -832,7 +871,7 @@ export default function DriverStatsDetail() {
                 Total Earnings
               </AppText>
               <AppText style={[styles.subValue, { color: colors.foreground }]}>
-                {formatRwf(activeStats.earnings)}
+                {formatRwf(activeStats.earningsRwf)}
               </AppText>
             </View>
             <View style={styles.subGridItem}>
@@ -842,7 +881,7 @@ export default function DriverStatsDetail() {
                 Earnings per Trip
               </AppText>
               <AppText style={[styles.subValue, { color: colors.foreground }]}>
-                {formatRwf(activeStats.earningsPerTrip)}
+                {formatRwf(activeStats.earningsPerTripRwf ?? 0)}
               </AppText>
             </View>
             <View style={styles.subGridItem}>
@@ -888,6 +927,8 @@ export default function DriverStatsDetail() {
               </AppText>
               <Pressable
                 onPress={() => setCalendarVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close earnings calendar"
                 style={styles.calendarCloseBtn}
               >
                 <Feather name="x" size={18} color="#FFFFFF" />
@@ -920,23 +961,24 @@ export default function DriverStatsDetail() {
                   date.getDate() === selectedDate.getDate() &&
                   date.getMonth() === selectedDate.getMonth();
                 const dayStats = getDailyStatsForDate(date);
-                const isFuture = isFutureLocalDate(date);
+                const dateLocalDate = toLocalDateString(date);
+                const isFuture = isFutureLocalDateString(dateLocalDate, currentLocalDate);
 
                 let dayProgress = 0;
-                if (activeMetric === "earnings" && dayStats.earnings > 0) {
+                if (activeMetric === "earnings" && dayStats.earningsRwf > 0) {
                   const dayGoal = resolveDailyGoalForDate({
                     records: dailyGoalRecords,
                     selectedLocalDate: toLocalDateString(date),
                     fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
                   });
-                  dayProgress = dayGoal > 0 ? dayStats.earnings / dayGoal : 0;
+                  dayProgress = dayGoal > 0 ? dayStats.earningsRwf / dayGoal : 0;
                 } else if (
                   activeMetric === "completedTrips" &&
-                  dayStats.tripsCount > 0
+                  dayStats.completedTrips > 0
                 ) {
                   dayProgress =
                     selectedDateGoal > 0
-                      ? dayStats.tripsCount / selectedDateGoal
+                      ? dayStats.completedTrips / selectedDateGoal
                       : 0;
                 }
 
@@ -944,7 +986,7 @@ export default function DriverStatsDetail() {
                   <Pressable
                     key={idx}
                     onPress={() => {
-                      setSelectedDate(date);
+                      setSelectedLocalDate(dateLocalDate);
                       setCalendarVisible(false);
                     }}
                     disabled={isFuture}
@@ -967,6 +1009,11 @@ export default function DriverStatsDetail() {
                       progress={dayProgress}
                       color={config.color}
                       trackColor="rgba(255, 255, 255, 0.05)"
+                      animationMode="none"
+                      animateArrow={false}
+                      detailLevel="compact"
+                      reducedMotion={reducedMotion}
+                      testID={`calendar-progress-ring-${dateLocalDate}`}
                     >
                       <View
                         style={[

@@ -9,6 +9,7 @@ import {
   validateDailyGoalAmount,
   type DriverDailyGoalRecord,
 } from '../driverDailyGoals';
+import { driverDailyGoalsSchema } from '@/persistence/storageSchemas';
 
 function record(effectiveFromLocalDate: string, amountRwf: number): DriverDailyGoalRecord {
   return {
@@ -96,6 +97,16 @@ describe('driver daily goals', () => {
       effectiveFromLocalDate: '2026-07-10',
       amountRwf: -1,
     })).toThrow(/Daily goal/);
+  });
+
+  test('uses the same minimum in domain validation and persistence', () => {
+    const minimumRecord = record('2026-07-10', MIN_DAILY_GOAL_RWF);
+    const belowMinimumRecord = record('2026-07-10', MIN_DAILY_GOAL_RWF - 1);
+
+    expect(validateDailyGoalAmount(MIN_DAILY_GOAL_RWF)).toBe(true);
+    expect(driverDailyGoalsSchema.safeParse([minimumRecord]).success).toBe(true);
+    expect(validateDailyGoalAmount(MIN_DAILY_GOAL_RWF - 1)).toBe(false);
+    expect(driverDailyGoalsSchema.safeParse([belowMinimumRecord]).success).toBe(false);
   });
 
   test('handles local date boundaries using local calendar fields', () => {

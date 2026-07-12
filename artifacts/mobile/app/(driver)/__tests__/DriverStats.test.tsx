@@ -1,18 +1,23 @@
 import {
+  act,
+  cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Animated } from "react-native";
 import type { DriverEntitlement } from "@/domain/driverRidePackages";
 import { EMPTY_DRIVER_ENTITLEMENT } from "@/domain/driverRidePackages";
 import type { Ride } from "@/types";
 import DriverStats from "../stats";
 import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
+import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersistence";
 
-const mockListRideHistory = jest.fn();
+let mockSummaryAppStateHandler: undefined | ((state: string) => void);
+let mockSummaryFocusCallback: undefined | (() => void | (() => void));
+let mockSummaryFocusCleanup: undefined | (() => void);
 
 let mockRideHistory: Ride[] = [];
 let mockDriverProfile = {
@@ -71,10 +76,22 @@ jest.mock("react-native", () => {
       Value: jest.fn(() => ({
         interpolate: jest.fn(() => ({})),
         setValue: jest.fn(),
+        stopAnimation: jest.fn(),
       })),
       timing: jest.fn(() => ({
         start: jest.fn((cb) => cb && cb({ finished: true })),
+        stop: jest.fn(),
       })),
+      sequence: jest.fn(() => ({
+        start: jest.fn((cb) => cb && cb({ finished: true })),
+        stop: jest.fn(),
+      })),
+    },
+    AppState: {
+      addEventListener: jest.fn((_event, handler) => {
+        mockSummaryAppStateHandler = handler;
+        return { remove: jest.fn() };
+      }),
     },
   };
 });
@@ -85,7 +102,15 @@ jest.mock("react-native-safe-area-context", () => ({
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn(), navigate: jest.fn() },
-  useFocusEffect: jest.fn((cb) => cb()),
+  useFocusEffect: jest.fn((cb) => {
+    const React = require("react");
+    React.useEffect(() => {
+      mockSummaryFocusCallback = cb;
+      const cleanup = cb();
+      mockSummaryFocusCleanup = typeof cleanup === "function" ? cleanup : undefined;
+      return cleanup;
+    }, [cb]);
+  }),
   useLocalSearchParams: jest.fn(() => ({})),
 }));
 
@@ -169,11 +194,12 @@ jest.mock("@/context/DriverEntitlementContext", () => ({
   }),
 }));
 
-jest.mock("@/domains/ride", () => ({
-  rideHistoryRepository: {
-    listRideHistory: (...args: unknown[]) => mockListRideHistory(...args),
-    getRideDetail: jest.fn(),
-  },
+jest.mock("@/query/hooks/useRideHistoryQuery", () => ({
+  useRideHistoryQuery: () => ({
+    data: mockRideHistory,
+    isLoading: false,
+    refetch: jest.fn(async () => ({ data: mockRideHistory })),
+  }),
 }));
 
 jest.mock("@/persistence/driverRatingPersistence", () => ({
@@ -205,22 +231,16 @@ function ride(overrides: Partial<Ride>): Ride {
 }
 
 function renderWithQueryClient(ui: React.ReactElement) {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-
-  return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
-  );
+  return render(ui);
 }
 
 describe("DriverStats Summary UI", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers({ now: new Date("2026-07-08T14:30:00.000Z") });
+    mockSummaryAppStateHandler = undefined;
+    mockSummaryFocusCallback = undefined;
+    mockSummaryFocusCleanup = undefined;
     mockDriverProfile = {
       acceptanceRate: 80,
       completedRides: 10,
@@ -266,9 +286,6 @@ describe("DriverStats Summary UI", () => {
       purchaseHistory: [],
       updatedAt: "2026-07-08T10:00:00.000Z",
     };
-    mockListRideHistory.mockImplementation(() =>
-      Promise.resolve(mockRideHistory),
-    );
     (loadStoredDriverRatings as jest.Mock).mockResolvedValue({
       data: [
         {
@@ -290,6 +307,7 @@ describe("DriverStats Summary UI", () => {
   });
 
   afterEach(() => {
+    cleanup();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
@@ -347,7 +365,6 @@ describe("DriverStats Summary UI", () => {
       merchantCode: "",
       momoCode: "",
     };
-    mockListRideHistory.mockResolvedValue([]);
     (loadStoredDriverRatings as jest.Mock).mockResolvedValue({ data: [] });
 
     renderWithQueryClient(<DriverStats />);
@@ -368,5 +385,61 @@ describe("DriverStats Summary UI", () => {
     expect(screen.queryByText(/random/i)).toBeNull();
     expect(screen.queryByText(/yesterday/i)).toBeNull();
     expect(screen.queryByText(/last week/i)).toBeNull();
+  });
+
+  test("updates Summary to the current local day after foregrounding across midnight", async () => {
+    renderWithQueryClient(<DriverStats />);
+    await waitFor(() =>
+      expect(screen.getAllByText(/Wednesday/).length).toBeGreaterThan(0),
+    );
+
+    jest.setSystemTime(new Date("2026-07-09T08:00:00.000Z"));
+    act(() => mockSummaryAppStateHandler?.("active"));
+
+    await waitFor(() =>
+      expect(screen.getAllByText(/Thursday/).length).toBeGreaterThan(0),
+    );
+  });
+
+  test("animates once on entry and does not replay on unchanged focus", async () => {
+    renderWithQueryClient(<DriverStats />);
+    await waitFor(() => expect(screen.getByTestId("summary-earnings-progress-ring")).toBeTruthy());
+    const progressCalls = () => (Animated.timing as jest.Mock).mock.calls.filter(
+      ([, config]) => config.duration === 850,
+    ).length;
+    expect(progressCalls()).toBe(1);
+
+    act(() => {
+      mockSummaryFocusCleanup?.();
+      const cleanup = mockSummaryFocusCallback?.();
+      mockSummaryFocusCleanup = typeof cleanup === "function" ? cleanup : undefined;
+    });
+    await Promise.resolve();
+
+    expect(progressCalls()).toBe(1);
+  });
+
+  test("a goal change retargets the retained Summary ring once", async () => {
+    renderWithQueryClient(<DriverStats />);
+    await waitFor(() => expect(screen.getByTestId("summary-earnings-progress-ring")).toBeTruthy());
+    const progressCalls = () => (Animated.timing as jest.Mock).mock.calls.filter(
+      ([, config]) => config.duration === 850,
+    ).length;
+    const initialCount = progressCalls();
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [{
+        amountRwf: 60_000,
+        effectiveFromLocalDate: "2026-07-08",
+        createdAt: "2026-07-08T12:00:00.000Z",
+        updatedAt: "2026-07-08T12:00:00.000Z",
+      }],
+    });
+
+    act(() => {
+      mockSummaryFocusCleanup?.();
+      const cleanup = mockSummaryFocusCallback?.();
+      mockSummaryFocusCleanup = typeof cleanup === "function" ? cleanup : undefined;
+    });
+    await waitFor(() => expect(progressCalls()).toBe(initialCount + 1));
   });
 });

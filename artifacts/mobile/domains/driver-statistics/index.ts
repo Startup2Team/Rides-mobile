@@ -6,3 +6,5 @@ export * from './driverStatisticsPeriods';
 export * from './driverStatisticsSeries';
 export * from './driverStatisticsViewModel';
 export * from './driverDailyGoals';
+export * from './driverDailyStatistics';
+export * from './driverLocalDates';

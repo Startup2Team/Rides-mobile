@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, InteractionManager, View, StyleSheet, Animated, Easing } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager, View, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent
@@ -25,7 +25,16 @@ interface ProgressRingProps {
   showArrow?: boolean;
   allowSmallOverflowShadow?: boolean;
   showStartCapAtZero?: boolean;
+  animationMode?: ProgressRingAnimationMode;
+  animateArrow?: boolean;
+  progressChangeThreshold?: number;
+  detailLevel?: ProgressRingDetailLevel;
+  reducedMotion?: boolean;
+  testID?: string;
 }
+
+export type ProgressRingAnimationMode = 'entry-and-updates' | 'updates-only' | 'entry-only' | 'none';
+export type ProgressRingDetailLevel = 'full' | 'compact';
 
 const LAP_RESET_EPSILON = 0.0001;
 const DEFAULT_TRACK_COLOR = '#111827';
@@ -34,6 +43,7 @@ const CAP_BRIDGE_ARC_DEGREES = 6;
 const CAP_POSITION_STEPS_PER_LAP = 72;
 const SHADOW_PATH_STEPS = 8;
 const PROGRESS_ANIMATION_DURATION_MS = 850;
+export const PROGRESS_CHANGE_EPSILON = 0.0005;
 const ARROW_ANIMATION_DURATION_MS = 560;
 const ARROW_CONTACT_DURATION_MS = 200;
 const ARROW_FORM_DURATION_MS = 190;
@@ -124,27 +134,38 @@ function getRingGeometrySnapshot(progress: number, cx: number, cy: number, r: nu
   };
 }
 
-function buildLapPositionInterpolation(maxLaps: number, cx: number, cy: number, r: number) {
+function buildLapPositionInterpolation(
+  maxLaps: number,
+  cx: number,
+  cy: number,
+  r: number,
+  detailLevel: ProgressRingDetailLevel,
+) {
+  const includeFullDetail = detailLevel === 'full';
   const inputRange: number[] = [0, 1];
   const capXRange: number[] = [cx, cx];
   const capYRange: number[] = [cy - r, cy - r];
-  const shadowPathRanges = SHADOW_SEGMENTS.map(segment => ({
+  const shadowPathRanges = (includeFullDetail ? SHADOW_SEGMENTS : []).map(segment => ({
     segment,
     outputRange: [
       describeArc(cx, cy, r, segment.start, segment.end),
       describeArc(cx, cy, r, segment.start, segment.end),
     ],
   }));
-  const capBridgePathRange = [
-    describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0),
-    describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0),
-  ];
+  const capBridgePathRange = includeFullDetail
+    ? [
+        describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0),
+        describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0),
+      ]
+    : [];
 
   for (let lap = 1; lap < maxLaps; lap++) {
     inputRange.push(lap + LAP_RESET_EPSILON);
     capXRange.push(cx);
     capYRange.push(cy - r);
-    capBridgePathRange.push(describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0));
+    if (includeFullDetail) {
+      capBridgePathRange.push(describeArc(cx, cy, r, -CAP_BRIDGE_ARC_DEGREES, 0));
+    }
     shadowPathRanges.forEach(({ segment, outputRange }) => {
       outputRange.push(describeArc(cx, cy, r, segment.start, segment.end));
     });
@@ -158,7 +179,9 @@ function buildLapPositionInterpolation(maxLaps: number, cx: number, cy: number, 
       inputRange.push(progress);
       capXRange.push(point.x);
       capYRange.push(point.y);
-      capBridgePathRange.push(describeArc(cx, cy, r, leadingAngleDeg - CAP_BRIDGE_ARC_DEGREES, leadingAngleDeg));
+      if (includeFullDetail) {
+        capBridgePathRange.push(describeArc(cx, cy, r, leadingAngleDeg - CAP_BRIDGE_ARC_DEGREES, leadingAngleDeg));
+      }
       shadowPathRanges.forEach(({ segment, outputRange }) => {
         outputRange.push(describeArc(cx, cy, r, leadingAngleDeg + segment.start, leadingAngleDeg + segment.end));
       });
@@ -168,7 +191,38 @@ function buildLapPositionInterpolation(maxLaps: number, cx: number, cy: number, 
   return { inputRange, capXRange, capYRange, capBridgePathRange, shadowPathRanges };
 }
 
-export function ProgressRing({
+function modeAllowsEntry(mode: ProgressRingAnimationMode) {
+  return mode === 'entry-and-updates' || mode === 'entry-only';
+}
+
+function modeAllowsUpdates(mode: ProgressRingAnimationMode) {
+  return mode === 'entry-and-updates' || mode === 'updates-only';
+}
+
+export function shouldAnimateProgressRingArrow({
+  animateArrow,
+  animationMode,
+  isInitialEntry,
+  previousTarget,
+  nextTarget,
+  progressChangeThreshold,
+  reducedMotion,
+}: {
+  animateArrow: boolean;
+  animationMode: ProgressRingAnimationMode;
+  isInitialEntry: boolean;
+  previousTarget: number;
+  nextTarget: number;
+  progressChangeThreshold: number;
+  reducedMotion: boolean;
+}) {
+  if (!animateArrow || reducedMotion) return false;
+  if (isInitialEntry) return modeAllowsEntry(animationMode);
+  return modeAllowsUpdates(animationMode)
+    && Math.abs(nextTarget - previousTarget) > progressChangeThreshold;
+}
+
+function ProgressRingComponent({
   size,
   strokeWidth,
   progress,
@@ -179,148 +233,175 @@ export function ProgressRing({
   showArrow = false,
   allowSmallOverflowShadow = false,
   showStartCapAtZero = false,
+  animationMode = 'entry-and-updates',
+  animateArrow = showArrow,
+  progressChangeThreshold = PROGRESS_CHANGE_EPSILON,
+  detailLevel = 'full',
+  reducedMotion = false,
+  testID = 'progress-ring',
 }: ProgressRingProps) {
   const clampedProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
   const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const animatedProgress = useRef(new Animated.Value(0)).current;
-  const animatedArrow = useRef(new Animated.Value(0)).current;
-  const previousProgressRef = useRef(clampedProgress);
+  const animatedProgressRef = useRef<Animated.Value | null>(null);
+  if (!animatedProgressRef.current) {
+    animatedProgressRef.current = new Animated.Value(
+      modeAllowsEntry(animationMode) && !reducedMotion ? 0 : clampedProgress,
+    );
+  }
+  const animatedArrowRef = useRef<Animated.Value | null>(null);
+  if (!animatedArrowRef.current) {
+    animatedArrowRef.current = new Animated.Value(
+      showArrow && animateArrow && modeAllowsEntry(animationMode) && !reducedMotion ? 0 : 1,
+    );
+  }
+  const animatedProgress = animatedProgressRef.current;
+  const animatedArrow = animatedArrowRef.current;
+  const previousTargetProgressRef = useRef(clampedProgress);
+  const hasProcessedInitialTargetRef = useRef(false);
+  const geometryMaxLapsRef = useRef(2);
+  const progressAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const arrowAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const arrowInteractionHandleRef = useRef<{ cancel?: () => void } | null>(null);
   const isMountedRef = useRef(false);
-  const [isReduceMotionEnabled, setIsReduceMotionEnabled] = useState(false);
   const [renderedHasProgress, setRenderedHasProgress] = useState(clampedProgress > 0);
   const [renderedIsOverflow, setRenderedIsOverflow] = useState(clampedProgress > 1);
-  const maxLaps = Math.max(2, Math.ceil(Math.max(clampedProgress, previousProgressRef.current)) + 2);
-  const capPositionInterpolation = buildLapPositionInterpolation(maxLaps, center, center, radius);
+  geometryMaxLapsRef.current = Math.max(
+    geometryMaxLapsRef.current,
+    Math.ceil(Math.max(clampedProgress, previousTargetProgressRef.current)) + 2,
+  );
+  const maxLaps = geometryMaxLapsRef.current;
+  const capPositionInterpolation = useMemo(
+    () => buildLapPositionInterpolation(maxLaps, center, center, radius, detailLevel),
+    [center, detailLevel, maxLaps, radius],
+  );
 
   useEffect(() => {
     isMountedRef.current = true;
 
     return () => {
       isMountedRef.current = false;
+      progressAnimationRef.current?.stop();
+      arrowAnimationRef.current?.stop();
+      arrowInteractionHandleRef.current?.cancel?.();
     };
   }, []);
 
   useEffect(() => {
-    let isActive = true;
+    const isInitialEntry = !hasProcessedInitialTargetRef.current;
+    const previousTarget = previousTargetProgressRef.current;
+    const meaningfullyChanged = Math.abs(clampedProgress - previousTarget) > progressChangeThreshold;
+    const shouldAnimateProgress = isInitialEntry
+      ? modeAllowsEntry(animationMode)
+      : meaningfullyChanged && modeAllowsUpdates(animationMode);
+    const shouldAnimateArrow = showArrow && shouldAnimateProgressRingArrow({
+      animateArrow,
+      animationMode,
+      isInitialEntry,
+      previousTarget,
+      nextTarget: clampedProgress,
+      progressChangeThreshold,
+      reducedMotion,
+    });
 
-    Promise.resolve(AccessibilityInfo?.isReduceMotionEnabled?.() ?? false)
-      .then(enabled => {
-        if (isActive) {
-          setIsReduceMotionEnabled(enabled);
-        }
-      })
-      .catch(() => undefined);
+    hasProcessedInitialTargetRef.current = true;
 
-    const subscription = AccessibilityInfo?.addEventListener?.('reduceMotionChanged', setIsReduceMotionEnabled);
+    if (!isInitialEntry && !meaningfullyChanged && !reducedMotion) return;
 
-    return () => {
-      isActive = false;
-      subscription?.remove?.();
-    };
-  }, []);
+    progressAnimationRef.current?.stop();
+    arrowAnimationRef.current?.stop();
+    arrowInteractionHandleRef.current?.cancel?.();
 
-  useEffect(() => {
-    if (clampedProgress > 0) {
-      setRenderedHasProgress(true);
+    previousTargetProgressRef.current = clampedProgress;
+    setRenderedHasProgress(current => current || clampedProgress > 0);
+    setRenderedIsOverflow(current => current || clampedProgress > 1 || previousTarget > 1);
+
+    if (reducedMotion || !shouldAnimateProgress) {
+      animatedProgress.setValue(clampedProgress);
+      animatedArrow.setValue(1);
+      setRenderedHasProgress(clampedProgress > 0);
+      setRenderedIsOverflow(clampedProgress > 1);
+      return;
     }
-    if (clampedProgress > 1 || previousProgressRef.current > 1) {
-      setRenderedIsOverflow(true);
-    }
 
-    const animation = Animated.timing(animatedProgress, {
+    if (isInitialEntry) animatedProgress.setValue(0);
+    const progressAnimation = Animated.timing(animatedProgress, {
       toValue: clampedProgress,
       duration: PROGRESS_ANIMATION_DURATION_MS,
       useNativeDriver: false,
     });
-
-    animation.start(({ finished }) => {
+    progressAnimationRef.current = progressAnimation;
+    progressAnimation.start(({ finished }) => {
       if (!finished || !isMountedRef.current) return;
-
-      previousProgressRef.current = clampedProgress;
+      progressAnimationRef.current = null;
       setRenderedHasProgress(clampedProgress > 0);
       setRenderedIsOverflow(clampedProgress > 1);
     });
-  }, [animatedProgress, clampedProgress]);
 
-  useEffect(() => {
-    if (!showArrow) return;
-
-    if (isReduceMotionEnabled) {
+    if (!shouldAnimateArrow) {
       animatedArrow.setValue(1);
       return;
     }
 
-    let isCancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const startArrowAnimation = () => {
-      if (isCancelled) return;
-
-      animatedArrow.stopAnimation?.();
+      if (!isMountedRef.current) return;
       animatedArrow.setValue(0);
-      Animated.timing(animatedArrow, {
-        toValue: 0.35,
-        duration: ARROW_CONTACT_DURATION_MS,
-        easing: Easing?.out?.(Easing.cubic),
-        useNativeDriver: false,
-      }).start(({ finished }) => {
-        if (!finished || isCancelled) return;
-
+      const sequence = Animated.sequence([
+        Animated.timing(animatedArrow, {
+          toValue: 0.35,
+          duration: ARROW_CONTACT_DURATION_MS,
+          easing: Easing?.out?.(Easing.cubic),
+          useNativeDriver: false,
+        }),
         Animated.timing(animatedArrow, {
           toValue: 0.63,
           duration: ARROW_FORM_DURATION_MS,
           easing: Easing?.inOut?.(Easing.cubic),
           useNativeDriver: false,
-        }).start(({ finished: didForm }) => {
-          if (!didForm || isCancelled) return;
-
-          Animated.timing(animatedArrow, {
-            toValue: 0.8,
-            duration: ARROW_FORWARD_BOUNCE_DURATION_MS,
-            easing: Easing?.out?.(Easing.cubic),
-            useNativeDriver: false,
-          }).start(({ finished: didOvershoot }) => {
-            if (!didOvershoot || isCancelled) return;
-
-            Animated.timing(animatedArrow, {
-              toValue: 0.92,
-              duration: ARROW_REBOUND_DURATION_MS,
-              easing: Easing?.out?.(Easing.cubic),
-              useNativeDriver: false,
-            }).start(({ finished: didRebound }) => {
-              if (!didRebound || isCancelled) return;
-
-              Animated.timing(animatedArrow, {
-                toValue: 1,
-                duration: ARROW_SETTLE_DURATION_MS,
-                easing: Easing?.out?.(Easing.cubic),
-                useNativeDriver: false,
-              }).start();
-            });
-          });
-        });
+        }),
+        Animated.timing(animatedArrow, {
+          toValue: 0.8,
+          duration: ARROW_FORWARD_BOUNCE_DURATION_MS,
+          easing: Easing?.out?.(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(animatedArrow, {
+          toValue: 0.92,
+          duration: ARROW_REBOUND_DURATION_MS,
+          easing: Easing?.out?.(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(animatedArrow, {
+          toValue: 1,
+          duration: ARROW_SETTLE_DURATION_MS,
+          easing: Easing?.out?.(Easing.cubic),
+          useNativeDriver: false,
+        }),
+      ]);
+      arrowAnimationRef.current = sequence;
+      sequence.start(({ finished }) => {
+        if (finished) arrowAnimationRef.current = null;
       });
     };
-    const scheduleArrowAnimation = () => {
-      timeoutId = setTimeout(() => {
-        startArrowAnimation();
-      }, 0);
-    };
-    const interactionHandle = InteractionManager?.runAfterInteractions?.(scheduleArrowAnimation);
-
-    if (!interactionHandle) {
-      scheduleArrowAnimation();
-    }
+    arrowInteractionHandleRef.current = InteractionManager?.runAfterInteractions?.(
+      startArrowAnimation,
+    ) ?? null;
+    if (!arrowInteractionHandleRef.current) startArrowAnimation();
 
     return () => {
-      isCancelled = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      interactionHandle?.cancel?.();
+      arrowInteractionHandleRef.current?.cancel?.();
     };
-  }, [animatedArrow, clampedProgress, isReduceMotionEnabled, showArrow]);
+  }, [
+    animateArrow,
+    animatedArrow,
+    animatedProgress,
+    animationMode,
+    clampedProgress,
+    progressChangeThreshold,
+    reducedMotion,
+    showArrow,
+  ]);
 
   useEffect(() => {
     if (!DEBUG_PROGRESS_RING_GEOMETRY) return;
@@ -380,11 +461,13 @@ export function ProgressRing({
     outputRange: capPositionInterpolation.capYRange,
     extrapolate: 'clamp',
   });
-  const capBridgePath = animatedProgress.interpolate({
-    inputRange: capPositionInterpolation.inputRange,
-    outputRange: capPositionInterpolation.capBridgePathRange,
-    extrapolate: 'clamp',
-  });
+  const capBridgePath = detailLevel === 'full'
+    ? animatedProgress.interpolate({
+        inputRange: capPositionInterpolation.inputRange,
+        outputRange: capPositionInterpolation.capBridgePathRange,
+        extrapolate: 'clamp',
+      })
+    : null;
   const shadowPaths = capPositionInterpolation.shadowPathRanges.map(({ segment, outputRange }) => ({
     segment,
     d: animatedProgress.interpolate({
@@ -413,13 +496,19 @@ export function ProgressRing({
   const isOverflow = renderedIsOverflow;
   const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
   const shouldRenderShadow =
-    allowSmallOverflowShadow ||
-    (size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH);
+    detailLevel === 'full' && (
+      allowSmallOverflowShadow ||
+      (size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH)
+    );
   const arrowScale = strokeWidth / ARROW_BASE_BADGE_DIAMETER;
   const arrowStrokeWidth = Math.max(1.1, strokeWidth * ARROW_STROKE_TO_BADGE_RATIO);
 
   return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+    <View
+      testID={testID}
+      accessibilityValue={{ now: clampedProgress }}
+      style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}
+    >
       {/* Layer 1: inactive track. Layer 2: base progress ring. */}
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
@@ -478,6 +567,7 @@ export function ProgressRing({
           <Svg width={size} height={size}>
             <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
               <AnimatedCircle
+                testID="progress-ring-overflow-arc"
                 cx={size / 2}
                 cy={size / 2}
                 r={radius}
@@ -495,10 +585,11 @@ export function ProgressRing({
       )}
 
       {/* Layer 3.5: same-color sleeve that blends the raised cap into the flat overflow arc. */}
-      {isOverflow && (
+      {isOverflow && detailLevel === 'full' && capBridgePath && (
         <AnimatedView pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
           <Svg width={size} height={size}>
             <AnimatedPath
+              testID="progress-ring-cap-bridge"
               d={capBridgePath as unknown as string}
               stroke={color}
               strokeWidth={strokeWidth}
@@ -511,7 +602,11 @@ export function ProgressRing({
 
       {/* Layer 4: short crescent shadow trailing the raised cap. Omitted on tiny rings to avoid artifacts. */}
       {isOverflow && shouldRenderShadow && (
-        <AnimatedView pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
+        <AnimatedView
+          testID="progress-ring-overflow-shadow"
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}
+        >
           <Svg width={size} height={size}>
             <Defs>
               <Filter id="progressRingShadowBlur">
@@ -539,6 +634,7 @@ export function ProgressRing({
         <AnimatedView pointerEvents="none" style={[StyleSheet.absoluteFillObject, { opacity: overflowOpacity }]}>
           <Svg width={size} height={size}>
             <AnimatedCircle
+              testID="progress-ring-raised-cap"
               cx={capX as unknown as number}
               cy={capY as unknown as number}
               r={strokeWidth / 2}
@@ -618,6 +714,8 @@ export function ProgressRing({
     </View>
   );
 }
+
+export const ProgressRing = React.memo(ProgressRingComponent);
 
 const styles = StyleSheet.create({
   center: {

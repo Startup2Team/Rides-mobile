@@ -6,7 +6,7 @@ export interface DriverDailyGoalRecord {
 }
 
 export const DAILY_GOAL_STEP_RWF = 1_000;
-export const MIN_DAILY_GOAL_RWF = 500;
+export const MIN_DAILY_GOAL_RWF = 1_000;
 export const MAX_DAILY_GOAL_RWF = 1_000_000;
 export const DEFAULT_DAILY_GOAL_RWF = 30_000;
 

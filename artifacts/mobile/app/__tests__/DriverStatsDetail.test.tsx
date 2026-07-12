@@ -1,10 +1,16 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react-native';
 import React from 'react';
+import { Animated } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import DriverStatsDetail from '../driver-stats-detail';
 import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { loadStoredDriverDailyGoals } from '@/persistence/driverDailyGoalPersistence';
+import { publishDriverDailyGoalUpdate } from '@/persistence/driverDailyGoalUpdateSignal';
+
+let mockDetailFocusCallback: undefined | (() => void | (() => void));
+let mockDetailFocusCleanup: undefined | (() => void);
+let mockAppStateChangeHandler: undefined | ((state: string) => void);
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -32,10 +38,22 @@ jest.mock('react-native', () => {
       Value: jest.fn(() => ({
         interpolate: jest.fn(() => ({})),
         setValue: jest.fn(),
+        stopAnimation: jest.fn(),
       })),
       timing: jest.fn(() => ({
         start: jest.fn((cb) => cb && cb({ finished: true })),
+        stop: jest.fn(),
       })),
+      sequence: jest.fn(() => ({
+        start: jest.fn((cb) => cb && cb({ finished: true })),
+        stop: jest.fn(),
+      })),
+    },
+    AppState: {
+      addEventListener: jest.fn((_event, handler) => {
+        mockAppStateChangeHandler = handler;
+        return { remove: jest.fn() };
+      }),
     },
   };
 });
@@ -48,7 +66,12 @@ jest.mock('expo-router', () => ({
   router: { back: jest.fn(), push: jest.fn(), navigate: jest.fn() },
   useFocusEffect: jest.fn((cb) => {
     const React = require('react');
-    React.useEffect(() => cb(), [cb]);
+    React.useEffect(() => {
+      mockDetailFocusCallback = cb;
+      const cleanup = cb();
+      mockDetailFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+      return cleanup;
+    }, [cb]);
   }),
   useLocalSearchParams: () => ({ metric: 'earnings', period: 'today' }),
 }));
@@ -126,9 +149,28 @@ jest.mock('@/query/hooks/useRideHistoryQuery', () => ({
       {
         id: 'ride-1',
         agreedFare: 12000,
-        createdAt: '2026-07-08T09:00:00.000Z',
+        createdAt: '2026-07-07T23:55:00.000Z',
+        completedAt: '2026-07-08T09:00:00',
         status: 'completed',
         driverId: 'driver-1',
+        vehicleType: 'moto',
+      },
+      {
+        id: 'cancelled-ride',
+        agreedFare: 50000,
+        createdAt: '2026-07-08T10:00:00.000Z',
+        completedAt: '2026-07-08T10:30:00.000Z',
+        status: 'cancelled',
+        driverId: 'driver-1',
+        vehicleType: 'moto',
+      },
+      {
+        id: 'other-driver-ride',
+        agreedFare: 70000,
+        createdAt: '2026-07-08T11:00:00.000Z',
+        completedAt: '2026-07-08T11:30:00.000Z',
+        status: 'completed',
+        driverId: 'driver-2',
         vehicleType: 'moto',
       }
     ],
@@ -159,10 +201,19 @@ function renderWithQueryClient(ui: React.ReactElement) {
   );
 }
 
+function progressAnimationCount() {
+  return (Animated.timing as jest.Mock).mock.calls.filter(
+    ([, config]) => config.duration === 850,
+  ).length;
+}
+
 describe('DriverStatsDetail UI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers({ now: new Date('2026-07-08T14:30:00.000Z') });
+    mockDetailFocusCallback = undefined;
+    mockDetailFocusCleanup = undefined;
+    mockAppStateChangeHandler = undefined;
   });
 
   afterEach(() => {
@@ -203,6 +254,162 @@ describe('DriverStatsDetail UI', () => {
     );
 
     expect(screen.queryByLabelText('Change daily earnings goal')).toBeNull();
+  });
+
+  test('preserves a historical selection across cleanup and ordinary refocus', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+    expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
+
+    act(() => {
+      mockDetailFocusCleanup?.();
+      const cleanup = mockDetailFocusCallback?.();
+      mockDetailFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    });
+
+    expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
+  });
+
+  test('opening and closing the calendar preserves the selected date', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+
+    fireEvent.press(screen.getByLabelText('Open earnings calendar'));
+    fireEvent.press(screen.getByLabelText('Close earnings calendar'));
+
+    expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
+  });
+
+  test('successful Daily Goal return resets to today and reloads its goal', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [{
+        amountRwf: 40_000,
+        effectiveFromLocalDate: '2026-07-08',
+        createdAt: '2026-07-08T12:00:00.000Z',
+        updatedAt: '2026-07-08T12:00:00.000Z',
+      }],
+    });
+    publishDriverDailyGoalUpdate();
+
+    act(() => {
+      mockDetailFocusCleanup?.();
+      const cleanup = mockDetailFocusCallback?.();
+      mockDetailFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    });
+
+    await waitFor(() => expect(screen.getByText(/12,000\/40,000/)).toBeTruthy());
+    expect(screen.getByText(/8 Jul 2026/)).toBeTruthy();
+  });
+
+  test('foregrounding preserves an intentional historical selection', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+
+    act(() => mockAppStateChangeHandler?.('active'));
+
+    expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
+  });
+
+  test('foreground after midnight advances old today but preserves an older selection', async () => {
+    const first = renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+
+    jest.setSystemTime(new Date('2026-07-09T08:00:00.000Z'));
+    act(() => mockAppStateChangeHandler?.('active'));
+    await waitFor(() => expect(screen.getByText(/9 Jul 2026/)).toBeTruthy());
+
+    first.unmount();
+    jest.setSystemTime(new Date('2026-07-08T14:30:00.000Z'));
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+    jest.setSystemTime(new Date('2026-07-09T08:00:00.000Z'));
+    act(() => mockAppStateChangeHandler?.('active'));
+
+    expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
+  });
+
+  test('a freshly mounted Earnings route starts on today again', async () => {
+    const first = renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+    first.unmount();
+
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+  });
+
+  test('fresh entry animates the big ring and only the visible center week', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByTestId('earnings-big-progress-ring')).toBeTruthy());
+
+    expect(progressAnimationCount()).toBe(8);
+    expect(screen.getAllByTestId(/weekly-progress-ring-0-/)).toHaveLength(7);
+    expect(screen.getAllByTestId(/weekly-progress-ring-1-/)).toHaveLength(7);
+    expect(screen.getAllByTestId(/weekly-progress-ring-2-/)).toHaveLength(7);
+  });
+
+  test('date changes retarget only for meaningful progress changes', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByTestId('earnings-big-progress-ring')).toBeTruthy());
+    await act(async () => Promise.resolve());
+    const initialCount = progressAnimationCount();
+
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+    expect(progressAnimationCount()).toBe(initialCount + 1);
+
+    fireEvent.press(
+      screen.getByLabelText('Select Tuesday, 7 July 2026 from weekday label'),
+    );
+    expect(progressAnimationCount()).toBe(initialCount + 1);
+  });
+
+  test('calendar and same-day foreground do not replay the big ring', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByTestId('earnings-big-progress-ring')).toBeTruthy());
+    await act(async () => Promise.resolve());
+    const initialCount = progressAnimationCount();
+
+    fireEvent.press(screen.getByLabelText('Open earnings calendar'));
+    fireEvent.press(screen.getByLabelText('Close earnings calendar'));
+    act(() => mockAppStateChangeHandler?.('active'));
+
+    expect(progressAnimationCount()).toBe(initialCount);
+  });
+
+  test('uses the authoritative completed-ride total and real completion-hour activity', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+
+    await waitFor(() => expect(screen.getByText(/12,000\/30,000/)).toBeTruthy());
+
+    expect(screen.getAllByText('12,000 RWF').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/132,000/)).toBeNull();
+    expect(screen.getByTestId('hourly-activity-bar-9').props.accessibilityValue).toEqual({ now: 12000 });
+    expect(screen.queryByTestId('hourly-activity-bar-8')).toBeNull();
+    expect(screen.queryByTestId('hourly-activity-bar-10')).toBeNull();
+    expect(screen.queryByTestId('hourly-activity-bar-11')).toBeNull();
   });
 
   test('swipes between past weeks without navigating into the future', async () => {

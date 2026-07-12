@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -23,13 +23,14 @@ import {
   MAX_DAILY_GOAL_RWF,
   MIN_DAILY_GOAL_RWF,
   resolveDailyGoalForDate,
-  toLocalDateString,
   upsertDailyGoalForEffectiveDate,
 } from "@/domains/driver-statistics";
 import {
   loadStoredDriverDailyGoals,
   saveStoredDriverDailyGoals,
 } from "@/persistence/driverDailyGoalPersistence";
+import { publishDriverDailyGoalUpdate } from "@/persistence/driverDailyGoalUpdateSignal";
+import { useCurrentLocalDate } from "@/hooks/useCurrentLocalDate";
 import { fonts } from "@/constants/fonts";
 import { radius } from "@/constants/radius";
 import { spacing } from "@/constants/spacing";
@@ -75,7 +76,8 @@ export default function DriverDailyGoalScreen() {
     { start: number; end: number } | undefined
   >(undefined);
   const [saving, setSaving] = useState(false);
-  const todayLocalDate = useMemo(() => toLocalDateString(new Date()), []);
+  const { currentLocalDate: todayLocalDate, refreshCurrentLocalDate } =
+    useCurrentLocalDate();
   const preEditValueRef = React.useRef(draftGoal);
   const inputRef = React.useRef<TextInput>(null);
 
@@ -192,17 +194,19 @@ export default function DriverDailyGoalScreen() {
     if (!canSave || saving) return;
     Keyboard.dismiss();
     setSaving(true);
+    const effectiveFromLocalDate = refreshCurrentLocalDate();
     const nextRecords = upsertDailyGoalForEffectiveDate({
       records: records ?? [],
-      effectiveFromLocalDate: todayLocalDate,
+      effectiveFromLocalDate,
       amountRwf: draftGoal,
     });
     await saveStoredDriverDailyGoals(nextRecords);
+    publishDriverDailyGoalUpdate();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("Daily goal updated", "success");
     setSaving(false);
     router.back();
-  }, [canSave, draftGoal, records, saving, showToast, todayLocalDate]);
+  }, [canSave, draftGoal, records, refreshCurrentLocalDate, saving, showToast]);
 
   const displayVal = formatRwf(draftGoal).replace(/\s*RWF/gi, "");
   const displayFontSize = getDisplayFontSize(displayVal.length);

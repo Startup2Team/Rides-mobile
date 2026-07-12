@@ -176,8 +176,8 @@ describe("DriverDailyGoalScreen", () => {
     fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
     const input = screen.getByTestId("daily-goal-amount-input");
 
-    // Under minimum limit (which is now 500)
-    fireEvent.changeText(input, "400");
+    // Under the 1,000 RWF minimum.
+    fireEvent.changeText(input, "900");
     const saveBtn = screen.getByLabelText("Save daily earnings goal");
     expect(saveBtn.props.disabled).toBe(true);
   });
@@ -251,11 +251,11 @@ describe("DriverDailyGoalScreen", () => {
   });
 
   test("11. Minimum and maximum rules still apply", async () => {
-    // Override persistence to load minimum goal (500)
+    // Override persistence to load the minimum goal (1,000).
     (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValueOnce({
       data: [
         {
-          amountRwf: 500,
+          amountRwf: 1000,
           effectiveFromLocalDate: "2026-07-10",
           createdAt: "2026-07-10T08:00:00.000Z",
           updatedAt: "2026-07-10T08:00:00.000Z",
@@ -264,24 +264,24 @@ describe("DriverDailyGoalScreen", () => {
     });
 
     render(<DriverDailyGoalScreen />);
-    await screen.findByText("500");
+    await screen.findByText("1,000");
 
     // Decrease at min should not go below min
     fireEvent.press(screen.getByLabelText("Decrease daily earnings goal"));
-    expect(screen.getByText("500")).toBeTruthy();
+    expect(screen.getByText("1,000")).toBeTruthy();
 
     // Now edit to under min
     fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
     const input = screen.getByTestId("daily-goal-amount-input");
-    fireEvent.changeText(input, "400"); // under min
+    fireEvent.changeText(input, "900"); // under min
 
     // Save button should be disabled
     const saveBtn = screen.getByLabelText("Save daily earnings goal");
     expect(saveBtn.props.disabled).toBe(true);
 
-    // Blur should clamp to min limit (500)
+    // Blur should clamp to the 1,000 RWF minimum.
     fireEvent(input, "blur");
-    await screen.findByText("500");
+    await screen.findByText("1,000");
   });
 
   test("12. Input exceeding max limit is rejected", async () => {
@@ -299,5 +299,24 @@ describe("DriverDailyGoalScreen", () => {
     fireEvent.changeText(input, "10000000");
     // It should keep the previous value
     expect(input.props.value).toBe("1000000");
+  });
+
+  test("13. Save uses the actual current local date after midnight", async () => {
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+
+    fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
+    fireEvent.changeText(screen.getByTestId("daily-goal-amount-input"), "35000");
+    jest.setSystemTime(new Date(2026, 6, 11, 0, 5, 0));
+    fireEvent.press(screen.getByLabelText("Save daily earnings goal"));
+
+    await waitFor(() => {
+      expect(saveStoredDriverDailyGoals).toHaveBeenCalledWith([
+        expect.objectContaining({
+          amountRwf: 35000,
+          effectiveFromLocalDate: "2026-07-11",
+        }),
+      ]);
+    });
   });
 });

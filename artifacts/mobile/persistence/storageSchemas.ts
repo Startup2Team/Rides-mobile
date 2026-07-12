@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { migrateDriverProfileToMultiVehicle } from '@/domain/driverVehicles';
 import { normalizeEntitlement } from '@/domain/driverRidePackages';
 import type { ManualPaymentClaimAuditAction, ManualPaymentClaimStatus, ManualPaymentProvider } from '@/domains/package-payments';
+import { MAX_DAILY_GOAL_RWF, MIN_DAILY_GOAL_RWF } from '@/domains/driver-statistics/driverDailyGoals';
 
 const vehicleTypeSchema = z.enum(['moto', 'rifani', 'cab', 'fuso', 'hilux']);
 const appModeSchema = z.enum(['customer', 'driver']);
@@ -506,7 +507,7 @@ const driverRatingSchema = z.object({
 export const driverRatingsSchema = z.array(driverRatingSchema);
 
 const driverDailyGoalRecordSchema = z.object({
-  amountRwf: z.number().int().min(1_000).max(1_000_000),
+  amountRwf: z.number().int().min(MIN_DAILY_GOAL_RWF).max(MAX_DAILY_GOAL_RWF),
   effectiveFromLocalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   createdAt: z.string(),
   updatedAt: z.string(),

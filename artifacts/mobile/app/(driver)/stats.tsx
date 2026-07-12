@@ -32,9 +32,11 @@ import {
   type DriverStatisticsPeriod,
   DEFAULT_DAILY_GOAL_RWF,
   resolveDailyGoalForDate,
-  toLocalDateString,
+  localDateStringToLocalDate,
 } from "@/domains/driver-statistics";
 import { useColors } from "@/hooks/useColors";
+import { useCurrentLocalDate } from "@/hooks/useCurrentLocalDate";
+import { useReducedMotionPreference } from "@/hooks/useReducedMotionPreference";
 import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
 import { useRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
 
@@ -45,6 +47,7 @@ const EMPTY_RATING_SUMMARY: DriverRatingSummary = {
 
 export default function DriverStats() {
   const colors = useColors();
+  const reducedMotion = useReducedMotionPreference();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const statsContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
@@ -60,7 +63,11 @@ export default function DriverStats() {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [selectedPeriod, setSelectedPeriod] =
     React.useState<DriverStatisticsPeriod>("today");
-  const [now] = React.useState(() => new Date());
+  const { currentLocalDate, refreshCurrentLocalDate } = useCurrentLocalDate();
+  const now = React.useMemo(
+    () => localDateStringToLocalDate(currentLocalDate) ?? new Date(),
+    [currentLocalDate],
+  );
 
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
@@ -103,11 +110,12 @@ export default function DriverStats() {
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
+      const todayLocalDate = refreshCurrentLocalDate();
       async function fetchGoal() {
         const stored = await loadStoredDriverDailyGoals();
         const goal = resolveDailyGoalForDate({
           records: stored.data ?? [],
-          selectedLocalDate: toLocalDateString(new Date()),
+          selectedLocalDate: todayLocalDate,
           fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
         });
         if (active) {
@@ -118,7 +126,7 @@ export default function DriverStats() {
       return () => {
         active = false;
       };
-    }, []),
+    }, [refreshCurrentLocalDate]),
   );
 
   const statistics = React.useMemo(
@@ -235,6 +243,7 @@ export default function DriverStats() {
           completedTrips={completedTrips}
           periodEarnings={periodEarnings}
           targetEarnings={dailyGoal}
+          reducedMotion={reducedMotion}
           onPress={() => {
             router.push({
               pathname: "/driver-stats-detail",

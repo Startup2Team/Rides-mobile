@@ -1,20 +1,15 @@
 import type { Ride } from '@/types';
 import type { DriverStatisticsBucket, DriverStatisticsPeriodWindow } from './types';
+import {
+  getCompletedDriverRideStatisticsRecord,
+  normalizeDriverStatisticsFare,
+} from './driverDailyStatistics';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-function positiveFare(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
 export function isCompletedDriverRideForStatistics(ride: Ride, driverId?: string | null) {
-  return Boolean(
-    driverId
-    && ride.driverId === driverId
-    && ride.status === 'completed'
-    && ride.completedAt,
-  );
+  return getCompletedDriverRideStatisticsRecord(ride, driverId) !== null;
 }
 
 function getBucketLabel(start: Date, granularity: DriverStatisticsPeriodWindow['bucketGranularity']) {
@@ -49,7 +44,7 @@ export function createDriverStatisticsBuckets(window: DriverStatisticsPeriodWind
 export function summarizeCompletedRide(ride: Ride) {
   return {
     completedTrips: 1,
-    earningsRwf: positiveFare(ride.agreedFare),
+    earningsRwf: normalizeDriverStatisticsFare(ride.agreedFare),
   };
 }
 
@@ -64,19 +59,17 @@ export function buildDriverStatisticsBuckets({
 }) {
   const buckets = createDriverStatisticsBuckets(window);
 
-  rideHistory
-    .filter(ride => isCompletedDriverRideForStatistics(ride, driverId))
-    .forEach(ride => {
-      const completedAt = new Date(ride.completedAt as string).getTime();
-      if (Number.isNaN(completedAt)) return;
+  rideHistory.forEach(ride => {
+      const record = getCompletedDriverRideStatisticsRecord(ride, driverId);
+      if (!record) return;
+      const completedAt = record.completedAt.getTime();
       const bucket = buckets.find(item =>
         completedAt >= new Date(item.startAt).getTime()
         && completedAt <= new Date(item.endAt).getTime()
       );
       if (!bucket) return;
-      const summary = summarizeCompletedRide(ride);
-      bucket.completedTrips += summary.completedTrips;
-      bucket.earningsRwf += summary.earningsRwf;
+      bucket.completedTrips += 1;
+      bucket.earningsRwf += record.earningsRwf;
     });
 
   return buckets;

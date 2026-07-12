@@ -16,6 +16,7 @@ interface EarningsSummaryCardProps {
   periodEarnings: number;
   targetEarnings?: number;
   onPress?: () => void;
+  reducedMotion?: boolean;
 }
 export function EarningsSummaryCard({
   completedTrips,
@@ -24,6 +25,7 @@ export function EarningsSummaryCard({
   periodEarnings,
   targetEarnings = 30000, // Default target
   onPress,
+  reducedMotion = false,
 }: EarningsSummaryCardProps) {
   const colors = useColors();
 
@@ -86,6 +88,11 @@ export function EarningsSummaryCard({
             trackColor={colors.primaryHex}
             trackOpacity={0.24}
             showArrow={true}
+            animationMode="entry-and-updates"
+            animateArrow
+            detailLevel="full"
+            reducedMotion={reducedMotion}
+            testID="summary-earnings-progress-ring"
           />
         </View>
 
