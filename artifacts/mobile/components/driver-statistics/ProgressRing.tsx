@@ -506,7 +506,13 @@ function ProgressRingComponent({
   return (
     <View
       testID={testID}
-      accessibilityValue={{ now: clampedProgress }}
+      accessibilityRole="progressbar"
+      accessibilityValue={{
+        min: 0,
+        max: 100,
+        // Fabric requires integers; fractional progress crashes with "Loss of precision".
+        now: Math.round(Math.min(1, clampedProgress) * 100),
+      }}
       style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}
     >
       {/* Layer 1: inactive track. Layer 2: base progress ring. */}

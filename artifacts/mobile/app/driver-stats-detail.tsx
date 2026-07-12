@@ -796,7 +796,11 @@ export default function DriverStatsDetail() {
                         <View
                           testID={`hourly-activity-bar-${h.hour}`}
                           accessibilityLabel={`${String(h.hour).padStart(2, "0")}:00 activity`}
-                          accessibilityValue={{ now: h.value }}
+                          accessibilityValue={{
+                            min: 0,
+                            max: Math.round(maxHourlyValue),
+                            now: Math.round(h.value),
+                          }}
                           style={[
                             styles.chartBarFill,
                             {
