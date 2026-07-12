@@ -28,12 +28,6 @@ export const DRIVER_STATISTICS_MOTION = {
   weekSwipeVelocityThreshold: 0.55,
   weekSwipeFutureResistance: 0.22,
 
-  calendarOpenMs: 220,
-  calendarCloseMs: 180,
-  calendarBackdropOpacity: 0.55,
-  calendarPanelScaleFrom: 0.96,
-  calendarPanelTranslateY: 10,
-
   detailRingEntryDelayMs: 60,
   detailSupportingRevealDelayMs: 120,
   detailSupportingRevealMs: 180,

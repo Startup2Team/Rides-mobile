@@ -5,10 +5,24 @@ export interface DriverDailyGoalRecord {
   updatedAt: string;
 }
 
+export type ResolvedDriverDailyGoal =
+  | {
+      status: 'configured';
+      amountRwf: number;
+      effectiveFromLocalDate: string;
+    }
+  | {
+      status: 'not-configured';
+      amountRwf: null;
+    };
+
 export const DAILY_GOAL_STEP_RWF = 1_000;
 export const MIN_DAILY_GOAL_RWF = 1_000;
 export const MAX_DAILY_GOAL_RWF = 1_000_000;
-export const DEFAULT_DAILY_GOAL_RWF = 30_000;
+/** Suggested first-time draft only — never treat as a saved personal goal. */
+export const SUGGESTED_DAILY_GOAL_RWF = 30_000;
+/** @deprecated Use SUGGESTED_DAILY_GOAL_RWF for draft prefill only. */
+export const DEFAULT_DAILY_GOAL_RWF = SUGGESTED_DAILY_GOAL_RWF;
 
 const LOCAL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,23 +66,64 @@ function normalizeRecords(records: DriverDailyGoalRecord[]) {
     .sort((a, b) => a.effectiveFromLocalDate.localeCompare(b.effectiveFromLocalDate));
 }
 
-export function resolveDailyGoalForDate({
+/**
+ * Resolves whether a real persisted goal is effective on the selected local date.
+ * Does not return the suggested 30,000 amount as configured.
+ */
+export function resolveConfiguredDailyGoalForDate({
   records,
   selectedLocalDate,
-  fallbackGoal = DEFAULT_DAILY_GOAL_RWF,
 }: {
   records: DriverDailyGoalRecord[];
   selectedLocalDate: string;
-  fallbackGoal?: number;
-}) {
-  const fallback = validateDailyGoalAmount(fallbackGoal) ? fallbackGoal : DEFAULT_DAILY_GOAL_RWF;
-  if (!isValidLocalDateString(selectedLocalDate)) return fallback;
+}): ResolvedDriverDailyGoal {
+  if (!isValidLocalDateString(selectedLocalDate)) {
+    return { status: 'not-configured', amountRwf: null };
+  }
 
   const resolved = normalizeRecords(records)
     .filter(record => record.effectiveFromLocalDate <= selectedLocalDate)
     .at(-1);
 
-  return resolved?.amountRwf ?? fallback;
+  if (!resolved) {
+    return { status: 'not-configured', amountRwf: null };
+  }
+
+  return {
+    status: 'configured',
+    amountRwf: resolved.amountRwf,
+    effectiveFromLocalDate: resolved.effectiveFromLocalDate,
+  };
+}
+
+/**
+ * @deprecated Prefer resolveConfiguredDailyGoalForDate. Numeric fallback is for
+ * non-UI helpers only and must not drive progress or “saved goal” labels.
+ */
+export function resolveDailyGoalForDate({
+  records,
+  selectedLocalDate,
+  fallbackGoal = SUGGESTED_DAILY_GOAL_RWF,
+}: {
+  records: DriverDailyGoalRecord[];
+  selectedLocalDate: string;
+  fallbackGoal?: number;
+}) {
+  const configured = resolveConfiguredDailyGoalForDate({ records, selectedLocalDate });
+  if (configured.status === 'configured') return configured.amountRwf;
+  const fallback = validateDailyGoalAmount(fallbackGoal) ? fallbackGoal : SUGGESTED_DAILY_GOAL_RWF;
+  return fallback;
+}
+
+export function progressRatioForConfiguredGoal({
+  earningsRwf,
+  resolved,
+}: {
+  earningsRwf: number;
+  resolved: ResolvedDriverDailyGoal;
+}) {
+  if (resolved.status !== 'configured' || resolved.amountRwf <= 0) return 0;
+  return earningsRwf / resolved.amountRwf;
 }
 
 export function upsertDailyGoalForEffectiveDate({

@@ -30,9 +30,9 @@ import {
   getDriverStatisticsSparseLabels,
   getEarningsPerTripSeries,
   type DriverStatisticsPeriod,
-  DEFAULT_DAILY_GOAL_RWF,
-  resolveDailyGoalForDate,
+  resolveConfiguredDailyGoalForDate,
   localDateStringToLocalDate,
+  type DriverDailyGoalRecord,
 } from "@/domains/driver-statistics";
 import { useColors } from "@/hooks/useColors";
 import { useCurrentLocalDate } from "@/hooks/useCurrentLocalDate";
@@ -105,29 +105,54 @@ export default function DriverStats() {
     };
   }, [user?.id]);
 
-  const [dailyGoal, setDailyGoal] = React.useState(DEFAULT_DAILY_GOAL_RWF);
+  const [dailyGoalRecords, setDailyGoalRecords] = React.useState<
+    DriverDailyGoalRecord[]
+  >([]);
+  const [goalLoadStatus, setGoalLoadStatus] = React.useState<
+    "loading" | "ready" | "error"
+  >("loading");
 
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
-      const todayLocalDate = refreshCurrentLocalDate();
       async function fetchGoal() {
-        const stored = await loadStoredDriverDailyGoals();
-        const goal = resolveDailyGoalForDate({
-          records: stored.data ?? [],
-          selectedLocalDate: todayLocalDate,
-          fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
-        });
-        if (active) {
-          setDailyGoal(goal);
+        try {
+          const stored = await loadStoredDriverDailyGoals();
+          if (!active) return;
+          if (stored.source === "invalid" && stored.data == null) {
+            setGoalLoadStatus("error");
+            return;
+          }
+          setDailyGoalRecords(stored.data ?? []);
+          setGoalLoadStatus("ready");
+        } catch {
+          if (active) setGoalLoadStatus("error");
         }
       }
-      fetchGoal();
+      void fetchGoal();
       return () => {
         active = false;
       };
     }, [refreshCurrentLocalDate]),
   );
+
+  const todayResolvedGoal = React.useMemo(
+    () =>
+      resolveConfiguredDailyGoalForDate({
+        records: dailyGoalRecords,
+        selectedLocalDate: currentLocalDate,
+      }),
+    [currentLocalDate, dailyGoalRecords],
+  );
+
+  const summaryGoalStatus =
+    goalLoadStatus === "loading"
+      ? ("loading" as const)
+      : goalLoadStatus === "error"
+        ? ("error" as const)
+        : todayResolvedGoal.status === "configured"
+          ? ("configured" as const)
+          : ("not-configured" as const);
 
   const statistics = React.useMemo(
     () =>
@@ -242,15 +267,20 @@ export default function DriverStats() {
           earningsLabel={earningsLabel}
           completedTrips={completedTrips}
           periodEarnings={periodEarnings}
-          targetEarnings={dailyGoal}
+          targetEarnings={
+            todayResolvedGoal.status === "configured"
+              ? todayResolvedGoal.amountRwf
+              : null
+          }
+          goalStatus={summaryGoalStatus}
           reducedMotion={reducedMotion}
+          onPressSetGoal={() => router.push("/driver-daily-goal")}
           onPress={() => {
             router.push({
               pathname: "/driver-stats-detail",
               params: {
                 metric: "earnings",
                 period: selectedPeriod,
-                dailyGoal: String(dailyGoal),
               },
             });
           }}

@@ -11,40 +11,80 @@ import { DRIVER_STATISTICS_MOTION } from "@/domains/driver-statistics/driverStat
 import { ProgressRing } from "./ProgressRing";
 import { formatRwf } from "@/domain/driverActivitySummary";
 
+export type EarningsGoalDisplayStatus =
+  | "loading"
+  | "configured"
+  | "not-configured"
+  | "error";
+
 interface EarningsSummaryCardProps {
   periodLabel: string;
   earningsLabel: string;
   completedTrips: number;
   periodEarnings: number;
-  targetEarnings?: number;
+  /** Only used when goalStatus is "configured". */
+  targetEarnings?: number | null;
+  goalStatus?: EarningsGoalDisplayStatus;
   onPress?: () => void;
+  onPressSetGoal?: () => void;
   reducedMotion?: boolean;
 }
+
 export function EarningsSummaryCard({
   completedTrips,
   earningsLabel,
   periodLabel,
   periodEarnings,
-  targetEarnings = 30000, // Default target
+  targetEarnings = null,
+  goalStatus = "not-configured",
   onPress,
+  onPressSetGoal,
   reducedMotion = false,
 }: EarningsSummaryCardProps) {
   const colors = useColors();
   const pressScale = useRef(new Animated.Value(1)).current;
   const pressOpacity = useRef(new Animated.Value(1)).current;
+  const suppressCardPressRef = useRef(false);
 
-  // Adjust target based on period label
-  let activeTarget = targetEarnings;
-  const lowerPeriod = periodLabel.toLowerCase();
-  if (lowerPeriod.includes("week")) {
-    activeTarget = targetEarnings * 5;
-  } else if (lowerPeriod.includes("month")) {
-    activeTarget = targetEarnings * 20;
+  const goalConfigured =
+    goalStatus === "configured"
+    && typeof targetEarnings === "number"
+    && targetEarnings > 0;
+  const goalUnconfigured = goalStatus === "not-configured";
+  const showSetGoal =
+    goalUnconfigured && typeof onPressSetGoal === "function";
+
+  let activeTarget = goalConfigured ? targetEarnings : 0;
+  if (goalConfigured) {
+    const lowerPeriod = periodLabel.toLowerCase();
+    if (lowerPeriod.includes("week")) {
+      activeTarget = targetEarnings * 5;
+    } else if (lowerPeriod.includes("month")) {
+      activeTarget = targetEarnings * 20;
+    }
   }
 
-  const progress = activeTarget > 0 ? periodEarnings / activeTarget : 0;
-  const targetLabel = formatRwf(activeTarget);
+  const progress = goalConfigured && activeTarget > 0
+    ? periodEarnings / activeTarget
+    : 0;
   const displayEarnings = earningsLabel.replace(/\s*RWF/gi, "");
+  const targetLabel = goalConfigured ? formatRwf(activeTarget) : null;
+
+  const goalValueText = goalStatus === "loading"
+    ? "…"
+    : goalStatus === "error"
+      ? "—/—"
+      : goalConfigured
+        ? `${displayEarnings}/${targetLabel}`
+        : "--/--";
+
+  const accessibilityLabel = goalConfigured
+    ? `Earnings for ${periodLabel}. ${earningsLabel} of ${targetLabel} goal. ${completedTrips} completed trips.`
+    : goalStatus === "loading"
+      ? `Earnings for ${periodLabel}. ${earningsLabel}. Daily goal loading.`
+      : goalStatus === "error"
+        ? `Earnings for ${periodLabel}. ${earningsLabel}. Daily goal unavailable.`
+        : `Earnings for ${periodLabel}. ${earningsLabel}. Daily earnings goal not set. Set daily earnings goal.`;
 
   const animatePress = (pressed: boolean) => {
     if (!onPress || reducedMotion) return;
@@ -67,15 +107,26 @@ export function EarningsSummaryCard({
   };
 
   const handlePress = () => {
+    if (suppressCardPressRef.current) {
+      suppressCardPressRef.current = false;
+      return;
+    }
     if (!onPress) return;
     void driverStatisticsHaptics.lightImpact();
     onPress();
   };
 
+  const handleSetGoalPress = () => {
+    if (!onPressSetGoal) return;
+    suppressCardPressRef.current = true;
+    void driverStatisticsHaptics.lightImpact();
+    onPressSetGoal();
+  };
+
   return (
     <Pressable
       accessible
-      accessibilityLabel={`Earnings for ${periodLabel}. ${earningsLabel} of ${targetLabel} goal. ${completedTrips} completed trips.`}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole={onPress ? "button" : undefined}
       onPress={handlePress}
       onPressIn={() => animatePress(true)}
@@ -93,7 +144,6 @@ export function EarningsSummaryCard({
           },
         ]}
       >
-      {/* Header Block at the Top */}
       <View style={styles.header}>
         <View style={styles.titleGroup}>
           <AppText
@@ -114,7 +164,6 @@ export function EarningsSummaryCard({
       </View>
 
       <View style={styles.content}>
-        {/* Progress Ring on the Left */}
         <View style={styles.ringWrapper}>
           <ProgressRing
             size={140}
@@ -124,32 +173,63 @@ export function EarningsSummaryCard({
             trackColor={colors.primaryHex}
             trackOpacity={0.24}
             showArrow={true}
-            animationMode="entry-and-updates"
-            animateArrow
+            goalState={goalConfigured ? "configured" : "unconfigured"}
+            animationMode={goalConfigured ? "entry-and-updates" : "none"}
+            animateArrow={false}
             detailLevel="full"
             reducedMotion={reducedMotion}
             testID="summary-earnings-progress-ring"
           />
         </View>
 
-        {/* Value on the Right */}
         <View style={styles.valueWrapper}>
           <AppText style={[styles.targetLabel, { color: colors.foreground }]}>
             Goal
           </AppText>
-          <View style={styles.valuesContainer}>
+          {goalUnconfigured ? (
             <AppText
               style={[styles.value, { color: colors.primary }]}
               numberOfLines={1}
-              adjustsFontSizeToFit
+              testID="summary-goal-unset-label"
             >
-              {`${displayEarnings}/${targetLabel}`}
+              {goalValueText}
             </AppText>
-          </View>
+          ) : (
+            <View style={styles.valuesContainer}>
+              <AppText
+                style={[styles.value, { color: colors.primary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                testID="summary-goal-value"
+              >
+                {goalValueText}
+              </AppText>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* Top-Right Chevron Indicator */}
+      {showSetGoal ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Set daily earnings goal"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={handleSetGoalPress}
+          style={({ pressed }) => [
+            styles.setGoalChip,
+            {
+              backgroundColor: colors.foreground,
+              opacity: pressed ? 0.72 : 1,
+            },
+          ]}
+          testID="summary-set-goal-cta"
+        >
+          <AppText style={[styles.setGoalChipText, { color: colors.background }]}>
+            Set goal
+          </AppText>
+        </Pressable>
+      ) : null}
+
       {onPress && (
         <View style={[styles.chevronBadge, { backgroundColor: colors.border }]}>
           <Feather
@@ -218,6 +298,24 @@ const styles = StyleSheet.create({
   valuesContainer: {
     flexDirection: "row",
     alignItems: "baseline",
+  },
+  setGoalChip: {
+    position: "absolute",
+    right: spacing[12],
+    bottom: spacing[12],
+    minHeight: 32,
+    paddingHorizontal: spacing[12],
+    paddingVertical: spacing[6],
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  setGoalChipText: {
+    ...typography.label,
+    fontSize: 12,
+    fontWeight: "700",
   },
   value: {
     ...typography.h1,

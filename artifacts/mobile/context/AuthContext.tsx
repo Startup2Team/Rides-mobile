@@ -14,6 +14,8 @@ import {
   saveStoredUser,
 } from '@/persistence/authPersistence';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
+import { queryClient } from '@/query/client';
+import { profileKeys } from '@/query/keys';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
@@ -65,12 +67,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (newUser: User) => {
     setUser(newUser);
     await saveStoredUser(newUser);
+    // Drop any previous account's cached profile identity before the next screen reads it.
+    queryClient.setQueryData(profileKeys.current(), {
+      user: newUser,
+      profilePhoto: null,
+    });
+    queryClient.setQueryData(profileKeys.photo(), null);
+    await queryClient.invalidateQueries({ queryKey: profileKeys.all });
   }, []);
 
   const logout = useCallback(async () => {
     setUser(null);
     setDriverProfile(null);
     await clearSensitiveStorage();
+    queryClient.removeQueries({ queryKey: profileKeys.all });
   }, []);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {
@@ -78,6 +88,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...userRef.current, ...updates };
     setUser(updated);
     await saveStoredUser(updated);
+    const previous = queryClient.getQueryData<{
+      user: User | null;
+      profilePhoto: { uri: string } | null;
+    }>(profileKeys.current());
+    queryClient.setQueryData(profileKeys.current(), {
+      user: updated,
+      profilePhoto: previous?.profilePhoto ?? null,
+    });
   }, []);
 
   const saveDriverProfile = useCallback(async (profile: DriverProfile) => {

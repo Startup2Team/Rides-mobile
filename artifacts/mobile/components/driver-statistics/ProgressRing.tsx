@@ -18,6 +18,8 @@ const AnimatedView = Animated.createAnimatedComponent
   ? Animated.createAnimatedComponent(View)
   : View;
 
+export type ProgressRingGoalState = 'configured' | 'unconfigured';
+
 interface ProgressRingProps {
   size: number;
   strokeWidth: number;
@@ -29,6 +31,12 @@ interface ProgressRingProps {
   showArrow?: boolean;
   allowSmallOverflowShadow?: boolean;
   showStartCapAtZero?: boolean;
+  /**
+   * Semantic goal state. Unconfigured forces an inactive track-only ring and
+   * ignores progress (distinct from configured zero-earnings progress).
+   * Defaults to "configured" for backward compatibility.
+   */
+  goalState?: ProgressRingGoalState;
   animationMode?: ProgressRingAnimationMode;
   animateArrow?: boolean;
   progressChangeThreshold?: number;
@@ -234,6 +242,7 @@ function ProgressRingComponent({
   showArrow = false,
   allowSmallOverflowShadow = false,
   showStartCapAtZero = false,
+  goalState = 'configured',
   animationMode = 'entry-and-updates',
   animateArrow = showArrow,
   progressChangeThreshold = PROGRESS_CHANGE_EPSILON,
@@ -242,20 +251,28 @@ function ProgressRingComponent({
   entryDelayMs = 0,
   testID = 'progress-ring',
 }: ProgressRingProps) {
-  const clampedProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
+  const isUnconfiguredGoal = goalState === 'unconfigured';
+  const clampedProgress = isUnconfiguredGoal
+    ? 0
+    : (Number.isFinite(progress) ? Math.max(0, progress) : 0);
   const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
+  const effectiveAnimationMode: ProgressRingAnimationMode = isUnconfiguredGoal
+    ? 'none'
+    : animationMode;
   const animatedProgressRef = useRef<Animated.Value | null>(null);
   if (!animatedProgressRef.current) {
     animatedProgressRef.current = new Animated.Value(
-      modeAllowsEntry(animationMode) && !reducedMotion ? 0 : clampedProgress,
+      modeAllowsEntry(effectiveAnimationMode) && !reducedMotion ? 0 : clampedProgress,
     );
   }
   const animatedArrowRef = useRef<Animated.Value | null>(null);
   if (!animatedArrowRef.current) {
     animatedArrowRef.current = new Animated.Value(
-      showArrow && animateArrow && modeAllowsEntry(animationMode) && !reducedMotion ? 0 : 1,
+      showArrow && animateArrow && modeAllowsEntry(effectiveAnimationMode) && !reducedMotion
+        ? 0
+        : 1,
     );
   }
   const animatedProgress = animatedProgressRef.current;
@@ -294,12 +311,100 @@ function ProgressRingComponent({
     const isInitialEntry = !hasProcessedInitialTargetRef.current;
     const previousTarget = previousTargetProgressRef.current;
     const meaningfullyChanged = Math.abs(clampedProgress - previousTarget) > progressChangeThreshold;
+
+    if (isUnconfiguredGoal) {
+      progressAnimationRef.current?.stop();
+      arrowAnimationRef.current?.stop();
+      arrowInteractionHandleRef.current?.cancel?.();
+      previousTargetProgressRef.current = 0;
+      hasProcessedInitialTargetRef.current = true;
+      animatedProgress.setValue(0);
+      setRenderedHasProgress(false);
+      setRenderedIsOverflow(false);
+
+      const shouldAnimateArrow = showArrow && shouldAnimateProgressRingArrow({
+        animateArrow,
+        animationMode: isInitialEntry ? 'entry-only' : 'none',
+        isInitialEntry,
+        previousTarget,
+        nextTarget: 0,
+        progressChangeThreshold,
+        reducedMotion,
+      });
+
+      if (!shouldAnimateArrow) {
+        animatedArrow.setValue(1);
+        return;
+      }
+
+      let entryDelayHandle: ReturnType<typeof setTimeout> | null = null;
+      const startArrowAnimation = () => {
+        if (!isMountedRef.current) return;
+        animatedArrow.setValue(0);
+        const sequence = Animated.sequence([
+          Animated.timing(animatedArrow, {
+            toValue: 0.35,
+            duration: ARROW_CONTACT_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 0.63,
+            duration: ARROW_FORM_DURATION_MS,
+            easing: Easing?.inOut?.(Easing.cubic) ?? driverStatisticsEasing.easeInOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 0.8,
+            duration: ARROW_FORWARD_BOUNCE_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 0.92,
+            duration: ARROW_REBOUND_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 1,
+            duration: ARROW_SETTLE_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+        ]);
+        arrowAnimationRef.current = sequence;
+        sequence.start(({ finished }) => {
+          if (finished) arrowAnimationRef.current = null;
+        });
+      };
+
+      const run = () => {
+        arrowInteractionHandleRef.current = InteractionManager?.runAfterInteractions?.(
+          startArrowAnimation,
+        ) ?? null;
+        if (!arrowInteractionHandleRef.current) startArrowAnimation();
+      };
+
+      const delayMs = isInitialEntry ? Math.max(0, entryDelayMs) : 0;
+      if (delayMs > 0) {
+        entryDelayHandle = setTimeout(run, delayMs);
+      } else {
+        run();
+      }
+
+      return () => {
+        if (entryDelayHandle) clearTimeout(entryDelayHandle);
+        arrowInteractionHandleRef.current?.cancel?.();
+      };
+    }
+
     const shouldAnimateProgress = isInitialEntry
-      ? modeAllowsEntry(animationMode)
-      : meaningfullyChanged && modeAllowsUpdates(animationMode);
+      ? modeAllowsEntry(effectiveAnimationMode)
+      : meaningfullyChanged && modeAllowsUpdates(effectiveAnimationMode);
     const shouldAnimateArrow = showArrow && shouldAnimateProgressRingArrow({
       animateArrow,
-      animationMode,
+      animationMode: effectiveAnimationMode,
       isInitialEntry,
       previousTarget,
       nextTarget: clampedProgress,
@@ -413,9 +518,10 @@ function ProgressRingComponent({
     animateArrow,
     animatedArrow,
     animatedProgress,
-    animationMode,
     clampedProgress,
+    effectiveAnimationMode,
     entryDelayMs,
+    isUnconfiguredGoal,
     progressChangeThreshold,
     reducedMotion,
     showArrow,
@@ -510,21 +616,29 @@ function ProgressRingComponent({
     extrapolate: 'clamp',
   });
 
-  const hasProgress = renderedHasProgress;
-  const isOverflow = renderedIsOverflow;
+  const hasProgress = isUnconfiguredGoal ? false : renderedHasProgress;
+  const isOverflow = isUnconfiguredGoal ? false : renderedIsOverflow;
   const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
   const shouldRenderShadow =
-    detailLevel === 'full' && (
+    !isUnconfiguredGoal
+    && detailLevel === 'full'
+    && (
       allowSmallOverflowShadow ||
       (size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH)
     );
   const arrowScale = strokeWidth / ARROW_BASE_BADGE_DIAMETER;
   const arrowStrokeWidth = Math.max(1.1, strokeWidth * ARROW_STROKE_TO_BADGE_RATIO);
+  const showZeroStartCap = !isUnconfiguredGoal && !hasProgress && showStartCapAtZero;
 
   return (
     <View
       testID={testID}
       accessibilityRole="progressbar"
+      accessibilityLabel={
+        isUnconfiguredGoal && showArrow
+          ? 'Daily earnings goal not set.'
+          : undefined
+      }
       accessibilityValue={{
         min: 0,
         max: 100,
@@ -678,6 +792,7 @@ function ProgressRingComponent({
                 cy={strokeWidth / 2}
                 r={strokeWidth / 2}
                 fill={color}
+                testID="progress-ring-arrow-badge"
               />
             </Svg>
           )}
@@ -704,7 +819,7 @@ function ProgressRingComponent({
         </View>
       )}
 
-      {!hasProgress && showStartCapAtZero && (
+      {!hasProgress && showZeroStartCap && (
         <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
           <Svg width={size} height={size}>
             <Defs>
@@ -725,6 +840,7 @@ function ProgressRingComponent({
               cy={strokeWidth / 2}
               r={strokeWidth / 2}
               fill={color}
+              testID="progress-ring-zero-start-cap"
             />
           </Svg>
         </View>

@@ -237,7 +237,9 @@ jest.mock("@/persistence/driverRatingPersistence", () => ({
 }));
 
 jest.mock("@/persistence/driverDailyGoalPersistence", () => ({
-  loadStoredDriverDailyGoals: jest.fn(() => Promise.resolve({ data: [] })),
+  loadStoredDriverDailyGoals: jest.fn(() =>
+    Promise.resolve({ data: [], source: "missing" }),
+  ),
 }));
 
 function ride(overrides: Partial<Ride>): Ride {
@@ -330,6 +332,10 @@ describe("DriverStats Summary UI", () => {
         },
       ],
     });
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [],
+      source: "missing",
+    });
     jest.spyOn(console, "error").mockImplementation((...args) => {
       if (String(args[0]).includes("react-test-renderer is deprecated")) return;
       console.warn(...args);
@@ -345,7 +351,6 @@ describe("DriverStats Summary UI", () => {
   test("renders the Summary hierarchy and removes package/payment drift", async () => {
     renderWithQueryClient(<DriverStats />);
 
-    await screen.findAllByText(/30,000 RWF/);
     await waitFor(() =>
       expect(screen.getAllByText("1,000 RWF").length).toBeGreaterThan(0),
     );
@@ -364,15 +369,33 @@ describe("DriverStats Summary UI", () => {
     expect(screen.queryByText("Bonus Rides")).toBeNull();
   });
 
-  test("does not render fake goals, fake percentages, or fake benchmark language", async () => {
+  test("first-time driver sees unset goal state without treating 30,000 as configured", async () => {
+    const { router } = require("expo-router");
     renderWithQueryClient(<DriverStats />);
 
-    await screen.findAllByText(/30,000 RWF/);
+    await waitFor(() =>
+      expect(screen.getByTestId("summary-goal-unset-label")).toBeTruthy(),
+    );
+    expect(screen.getByText("--/--")).toBeTruthy();
+    expect(screen.queryByText("No daily goal set")).toBeNull();
+    expect(screen.getByTestId("summary-set-goal-cta")).toBeTruthy();
+    expect(screen.queryByTestId("summary-goal-value")).toBeNull();
+    expect(screen.queryByText(/1,000\/30,000/)).toBeNull();
+
+    fireEvent.press(screen.getByTestId("summary-set-goal-cta"));
+    expect(router.push).toHaveBeenCalledWith("/driver-daily-goal");
+    expect(router.push).not.toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: "/driver-stats-detail" }),
+    );
+  });
+
+  test("does not render fake percentages or fake benchmark language", async () => {
+    renderWithQueryClient(<DriverStats />);
+
     await waitFor(() =>
       expect(screen.getAllByText("1,000 RWF").length).toBeGreaterThan(0),
     );
 
-    expect(screen.queryAllByText(/goal/i).length).toBe(1);
     expect(screen.queryByText(/50,000/)).toBeNull();
     expect(
       screen.queryByText(/% complete|completion progress|goal progress/i),
@@ -399,8 +422,12 @@ describe("DriverStats Summary UI", () => {
 
     renderWithQueryClient(<DriverStats />);
 
-    await screen.findAllByText(/30,000 RWF/);
-    await waitFor(() => expect(screen.getByText("0 RWF")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("--/--")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getAllByText("0 RWF").length).toBeGreaterThan(0),
+    );
+    expect(screen.queryByText(/0\/30,000/)).toBeNull();
+    expect(screen.queryByText("No daily goal set")).toBeNull();
 
     expect(screen.getByText("--")).toBeTruthy();
     expect(screen.getByText("No rating yet")).toBeTruthy();
@@ -447,9 +474,36 @@ describe("DriverStats Summary UI", () => {
     );
   });
 
+  test("Set goal nested press does not also open Earnings detail", async () => {
+    const { router } = require("expo-router");
+    renderWithQueryClient(<DriverStats />);
+    await waitFor(() => expect(screen.getByTestId("summary-set-goal-cta")).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId("summary-set-goal-cta"));
+
+    expect(router.push).toHaveBeenCalledWith("/driver-daily-goal");
+    expect(
+      (router.push as jest.Mock).mock.calls.some(
+        ([arg]) =>
+          typeof arg === "object"
+          && arg?.pathname === "/driver-stats-detail",
+      ),
+    ).toBe(false);
+  });
+
   test("animates once on entry and does not replay on unchanged focus", async () => {
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [{
+        amountRwf: 30_000,
+        effectiveFromLocalDate: "2026-07-08",
+        createdAt: "2026-07-08T08:00:00.000Z",
+        updatedAt: "2026-07-08T08:00:00.000Z",
+      }],
+      source: "current",
+    });
     renderWithQueryClient(<DriverStats />);
     await waitFor(() => expect(screen.getByTestId("summary-earnings-progress-ring")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("summary-goal-value")).toBeTruthy());
     const progressCalls = () => (Animated.timing as jest.Mock).mock.calls.filter(
       ([, config]) =>
         config.duration === DRIVER_STATISTICS_MOTION.ringEntryMs
@@ -468,13 +522,23 @@ describe("DriverStats Summary UI", () => {
   });
 
   test("a goal change retargets the retained Summary ring once", async () => {
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [{
+        amountRwf: 30_000,
+        effectiveFromLocalDate: "2026-07-08",
+        createdAt: "2026-07-08T08:00:00.000Z",
+        updatedAt: "2026-07-08T08:00:00.000Z",
+      }],
+      source: "current",
+    });
     renderWithQueryClient(<DriverStats />);
-    await waitFor(() => expect(screen.getByTestId("summary-earnings-progress-ring")).toBeTruthy());
     const progressCalls = () => (Animated.timing as jest.Mock).mock.calls.filter(
       ([, config]) =>
         config.duration === DRIVER_STATISTICS_MOTION.ringEntryMs
         || config.duration === DRIVER_STATISTICS_MOTION.ringUpdateMs,
     ).length;
+    await waitFor(() => expect(screen.getByTestId("summary-goal-value")).toBeTruthy());
+    await waitFor(() => expect(progressCalls()).toBeGreaterThanOrEqual(1));
     const initialCount = progressCalls();
     (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
       data: [{
@@ -483,6 +547,7 @@ describe("DriverStats Summary UI", () => {
         createdAt: "2026-07-08T12:00:00.000Z",
         updatedAt: "2026-07-08T12:00:00.000Z",
       }],
+      source: "current",
     });
 
     act(() => {

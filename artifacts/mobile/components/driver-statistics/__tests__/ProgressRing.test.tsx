@@ -258,4 +258,41 @@ describe('ProgressRing animation lifecycle', () => {
     );
     expect(progressAnimations()).toHaveLength(0);
   });
+
+  test('unconfigured goal renders inactive track with arrow badge and no progress layers', () => {
+    renderRing({
+      goalState: 'unconfigured',
+      progress: 0.8,
+      showArrow: true,
+      animateArrow: false,
+      showStartCapAtZero: true,
+      animationMode: 'entry-and-updates',
+    });
+
+    expect(screen.getByTestId('progress-ring').props.accessibilityLabel).toBe(
+      'Daily earnings goal not set.',
+    );
+    expect(screen.getByTestId('progress-ring').props.accessibilityValue).toEqual(
+      accessibilityNow(0),
+    );
+    expect(screen.getByTestId('progress-ring-arrow-badge')).toBeTruthy();
+    expect(screen.queryByTestId('progress-ring-zero-start-cap')).toBeNull();
+    expect(screen.queryByTestId('progress-ring-overflow-arc')).toBeNull();
+    expect(screen.queryByTestId('progress-ring-raised-cap')).toBeNull();
+    expect(screen.queryByTestId('progress-ring-overflow-shadow')).toBeNull();
+    expect(progressAnimations()).toHaveLength(0);
+  });
+
+  test('configured zero progress can still show the start cap', () => {
+    renderRing({
+      goalState: 'configured',
+      progress: 0,
+      showArrow: false,
+      showStartCapAtZero: true,
+      animationMode: 'none',
+    });
+
+    expect(screen.getByTestId('progress-ring-zero-start-cap')).toBeTruthy();
+    expect(screen.queryByTestId('progress-ring-arrow-badge')).toBeNull();
+  });
 });

@@ -90,7 +90,9 @@ jest.mock("@/context/ToastContext", () => ({
 }));
 
 jest.mock("@/persistence/driverDailyGoalPersistence", () => ({
-  loadStoredDriverDailyGoals: jest.fn(() => Promise.resolve({ data: [] })),
+  loadStoredDriverDailyGoals: jest.fn(() =>
+    Promise.resolve({ data: [], source: "missing" }),
+  ),
   saveStoredDriverDailyGoals: jest.fn(() => Promise.resolve()),
 }));
 
@@ -111,6 +113,11 @@ describe("DriverDailyGoalScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers({ now: new Date(2026, 6, 10, 9, 0, 0) });
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [],
+      source: "missing",
+    });
+    (saveStoredDriverDailyGoals as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -175,7 +182,7 @@ describe("DriverDailyGoalScreen", () => {
     expect(input.props.value).toBe("");
 
     // Save button should be disabled
-    const saveBtn = screen.getByLabelText("Save daily earnings goal");
+    const saveBtn = screen.getByLabelText("Set daily earnings goal");
     expect(saveBtn.props.disabled).toBe(true);
 
     // Blur input
@@ -194,7 +201,7 @@ describe("DriverDailyGoalScreen", () => {
 
     // Under the 1,000 RWF minimum.
     fireEvent.changeText(input, "900");
-    const saveBtn = screen.getByLabelText("Save daily earnings goal");
+    const saveBtn = screen.getByLabelText("Set daily earnings goal");
     expect(saveBtn.props.disabled).toBe(true);
   });
 
@@ -226,7 +233,7 @@ describe("DriverDailyGoalScreen", () => {
     fireEvent.changeText(input, "35000");
 
     // Save
-    fireEvent.press(screen.getByLabelText("Save daily earnings goal"));
+    fireEvent.press(screen.getByLabelText("Set daily earnings goal"));
 
     await waitFor(() => {
       expect(saveStoredDriverDailyGoals).toHaveBeenCalledWith([
@@ -238,12 +245,12 @@ describe("DriverDailyGoalScreen", () => {
     });
   });
 
-  test("9. Save button is disabled when amount is unchanged", async () => {
+  test("9. First-time Set Goal stays enabled for the suggested amount", async () => {
     render(<DriverDailyGoalScreen />);
     await screen.findByText("30,000");
 
-    const saveBtn = screen.getByLabelText("Save daily earnings goal");
-    expect(saveBtn.props.disabled).toBe(true);
+    const saveBtn = screen.getByLabelText("Set daily earnings goal");
+    expect(saveBtn.props.disabled).toBe(false);
   });
 
   test("10. Keyboard dismissal/save behavior does not break navigation", async () => {
@@ -254,7 +261,7 @@ describe("DriverDailyGoalScreen", () => {
     const input = screen.getByTestId("daily-goal-amount-input");
     fireEvent.changeText(input, "40000");
 
-    const saveBtn = screen.getByLabelText("Save daily earnings goal");
+    const saveBtn = screen.getByLabelText("Set daily earnings goal");
     fireEvent.press(saveBtn);
 
     // Keyboard should be dismissed
@@ -277,6 +284,7 @@ describe("DriverDailyGoalScreen", () => {
           updatedAt: "2026-07-10T08:00:00.000Z",
         },
       ],
+      source: "current",
     });
 
     render(<DriverDailyGoalScreen />);
@@ -324,7 +332,7 @@ describe("DriverDailyGoalScreen", () => {
     fireEvent.press(screen.getByLabelText("Edit daily earnings goal amount"));
     fireEvent.changeText(screen.getByTestId("daily-goal-amount-input"), "35000");
     jest.setSystemTime(new Date(2026, 6, 11, 0, 5, 0));
-    fireEvent.press(screen.getByLabelText("Save daily earnings goal"));
+    fireEvent.press(screen.getByLabelText("Set daily earnings goal"));
 
     await waitFor(() => {
       expect(saveStoredDriverDailyGoals).toHaveBeenCalledWith([
@@ -347,7 +355,7 @@ describe("DriverDailyGoalScreen", () => {
     expect(driverStatisticsHaptics.selection).toHaveBeenCalledTimes(2);
   });
 
-  test("15. Save success triggers success haptic once and prevents double save", async () => {
+  test("15. First-time Set Goal persists suggestion and shows set toast once", async () => {
     let resolveSave: (() => void) | undefined;
     (saveStoredDriverDailyGoals as jest.Mock).mockImplementation(
       () =>
@@ -358,13 +366,18 @@ describe("DriverDailyGoalScreen", () => {
 
     render(<DriverDailyGoalScreen />);
     await screen.findByText("30,000");
-    fireEvent.press(screen.getByLabelText("Increase daily earnings goal"));
 
-    const saveBtn = screen.getByLabelText("Save daily earnings goal");
+    const saveBtn = screen.getByLabelText("Set daily earnings goal");
     fireEvent.press(saveBtn);
     fireEvent.press(saveBtn);
 
     expect(saveStoredDriverDailyGoals).toHaveBeenCalledTimes(1);
+    expect(saveStoredDriverDailyGoals).toHaveBeenCalledWith([
+      expect.objectContaining({
+        amountRwf: 30_000,
+        effectiveFromLocalDate: "2026-07-10",
+      }),
+    ]);
 
     await act(async () => {
       resolveSave?.();
@@ -373,10 +386,41 @@ describe("DriverDailyGoalScreen", () => {
     await waitFor(() => {
       expect(driverStatisticsHaptics.success).toHaveBeenCalledTimes(1);
       expect(publishDriverDailyGoalUpdate).toHaveBeenCalledTimes(1);
-      expect(mockShowToast).toHaveBeenCalledWith("Daily goal updated", "success", {
+      expect(mockShowToast).toHaveBeenCalledWith("Daily goal set", "success", {
         haptic: false,
       });
       expect(router.back).toHaveBeenCalled();
+    });
+  });
+
+  test("15b. Existing unchanged goal keeps Save disabled; update toast on change", async () => {
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValueOnce({
+      data: [{
+        amountRwf: 30_000,
+        effectiveFromLocalDate: "2026-07-10",
+        createdAt: "2026-07-10T08:00:00.000Z",
+        updatedAt: "2026-07-10T08:00:00.000Z",
+      }],
+      source: "current",
+    });
+
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+    expect(screen.getByLabelText("Save daily earnings goal").props.disabled).toBe(true);
+
+    fireEvent.press(screen.getByLabelText("Increase daily earnings goal"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Save daily earnings goal").props.disabled).toBe(
+        false,
+      );
+    });
+    fireEvent.press(screen.getByLabelText("Save daily earnings goal"));
+
+    await waitFor(() => {
+      expect(saveStoredDriverDailyGoals).toHaveBeenCalled();
+      expect(mockShowToast).toHaveBeenCalledWith("Daily goal updated", "success", {
+        haptic: false,
+      });
     });
   });
 
@@ -388,7 +432,7 @@ describe("DriverDailyGoalScreen", () => {
     render(<DriverDailyGoalScreen />);
     await screen.findByText("30,000");
     fireEvent.press(screen.getByLabelText("Increase daily earnings goal"));
-    fireEvent.press(screen.getByLabelText("Save daily earnings goal"));
+    fireEvent.press(screen.getByLabelText("Set daily earnings goal"));
 
     await waitFor(() => {
       expect(driverStatisticsHaptics.warning).toHaveBeenCalledTimes(1);
@@ -401,7 +445,7 @@ describe("DriverDailyGoalScreen", () => {
       );
     });
 
-    expect(screen.getByLabelText("Save daily earnings goal").props.disabled).toBe(
+    expect(screen.getByLabelText("Set daily earnings goal").props.disabled).toBe(
       false,
     );
   });

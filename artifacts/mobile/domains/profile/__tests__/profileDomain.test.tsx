@@ -119,6 +119,30 @@ describe('profile domain', () => {
     expect(result.current).not.toHaveProperty('driverVerificationStatus');
   });
 
+  test('prefers the live auth session over a stale profile query user', () => {
+    mockUseProfileQuery.mockReturnValue({
+      data: {
+        user: {
+          ...mockUser,
+          id: 'stale-user',
+          name: 'Kezakase Mercy Joan',
+        },
+        profilePhoto: mockProfilePhoto,
+      },
+      refetch: jest.fn(),
+    });
+    mockUseProfilePhotoQuery.mockReturnValue({
+      data: 'file://stale-previous-user.jpg',
+      refetch: jest.fn(),
+    });
+
+    const { result } = renderHook(() => useProfile());
+
+    expect(result.current.profile?.userId).toBe('user-1');
+    expect(result.current.profile?.fullName).toBe('Alice Rider');
+    expect(result.current.profile?.profilePhoto).toBeNull();
+  });
+
   test('returns profile state and compatibility actions', async () => {
     const { result } = renderHook(() => useProfile());
     const actions = renderHook(() => useProfileActions());

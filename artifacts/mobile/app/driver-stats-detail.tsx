@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -26,13 +25,14 @@ import {
   type DriverRatingSummary,
 } from "@/domain/driverWallet";
 import {
-  DEFAULT_DAILY_GOAL_RWF,
   addLocalDays,
   buildDriverDailyStatisticsIndex,
   createEmptyDriverDailyStatistics,
   isFutureLocalDateString,
+  isValidLocalDateString,
   localDateStringToLocalDate,
-  resolveDailyGoalForDate,
+  progressRatioForConfiguredGoal,
+  resolveConfiguredDailyGoalForDate,
   toLocalDateString,
   type DriverDailyGoalRecord,
   DRIVER_STATISTICS_MOTION,
@@ -42,6 +42,7 @@ import {
 import { formatRwf } from "@/domain/driverActivitySummary";
 import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersistence";
 import { getDriverDailyGoalUpdateVersion } from "@/persistence/driverDailyGoalUpdateSignal";
+import { consumeDriverEarningsDateSelection, getDriverEarningsDateSelectionVersion } from "@/persistence/driverEarningsDateSelectionSignal";
 import { useCurrentLocalDate } from "@/hooks/useCurrentLocalDate";
 import { useReducedMotionPreference } from "@/hooks/useReducedMotionPreference";
 import { spacing } from "@/constants/spacing";
@@ -131,18 +132,23 @@ function buildEarningsDateAccessibilityLabel({
   isSelected,
   isFuture,
   earningsRwf,
+  goalConfigured,
   goalRwf,
 }: {
   date: Date;
   isSelected: boolean;
   isFuture: boolean;
   earningsRwf: number;
-  goalRwf: number;
+  goalConfigured: boolean;
+  goalRwf: number | null;
 }) {
   const base = formatDateAccessibilityLabel(date);
   if (isFuture) return `${base}, unavailable`;
   const selectedSuffix = isSelected ? ", selected" : "";
-  return `${base}${selectedSuffix}, earnings ${formatRwf(earningsRwf)} of ${formatRwf(goalRwf)}`;
+  if (!goalConfigured) {
+    return `${base}${selectedSuffix}, earnings ${formatRwf(earningsRwf)}. No daily earnings goal was configured for this date.`;
+  }
+  return `${base}${selectedSuffix}, earnings ${formatRwf(earningsRwf)} of ${formatRwf(goalRwf ?? 0)}`;
 }
 
 export default function DriverStatsDetail() {
@@ -152,7 +158,6 @@ export default function DriverStatsDetail() {
   const params = useLocalSearchParams<{
     metric: string;
     period: string;
-    dailyGoal?: string;
   }>();
   const activeMetric: MetricType = (params.metric as MetricType) || "earnings";
   const config = useMemo(() => {
@@ -176,28 +181,15 @@ export default function DriverStatsDetail() {
   });
   const [dailyGoalRecords, setDailyGoalRecords] = useState<
     DriverDailyGoalRecord[]
-  >(() => {
-    if (params.dailyGoal) {
-      const parsed = parseInt(params.dailyGoal, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        return [
-          {
-            amountRwf: parsed,
-            effectiveFromLocalDate: toLocalDateString(new Date()),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-      }
-    }
-    return [];
-  });
+  >([]);
+  const [goalLoadStatus, setGoalLoadStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const { currentLocalDate, refreshCurrentLocalDate } = useCurrentLocalDate();
   const [selectedLocalDate, setSelectedLocalDate] = useState(() =>
     toLocalDateString(new Date()),
   );
   const selectedDate = localDateStringToLocalDate(selectedLocalDate) ?? new Date();
-  const [calendarVisible, setCalendarVisible] = useState(false);
   const [weekPagerWidth, setWeekPagerWidth] = useState(320);
   const weekPagerWidthRef = useRef(320);
   const weekTranslateX = useRef(new Animated.Value(-320)).current;
@@ -206,12 +198,11 @@ export default function DriverStatsDetail() {
   const supportingTranslateY = useRef(
     new Animated.Value(reducedMotion ? 0 : DRIVER_STATISTICS_MOTION.detailSupportingTranslateY),
   ).current;
-  const calendarBackdropOpacity = useRef(new Animated.Value(0)).current;
-  const calendarPanelOpacity = useRef(new Animated.Value(0)).current;
-  const calendarPanelScale = useRef(new Animated.Value(1)).current;
-  const calendarPanelTranslateY = useRef(new Animated.Value(0)).current;
   const lastObservedGoalUpdateVersionRef = useRef(
     getDriverDailyGoalUpdateVersion(),
+  );
+  const lastObservedEarningsDateSelectionVersionRef = useRef(
+    getDriverEarningsDateSelectionVersion(),
   );
   const previousCurrentLocalDateRef = useRef(currentLocalDate);
   const hasMountedInitialWeekRef = useRef(false);
@@ -369,93 +360,12 @@ export default function DriverStatsDetail() {
     [currentLocalDate, selectedLocalDate],
   );
 
-  const openCalendar = useCallback(() => {
-    setCalendarVisible(true);
-    if (reducedMotion) {
-      calendarBackdropOpacity.setValue(1);
-      calendarPanelOpacity.setValue(1);
-      calendarPanelScale.setValue(1);
-      calendarPanelTranslateY.setValue(0);
-      return;
-    }
-    calendarBackdropOpacity.setValue(0);
-    calendarPanelOpacity.setValue(0);
-    calendarPanelScale.setValue(DRIVER_STATISTICS_MOTION.calendarPanelScaleFrom);
-    calendarPanelTranslateY.setValue(DRIVER_STATISTICS_MOTION.calendarPanelTranslateY);
-    Animated.parallel([
-      Animated.timing(calendarBackdropOpacity, {
-        toValue: 1,
-        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-      Animated.timing(calendarPanelOpacity, {
-        toValue: 1,
-        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-      Animated.timing(calendarPanelScale, {
-        toValue: 1,
-        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-      Animated.timing(calendarPanelTranslateY, {
-        toValue: 0,
-        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [
-    calendarBackdropOpacity,
-    calendarPanelOpacity,
-    calendarPanelScale,
-    calendarPanelTranslateY,
-    reducedMotion,
-  ]);
-
-  const closeCalendar = useCallback(() => {
-    if (reducedMotion) {
-      setCalendarVisible(false);
-      return;
-    }
-    Animated.parallel([
-      Animated.timing(calendarBackdropOpacity, {
-        toValue: 0,
-        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-      Animated.timing(calendarPanelOpacity, {
-        toValue: 0,
-        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-      Animated.timing(calendarPanelScale, {
-        toValue: DRIVER_STATISTICS_MOTION.calendarPanelScaleFrom,
-        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-      Animated.timing(calendarPanelTranslateY, {
-        toValue: DRIVER_STATISTICS_MOTION.calendarPanelTranslateY,
-        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
-        easing: driverStatisticsEasing.easeOutCubic,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) setCalendarVisible(false);
+  const openEarningsHistory = useCallback(() => {
+    router.push({
+      pathname: "/driver-earnings-history",
+      params: { selectedLocalDate },
     });
-  }, [
-    calendarBackdropOpacity,
-    calendarPanelOpacity,
-    calendarPanelScale,
-    calendarPanelTranslateY,
-    reducedMotion,
-  ]);
+  }, [selectedLocalDate]);
 
   // Load rating summary
   React.useEffect(() => {
@@ -478,14 +388,40 @@ export default function DriverStatsDetail() {
         goalUpdateVersion !== lastObservedGoalUpdateVersionRef.current;
       lastObservedGoalUpdateVersionRef.current = goalUpdateVersion;
 
+      const dateSelection = consumeDriverEarningsDateSelection(
+        lastObservedEarningsDateSelectionVersionRef.current,
+      );
+      lastObservedEarningsDateSelectionVersionRef.current = dateSelection.version;
+
+      // Precedence:
+      // 1. Successful Daily Goal update → today
+      // 2. Explicit Earnings History selection → selected date
+      // 3. Otherwise preserve current selection
       if (returningFromGoal) {
         setSelectedLocalDate(todayLocalDate);
         centerWeekPager();
+      } else if (
+        dateSelection.localDate
+        && isValidLocalDateString(dateSelection.localDate)
+        && !isFutureLocalDateString(dateSelection.localDate, todayLocalDate)
+      ) {
+        setSelectedLocalDate(dateSelection.localDate);
+        centerWeekPager();
       }
 
-      void loadStoredDriverDailyGoals().then(stored => {
-        if (active) setDailyGoalRecords(stored.data ?? []);
-      });
+      void loadStoredDriverDailyGoals()
+        .then((stored) => {
+          if (!active) return;
+          if (stored.source === "invalid" && stored.data == null) {
+            setGoalLoadStatus("error");
+            return;
+          }
+          setDailyGoalRecords(stored.data ?? []);
+          setGoalLoadStatus("ready");
+        })
+        .catch(() => {
+          if (active) setGoalLoadStatus("error");
+        });
 
       return () => {
         active = false;
@@ -572,40 +508,43 @@ export default function DriverStatsDetail() {
   }, [activeMetric, activeStats, ratingSummary, driverProfile]);
 
   const isSelectedToday = selectedLocalDate === currentLocalDate;
-  const selectedDateGoal = useMemo(() => {
-    if (activeMetric !== "earnings") return config.target;
-    return resolveDailyGoalForDate({
+  const selectedResolvedGoal = useMemo(() => {
+    if (activeMetric !== "earnings") {
+      return {
+        status: "configured" as const,
+        amountRwf: config.target,
+        effectiveFromLocalDate: selectedLocalDate,
+      };
+    }
+    return resolveConfiguredDailyGoalForDate({
       records: dailyGoalRecords,
       selectedLocalDate,
-      fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
     });
   }, [activeMetric, config.target, dailyGoalRecords, selectedLocalDate]);
 
+  const selectedDateGoal =
+    selectedResolvedGoal.status === "configured"
+      ? selectedResolvedGoal.amountRwf
+      : null;
+
   const progressRatio = useMemo(() => {
-    if (selectedDateGoal <= 0) return 0;
-    return currentValue / selectedDateGoal;
-  }, [currentValue, selectedDateGoal]);
+    if (activeMetric !== "earnings") {
+      if (!selectedDateGoal || selectedDateGoal <= 0) return 0;
+      return currentValue / selectedDateGoal;
+    }
+    if (goalLoadStatus !== "ready") return 0;
+    return progressRatioForConfiguredGoal({
+      earningsRwf: currentValue,
+      resolved: selectedResolvedGoal,
+    });
+  }, [
+    activeMetric,
+    currentValue,
+    goalLoadStatus,
+    selectedDateGoal,
+    selectedResolvedGoal,
+  ]);
   const mainRingStrokeWidth = activeMetric === "earnings" ? 50 : 36;
-
-  // Build calendar month days (July 2026 or Current Month)
-  const calendarDays = useMemo(() => {
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-    const firstDayIndex = new Date(year, month, 1).getDay(); // Sunday is 0
-    const startOffset = firstDayIndex === 0 ? 6 : firstDayIndex - 1; // Align to Monday as 0
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    const days = [];
-    // Pad initial slots
-    for (let i = 0; i < startOffset; i++) {
-      days.push(null);
-    }
-    // Populate month days
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-    return days;
-  }, [selectedLocalDate]);
 
   const handleShare = () => {
     // Shared mock action
@@ -656,13 +595,30 @@ export default function DriverStatsDetail() {
     return String(currentValue);
   }, [currentValue, activeMetric]);
   const targetProgressLabel = useMemo(() => {
-    if (activeMetric === "earnings" || activeMetric === "earningsPerTrip") {
+    if (activeMetric === "earnings") {
+      if (goalLoadStatus === "loading") return "…";
+      if (goalLoadStatus === "error") return "—/—";
+      if (selectedResolvedGoal.status !== "configured") {
+        return "--/--";
+      }
       const displayAmount = displayValueStr.replace(/\s*RWF/gi, "");
-      return `${displayAmount}/${formatRwf(selectedDateGoal)}`;
+      return `${displayAmount}/${formatRwf(selectedResolvedGoal.amountRwf)}`;
+    }
+    if (activeMetric === "earningsPerTrip") {
+      const displayAmount = displayValueStr.replace(/\s*RWF/gi, "");
+      return `${displayAmount}/${formatRwf(selectedDateGoal ?? config.target)}`;
     }
 
-    return `${displayValueStr}/${selectedDateGoal} ${config.unit}`;
-  }, [activeMetric, config.unit, displayValueStr, selectedDateGoal]);
+    return `${displayValueStr}/${selectedDateGoal ?? config.target} ${config.unit}`;
+  }, [
+    activeMetric,
+    config.target,
+    config.unit,
+    displayValueStr,
+    goalLoadStatus,
+    selectedDateGoal,
+    selectedResolvedGoal,
+  ]);
   const headerBottom =
     insets.top + (Platform.OS === "web" ? 67 : 0) + 44;
 
@@ -677,7 +633,7 @@ export default function DriverStatsDetail() {
         right={
           activeMetric === "earnings" ? (
             <Pressable
-              onPress={openCalendar}
+              onPress={openEarningsHistory}
               accessibilityRole="button"
               accessibilityLabel="Open earnings calendar"
               style={styles.headerBtn}
@@ -711,11 +667,20 @@ export default function DriverStatsDetail() {
                           isSelected,
                           isFuture,
                           earningsRwf: getDailyStatsForDate(date).earningsRwf,
-                          goalRwf: resolveDailyGoalForDate({
-                            records: dailyGoalRecords,
-                            selectedLocalDate: dateLocalDate,
-                            fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
-                          }),
+                          goalConfigured:
+                            resolveConfiguredDailyGoalForDate({
+                              records: dailyGoalRecords,
+                              selectedLocalDate: dateLocalDate,
+                            }).status === "configured",
+                          goalRwf: (() => {
+                            const resolved = resolveConfiguredDailyGoalForDate({
+                              records: dailyGoalRecords,
+                              selectedLocalDate: dateLocalDate,
+                            });
+                            return resolved.status === "configured"
+                              ? resolved.amountRwf
+                              : null;
+                          })(),
                         })} from weekday label`
                       : `Select ${formatDateAccessibilityLabel(date)} from weekday label`
                   }
@@ -783,20 +748,22 @@ export default function DriverStatsDetail() {
                 const dateLocalDate = toLocalDateString(date);
                 const isFuture = isFutureLocalDateString(dateLocalDate, currentLocalDate);
                 const dayStats = getDailyStatsForDate(date);
+                const dayResolvedGoal = resolveConfiguredDailyGoalForDate({
+                  records: dailyGoalRecords,
+                  selectedLocalDate: dateLocalDate,
+                });
                 let dayProgress = 0;
-                if (activeMetric === "earnings" && dayStats.earningsRwf > 0) {
-                  const dayGoal = resolveDailyGoalForDate({
-                    records: dailyGoalRecords,
-                    selectedLocalDate: toLocalDateString(date),
-                    fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+                if (activeMetric === "earnings") {
+                  dayProgress = progressRatioForConfiguredGoal({
+                    earningsRwf: dayStats.earningsRwf,
+                    resolved: dayResolvedGoal,
                   });
-                  dayProgress = dayGoal > 0 ? dayStats.earningsRwf / dayGoal : 0;
                 } else if (
                   activeMetric === "completedTrips" &&
                   dayStats.completedTrips > 0
                 ) {
                   dayProgress =
-                    selectedDateGoal > 0
+                    selectedDateGoal && selectedDateGoal > 0
                       ? dayStats.completedTrips / selectedDateGoal
                       : 0;
                 }
@@ -818,11 +785,11 @@ export default function DriverStatsDetail() {
                             isSelected: dateLocalDate === selectedLocalDate,
                             isFuture,
                             earningsRwf: dayStats.earningsRwf,
-                            goalRwf: resolveDailyGoalForDate({
-                              records: dailyGoalRecords,
-                              selectedLocalDate: dateLocalDate,
-                              fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
-                            }),
+                            goalConfigured: dayResolvedGoal.status === "configured",
+                            goalRwf:
+                              dayResolvedGoal.status === "configured"
+                                ? dayResolvedGoal.amountRwf
+                                : null,
                           })
                         : `Select ${formatDateAccessibilityLabel(date)}`
                     }
@@ -845,10 +812,17 @@ export default function DriverStatsDetail() {
                       color={config.color}
                       trackColor={config.color}
                       trackOpacity={0.24}
-                      allowSmallOverflowShadow={!isFuture}
-                      showStartCapAtZero={!isFuture}
+                      goalState={
+                        !isFuture && dayResolvedGoal.status === "configured"
+                          ? "configured"
+                          : "unconfigured"
+                      }
+                      allowSmallOverflowShadow={
+                        !isFuture && dayResolvedGoal.status === "configured"
+                      }
                       animationMode={
                         weekIndex === 1
+                          && dayResolvedGoal.status === "configured"
                           ? hasMountedInitialWeekRef.current
                             ? "updates-only"
                             : "entry-and-updates"
@@ -891,8 +865,27 @@ export default function DriverStatsDetail() {
             trackColor={config.color}
             trackOpacity={0.24}
             showArrow={activeMetric === "earnings"}
-            animationMode="entry-and-updates"
-            animateArrow={activeMetric === "earnings"}
+            goalState={
+              activeMetric === "earnings"
+              && goalLoadStatus === "ready"
+              && selectedResolvedGoal.status === "configured"
+                ? "configured"
+                : activeMetric === "earnings"
+                  ? "unconfigured"
+                  : "configured"
+            }
+            animationMode={
+              activeMetric === "earnings"
+              && (goalLoadStatus !== "ready"
+                || selectedResolvedGoal.status !== "configured")
+                ? "none"
+                : "entry-and-updates"
+            }
+            animateArrow={
+              activeMetric === "earnings"
+              && goalLoadStatus === "ready"
+              && selectedResolvedGoal.status === "configured"
+            }
             detailLevel="full"
             reducedMotion={reducedMotion}
             entryDelayMs={
@@ -939,18 +932,36 @@ export default function DriverStatsDetail() {
             Goal
           </AppText>
           <View style={styles.goalSummaryRow}>
-            <AppText
-              style={[styles.goalSummaryValue, { color: config.color }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {targetProgressLabel}
-            </AppText>
+            <View style={styles.goalSummaryCopy}>
+              <AppText
+                style={[styles.goalSummaryValue, { color: config.color }]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                testID="earnings-goal-summary-value"
+              >
+                {targetProgressLabel}
+              </AppText>
+              {activeMetric === "earnings"
+                && goalLoadStatus === "ready"
+                && selectedResolvedGoal.status !== "configured" ? (
+                <AppText
+                  style={[styles.goalEarningsAlone, { color: colors.mutedForeground }]}
+                  numberOfLines={1}
+                  testID="earnings-amount-without-goal"
+                >
+                  {displayValueStr} earned
+                </AppText>
+              ) : null}
+            </View>
             {activeMetric === "earnings" ? (
               isSelectedToday ? (
                 <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Change daily earnings goal"
+                accessibilityLabel={
+                  selectedResolvedGoal.status === "configured"
+                    ? "Change daily earnings goal"
+                    : "Set daily earnings goal"
+                }
                 hitSlop={4}
                 onPress={() => {
                   void driverStatisticsHaptics.lightImpact();
@@ -969,6 +980,7 @@ export default function DriverStatsDetail() {
                     }],
                   },
                 ]}
+                testID="earnings-goal-action"
               >
                 <AppText
                   style={[
@@ -976,7 +988,9 @@ export default function DriverStatsDetail() {
                     { color: colors.background },
                   ]}
                 >
-                  Change goal
+                  {selectedResolvedGoal.status === "configured"
+                    ? "Change goal"
+                    : "Set goal"}
                 </AppText>
                 </Pressable>
               ) : (
@@ -1150,195 +1164,6 @@ export default function DriverStatsDetail() {
         </View>
         </Animated.View>
       </ScrollView>
-
-      {/* Calendar Overlay Modal */}
-      <Modal
-        visible={calendarVisible}
-        transparent={true}
-        animationType="none"
-        onRequestClose={closeCalendar}
-      >
-        <Animated.View
-          style={[
-            styles.modalBackdrop,
-            {
-              backgroundColor: `rgba(0, 0, 0, ${DRIVER_STATISTICS_MOTION.calendarBackdropOpacity})`,
-              opacity: calendarBackdropOpacity,
-            },
-          ]}
-        >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={closeCalendar}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss earnings calendar"
-          />
-          <Animated.View
-            style={[
-              styles.calendarModal,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                opacity: calendarPanelOpacity,
-                transform: [
-                  { scale: calendarPanelScale },
-                  { translateY: calendarPanelTranslateY },
-                ],
-              },
-            ]}
-          >
-            {/* Header */}
-            <View style={styles.calendarHeader}>
-              <AppText
-                style={[
-                  styles.calendarMonthTitle,
-                  { color: colors.foreground },
-                ]}
-              >
-                {selectedDate.toLocaleDateString("en-US", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </AppText>
-              <Pressable
-                onPress={closeCalendar}
-                accessibilityRole="button"
-                accessibilityLabel="Close earnings calendar"
-                style={styles.calendarCloseBtn}
-              >
-                <Feather name="x" size={18} color="#FFFFFF" />
-              </Pressable>
-            </View>
-
-            {/* Weekdays Row */}
-            <View style={styles.calendarWeekHeader}>
-              {["M", "T", "W", "T", "F", "S", "S"].map((day, idx) => (
-                <AppText
-                  key={idx}
-                  style={[
-                    styles.calendarWeekText,
-                    { color: colors.mutedForeground },
-                  ]}
-                >
-                  {day}
-                </AppText>
-              ))}
-            </View>
-
-            {/* Month Grid */}
-            <View style={styles.calendarGrid}>
-              {calendarDays.map((date, idx) => {
-                if (!date) {
-                  return <View key={idx} style={styles.calendarGridSlot} />;
-                }
-
-                const isCurrentSelected =
-                  date.getDate() === selectedDate.getDate() &&
-                  date.getMonth() === selectedDate.getMonth();
-                const dayStats = getDailyStatsForDate(date);
-                const dateLocalDate = toLocalDateString(date);
-                const isFuture = isFutureLocalDateString(dateLocalDate, currentLocalDate);
-
-                let dayProgress = 0;
-                if (activeMetric === "earnings" && dayStats.earningsRwf > 0) {
-                  const dayGoal = resolveDailyGoalForDate({
-                    records: dailyGoalRecords,
-                    selectedLocalDate: toLocalDateString(date),
-                    fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
-                  });
-                  dayProgress = dayGoal > 0 ? dayStats.earningsRwf / dayGoal : 0;
-                } else if (
-                  activeMetric === "completedTrips" &&
-                  dayStats.completedTrips > 0
-                ) {
-                  dayProgress =
-                    selectedDateGoal > 0
-                      ? dayStats.completedTrips / selectedDateGoal
-                      : 0;
-                }
-
-                return (
-                  <Pressable
-                    key={idx}
-                    onPress={() => {
-                      selectLocalDate(dateLocalDate);
-                      closeCalendar();
-                    }}
-                    disabled={isFuture}
-                    accessibilityRole="button"
-                    accessibilityState={{
-                      disabled: isFuture,
-                      selected: isCurrentSelected,
-                    }}
-                    accessibilityLabel={
-                      activeMetric === "earnings"
-                        ? buildEarningsDateAccessibilityLabel({
-                            date,
-                            isSelected: isCurrentSelected,
-                            isFuture,
-                            earningsRwf: dayStats.earningsRwf,
-                            goalRwf: resolveDailyGoalForDate({
-                              records: dailyGoalRecords,
-                              selectedLocalDate: dateLocalDate,
-                              fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
-                            }),
-                          })
-                        : `Select ${formatDateAccessibilityLabel(date)}`
-                    }
-                    style={styles.calendarGridSlot}
-                  >
-                    {isFuture ? (
-                      <AppText
-                        style={[
-                          styles.calendarDayText,
-                          { color: colors.mutedForeground, opacity: 0.45 },
-                        ]}
-                      >
-                        {date.getDate()}
-                      </AppText>
-                    ) : (
-                    <ProgressRing
-                      size={32}
-                      strokeWidth={3}
-                      progress={dayProgress}
-                      color={config.color}
-                      trackColor="rgba(255, 255, 255, 0.05)"
-                      animationMode="none"
-                      animateArrow={false}
-                      detailLevel="compact"
-                      reducedMotion={reducedMotion}
-                      testID={`calendar-progress-ring-${dateLocalDate}`}
-                    >
-                      <View
-                        style={[
-                          styles.calendarDayBubble,
-                          isCurrentSelected && {
-                            backgroundColor: config.color,
-                          },
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.calendarDayText,
-                            {
-                              color: isCurrentSelected
-                                ? "#FFFFFF"
-                                : colors.foreground,
-                            },
-                          ]}
-                        >
-                          {date.getDate()}
-                        </AppText>
-                      </View>
-                    </ProgressRing>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        </Animated.View>
-      </Modal>
     </View>
   );
 }
@@ -1450,13 +1275,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  goalSummaryValue: {
-    ...typography.h2,
+  goalSummaryCopy: {
     flex: 1,
     minWidth: 0,
+    gap: 2,
+  },
+  goalSummaryValue: {
+    ...typography.h2,
     fontSize: 17,
     lineHeight: 22,
     fontWeight: "700",
+  },
+  goalEarningsAlone: {
+    ...typography.tiny,
+    fontSize: 12,
+    lineHeight: 16,
   },
   goalEditButton: {
     minHeight: 44,
@@ -1552,69 +1385,6 @@ const styles = StyleSheet.create({
   },
   subValue: {
     fontSize: 16,
-    fontWeight: "700",
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-  },
-  calendarModal: {
-    width: "100%",
-    borderRadius: radius["3xl"],
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    gap: 16,
-  },
-  calendarHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  calendarMonthTitle: {
-    ...typography.h2,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  calendarCloseBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FF3B30",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  calendarWeekHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  calendarWeekText: {
-    width: 36,
-    textAlign: "center",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  calendarGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    rowGap: 12,
-  },
-  calendarGridSlot: {
-    width: "14.28%",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-  },
-  calendarDayBubble: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  calendarDayText: {
-    fontSize: 11,
     fontWeight: "700",
   },
 });

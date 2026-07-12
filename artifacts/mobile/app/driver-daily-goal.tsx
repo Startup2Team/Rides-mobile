@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
+  useColorScheme,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -18,12 +19,13 @@ import { useColors } from "@/hooks/useColors";
 import { formatRwf } from "@/domain/driverActivitySummary";
 import {
   DAILY_GOAL_STEP_RWF,
-  DEFAULT_DAILY_GOAL_RWF,
+  SUGGESTED_DAILY_GOAL_RWF,
   MAX_DAILY_GOAL_RWF,
   MIN_DAILY_GOAL_RWF,
-  resolveDailyGoalForDate,
+  resolveConfiguredDailyGoalForDate,
   upsertDailyGoalForEffectiveDate,
   driverStatisticsHaptics,
+  type DriverDailyGoalRecord,
 } from "@/domains/driver-statistics";
 import {
   loadStoredDriverDailyGoals,
@@ -62,20 +64,22 @@ function getDisplayLineHeight(textLength: number) {
 
 export default function DriverDailyGoalScreen() {
   const colors = useColors();
+  const colorScheme = useColorScheme();
+  const adjustButtonFill = colorScheme === "dark" ? "#3A3A3C" : "#E5E5EA";
   const insets = useSafeAreaInsets();
   const { contentTop } = useGlassHeaderMetrics();
   const { showToast } = useToast();
-  const [records, setRecords] = useState<
-    Awaited<ReturnType<typeof loadStoredDriverDailyGoals>>["data"]
-  >([]);
-  const [initialGoal, setInitialGoal] = useState(DEFAULT_DAILY_GOAL_RWF);
-  const [draftGoal, setDraftGoal] = useState(DEFAULT_DAILY_GOAL_RWF);
-  const [inputText, setInputText] = useState(String(DEFAULT_DAILY_GOAL_RWF));
+  const [records, setRecords] = useState<DriverDailyGoalRecord[]>([]);
+  const [hasConfiguredGoal, setHasConfiguredGoal] = useState(false);
+  const [configuredGoal, setConfiguredGoal] = useState<number | null>(null);
+  const [draftGoal, setDraftGoal] = useState(SUGGESTED_DAILY_GOAL_RWF);
+  const [inputText, setInputText] = useState(String(SUGGESTED_DAILY_GOAL_RWF));
   const [isEditing, setIsEditing] = useState(false);
   const [selection, setSelection] = useState<
     { start: number; end: number } | undefined
   >(undefined);
   const [saving, setSaving] = useState(false);
+  const [loadReady, setLoadReady] = useState(false);
   const { currentLocalDate: todayLocalDate, refreshCurrentLocalDate } =
     useCurrentLocalDate();
   const preEditValueRef = React.useRef(draftGoal);
@@ -86,17 +90,24 @@ export default function DriverDailyGoalScreen() {
     async function loadGoal() {
       const stored = await loadStoredDriverDailyGoals();
       const nextRecords = stored.data ?? [];
-      const goal = resolveDailyGoalForDate({
+      const resolved = resolveConfiguredDailyGoalForDate({
         records: nextRecords,
         selectedLocalDate: todayLocalDate,
-        fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
       });
-      if (mounted) {
-        setRecords(nextRecords);
-        setInitialGoal(goal);
-        setDraftGoal(goal);
-        setInputText(String(goal));
+      if (!mounted) return;
+      setRecords(nextRecords);
+      if (resolved.status === "configured") {
+        setHasConfiguredGoal(true);
+        setConfiguredGoal(resolved.amountRwf);
+        setDraftGoal(resolved.amountRwf);
+        setInputText(String(resolved.amountRwf));
+      } else {
+        setHasConfiguredGoal(false);
+        setConfiguredGoal(null);
+        setDraftGoal(SUGGESTED_DAILY_GOAL_RWF);
+        setInputText(String(SUGGESTED_DAILY_GOAL_RWF));
       }
+      setLoadReady(true);
     }
     loadGoal();
     return () => {
@@ -106,17 +117,19 @@ export default function DriverDailyGoalScreen() {
 
   const canDecrease = draftGoal > MIN_DAILY_GOAL_RWF;
   const canIncrease = draftGoal < MAX_DAILY_GOAL_RWF;
+  const isFirstTimeMode = loadReady && !hasConfiguredGoal;
 
   const adjustGoal = useCallback(
     (direction: -1 | 1) => {
       setDraftGoal((current) => {
         let base = current;
         if (isNaN(base) || base === 0) {
-          base = initialGoal;
+          base = hasConfiguredGoal
+            ? (configuredGoal ?? SUGGESTED_DAILY_GOAL_RWF)
+            : SUGGESTED_DAILY_GOAL_RWF;
         }
         const next = base + direction * DAILY_GOAL_STEP_RWF;
         if (next < MIN_DAILY_GOAL_RWF || next > MAX_DAILY_GOAL_RWF) {
-          // Disabled controls should not fire; keep a silent clamp as a safety net.
           const clamped = Math.min(
             MAX_DAILY_GOAL_RWF,
             Math.max(MIN_DAILY_GOAL_RWF, next),
@@ -129,7 +142,7 @@ export default function DriverDailyGoalScreen() {
         return next;
       });
     },
-    [initialGoal],
+    [configuredGoal, hasConfiguredGoal],
   );
 
   const handleStartEditing = useCallback(() => {
@@ -186,13 +199,16 @@ export default function DriverDailyGoalScreen() {
 
   const isDraftValid =
     draftGoal >= MIN_DAILY_GOAL_RWF && draftGoal <= MAX_DAILY_GOAL_RWF;
-  const hasChanged = draftGoal !== initialGoal;
-  const canSave = isDraftValid && hasChanged && !saving;
+  const hasChanged = hasConfiguredGoal
+    ? draftGoal !== configuredGoal
+    : true;
+  const canSave = loadReady && isDraftValid && hasChanged && !saving;
 
   const handleSave = useCallback(async () => {
     if (!canSave || saving) return;
     Keyboard.dismiss();
     setSaving(true);
+    const wasFirstTime = !hasConfiguredGoal;
     try {
       const effectiveFromLocalDate = refreshCurrentLocalDate();
       const nextRecords = upsertDailyGoalForEffectiveDate({
@@ -203,7 +219,11 @@ export default function DriverDailyGoalScreen() {
       await saveStoredDriverDailyGoals(nextRecords);
       publishDriverDailyGoalUpdate();
       void driverStatisticsHaptics.success();
-      showToast("Daily goal updated", "success", { haptic: false });
+      showToast(
+        wasFirstTime ? "Daily goal set" : "Daily goal updated",
+        "success",
+        { haptic: false },
+      );
       router.back();
     } catch {
       void driverStatisticsHaptics.warning();
@@ -211,7 +231,15 @@ export default function DriverDailyGoalScreen() {
     } finally {
       setSaving(false);
     }
-  }, [canSave, draftGoal, records, refreshCurrentLocalDate, saving, showToast]);
+  }, [
+    canSave,
+    draftGoal,
+    hasConfiguredGoal,
+    records,
+    refreshCurrentLocalDate,
+    saving,
+    showToast,
+  ]);
 
   const displayVal = formatRwf(draftGoal).replace(/\s*RWF/gi, "");
   const displayFontSize = getDisplayFontSize(displayVal.length);
@@ -242,8 +270,7 @@ export default function DriverDailyGoalScreen() {
           <AppText
             style={[styles.description, { color: colors.mutedForeground }]}
           >
-            Set a daily goal based on how active you want to be on the road, or
-            how much you would like to earn each day.
+            Set a daily goal based on how active you want to be on the road, or how much you would like to earn each day.
           </AppText>
         </View>
 
@@ -258,9 +285,8 @@ export default function DriverDailyGoalScreen() {
                 style={({ pressed }) => [
                   styles.adjustButton,
                   {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    opacity: !canDecrease ? 0.35 : pressed ? 0.7 : 1,
+                    backgroundColor: adjustButtonFill,
+                    opacity: !canDecrease ? 0.35 : pressed ? 0.72 : 1,
                   },
                 ]}
               >
@@ -285,7 +311,11 @@ export default function DriverDailyGoalScreen() {
                   <TextInput
                     ref={inputRef}
                     testID="daily-goal-amount-input"
-                    accessibilityLabel="Daily goal amount input"
+                    accessibilityLabel={
+                      isFirstTimeMode
+                        ? "Suggested daily goal amount input"
+                        : "Daily goal amount input"
+                    }
                     value={inputText}
                     onChangeText={handleInputChange}
                     onBlur={handleBlur}
@@ -332,9 +362,8 @@ export default function DriverDailyGoalScreen() {
                 style={({ pressed }) => [
                   styles.adjustButton,
                   {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    opacity: !canIncrease ? 0.35 : pressed ? 0.7 : 1,
+                    backgroundColor: adjustButtonFill,
+                    opacity: !canIncrease ? 0.35 : pressed ? 0.72 : 1,
                   },
                 ]}
               >
@@ -356,7 +385,11 @@ export default function DriverDailyGoalScreen() {
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save daily earnings goal"
+            accessibilityLabel={
+              isFirstTimeMode
+                ? "Set daily earnings goal"
+                : "Save daily earnings goal"
+            }
             disabled={!canSave}
             onPress={handleSave}
             style={({ pressed }) => [
@@ -366,9 +399,14 @@ export default function DriverDailyGoalScreen() {
                 opacity: !canSave ? 0.45 : pressed ? 0.78 : 1,
               },
             ]}
+            testID="daily-goal-save-button"
           >
             <AppText style={styles.saveButtonText}>
-              {saving ? "Saving..." : "Save Goal"}
+              {saving
+                ? "Saving..."
+                : isFirstTimeMode
+                  ? "Set Goal"
+                  : "Save Goal"}
             </AppText>
           </Pressable>
         </View>
@@ -388,13 +426,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[24],
     gap: spacing[8],
     alignItems: "center",
-  },
-  title: {
-    ...typography.display,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "700",
-    textAlign: "center",
   },
   description: {
     fontSize: 17,
@@ -422,7 +453,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
   },

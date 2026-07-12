@@ -6,6 +6,11 @@ import { router } from 'expo-router';
 import DriverStatsDetail from '../driver-stats-detail';
 import { loadStoredDriverDailyGoals } from '@/persistence/driverDailyGoalPersistence';
 import { publishDriverDailyGoalUpdate } from '@/persistence/driverDailyGoalUpdateSignal';
+import {
+  consumeDriverEarningsDateSelection,
+  getDriverEarningsDateSelectionVersion,
+  publishDriverEarningsDateSelection,
+} from '@/persistence/driverEarningsDateSelectionSignal';
 import { DRIVER_STATISTICS_MOTION } from '@/domains/driver-statistics/driverStatisticsMotion';
 import { driverStatisticsHaptics } from '@/domains/driver-statistics/driverStatisticsHaptics';
 
@@ -21,6 +26,31 @@ jest.mock('react-native', () => {
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
     Pressable: host('Pressable'),
     ScrollView: host('ScrollView'),
+    FlatList: React.forwardRef((props: {
+      data?: Array<unknown>;
+      renderItem?: (info: { item: unknown; index: number }) => React.ReactNode;
+      keyExtractor?: (item: unknown, index: number) => string;
+      testID?: string;
+      initialScrollIndex?: number;
+      ListHeaderComponent?: React.ReactNode;
+    }, ref: unknown) => {
+      const { data = [], renderItem, keyExtractor, testID, initialScrollIndex = 0 } = props;
+      const center = Math.min(Math.max(0, initialScrollIndex), Math.max(0, data.length - 1));
+      const start = Math.max(0, center - 2);
+      const end = Math.min(data.length - 1, center + 2);
+      const nodes = [];
+      for (let index = start; index <= end; index += 1) {
+        const item = data[index];
+        nodes.push(
+          React.createElement(
+            React.Fragment,
+            { key: keyExtractor ? keyExtractor(item, index) : String(index) },
+            renderItem ? renderItem({ item, index }) : null,
+          ),
+        );
+      }
+      return React.createElement('FlatList', { ref, testID, initialScrollIndex }, nodes);
+    }),
     StyleSheet: {
       create: (styles: object) => styles,
       flatten: (style: object) => style,
@@ -31,7 +61,10 @@ jest.mock('react-native', () => {
     TouchableOpacity: host('TouchableOpacity'),
     useColorScheme: () => 'light',
     View: host('View'),
-    Modal: host('Modal'),
+    Modal: React.forwardRef((props: { visible?: boolean; children?: React.ReactNode }, ref: unknown) => {
+      if (!props.visible) return null;
+      return React.createElement('Modal', { ...props, ref }, props.children);
+    }),
     Image: host('Image'),
     PanResponder: {
       create: (handlers: object) => ({ panHandlers: handlers }),
@@ -202,7 +235,9 @@ jest.mock('@/persistence/driverRatingPersistence', () => ({
 }));
 
 jest.mock('@/persistence/driverDailyGoalPersistence', () => ({
-  loadStoredDriverDailyGoals: jest.fn(() => Promise.resolve({ data: [] })),
+  loadStoredDriverDailyGoals: jest.fn(() =>
+    Promise.resolve({ data: [], source: 'missing' }),
+  ),
 }));
 
 jest.mock('@/hooks/useReducedMotionPreference', () => ({
@@ -253,6 +288,11 @@ describe('DriverStatsDetail UI', () => {
     mockDetailFocusCallback = undefined;
     mockDetailFocusCleanup = undefined;
     mockAppStateChangeHandler = undefined;
+    consumeDriverEarningsDateSelection(getDriverEarningsDateSelectionVersion() - 1);
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [],
+      source: 'missing',
+    });
   });
 
   afterEach(() => {
@@ -265,21 +305,23 @@ describe('DriverStatsDetail UI', () => {
       jest.advanceTimersByTime(DRIVER_STATISTICS_MOTION.detailRingEntryDelayMs);
     });
 
-    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('--/--')).toBeTruthy());
 
     expect(screen.getAllByText('Earnings').length).toBeGreaterThan(0);
     expect(screen.queryByText('Goal: 30000')).toBeNull();
+    expect(screen.queryByText('No daily goal set')).toBeNull();
     expect(screen.getByText('Activity breakdown')).toBeTruthy();
     expect(screen.getByText('Daily Metrics Summary')).toBeTruthy();
   });
 
-  test('shows daily goal action for today and opens the goal screen', async () => {
+  test('shows Set goal action for today and opens the goal screen', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
-    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('--/--')).toBeTruthy());
 
-    const goalAction = screen.getByLabelText('Change daily earnings goal');
+    const goalAction = screen.getByLabelText('Set daily earnings goal');
     expect(goalAction).toBeTruthy();
+    expect(screen.getByText('Set goal')).toBeTruthy();
 
     fireEvent.press(goalAction);
     expect(driverStatisticsHaptics.lightImpact).toHaveBeenCalledTimes(1);
@@ -289,11 +331,14 @@ describe('DriverStatsDetail UI', () => {
   test('hides daily goal action for past selected dates without removing the action slot', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
-    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('--/--')).toBeTruthy());
     fireEvent.press(screen.getByLabelText(tuesdayLabel()));
 
+    expect(screen.queryByLabelText('Set daily earnings goal')).toBeNull();
     expect(screen.queryByLabelText('Change daily earnings goal')).toBeNull();
-    expect(screen.getByText(/\/30,000/)).toBeTruthy();
+    expect(screen.getByText('--/--')).toBeTruthy();
+    expect(screen.queryByText('No goal was set for this day')).toBeNull();
+    expect(screen.getByTestId('earnings-amount-without-goal')).toBeTruthy();
   });
 
   test('preserves a historical selection across cleanup and ordinary refocus', async () => {
@@ -312,15 +357,58 @@ describe('DriverStatsDetail UI', () => {
     expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
   });
 
-  test('opening and closing the calendar preserves the selected date', async () => {
+  test('calendar icon navigates to Earnings History with selectedLocalDate', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
     await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
     fireEvent.press(screen.getByLabelText(tuesdayLabel()));
 
     fireEvent.press(screen.getByLabelText('Open earnings calendar'));
-    fireEvent.press(screen.getByLabelText('Close earnings calendar'));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/driver-earnings-history',
+      params: { selectedLocalDate: '2026-07-07' },
+    });
+    expect(screen.queryByTestId('earnings-history-calendar')).toBeNull();
+    expect(screen.queryByTestId('earnings-history-calendar-list')).toBeNull();
+  });
 
-    expect(screen.getByText(/7 Jul 2026/)).toBeTruthy();
+  test('Earnings History return signal selects the date once and centers the week', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+
+    publishDriverEarningsDateSelection('2026-07-06');
+
+    act(() => {
+      mockDetailFocusCleanup?.();
+      const cleanup = mockDetailFocusCallback?.();
+      mockDetailFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    });
+
+    await waitFor(() => expect(screen.getByText(/6 Jul 2026/)).toBeTruthy());
+
+    act(() => {
+      mockDetailFocusCleanup?.();
+      const cleanup = mockDetailFocusCallback?.();
+      mockDetailFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    });
+
+    expect(screen.getByText(/6 Jul 2026/)).toBeTruthy();
+  });
+
+  test('Daily Goal return takes precedence over a pending calendar selection', async () => {
+    renderWithQueryClient(<DriverStatsDetail />);
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(tuesdayLabel()));
+
+    publishDriverEarningsDateSelection('2026-07-06');
+    publishDriverDailyGoalUpdate();
+
+    act(() => {
+      mockDetailFocusCleanup?.();
+      const cleanup = mockDetailFocusCallback?.();
+      mockDetailFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    });
+
+    await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
   });
 
   test('successful Daily Goal return resets to today and reloads its goal', async () => {
@@ -335,6 +423,7 @@ describe('DriverStatsDetail UI', () => {
         createdAt: '2026-07-08T12:00:00.000Z',
         updatedAt: '2026-07-08T12:00:00.000Z',
       }],
+      source: 'current',
     });
     publishDriverDailyGoalUpdate();
 
@@ -346,6 +435,7 @@ describe('DriverStatsDetail UI', () => {
 
     await waitFor(() => expect(screen.getByText(/12,000\/40,000/)).toBeTruthy());
     expect(screen.getByText(/8 Jul 2026/)).toBeTruthy();
+    expect(screen.getByLabelText('Change daily earnings goal')).toBeTruthy();
   });
 
   test('foregrounding preserves an intentional historical selection', async () => {
@@ -387,14 +477,18 @@ describe('DriverStatsDetail UI', () => {
     await waitFor(() => expect(screen.getByText(/8 Jul 2026/)).toBeTruthy());
   });
 
-  test('fresh entry animates the big ring and only the visible center week', async () => {
+  test('fresh entry keeps idle rings when goal is unset with no progress animations', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
     await waitFor(() => expect(screen.getByTestId('earnings-big-progress-ring')).toBeTruthy());
     act(() => {
       jest.advanceTimersByTime(DRIVER_STATISTICS_MOTION.detailRingEntryDelayMs);
     });
 
-    expect(progressAnimationCount()).toBe(8);
+    // Unconfigured rings are track-only and static — no progress animations.
+    expect(progressAnimationCount()).toBe(0);
+    expect(screen.getByTestId('earnings-big-progress-ring').props.accessibilityLabel).toBe(
+      'Daily earnings goal not set.',
+    );
     expect(screen.getAllByTestId(/weekly-progress-ring-0-/)).toHaveLength(7);
     expect(screen.getAllByTestId(/weekly-progress-ring-1-/)).toHaveLength(7);
     expect(screen.getAllByTestId(/weekly-progress-ring-2-/)).toHaveLength(7);
@@ -407,9 +501,18 @@ describe('DriverStatsDetail UI', () => {
     expect(screen.getByText('Activity breakdown')).toBeTruthy();
   });
 
-  test('date changes retarget only for meaningful progress changes', async () => {
+  test('date changes retarget only for meaningful progress changes when goals are configured', async () => {
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [{
+        amountRwf: 30_000,
+        effectiveFromLocalDate: '2026-07-01',
+        createdAt: '2026-07-01T08:00:00.000Z',
+        updatedAt: '2026-07-01T08:00:00.000Z',
+      }],
+      source: 'current',
+    });
     renderWithQueryClient(<DriverStatsDetail />);
-    await waitFor(() => expect(screen.getByTestId('earnings-big-progress-ring')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/12,000\/30,000/)).toBeTruthy());
     act(() => {
       jest.advanceTimersByTime(DRIVER_STATISTICS_MOTION.detailRingEntryDelayMs);
     });
@@ -425,9 +528,18 @@ describe('DriverStatsDetail UI', () => {
     expect(driverStatisticsHaptics.selection).toHaveBeenCalledTimes(1);
   });
 
-  test('calendar and same-day foreground do not replay the big ring', async () => {
+  test('opening earnings history does not replay the big ring', async () => {
+    (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({
+      data: [{
+        amountRwf: 30_000,
+        effectiveFromLocalDate: '2026-07-01',
+        createdAt: '2026-07-01T08:00:00.000Z',
+        updatedAt: '2026-07-01T08:00:00.000Z',
+      }],
+      source: 'current',
+    });
     renderWithQueryClient(<DriverStatsDetail />);
-    await waitFor(() => expect(screen.getByTestId('earnings-big-progress-ring')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/12,000\/30,000/)).toBeTruthy());
     act(() => {
       jest.advanceTimersByTime(DRIVER_STATISTICS_MOTION.detailRingEntryDelayMs);
     });
@@ -435,9 +547,11 @@ describe('DriverStatsDetail UI', () => {
     const initialCount = progressAnimationCount();
 
     fireEvent.press(screen.getByLabelText('Open earnings calendar'));
-    fireEvent.press(screen.getByLabelText('Close earnings calendar'));
     act(() => mockAppStateChangeHandler?.('active'));
 
+    expect(router.push).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/driver-earnings-history' }),
+    );
     expect(progressAnimationCount()).toBe(initialCount);
   });
 
@@ -451,7 +565,7 @@ describe('DriverStatsDetail UI', () => {
   test('uses the authoritative completed-ride total and real completion-hour activity', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
-    await waitFor(() => expect(screen.getByText(/12,000\/30,000/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/12,000 RWF earned/)).toBeTruthy());
 
     expect(screen.getAllByText('12,000 RWF').length).toBeGreaterThan(0);
     expect(screen.queryByText(/132,000/)).toBeNull();
@@ -468,7 +582,7 @@ describe('DriverStatsDetail UI', () => {
   test('swipes between past weeks without navigating into the future', async () => {
     renderWithQueryClient(<DriverStatsDetail />);
 
-    await waitFor(() => expect(screen.getByText(/\/30,000/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('--/--')).toBeTruthy());
     const weekSelector = screen.getByTestId('weekly-date-selector');
     expect(
       screen.getAllByLabelText(/Thursday, 9 July 2026/).every(

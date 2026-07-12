@@ -28,9 +28,20 @@ export function useProfile() {
   const photoQuery = useProfilePhotoQuery();
 
   const profile = useMemo<UserProfile | null>(() => {
-    const user = profileQuery.data?.user ?? auth.user;
+    // Auth session is the source of truth for the signed-in identity.
+    // Prefer it over the profile query cache so a previous account's name
+    // cannot linger after login/register (query key is not user-scoped).
+    const queryUser = profileQuery.data?.user ?? null;
+    const user = auth.user ?? queryUser;
     if (!user) return null;
-    const profilePhoto = photoQuery.data ? { uri: photoQuery.data } : profileQuery.data?.profilePhoto ?? null;
+
+    const queryMatchesSession = !auth.user || queryUser?.id === auth.user.id;
+    const profilePhoto = queryMatchesSession
+      ? (photoQuery.data
+          ? { uri: photoQuery.data }
+          : profileQuery.data?.profilePhoto ?? null)
+      : null;
+
     return {
       userId: user.id,
       fullName: user.name,
