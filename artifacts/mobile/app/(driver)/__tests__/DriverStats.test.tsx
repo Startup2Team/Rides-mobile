@@ -14,6 +14,8 @@ import type { Ride } from "@/types";
 import DriverStats from "../stats";
 import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
 import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersistence";
+import { DRIVER_STATISTICS_MOTION } from "@/domains/driver-statistics/driverStatisticsMotion";
+import { driverStatisticsHaptics } from "@/domains/driver-statistics/driverStatisticsHaptics";
 
 let mockSummaryAppStateHandler: undefined | ((state: string) => void);
 let mockSummaryFocusCallback: undefined | (() => void | (() => void));
@@ -73,12 +75,13 @@ jest.mock("react-native", () => {
     useColorScheme: () => "light",
     View: host("View"),
     Animated: {
+      View: host("AnimatedView"),
       Value: jest.fn(() => ({
         interpolate: jest.fn(() => ({})),
         setValue: jest.fn(),
         stopAnimation: jest.fn(),
       })),
-      timing: jest.fn(() => ({
+      timing: jest.fn((_value, _config) => ({
         start: jest.fn((cb) => cb && cb({ finished: true })),
         stop: jest.fn(),
       })),
@@ -86,6 +89,21 @@ jest.mock("react-native", () => {
         start: jest.fn((cb) => cb && cb({ finished: true })),
         stop: jest.fn(),
       })),
+      parallel: jest.fn(() => ({
+        start: jest.fn((cb) => cb && cb({ finished: true })),
+        stop: jest.fn(),
+      })),
+    },
+    Easing: {
+      cubic: "cubic",
+      out: jest.fn((value) => value),
+      inOut: jest.fn((value) => value),
+    },
+    InteractionManager: {
+      runAfterInteractions: jest.fn((callback) => {
+        callback();
+        return { cancel: jest.fn() };
+      }),
     },
     AppState: {
       addEventListener: jest.fn((_event, handler) => {
@@ -117,6 +135,18 @@ jest.mock("expo-router", () => ({
 jest.mock("expo-haptics", () => ({
   ImpactFeedbackStyle: { Light: "light" },
   impactAsync: jest.fn(),
+  selectionAsync: jest.fn(),
+  notificationAsync: jest.fn(),
+  NotificationFeedbackType: { Success: "success", Warning: "warning" },
+}));
+
+jest.mock("@/domains/driver-statistics/driverStatisticsHaptics", () => ({
+  driverStatisticsHaptics: {
+    selection: jest.fn(),
+    lightImpact: jest.fn(),
+    success: jest.fn(),
+    warning: jest.fn(),
+  },
 }));
 
 jest.mock("expo-linear-gradient", () => {
@@ -401,11 +431,29 @@ describe("DriverStats Summary UI", () => {
     );
   });
 
+  test("Earnings card press navigates with light haptic feedback", async () => {
+    const { router } = require("expo-router");
+    renderWithQueryClient(<DriverStats />);
+    await waitFor(() => expect(screen.getByTestId("earnings-summary-card")).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId("earnings-summary-card"));
+
+    expect(driverStatisticsHaptics.lightImpact).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pathname: "/driver-stats-detail",
+        params: expect.objectContaining({ metric: "earnings" }),
+      }),
+    );
+  });
+
   test("animates once on entry and does not replay on unchanged focus", async () => {
     renderWithQueryClient(<DriverStats />);
     await waitFor(() => expect(screen.getByTestId("summary-earnings-progress-ring")).toBeTruthy());
     const progressCalls = () => (Animated.timing as jest.Mock).mock.calls.filter(
-      ([, config]) => config.duration === 850,
+      ([, config]) =>
+        config.duration === DRIVER_STATISTICS_MOTION.ringEntryMs
+        || config.duration === DRIVER_STATISTICS_MOTION.ringUpdateMs,
     ).length;
     expect(progressCalls()).toBe(1);
 
@@ -423,7 +471,9 @@ describe("DriverStats Summary UI", () => {
     renderWithQueryClient(<DriverStats />);
     await waitFor(() => expect(screen.getByTestId("summary-earnings-progress-ring")).toBeTruthy());
     const progressCalls = () => (Animated.timing as jest.Mock).mock.calls.filter(
-      ([, config]) => config.duration === 850,
+      ([, config]) =>
+        config.duration === DRIVER_STATISTICS_MOTION.ringEntryMs
+        || config.duration === DRIVER_STATISTICS_MOTION.ringUpdateMs,
     ).length;
     const initialCount = progressCalls();
     (loadStoredDriverDailyGoals as jest.Mock).mockResolvedValue({

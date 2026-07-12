@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -12,6 +13,8 @@ import {
   loadStoredDriverDailyGoals,
   saveStoredDriverDailyGoals,
 } from "@/persistence/driverDailyGoalPersistence";
+import { driverStatisticsHaptics } from "@/domains/driver-statistics/driverStatisticsHaptics";
+import { publishDriverDailyGoalUpdate } from "@/persistence/driverDailyGoalUpdateSignal";
 
 const mockShowToast = jest.fn();
 
@@ -89,6 +92,19 @@ jest.mock("@/context/ToastContext", () => ({
 jest.mock("@/persistence/driverDailyGoalPersistence", () => ({
   loadStoredDriverDailyGoals: jest.fn(() => Promise.resolve({ data: [] })),
   saveStoredDriverDailyGoals: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock("@/domains/driver-statistics/driverStatisticsHaptics", () => ({
+  driverStatisticsHaptics: {
+    selection: jest.fn(),
+    lightImpact: jest.fn(),
+    success: jest.fn(),
+    warning: jest.fn(),
+  },
+}));
+
+jest.mock("@/persistence/driverDailyGoalUpdateSignal", () => ({
+  publishDriverDailyGoalUpdate: jest.fn(),
 }));
 
 describe("DriverDailyGoalScreen", () => {
@@ -318,5 +334,86 @@ describe("DriverDailyGoalScreen", () => {
         }),
       ]);
     });
+  });
+
+  test("14. Plus/minus triggers selection haptic only on valid changes", async () => {
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+
+    fireEvent.press(screen.getByLabelText("Increase daily earnings goal"));
+    expect(driverStatisticsHaptics.selection).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(screen.getByLabelText("Decrease daily earnings goal"));
+    expect(driverStatisticsHaptics.selection).toHaveBeenCalledTimes(2);
+  });
+
+  test("15. Save success triggers success haptic once and prevents double save", async () => {
+    let resolveSave: (() => void) | undefined;
+    (saveStoredDriverDailyGoals as jest.Mock).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+    fireEvent.press(screen.getByLabelText("Increase daily earnings goal"));
+
+    const saveBtn = screen.getByLabelText("Save daily earnings goal");
+    fireEvent.press(saveBtn);
+    fireEvent.press(saveBtn);
+
+    expect(saveStoredDriverDailyGoals).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSave?.();
+    });
+
+    await waitFor(() => {
+      expect(driverStatisticsHaptics.success).toHaveBeenCalledTimes(1);
+      expect(publishDriverDailyGoalUpdate).toHaveBeenCalledTimes(1);
+      expect(mockShowToast).toHaveBeenCalledWith("Daily goal updated", "success", {
+        haptic: false,
+      });
+      expect(router.back).toHaveBeenCalled();
+    });
+  });
+
+  test("16. Save failure keeps the screen open and does not publish", async () => {
+    (saveStoredDriverDailyGoals as jest.Mock).mockRejectedValueOnce(
+      new Error("persist failed"),
+    );
+
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+    fireEvent.press(screen.getByLabelText("Increase daily earnings goal"));
+    fireEvent.press(screen.getByLabelText("Save daily earnings goal"));
+
+    await waitFor(() => {
+      expect(driverStatisticsHaptics.warning).toHaveBeenCalledTimes(1);
+      expect(publishDriverDailyGoalUpdate).not.toHaveBeenCalled();
+      expect(router.back).not.toHaveBeenCalled();
+      expect(mockShowToast).toHaveBeenCalledWith(
+        "Could not save daily goal",
+        "error",
+        { haptic: false },
+      );
+    });
+
+    expect(screen.getByLabelText("Save daily earnings goal").props.disabled).toBe(
+      false,
+    );
+  });
+
+  test("17. Goal amount edit mode preserves the amount touch area", async () => {
+    render(<DriverDailyGoalScreen />);
+    await screen.findByText("30,000");
+
+    const amountArea = screen.getByLabelText("Edit daily earnings goal amount");
+    fireEvent.press(amountArea);
+
+    expect(screen.getByTestId("daily-goal-amount-input")).toBeTruthy();
+    expect(amountArea).toBeTruthy();
   });
 });

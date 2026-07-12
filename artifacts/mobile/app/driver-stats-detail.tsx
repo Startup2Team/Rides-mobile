@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   Modal,
   Platform,
@@ -35,6 +35,9 @@ import {
   resolveDailyGoalForDate,
   toLocalDateString,
   type DriverDailyGoalRecord,
+  DRIVER_STATISTICS_MOTION,
+  driverStatisticsEasing,
+  driverStatisticsHaptics,
 } from "@/domains/driver-statistics";
 import { formatRwf } from "@/domain/driverActivitySummary";
 import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersistence";
@@ -114,6 +117,34 @@ const METRIC_CONFIGS: Record<MetricType, MetricConfig> = {
   },
 };
 
+function formatDateAccessibilityLabel(date: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function buildEarningsDateAccessibilityLabel({
+  date,
+  isSelected,
+  isFuture,
+  earningsRwf,
+  goalRwf,
+}: {
+  date: Date;
+  isSelected: boolean;
+  isFuture: boolean;
+  earningsRwf: number;
+  goalRwf: number;
+}) {
+  const base = formatDateAccessibilityLabel(date);
+  if (isFuture) return `${base}, unavailable`;
+  const selectedSuffix = isSelected ? ", selected" : "";
+  return `${base}${selectedSuffix}, earnings ${formatRwf(earningsRwf)} of ${formatRwf(goalRwf)}`;
+}
+
 export default function DriverStatsDetail() {
   const colors = useColors();
   const reducedMotion = useReducedMotionPreference();
@@ -171,6 +202,14 @@ export default function DriverStatsDetail() {
   const weekPagerWidthRef = useRef(320);
   const weekTranslateX = useRef(new Animated.Value(-320)).current;
   const isWeekAnimating = useRef(false);
+  const supportingOpacity = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
+  const supportingTranslateY = useRef(
+    new Animated.Value(reducedMotion ? 0 : DRIVER_STATISTICS_MOTION.detailSupportingTranslateY),
+  ).current;
+  const calendarBackdropOpacity = useRef(new Animated.Value(0)).current;
+  const calendarPanelOpacity = useRef(new Animated.Value(0)).current;
+  const calendarPanelScale = useRef(new Animated.Value(1)).current;
+  const calendarPanelTranslateY = useRef(new Animated.Value(0)).current;
   const lastObservedGoalUpdateVersionRef = useRef(
     getDriverDailyGoalUpdateVersion(),
   );
@@ -180,6 +219,33 @@ export default function DriverStatsDetail() {
   React.useEffect(() => {
     hasMountedInitialWeekRef.current = true;
   }, []);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      supportingOpacity.setValue(1);
+      supportingTranslateY.setValue(0);
+      return;
+    }
+    supportingOpacity.setValue(0);
+    supportingTranslateY.setValue(DRIVER_STATISTICS_MOTION.detailSupportingTranslateY);
+    const handle = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(supportingOpacity, {
+          toValue: 1,
+          duration: DRIVER_STATISTICS_MOTION.detailSupportingRevealMs,
+          easing: driverStatisticsEasing.easeOutCubic,
+          useNativeDriver: true,
+        }),
+        Animated.timing(supportingTranslateY, {
+          toValue: 0,
+          duration: DRIVER_STATISTICS_MOTION.detailSupportingRevealMs,
+          easing: driverStatisticsEasing.easeOutCubic,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, DRIVER_STATISTICS_MOTION.detailSupportingRevealDelayMs);
+    return () => clearTimeout(handle);
+  }, [reducedMotion, supportingOpacity, supportingTranslateY]);
 
   const centerWeekPager = useCallback(() => {
     isWeekAnimating.current = false;
@@ -211,7 +277,8 @@ export default function DriverStatsDetail() {
       if (!canShiftVisibleWeek(weekOffset)) {
         Animated.timing(weekTranslateX, {
           toValue: -weekPagerWidth,
-          duration: 180,
+          duration: DRIVER_STATISTICS_MOTION.weekSwipeFailMs,
+          easing: driverStatisticsEasing.easeOutCubic,
           useNativeDriver: true,
         }).start();
         return;
@@ -220,7 +287,8 @@ export default function DriverStatsDetail() {
       isWeekAnimating.current = true;
       Animated.timing(weekTranslateX, {
         toValue: weekOffset > 0 ? -weekPagerWidth * 2 : 0,
-        duration: 220,
+        duration: DRIVER_STATISTICS_MOTION.weekSwipeSuccessMs,
+        easing: driverStatisticsEasing.easeOutCubic,
         useNativeDriver: true,
       }).start(({ finished }) => {
         if (!finished) {
@@ -247,19 +315,34 @@ export default function DriverStatsDetail() {
             gestureState.dx < 0 && !canShiftVisibleWeek(1);
           weekTranslateX.setValue(
             -weekPagerWidth +
-              (movingTowardFuture ? gestureState.dx * 0.22 : gestureState.dx),
+              (movingTowardFuture
+                ? gestureState.dx * DRIVER_STATISTICS_MOTION.weekSwipeFutureResistance
+                : gestureState.dx),
           );
         },
         onPanResponderRelease: (_, gestureState) => {
-          const pageChangeThreshold = weekPagerWidth * 0.35;
-          if (gestureState.dx <= -pageChangeThreshold) {
+          const pageChangeThreshold =
+            weekPagerWidth * DRIVER_STATISTICS_MOTION.weekSwipePageThresholdRatio;
+          const velocityComplete =
+            Math.abs(gestureState.vx) >=
+            DRIVER_STATISTICS_MOTION.weekSwipeVelocityThreshold;
+          if (
+            gestureState.dx <= -pageChangeThreshold ||
+            (gestureState.vx <= -DRIVER_STATISTICS_MOTION.weekSwipeVelocityThreshold &&
+              velocityComplete)
+          ) {
             settleWeekSwipe(1);
-          } else if (gestureState.dx >= pageChangeThreshold) {
+          } else if (
+            gestureState.dx >= pageChangeThreshold ||
+            (gestureState.vx >= DRIVER_STATISTICS_MOTION.weekSwipeVelocityThreshold &&
+              velocityComplete)
+          ) {
             settleWeekSwipe(-1);
           } else {
             Animated.timing(weekTranslateX, {
               toValue: -weekPagerWidth,
-              duration: 180,
+              duration: DRIVER_STATISTICS_MOTION.weekSwipeFailMs,
+              easing: driverStatisticsEasing.easeOutCubic,
               useNativeDriver: true,
             }).start();
           }
@@ -267,13 +350,112 @@ export default function DriverStatsDetail() {
         onPanResponderTerminate: () => {
           Animated.timing(weekTranslateX, {
             toValue: -weekPagerWidth,
-            duration: 180,
+            duration: DRIVER_STATISTICS_MOTION.weekSwipeFailMs,
+            easing: driverStatisticsEasing.easeOutCubic,
             useNativeDriver: true,
           }).start();
         },
       }),
     [canShiftVisibleWeek, settleWeekSwipe, weekPagerWidth, weekTranslateX],
   );
+
+  const selectLocalDate = useCallback(
+    (dateLocalDate: string) => {
+      if (isFutureLocalDateString(dateLocalDate, currentLocalDate)) return;
+      if (dateLocalDate === selectedLocalDate) return;
+      void driverStatisticsHaptics.selection();
+      setSelectedLocalDate(dateLocalDate);
+    },
+    [currentLocalDate, selectedLocalDate],
+  );
+
+  const openCalendar = useCallback(() => {
+    setCalendarVisible(true);
+    if (reducedMotion) {
+      calendarBackdropOpacity.setValue(1);
+      calendarPanelOpacity.setValue(1);
+      calendarPanelScale.setValue(1);
+      calendarPanelTranslateY.setValue(0);
+      return;
+    }
+    calendarBackdropOpacity.setValue(0);
+    calendarPanelOpacity.setValue(0);
+    calendarPanelScale.setValue(DRIVER_STATISTICS_MOTION.calendarPanelScaleFrom);
+    calendarPanelTranslateY.setValue(DRIVER_STATISTICS_MOTION.calendarPanelTranslateY);
+    Animated.parallel([
+      Animated.timing(calendarBackdropOpacity, {
+        toValue: 1,
+        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+      Animated.timing(calendarPanelOpacity, {
+        toValue: 1,
+        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+      Animated.timing(calendarPanelScale, {
+        toValue: 1,
+        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+      Animated.timing(calendarPanelTranslateY, {
+        toValue: 0,
+        duration: DRIVER_STATISTICS_MOTION.calendarOpenMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [
+    calendarBackdropOpacity,
+    calendarPanelOpacity,
+    calendarPanelScale,
+    calendarPanelTranslateY,
+    reducedMotion,
+  ]);
+
+  const closeCalendar = useCallback(() => {
+    if (reducedMotion) {
+      setCalendarVisible(false);
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(calendarBackdropOpacity, {
+        toValue: 0,
+        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+      Animated.timing(calendarPanelOpacity, {
+        toValue: 0,
+        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+      Animated.timing(calendarPanelScale, {
+        toValue: DRIVER_STATISTICS_MOTION.calendarPanelScaleFrom,
+        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+      Animated.timing(calendarPanelTranslateY, {
+        toValue: DRIVER_STATISTICS_MOTION.calendarPanelTranslateY,
+        duration: DRIVER_STATISTICS_MOTION.calendarCloseMs,
+        easing: driverStatisticsEasing.easeOutCubic,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setCalendarVisible(false);
+    });
+  }, [
+    calendarBackdropOpacity,
+    calendarPanelOpacity,
+    calendarPanelScale,
+    calendarPanelTranslateY,
+    reducedMotion,
+  ]);
 
   // Load rating summary
   React.useEffect(() => {
@@ -495,7 +677,7 @@ export default function DriverStatsDetail() {
         right={
           activeMetric === "earnings" ? (
             <Pressable
-              onPress={() => setCalendarVisible(true)}
+              onPress={openCalendar}
               accessibilityRole="button"
               accessibilityLabel="Open earnings calendar"
               style={styles.headerBtn}
@@ -518,16 +700,36 @@ export default function DriverStatsDetail() {
                 return (
                 <Pressable
                   key={toLocalDateString(date)}
-                  onPress={() => setSelectedLocalDate(dateLocalDate)}
+                  onPress={() => selectLocalDate(dateLocalDate)}
                   disabled={isFuture}
-                  accessibilityState={{ disabled: isFuture }}
-                  accessibilityLabel={`Select ${new Intl.DateTimeFormat("en-GB", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  }).format(date)} from weekday label`}
-                  style={styles.weekdayLabelItem}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isFuture, selected: isSelected }}
+                  accessibilityLabel={
+                    activeMetric === "earnings"
+                      ? `${buildEarningsDateAccessibilityLabel({
+                          date,
+                          isSelected,
+                          isFuture,
+                          earningsRwf: getDailyStatsForDate(date).earningsRwf,
+                          goalRwf: resolveDailyGoalForDate({
+                            records: dailyGoalRecords,
+                            selectedLocalDate: dateLocalDate,
+                            fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+                          }),
+                        })} from weekday label`
+                      : `Select ${formatDateAccessibilityLabel(date)} from weekday label`
+                  }
+                  style={({ pressed }) => [
+                    styles.weekdayLabelItem,
+                    {
+                      transform: [{
+                        scale:
+                          !reducedMotion && pressed && !isFuture
+                            ? DRIVER_STATISTICS_MOTION.dateCellPressedScale
+                            : 1,
+                      }],
+                    },
+                  ]}
                 >
                   <AppText
                     style={[
@@ -602,16 +804,39 @@ export default function DriverStatsDetail() {
                 return (
                   <Pressable
                     key={toLocalDateString(date)}
-                    onPress={() => setSelectedLocalDate(dateLocalDate)}
+                    onPress={() => selectLocalDate(dateLocalDate)}
                     disabled={isFuture}
-                    accessibilityState={{ disabled: isFuture }}
-                    accessibilityLabel={`Select ${new Intl.DateTimeFormat("en-GB", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    }).format(date)}`}
-                    style={styles.weekdayItem}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      disabled: isFuture,
+                      selected: dateLocalDate === selectedLocalDate,
+                    }}
+                    accessibilityLabel={
+                      activeMetric === "earnings"
+                        ? buildEarningsDateAccessibilityLabel({
+                            date,
+                            isSelected: dateLocalDate === selectedLocalDate,
+                            isFuture,
+                            earningsRwf: dayStats.earningsRwf,
+                            goalRwf: resolveDailyGoalForDate({
+                              records: dailyGoalRecords,
+                              selectedLocalDate: dateLocalDate,
+                              fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+                            }),
+                          })
+                        : `Select ${formatDateAccessibilityLabel(date)}`
+                    }
+                    style={({ pressed }) => [
+                      styles.weekdayItem,
+                      {
+                        transform: [{
+                          scale:
+                            !reducedMotion && pressed && !isFuture
+                              ? DRIVER_STATISTICS_MOTION.dateCellPressedScale
+                              : 1,
+                        }],
+                      },
+                    ]}
                   >
                     <ProgressRing
                       size={40}
@@ -670,6 +895,9 @@ export default function DriverStatsDetail() {
             animateArrow={activeMetric === "earnings"}
             detailLevel="full"
             reducedMotion={reducedMotion}
+            entryDelayMs={
+              reducedMotion ? 0 : DRIVER_STATISTICS_MOTION.detailRingEntryDelayMs
+            }
             testID="earnings-big-progress-ring"
           >
             {activeMetric !== "earnings" && (
@@ -697,6 +925,13 @@ export default function DriverStatsDetail() {
           </ProgressRing>
         </View>
 
+        <Animated.View
+          style={{
+            opacity: supportingOpacity,
+            transform: [{ translateY: supportingTranslateY }],
+            gap: 20,
+          }}
+        >
         <View style={styles.goalSummary}>
           <AppText
             style={[styles.goalSummaryLabel, { color: colors.mutedForeground }]}
@@ -716,13 +951,22 @@ export default function DriverStatsDetail() {
                 <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Change daily earnings goal"
-                hitSlop={8}
-                onPress={() => router.push("/driver-daily-goal")}
+                hitSlop={4}
+                onPress={() => {
+                  void driverStatisticsHaptics.lightImpact();
+                  router.push("/driver-daily-goal");
+                }}
                 style={({ pressed }) => [
                   styles.goalEditButton,
                   {
-                    opacity: pressed ? 0.6 : 1,
+                    opacity: pressed ? 0.72 : 1,
                     backgroundColor: colors.foreground,
+                    transform: [{
+                      scale:
+                        !reducedMotion && pressed
+                          ? DRIVER_STATISTICS_MOTION.dateCellPressedScale
+                          : 1,
+                    }],
                   },
                 ]}
               >
@@ -738,6 +982,8 @@ export default function DriverStatsDetail() {
               ) : (
                 <View
                   pointerEvents="none"
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
                   style={[styles.goalEditButton, styles.goalEditButtonPlaceholder]}
                 />
               )
@@ -759,7 +1005,9 @@ export default function DriverStatsDetail() {
             <AppText
               style={[styles.chartSubtitle, { color: colors.mutedForeground }]}
             >
-              Hourly view
+              {activeStats.completedTrips === 0
+                ? "No completed rides this day"
+                : "Hourly view"}
             </AppText>
           </View>
 
@@ -900,20 +1148,43 @@ export default function DriverStatsDetail() {
             </View>
           </View>
         </View>
+        </Animated.View>
       </ScrollView>
 
       {/* Calendar Overlay Modal */}
       <Modal
         visible={calendarVisible}
         transparent={true}
-        animationType="fade"
-        onRequestClose={() => setCalendarVisible(false)}
+        animationType="none"
+        onRequestClose={closeCalendar}
       >
-        <View style={styles.modalBackdrop}>
-          <View
+        <Animated.View
+          style={[
+            styles.modalBackdrop,
+            {
+              backgroundColor: `rgba(0, 0, 0, ${DRIVER_STATISTICS_MOTION.calendarBackdropOpacity})`,
+              opacity: calendarBackdropOpacity,
+            },
+          ]}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeCalendar}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss earnings calendar"
+          />
+          <Animated.View
             style={[
               styles.calendarModal,
-              { backgroundColor: "#121214", borderColor: colors.border },
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: calendarPanelOpacity,
+                transform: [
+                  { scale: calendarPanelScale },
+                  { translateY: calendarPanelTranslateY },
+                ],
+              },
             ]}
           >
             {/* Header */}
@@ -930,7 +1201,7 @@ export default function DriverStatsDetail() {
                 })}
               </AppText>
               <Pressable
-                onPress={() => setCalendarVisible(false)}
+                onPress={closeCalendar}
                 accessibilityRole="button"
                 accessibilityLabel="Close earnings calendar"
                 style={styles.calendarCloseBtn}
@@ -990,11 +1261,30 @@ export default function DriverStatsDetail() {
                   <Pressable
                     key={idx}
                     onPress={() => {
-                      setSelectedLocalDate(dateLocalDate);
-                      setCalendarVisible(false);
+                      selectLocalDate(dateLocalDate);
+                      closeCalendar();
                     }}
                     disabled={isFuture}
-                    accessibilityState={{ disabled: isFuture }}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      disabled: isFuture,
+                      selected: isCurrentSelected,
+                    }}
+                    accessibilityLabel={
+                      activeMetric === "earnings"
+                        ? buildEarningsDateAccessibilityLabel({
+                            date,
+                            isSelected: isCurrentSelected,
+                            isFuture,
+                            earningsRwf: dayStats.earningsRwf,
+                            goalRwf: resolveDailyGoalForDate({
+                              records: dailyGoalRecords,
+                              selectedLocalDate: dateLocalDate,
+                              fallbackGoal: DEFAULT_DAILY_GOAL_RWF,
+                            }),
+                          })
+                        : `Select ${formatDateAccessibilityLabel(date)}`
+                    }
                     style={styles.calendarGridSlot}
                   >
                     {isFuture ? (
@@ -1046,8 +1336,8 @@ export default function DriverStatsDetail() {
                 );
               })}
             </View>
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
     </View>
   );
@@ -1066,8 +1356,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   headerBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1081,8 +1371,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   weekdayLabelItem: {
-    width: 40,
+    width: 44,
+    minHeight: 44,
     alignItems: "center",
+    justifyContent: "center",
   },
   weekdayRingsRow: {
     flexDirection: "row",
@@ -1096,7 +1388,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   weekdayItem: {
+    width: 44,
+    minHeight: 44,
     alignItems: "center",
+    justifyContent: "center",
   },
   weekdayLabel: {
     width: 22,
@@ -1164,10 +1459,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   goalEditButton: {
-    minHeight: 36,
-    minWidth: 92,
+    minHeight: 44,
+    minWidth: 44,
     paddingHorizontal: 12,
-    borderRadius: 18,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: "auto",
@@ -1261,7 +1556,6 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
@@ -1284,9 +1578,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   calendarCloseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#FF3B30",
     alignItems: "center",
     justifyContent: "center",
@@ -1310,7 +1604,7 @@ const styles = StyleSheet.create({
     width: "14.28%",
     alignItems: "center",
     justifyContent: "center",
-    height: 36,
+    minHeight: 44,
   },
   calendarDayBubble: {
     width: 22,

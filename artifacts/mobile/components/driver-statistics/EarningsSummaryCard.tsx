@@ -1,11 +1,13 @@
-import React from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import React, { useRef } from "react";
+import { Animated, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { AppText } from "@/components/AppText";
 import { radius } from "@/constants/radius";
 import { spacing, semanticSpacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
 import { useColors } from "@/hooks/useColors";
+import { driverStatisticsHaptics } from "@/domains/driver-statistics/driverStatisticsHaptics";
+import { DRIVER_STATISTICS_MOTION } from "@/domains/driver-statistics/driverStatisticsMotion";
 import { ProgressRing } from "./ProgressRing";
 import { formatRwf } from "@/domain/driverActivitySummary";
 
@@ -28,6 +30,8 @@ export function EarningsSummaryCard({
   reducedMotion = false,
 }: EarningsSummaryCardProps) {
   const colors = useColors();
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const pressOpacity = useRef(new Animated.Value(1)).current;
 
   // Adjust target based on period label
   let activeTarget = targetEarnings;
@@ -42,21 +46,53 @@ export function EarningsSummaryCard({
   const targetLabel = formatRwf(activeTarget);
   const displayEarnings = earningsLabel.replace(/\s*RWF/gi, "");
 
+  const animatePress = (pressed: boolean) => {
+    if (!onPress || reducedMotion) return;
+    Animated.parallel([
+      Animated.timing(pressScale, {
+        toValue: pressed ? DRIVER_STATISTICS_MOTION.summaryCardPressedScale : 1,
+        duration: pressed
+          ? DRIVER_STATISTICS_MOTION.summaryCardPressInMs
+          : DRIVER_STATISTICS_MOTION.summaryCardPressOutMs,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pressOpacity, {
+        toValue: pressed ? DRIVER_STATISTICS_MOTION.summaryCardPressedOpacity : 1,
+        duration: pressed
+          ? DRIVER_STATISTICS_MOTION.summaryCardPressInMs
+          : DRIVER_STATISTICS_MOTION.summaryCardPressOutMs,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePress = () => {
+    if (!onPress) return;
+    void driverStatisticsHaptics.lightImpact();
+    onPress();
+  };
+
   return (
     <Pressable
       accessible
       accessibilityLabel={`Earnings for ${periodLabel}. ${earningsLabel} of ${targetLabel} goal. ${completedTrips} completed trips.`}
       accessibilityRole={onPress ? "button" : undefined}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed && onPress ? 0.75 : 1,
-        },
-      ]}
+      onPress={handlePress}
+      onPressIn={() => animatePress(true)}
+      onPressOut={() => animatePress(false)}
+      testID="earnings-summary-card"
     >
+      <Animated.View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            opacity: onPress ? pressOpacity : 1,
+            transform: [{ scale: onPress ? pressScale : 1 }],
+          },
+        ]}
+      >
       {/* Header Block at the Top */}
       <View style={styles.header}>
         <View style={styles.titleGroup}>
@@ -123,6 +159,7 @@ export function EarningsSummaryCard({
           />
         </View>
       )}
+      </Animated.View>
     </Pressable>
   );
 }

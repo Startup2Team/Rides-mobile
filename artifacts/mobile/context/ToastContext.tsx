@@ -37,7 +37,11 @@ interface ToastState {
 }
 
 interface ToastContextValue {
-  showToast: (message: string, variant?: ToastVariant) => void;
+  showToast: (
+    message: string,
+    variant?: ToastVariant,
+    options?: { haptic?: boolean },
+  ) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -79,18 +83,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     });
   }, [opacity, scale, translateY]);
 
-  const showToast = useCallback((message: string, variant: ToastVariant = 'success') => {
+  const showToast = useCallback((
+    message: string,
+    variant: ToastVariant = 'success',
+    options?: { haptic?: boolean },
+  ) => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
 
     toastId.current += 1;
     setToast({ id: toastId.current, message, variant });
 
-    if (variant === 'success') {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else if (variant === 'error') {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    } else {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (options?.haptic !== false) {
+      if (variant === 'success') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (variant === 'error') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
     }
 
     opacity.setValue(0);

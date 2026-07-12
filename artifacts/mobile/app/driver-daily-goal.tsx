@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/components/AppText";
 import { GlassHeader, useGlassHeaderMetrics } from "@/components/GlassHeader";
@@ -24,6 +23,7 @@ import {
   MIN_DAILY_GOAL_RWF,
   resolveDailyGoalForDate,
   upsertDailyGoalForEffectiveDate,
+  driverStatisticsHaptics,
 } from "@/domains/driver-statistics";
 import {
   loadStoredDriverDailyGoals,
@@ -116,18 +116,17 @@ export default function DriverDailyGoalScreen() {
         }
         const next = base + direction * DAILY_GOAL_STEP_RWF;
         if (next < MIN_DAILY_GOAL_RWF || next > MAX_DAILY_GOAL_RWF) {
-          void Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Warning,
+          // Disabled controls should not fire; keep a silent clamp as a safety net.
+          const clamped = Math.min(
+            MAX_DAILY_GOAL_RWF,
+            Math.max(MIN_DAILY_GOAL_RWF, next),
           );
-        } else {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setInputText(String(clamped));
+          return clamped;
         }
-        const clamped = Math.min(
-          MAX_DAILY_GOAL_RWF,
-          Math.max(MIN_DAILY_GOAL_RWF, next),
-        );
-        setInputText(String(clamped));
-        return clamped;
+        void driverStatisticsHaptics.selection();
+        setInputText(String(next));
+        return next;
       });
     },
     [initialGoal],
@@ -151,7 +150,7 @@ export default function DriverDailyGoalScreen() {
       }
       const parsed = parseInt(cleaned, 10);
       if (!isNaN(parsed) && parsed > MAX_DAILY_GOAL_RWF) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        void driverStatisticsHaptics.warning();
         inputRef.current?.setNativeProps({ text: inputText });
         return;
       }
@@ -194,18 +193,24 @@ export default function DriverDailyGoalScreen() {
     if (!canSave || saving) return;
     Keyboard.dismiss();
     setSaving(true);
-    const effectiveFromLocalDate = refreshCurrentLocalDate();
-    const nextRecords = upsertDailyGoalForEffectiveDate({
-      records: records ?? [],
-      effectiveFromLocalDate,
-      amountRwf: draftGoal,
-    });
-    await saveStoredDriverDailyGoals(nextRecords);
-    publishDriverDailyGoalUpdate();
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showToast("Daily goal updated", "success");
-    setSaving(false);
-    router.back();
+    try {
+      const effectiveFromLocalDate = refreshCurrentLocalDate();
+      const nextRecords = upsertDailyGoalForEffectiveDate({
+        records: records ?? [],
+        effectiveFromLocalDate,
+        amountRwf: draftGoal,
+      });
+      await saveStoredDriverDailyGoals(nextRecords);
+      publishDriverDailyGoalUpdate();
+      void driverStatisticsHaptics.success();
+      showToast("Daily goal updated", "success", { haptic: false });
+      router.back();
+    } catch {
+      void driverStatisticsHaptics.warning();
+      showToast("Could not save daily goal", "error", { haptic: false });
+    } finally {
+      setSaving(false);
+    }
   }, [canSave, draftGoal, records, refreshCurrentLocalDate, saving, showToast]);
 
   const displayVal = formatRwf(draftGoal).replace(/\s*RWF/gi, "");

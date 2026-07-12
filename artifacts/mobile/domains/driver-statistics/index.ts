@@ -8,3 +8,5 @@ export * from './driverStatisticsViewModel';
 export * from './driverDailyGoals';
 export * from './driverDailyStatistics';
 export * from './driverLocalDates';
+export * from './driverStatisticsMotion';
+export * from './driverStatisticsHaptics';

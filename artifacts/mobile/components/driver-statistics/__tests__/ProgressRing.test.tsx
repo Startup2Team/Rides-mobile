@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { ProgressRing, PROGRESS_CHANGE_EPSILON } from '../ProgressRing';
+import { DRIVER_STATISTICS_MOTION } from '@/domains/driver-statistics/driverStatisticsMotion';
 
 const mockTimingAnimations: Array<{
   config: { duration: number; toValue: number };
@@ -83,7 +84,18 @@ jest.mock('react-native-svg', () => {
 });
 
 function progressAnimations() {
-  return mockTimingAnimations.filter(animation => animation.config.duration === 850);
+  return mockTimingAnimations.filter(animation =>
+    animation.config.duration === DRIVER_STATISTICS_MOTION.ringEntryMs
+    || animation.config.duration === DRIVER_STATISTICS_MOTION.ringUpdateMs,
+  );
+}
+
+function accessibilityNow(progress: number) {
+  return {
+    min: 0,
+    max: 100,
+    now: Math.round(Math.min(1, progress) * 100),
+  };
 }
 
 function renderRing(overrides: Partial<React.ComponentProps<typeof ProgressRing>> = {}) {
@@ -104,6 +116,11 @@ describe('ProgressRing animation lifecycle', () => {
     mockTimingAnimations.length = 0;
     mockSequences.length = 0;
     mockAnimatedValues.length = 0;
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test('entry animation starts from zero when allowed', () => {
@@ -112,6 +129,7 @@ describe('ProgressRing animation lifecycle', () => {
     expect(mockAnimatedValues[0].setValue).toHaveBeenCalledWith(0);
     expect(progressAnimations()).toHaveLength(1);
     expect(progressAnimations()[0].config.toValue).toBe(0.5);
+    expect(progressAnimations()[0].config.duration).toBe(DRIVER_STATISTICS_MOTION.ringEntryMs);
   });
 
   test('entry-disabled and static rings render the target immediately', () => {
@@ -151,6 +169,7 @@ describe('ProgressRing animation lifecycle', () => {
     );
     expect(first.stop).toHaveBeenCalledTimes(1);
     expect(progressAnimations().at(-1)?.config.toValue).toBe(0.9);
+    expect(progressAnimations().at(-1)?.config.duration).toBe(DRIVER_STATISTICS_MOTION.ringUpdateMs);
     expect(mockAnimatedValues[0].setValue).toHaveBeenCalledTimes(1);
 
     view.rerender(
@@ -194,6 +213,15 @@ describe('ProgressRing animation lifecycle', () => {
     expect(mockSequences).toHaveLength(0);
   });
 
+  test('entry delay defers the first draw without hiding the ring', () => {
+    renderRing({ entryDelayMs: 60 });
+    expect(progressAnimations()).toHaveLength(0);
+    expect(screen.getByTestId('progress-ring')).toBeTruthy();
+
+    jest.advanceTimersByTime(60);
+    expect(progressAnimations()).toHaveLength(1);
+  });
+
   test('unmount stops active progress and arrow animations', () => {
     const view = renderRing({ showArrow: true, animateArrow: true });
     const progress = progressAnimations()[0];
@@ -225,7 +253,9 @@ describe('ProgressRing animation lifecycle', () => {
 
   test.each([0, 1, 1.5, 3.25])('static mode settles progress %s without animation', progress => {
     renderRing({ animationMode: 'none', progress });
-    expect(screen.getByTestId('progress-ring').props.accessibilityValue).toEqual({ now: progress });
+    expect(screen.getByTestId('progress-ring').props.accessibilityValue).toEqual(
+      accessibilityNow(progress),
+    );
     expect(progressAnimations()).toHaveLength(0);
   });
 });

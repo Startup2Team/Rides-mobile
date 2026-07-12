@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { InteractionManager, View, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
+import {
+  DRIVER_STATISTICS_MOTION,
+  driverStatisticsEasing,
+} from '@/domains/driver-statistics/driverStatisticsMotion';
 
 const AnimatedCircle = Animated.createAnimatedComponent
   ? Animated.createAnimatedComponent(Circle)
@@ -30,6 +34,8 @@ interface ProgressRingProps {
   progressChangeThreshold?: number;
   detailLevel?: ProgressRingDetailLevel;
   reducedMotion?: boolean;
+  /** Delay before the first entry draw. Defaults to 0 (backward compatible). */
+  entryDelayMs?: number;
   testID?: string;
 }
 
@@ -42,19 +48,14 @@ const SHADOW_ARC_DEGREES = 14;
 const CAP_BRIDGE_ARC_DEGREES = 6;
 const CAP_POSITION_STEPS_PER_LAP = 72;
 const SHADOW_PATH_STEPS = 8;
-const PROGRESS_ANIMATION_DURATION_MS = 850;
-export const PROGRESS_CHANGE_EPSILON = 0.0005;
-const ARROW_ANIMATION_DURATION_MS = 560;
-const ARROW_CONTACT_DURATION_MS = 200;
-const ARROW_FORM_DURATION_MS = 190;
-const ARROW_FORWARD_BOUNCE_DURATION_MS = 70;
-const ARROW_REBOUND_DURATION_MS = 60;
-const ARROW_SETTLE_DURATION_MS =
-  ARROW_ANIMATION_DURATION_MS -
-  ARROW_CONTACT_DURATION_MS -
-  ARROW_FORM_DURATION_MS -
-  ARROW_FORWARD_BOUNCE_DURATION_MS -
-  ARROW_REBOUND_DURATION_MS;
+export const PROGRESS_CHANGE_EPSILON = DRIVER_STATISTICS_MOTION.progressChangeEpsilon;
+const RING_ENTRY_DURATION_MS = DRIVER_STATISTICS_MOTION.ringEntryMs;
+const RING_UPDATE_DURATION_MS = DRIVER_STATISTICS_MOTION.ringUpdateMs;
+const ARROW_CONTACT_DURATION_MS = DRIVER_STATISTICS_MOTION.arrowContactMs;
+const ARROW_FORM_DURATION_MS = DRIVER_STATISTICS_MOTION.arrowFormMs;
+const ARROW_FORWARD_BOUNCE_DURATION_MS = DRIVER_STATISTICS_MOTION.arrowForwardBounceMs;
+const ARROW_REBOUND_DURATION_MS = DRIVER_STATISTICS_MOTION.arrowReboundMs;
+const ARROW_SETTLE_DURATION_MS = DRIVER_STATISTICS_MOTION.arrowSettleMs;
 const SHADOW_SEGMENTS = [
   { start: 0, end: 2.8, opacity: 0.34 },
   { start: 1.6, end: 5.4, opacity: 0.22 },
@@ -88,7 +89,7 @@ const ARROW_KEYFRAMES = {
     'M 0 -11.25 L 9.5 0 L 0 11.25',
   ],
 };
-const ARROW_BOUNCE_TRANSLATE_X = [0, 0, 0, 0, 0, 1.5, -0.35, 0];
+const ARROW_BOUNCE_TRANSLATE_X = [0, 0, 0, 0, 0, DRIVER_STATISTICS_MOTION.arrowBounceTranslateX, -0.35, 0];
 const ARROW_BASE_BADGE_DIAMETER = 44;
 const ARROW_STROKE_TO_BADGE_RATIO = 0.045;
 
@@ -238,6 +239,7 @@ function ProgressRingComponent({
   progressChangeThreshold = PROGRESS_CHANGE_EPSILON,
   detailLevel = 'full',
   reducedMotion = false,
+  entryDelayMs = 0,
   testID = 'progress-ring',
 }: ProgressRingProps) {
   const clampedProgress = Number.isFinite(progress) ? Math.max(0, progress) : 0;
@@ -325,71 +327,86 @@ function ProgressRingComponent({
       return;
     }
 
-    if (isInitialEntry) animatedProgress.setValue(0);
-    const progressAnimation = Animated.timing(animatedProgress, {
-      toValue: clampedProgress,
-      duration: PROGRESS_ANIMATION_DURATION_MS,
-      useNativeDriver: false,
-    });
-    progressAnimationRef.current = progressAnimation;
-    progressAnimation.start(({ finished }) => {
-      if (!finished || !isMountedRef.current) return;
-      progressAnimationRef.current = null;
-      setRenderedHasProgress(clampedProgress > 0);
-      setRenderedIsOverflow(clampedProgress > 1);
-    });
+    let entryDelayHandle: ReturnType<typeof setTimeout> | null = null;
+    const startProgressAndArrow = () => {
+      if (!isMountedRef.current) return;
+      if (isInitialEntry) animatedProgress.setValue(0);
+      const progressAnimation = Animated.timing(animatedProgress, {
+        toValue: clampedProgress,
+        duration: isInitialEntry ? RING_ENTRY_DURATION_MS : RING_UPDATE_DURATION_MS,
+        easing: isInitialEntry
+          ? driverStatisticsEasing.easeOutCubic
+          : driverStatisticsEasing.easeInOutCubic,
+        useNativeDriver: false,
+      });
+      progressAnimationRef.current = progressAnimation;
+      progressAnimation.start(({ finished }) => {
+        if (!finished || !isMountedRef.current) return;
+        progressAnimationRef.current = null;
+        setRenderedHasProgress(clampedProgress > 0);
+        setRenderedIsOverflow(clampedProgress > 1);
+      });
 
-    if (!shouldAnimateArrow) {
-      animatedArrow.setValue(1);
-      return;
+      if (!shouldAnimateArrow) {
+        animatedArrow.setValue(1);
+        return;
+      }
+
+      const startArrowAnimation = () => {
+        if (!isMountedRef.current) return;
+        animatedArrow.setValue(0);
+        const sequence = Animated.sequence([
+          Animated.timing(animatedArrow, {
+            toValue: 0.35,
+            duration: ARROW_CONTACT_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 0.63,
+            duration: ARROW_FORM_DURATION_MS,
+            easing: Easing?.inOut?.(Easing.cubic) ?? driverStatisticsEasing.easeInOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 0.8,
+            duration: ARROW_FORWARD_BOUNCE_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 0.92,
+            duration: ARROW_REBOUND_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedArrow, {
+            toValue: 1,
+            duration: ARROW_SETTLE_DURATION_MS,
+            easing: Easing?.out?.(Easing.cubic) ?? driverStatisticsEasing.easeOutCubic,
+            useNativeDriver: false,
+          }),
+        ]);
+        arrowAnimationRef.current = sequence;
+        sequence.start(({ finished }) => {
+          if (finished) arrowAnimationRef.current = null;
+        });
+      };
+      arrowInteractionHandleRef.current = InteractionManager?.runAfterInteractions?.(
+        startArrowAnimation,
+      ) ?? null;
+      if (!arrowInteractionHandleRef.current) startArrowAnimation();
+    };
+
+    const delayMs = isInitialEntry ? Math.max(0, entryDelayMs) : 0;
+    if (delayMs > 0) {
+      entryDelayHandle = setTimeout(startProgressAndArrow, delayMs);
+    } else {
+      startProgressAndArrow();
     }
 
-    const startArrowAnimation = () => {
-      if (!isMountedRef.current) return;
-      animatedArrow.setValue(0);
-      const sequence = Animated.sequence([
-        Animated.timing(animatedArrow, {
-          toValue: 0.35,
-          duration: ARROW_CONTACT_DURATION_MS,
-          easing: Easing?.out?.(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedArrow, {
-          toValue: 0.63,
-          duration: ARROW_FORM_DURATION_MS,
-          easing: Easing?.inOut?.(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedArrow, {
-          toValue: 0.8,
-          duration: ARROW_FORWARD_BOUNCE_DURATION_MS,
-          easing: Easing?.out?.(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedArrow, {
-          toValue: 0.92,
-          duration: ARROW_REBOUND_DURATION_MS,
-          easing: Easing?.out?.(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedArrow, {
-          toValue: 1,
-          duration: ARROW_SETTLE_DURATION_MS,
-          easing: Easing?.out?.(Easing.cubic),
-          useNativeDriver: false,
-        }),
-      ]);
-      arrowAnimationRef.current = sequence;
-      sequence.start(({ finished }) => {
-        if (finished) arrowAnimationRef.current = null;
-      });
-    };
-    arrowInteractionHandleRef.current = InteractionManager?.runAfterInteractions?.(
-      startArrowAnimation,
-    ) ?? null;
-    if (!arrowInteractionHandleRef.current) startArrowAnimation();
-
     return () => {
+      if (entryDelayHandle) clearTimeout(entryDelayHandle);
       arrowInteractionHandleRef.current?.cancel?.();
     };
   }, [
@@ -398,6 +415,7 @@ function ProgressRingComponent({
     animatedProgress,
     animationMode,
     clampedProgress,
+    entryDelayMs,
     progressChangeThreshold,
     reducedMotion,
     showArrow,
