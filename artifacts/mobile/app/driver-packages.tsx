@@ -23,6 +23,7 @@ import { getActiveDriverRideCampaigns, resolvePackageOffer, type DriverRidePacka
 import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
+import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
@@ -61,6 +62,7 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
   const [isActivating, setIsActivating] = useState(false);
   const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
+  const { claims } = useManualPaymentClaimsQuery({ driverId: user?.id });
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
@@ -162,6 +164,19 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
           ) : null}
         </View>
       </View>
+    ) : null}
+
+    {claims && claims.length > 0 ? (
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="View payment confirmations"
+        style={[styles.historyLink, { backgroundColor: cardFill, borderColor: colors.border }]}
+        onPress={() => router.push('/driver-package-payment-status')}
+      >
+        <Feather name="clock" size={16} color={colors.primary} />
+        <AppText style={[styles.historyLinkText, { color: colors.foreground }]}>Payment confirmations</AppText>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 'auto' }} />
+      </TouchableOpacity>
     ) : null}
 
     <View style={styles.introCopy}>
@@ -341,6 +356,20 @@ const styles = StyleSheet.create({
   activationErrorText: { ...typography.caption, flex: 1, lineHeight: 18 },
   buyButtonContainer: { marginHorizontal: semanticSpacing.cardPadding, marginTop: spacing[4] },
   scrollTail: { height: spacing[32] },
+  historyLink: {
+    marginHorizontal: semanticSpacing.cardPadding,
+    marginBottom: spacing[14],
+    borderRadius: radius.sheetCompact,
+    borderWidth: 1,
+    paddingHorizontal: spacing[20],
+    paddingVertical: spacing[16],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[10],
+  },
+  historyLinkText: {
+    ...typography.bodySmall,
+  },
 });
 
 export default DriverPackagesScreen;

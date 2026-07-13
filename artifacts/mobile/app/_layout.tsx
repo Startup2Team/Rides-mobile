@@ -97,8 +97,10 @@ function RootLayoutNav() {
       <Stack.Screen name="driver-submission-confirmation" />
       <Stack.Screen name="driver-packages" />
       <Stack.Screen name="driver-package-payment" />
+      <Stack.Screen name="driver-package-payment-status" />
       <Stack.Screen name="driver-policy" />
       <Stack.Screen name="driver-documents" />
+      <Stack.Screen name="driver-daily-goal" />
       <Stack.Screen name="driver-vehicles" />
       <Stack.Screen name="driver-vehicle-details" />
       <Stack.Screen name="driver-add-vehicle" />

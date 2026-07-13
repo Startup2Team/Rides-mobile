@@ -29,6 +29,7 @@ export function useGlassHeaderMetrics() {
 
 interface GlassHeaderProps {
   title: string;
+  subtitle?: string;
   showBack?: boolean;
   onBackPress?: () => void;
   right?: React.ReactNode;
@@ -37,6 +38,7 @@ interface GlassHeaderProps {
 
 export function GlassHeader({
   title,
+  subtitle,
   showBack = true,
   onBackPress,
   right,
@@ -71,6 +73,11 @@ export function GlassHeader({
               </AppText>
               {titleAccessory}
             </View>
+            {subtitle ? (
+              <AppText variant="tiny" style={[styles.headerSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+                {subtitle}
+              </AppText>
+            ) : null}
           </View>
         </View>
 
@@ -93,6 +100,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     minHeight: 44,
     paddingHorizontal: semanticSpacing.cardPadding,
   },
@@ -117,6 +125,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...typography.h3,
+  },
+  headerSubtitle: {
+    ...typography.tiny,
+    marginTop: -2,
   },
   sideSlot: {
     width: sizes.iconButton.md,

@@ -1,0 +1,31 @@
+import React from "react";
+import { Image, ImageStyle } from "react-native";
+import { useColors } from "@/hooks/useColors";
+
+interface VisitWebsiteIconProps {
+  size?: number;
+  color?: any;
+  style?: ImageStyle;
+}
+
+export function VisitWebsiteIcon({
+  size = 22,
+  color,
+  style,
+}: VisitWebsiteIconProps) {
+  const colors = useColors();
+  return (
+    <Image
+      source={require("@/assets/icons/visit-website.png")}
+      style={[
+        {
+          width: size,
+          height: size,
+          resizeMode: "contain",
+          tintColor: color ?? colors.primary,
+        },
+        style,
+      ]}
+    />
+  );
+}

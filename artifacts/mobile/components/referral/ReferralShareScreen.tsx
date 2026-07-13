@@ -1,65 +1,33 @@
 import React, { useEffect, useMemo } from 'react';
-import { Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, Share, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { SymbolView } from 'expo-symbols';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import QRCode from 'qrcode';
+import { LinearGradient } from 'expo-linear-gradient';
 import { APP_NAME } from '@/constants/branding';
-import { buttonCornerRadius } from '@/constants/buttons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { ReferralQrCode } from './ReferralQrCode';
 import { appendStoredReferralEvent } from '@/persistence/referralEventsPersistence';
 import { buildReferralId, buildReferralLink, getReferralPlatform, REFERRAL_EVENT_NAMES } from '@/domain/referrals';
-import { typography } from '@/constants/typography';
+import { useProfile } from '@/domains/profile';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 
 function eventId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function PrimaryButton({
-  label,
-  onPress,
-  variant = 'solid',
-}: {
-  label: string;
-  onPress: () => void;
-  variant?: 'solid' | 'outline';
-}) {
-  const colors = useColors();
-  const isSolid = variant === 'solid';
-  return (
-    <TouchableOpacity
-      style={[
-        styles.actionButton,
-        {
-          backgroundColor: isSolid ? colors.primary : colors.card,
-          borderColor: isSolid ? colors.primary : colors.border,
-        },
-      ]}
-      activeOpacity={0.84}
-      onPress={onPress}
-    >
-      {Platform.OS === 'ios' ? (
-        <SymbolView
-          name="square.and.arrow.up"
-          size={20}
-          tintColor={isSolid ? '#fff' : colors.foreground}
-        />
-      ) : (
-        <Ionicons name="share-outline" size={21} color={isSolid ? '#fff' : colors.foreground} />
-      )}
-      <Text style={[styles.actionButtonText, { color: isSolid ? '#fff' : colors.foreground }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 export default function ReferralShareScreen() {
   const colors = useColors();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { user, profile, driverProfile } = useProfile();
   const { showToast } = useToast();
+
   const referralLink = useMemo(() => buildReferralLink(user?.id ?? ''), [user?.id]);
   const referralId = useMemo(() => buildReferralId(user?.id ?? ''), [user?.id]);
 
@@ -130,50 +98,173 @@ export default function ReferralShareScreen() {
     });
   };
 
+  const handleShareCode = async () => {
+    try {
+      if (!FileSystem.cacheDirectory) {
+        throw new Error('Cache directory unavailable');
+      }
+
+      const fileUri = `${FileSystem.cacheDirectory}rides_invite_qr.svg`;
+      const svg = await QRCode.toString(referralLink, {
+        type: 'svg',
+        width: 500,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF',
+        },
+      });
+
+      await FileSystem.writeAsStringAsync(fileUri, svg, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'image/svg+xml',
+          dialogTitle: 'Share QR code',
+          UTI: 'public.svg-image',
+        });
+        void appendStoredReferralEvent({
+          id: eventId(),
+          name: REFERRAL_EVENT_NAMES.linkShared,
+          method: 'share',
+          userId: user?.id ?? '',
+          referralId,
+          referralLink,
+          platform: getReferralPlatform(),
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        showToast('Sharing is not available on this device', 'error');
+      }
+    } catch (error: any) {
+      showToast(`Failed to share QR code: ${error?.message || error}`, 'error');
+    }
+  };
+
+  const handleLearnMore = async () => {
+    await openExternalUrl('https://rides.rw/faq');
+  };
+
+  const handleScanPress = () => {
+    showToast('Scan feature coming soon', 'info');
+  };
+
   if (!user?.id) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <GlassHeader title={`Invite people to ${APP_NAME}`} />
+        <GlassHeader title="QR code" />
         <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
-          <Text style={[styles.emptyState, { color: colors.mutedForeground }]}>No referral account is available.</Text>
+          <Text style={[styles.emptyState, { color: colors.mutedForeground }]}>
+            No referral account is available.
+          </Text>
         </View>
       </View>
     );
   }
 
+  const profileName = profile?.fullName || user?.name || 'Rides Partner';
+  const profileImage = profile?.profilePhoto?.uri || driverProfile?.profileImage;
+  const profileInitial = (profileName || '?').trim()[0].toUpperCase();
+
+  const footerText = user?.isDriver
+    ? 'Your customer can scan this code to start a ride with you.'
+    : `Your friend can scan this code to sign up and start riding with ${APP_NAME}.`;
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <GlassHeader title={`Invite people to ${APP_NAME}`} />
-      <View style={[styles.container, { paddingTop: headerMetrics.contentTop }]}>
-        <Text style={[styles.helpText, { color: colors.mutedForeground }]}>
-          Ask a friend to scan the QR code, copy the link and send it in chat or contacts, or tap Share to choose social apps and messaging.
-        </Text>
+      <GlassHeader
+        title="QR code"
+        right={
+          <TouchableOpacity
+            onPress={handleScanPress}
+            style={styles.headerRight}
+            accessibilityRole="button"
+            accessibilityLabel="Scan"
+          >
+            <Text style={[styles.headerRightText, { color: colors.foreground }]}>Scan</Text>
+          </TouchableOpacity>
+        }
+      />
+      <View style={[styles.container, { paddingTop: headerMetrics.contentTop, paddingBottom: Math.max(insets.bottom, 16) + 56 }]}>
+        <View style={styles.cardContainer}>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            {/* Circular Avatar overlapping the top edge */}
+            <View style={[styles.avatarOverlap, { borderColor: colors.card, backgroundColor: colors.card }]}>
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              ) : (
+                <LinearGradient
+                  colors={['#9DBBE0', '#7984C3']}
+                  style={styles.avatarPlaceholder}
+                >
+                  <Text style={styles.avatarInitial}>{profileInitial}</Text>
+                </LinearGradient>
+              )}
+            </View>
 
-        <View style={styles.qrSection}>
-          <View style={[styles.qrFrame, { backgroundColor: '#FFFFFF', borderColor: colors.border }]}>
-            <View style={styles.qrCenter}>
-              <ReferralQrCode data={referralLink} size={256} />
+            {/* Profile Info */}
+            <Text style={[styles.nameText, { color: colors.foreground }]} numberOfLines={1}>{profileName}</Text>
+
+
+
+            <Text style={[styles.descriptorText, { color: colors.mutedForeground }]}>
+              {user?.isDriver ? 'Rides Partner Account' : 'Rides Account'}
+            </Text>
+
+            {/* QR Code section */}
+            <View style={styles.qrContainer}>
+              <ReferralQrCode data={referralLink} size={180} />
             </View>
           </View>
+        </View>
+
+        {/* Footer Text */}
+        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+          {footerText}{' '}
+          <Text style={[styles.learnMoreText, { color: colors.primary }]} onPress={handleLearnMore}>
+            Learn More
+          </Text>
+        </Text>
+
+        {/* Action Buttons Section */}
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity
+            style={styles.actionButtonCol}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionCircle, { backgroundColor: colors.card === '#FFFFFF' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)' }]}>
+              <Feather name="share" size={20} color={colors.foreground} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.foreground }]}>Share link</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.linkCard, { backgroundColor: colors.input }]}
-            activeOpacity={0.76}
-            onPress={() => {
-              void handleCopyLink();
-            }}
+            style={styles.actionButtonCol}
+            onPress={handleCopyLink}
+            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Copy invite link"
           >
-            <Text style={[styles.linkText, { color: colors.foreground }]} numberOfLines={1}>
-              {referralLink}
-            </Text>
-            <Feather name="copy" size={24} color={colors.primary} />
+            <View style={[styles.actionCircle, { backgroundColor: colors.card === '#FFFFFF' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)' }]}>
+              <Feather name="copy" size={20} color={colors.foreground} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.foreground }]}>Copy link</Text>
           </TouchableOpacity>
-        </View>
 
-        <View style={styles.actions}>
-          <PrimaryButton label="Share" onPress={() => { void handleShare(); }} />
+          <TouchableOpacity
+            style={styles.actionButtonCol}
+            onPress={handleShareCode}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.actionCircle, { backgroundColor: colors.card === '#FFFFFF' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)' }]}>
+              <Ionicons name="qr-code-outline" size={20} color={colors.foreground} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.foreground }]}>Share code</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -186,65 +277,130 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    gap: 14,
-    justifyContent: 'flex-start',
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   emptyState: {
-    ...typography.bodySmall,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 40,
+  },
+  headerRight: {
+    marginLeft: 'auto',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  headerRightText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cardContainer: {
+    width: '100%',
+    marginTop: 64, // space to account for the overlapping avatar
+    alignItems: 'center',
+  },
+  card: {
+    width: '100%',
+    borderRadius: 20,
+    paddingTop: 56, // space from top of card to the name text
+    paddingBottom: 32,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  avatarOverlap: {
+    position: 'absolute',
+    top: -44, // overlaps the top card border
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 4,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  nameText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+
+  descriptorText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  qrContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  footerText: {
+    fontSize: 14,
+    textAlign: 'center',
     lineHeight: 20,
+    paddingHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 'auto',
   },
-  helpText: {
-    ...typography.bodySmall,
-    lineHeight: 19,
+  learnMoreText: {
+    fontWeight: '600',
   },
-  qrSection: {
-    gap: 4,
-    marginTop: 56,
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 24,
   },
-  qrFrame: {
-    alignSelf: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 0,
-    padding: 1,
+  actionButtonCol: {
+    alignItems: 'center',
+    flex: 1,
   },
-  qrCenter: {
+  actionCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 0,
   },
-  linkCard: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 6,
-    marginTop: 42,
-    paddingHorizontal: 15,
-  },
-  linkText: {
-    flex: 1,
-    ...typography.title,
-    lineHeight: 22,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 48,
-    flex: 1,
-    borderRadius: buttonCornerRadius(48),
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-  },
-  actionButtonText: {
-    ...typography.bodySmall,
-    fontFamily: typography.badge.fontFamily,
+  actionLabel: {
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
