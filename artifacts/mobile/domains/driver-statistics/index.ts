@@ -9,5 +9,6 @@ export * from './driverDailyGoals';
 export * from './driverDailyStatistics';
 export * from './driverLocalDates';
 export * from './driverStatisticsCalendar';
+export * from './driverStatisticsDateSelector';
 export * from './driverStatisticsMotion';
 export * from './driverStatisticsHaptics';

@@ -23,6 +23,7 @@ jest.mock('react-native', () => {
     AccessibilityInfo: {
       announceForAccessibility: jest.fn(),
     },
+    Keyboard: { dismiss: jest.fn() },
     ActivityIndicator: host('ActivityIndicator'),
     Pressable: host('Pressable'),
     View: host('View'),
@@ -198,13 +199,57 @@ describe('DriverEarningsHistoryScreen', () => {
     await waitFor(() => expect(screen.getByTestId('driver-earnings-history-screen')).toBeTruthy());
     expect(screen.getByTestId('earnings-history-month-title')).toBeTruthy();
     expect(screen.getByText('July 2026')).toBeTruthy();
-    expect(screen.queryByText('Earnings History')).toBeNull();
     expect(screen.getByLabelText('Back to Earnings')).toBeTruthy();
     expect(screen.queryByLabelText('Select today')).toBeNull();
     expect(screen.queryByLabelText('Jump to year')).toBeNull();
+    expect(screen.getByLabelText('Select a date')).toBeTruthy();
     expect(screen.getByTestId('earnings-history-weekday-header')).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId('earnings-history-calendar-list')).toBeTruthy());
     expect(screen.getByTestId('calendar-month-2026-07')).toBeTruthy();
+  });
+
+  test('date selector prefills selected date and Cancel leaves the calendar unchanged', async () => {
+    renderScreen();
+    await waitFor(() => expect(screen.getByLabelText('Select a date')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Select a date'));
+    expect(screen.getByLabelText('Day').props.value).toBe('8');
+    expect(screen.getByLabelText('Month').props.value).toBe('7');
+    expect(screen.getByLabelText('Year').props.value).toBe('2026');
+    fireEvent.press(screen.getByText('Cancel'));
+    expect(screen.queryByTestId('earnings-history-date-selector-modal')).toBeNull();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  test('invalid and future selector dates disable Go, while Today fills today', async () => {
+    renderScreen();
+    fireEvent.press(await screen.findByLabelText('Select a date'));
+    fireEvent.changeText(screen.getByLabelText('Day'), '31');
+    fireEvent.changeText(screen.getByLabelText('Month'), '2');
+    expect(screen.getByTestId('date-selector-go-button').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Enter a valid date')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Day'), '11');
+    fireEvent.changeText(screen.getByLabelText('Month'), '7');
+    fireEvent.changeText(screen.getByLabelText('Year'), '2027');
+    expect(screen.getByText('This date is in the future')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Today'));
+    expect(screen.getByLabelText('Day').props.value).toBe('10');
+    expect(screen.getByLabelText('Month').props.value).toBe('7');
+    expect(screen.getByLabelText('Year').props.value).toBe('2026');
+  });
+
+  test('Go accepts an ancient year, keeps the page open, and highlights the target', async () => {
+    renderScreen();
+    fireEvent.press(await screen.findByLabelText('Select a date'));
+    fireEvent.changeText(screen.getByLabelText('Day'), '1');
+    fireEvent.changeText(screen.getByLabelText('Month'), '1');
+    fireEvent.changeText(screen.getByLabelText('Year'), '1500');
+    expect(screen.getByTestId('date-selector-go-button').props.accessibilityState.disabled).toBe(false);
+    fireEvent.press(screen.getByTestId('date-selector-go-button'));
+    expect(router.back).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByTestId('calendar-day-1500-01-01').props.accessibilityState.selected).toBe(true);
+    });
+    expect(screen.queryByTestId('earnings-history-date-selector-modal')).toBeNull();
   });
 
   test('selecting a date publishes return signal and navigates back', async () => {

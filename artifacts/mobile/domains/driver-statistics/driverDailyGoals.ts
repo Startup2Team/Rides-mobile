@@ -32,7 +32,7 @@ function padDatePart(value: number) {
 
 export function toLocalDateString(date: Date) {
   return [
-    date.getFullYear(),
+    String(date.getFullYear()).padStart(4, '0'),
     padDatePart(date.getMonth() + 1),
     padDatePart(date.getDate()),
   ].join('-');
@@ -45,7 +45,15 @@ export function isCurrentLocalDate(selectedDate: Date, now = new Date()) {
 }
 
 export function isValidLocalDateString(value: unknown): value is string {
-  return typeof value === 'string' && LOCAL_DATE_PATTERN.test(value);
+  if (typeof value !== 'string' || !LOCAL_DATE_PATTERN.test(value)) return false;
+  const [year, monthIndex, day] = value.split('-').map(Number);
+  const date = new Date(0);
+  date.setFullYear(year, monthIndex - 1, day);
+  date.setHours(12, 0, 0, 0);
+  return !Number.isNaN(date.getTime())
+    && date.getFullYear() === year
+    && date.getMonth() === monthIndex - 1
+    && date.getDate() === day;
 }
 
 export function validateDailyGoalAmount(amountRwf: unknown): amountRwf is number {
@@ -55,8 +63,12 @@ export function validateDailyGoalAmount(amountRwf: unknown): amountRwf is number
     && amountRwf <= MAX_DAILY_GOAL_RWF;
 }
 
+const normalizedGoalRecordCache = new WeakMap<DriverDailyGoalRecord[], DriverDailyGoalRecord[]>();
+
 function normalizeRecords(records: DriverDailyGoalRecord[]) {
-  return records
+  const cached = normalizedGoalRecordCache.get(records);
+  if (cached) return cached;
+  const normalized = records
     .filter(record =>
       validateDailyGoalAmount(record.amountRwf)
       && isValidLocalDateString(record.effectiveFromLocalDate)
@@ -64,6 +76,8 @@ function normalizeRecords(records: DriverDailyGoalRecord[]) {
       && typeof record.updatedAt === 'string',
     )
     .sort((a, b) => a.effectiveFromLocalDate.localeCompare(b.effectiveFromLocalDate));
+  normalizedGoalRecordCache.set(records, normalized);
+  return normalized;
 }
 
 /**
@@ -81,9 +95,20 @@ export function resolveConfiguredDailyGoalForDate({
     return { status: 'not-configured', amountRwf: null };
   }
 
-  const resolved = normalizeRecords(records)
-    .filter(record => record.effectiveFromLocalDate <= selectedLocalDate)
-    .at(-1);
+  const normalized = normalizeRecords(records);
+  let low = 0;
+  let high = normalized.length - 1;
+  let resolved: DriverDailyGoalRecord | undefined;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = normalized[middle];
+    if (candidate.effectiveFromLocalDate <= selectedLocalDate) {
+      resolved = candidate;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
 
   if (!resolved) {
     return { status: 'not-configured', amountRwf: null };

@@ -1,195 +1,142 @@
 import {
-  DRIVER_STATISTICS_CALENDAR_MONTH_ESTIMATED_HEIGHT,
-  DRIVER_STATISTICS_CALENDAR_WEEKDAY_LABELS,
-  MIN_CALENDAR_YEAR,
-  buildDriverStatisticsCalendarMonthAtIndex,
-  clampCalendarJumpYear,
-  createCalendarMonthIndexData,
-  formatCalendarMonthShortLabel,
-  getCalendarIndexForJumpYear,
-  getCalendarIndexForLocalDate,
-  getCalendarIndexForMonth,
-  getCalendarMonthFromIndex,
-  getCalendarTotalMonths,
-  parseCalendarJumpYear,
+  CALENDAR_INITIAL_MONTH_BATCH,
+  buildCalendarMonthLayouts,
+  buildDriverStatisticsCalendarMonthAtOffset,
+  createInitialRelativeMonthOffsets,
+  getCalendarMonthWeekCount,
+  getRestoredScrollOffsetAfterPrepend,
+  getRelativeOffsetForYearMonth,
+  getYearMonthFromRelativeOffset,
+  prependRelativeMonthOffsetBatch,
   toMonthKey,
 } from '../driverStatisticsCalendar';
-import type { DriverDailyGoalRecord } from '../driverDailyGoals';
-import { createEmptyDriverDailyStatistics } from '../driverDailyStatistics';
+import { createLocalCalendarDate, localDateStringToLocalDate } from '../driverLocalDates';
+import { isValidLocalDateString, toLocalDateString } from '../driverDailyGoals';
 
-describe('driverStatisticsCalendar', () => {
-  test('range begins at January 1500 and ends at the current month', () => {
-    const total = getCalendarTotalMonths('2026-07-10');
-    expect(total).toBe((2026 - MIN_CALENDAR_YEAR) * 12 + 7);
-    expect(total).toBe(6319);
+const CURRENT = { currentYear: 2026, currentMonthIndex: 6 };
 
-    expect(getCalendarMonthFromIndex(0)).toEqual({
-      year: MIN_CALENDAR_YEAR,
-      monthIndex: 0,
-    });
-    expect(toMonthKey(MIN_CALENDAR_YEAR, 0)).toBe('1500-01');
-
-    const last = getCalendarMonthFromIndex(total - 1);
-    expect(last).toEqual({ year: 2026, monthIndex: 6 });
-    expect(toMonthKey(last.year, last.monthIndex)).toBe('2026-07');
+describe('relative driver statistics calendar', () => {
+  test.each([
+    [0, 2026, 6],
+    [-1, 2026, 5],
+    [-12, 2025, 6],
+    [-6318, 1500, 0],
+    [-6319, 1499, 11],
+  ])('offset %s maps to %s-%s', (offset, year, monthIndex) => {
+    expect(getYearMonthFromRelativeOffset({ ...CURRENT, offset })).toEqual({ year, monthIndex });
+    expect(getRelativeOffsetForYearMonth({ ...CURRENT, year, monthIndex })).toBe(offset);
   });
 
-  test('future months are excluded from the total count', () => {
-    expect(getCalendarTotalMonths('2026-07-31')).toBe(6319);
-    expect(getCalendarMonthFromIndex(getCalendarTotalMonths('2026-07-10'))).toEqual({
-      year: 2026,
-      monthIndex: 7,
-    });
-    // Index equal to total is outside the list; last valid is current month only.
-    expect(getCalendarIndexForLocalDate('2026-08-01', '2026-07-10')).toBe(6318);
+  test('future offsets and future target months are rejected', () => {
+    expect(() => getYearMonthFromRelativeOffset({ ...CURRENT, offset: 1 })).toThrow();
+    expect(() => getRelativeOffsetForYearMonth({ ...CURRENT, year: 2026, monthIndex: 7 })).toThrow();
   });
 
-  test('month index maps to year/month and back', () => {
-    expect(getCalendarMonthFromIndex(0, MIN_CALENDAR_YEAR)).toEqual({
-      year: 1500,
-      monthIndex: 0,
-    });
-    expect(getCalendarMonthFromIndex(12, MIN_CALENDAR_YEAR)).toEqual({
-      year: 1501,
-      monthIndex: 0,
-    });
-    expect(getCalendarMonthFromIndex(6318, MIN_CALENDAR_YEAR)).toEqual({
-      year: 2026,
-      monthIndex: 6,
-    });
-
-    expect(getCalendarIndexForMonth(1500, 0)).toBe(0);
-    expect(getCalendarIndexForMonth(2026, 6)).toBe(6318);
-    expect(getCalendarIndexForMonth(2000, 0)).toBe((2000 - 1500) * 12);
+  test('initial window is lightweight, finite, ordered, and ends at current month', () => {
+    const offsets = createInitialRelativeMonthOffsets(2026, 6);
+    expect(offsets).toHaveLength(CALENDAR_INITIAL_MONTH_BATCH);
+    expect(offsets[0]).toBe(-239);
+    expect(offsets.at(-1)).toBe(0);
+    expect(offsets.every((value, index) => value === index - 239)).toBe(true);
   });
 
-  test('current and selected month initial indexes are correct', () => {
-    expect(getCalendarIndexForLocalDate('2026-07-10', '2026-07-10')).toBe(6318);
-    expect(getCalendarIndexForLocalDate('2026-07-08', '2026-07-10')).toBe(6318);
-    expect(getCalendarIndexForLocalDate('1500-01-15', '2026-07-10')).toBe(0);
-    expect(getCalendarIndexForLocalDate('2000-03-01', '2026-07-10')).toBe(
-      getCalendarIndexForMonth(2000, 2),
-    );
+  test('multiple prepends preserve identities without duplicates and continue beyond 1500', () => {
+    let offsets = createInitialRelativeMonthOffsets(2026, 6);
+    const original = offsets;
+    for (let index = 0; index < 27; index += 1) {
+      offsets = prependRelativeMonthOffsetBatch({ loadedOffsets: offsets, ...CURRENT });
+    }
+    expect(offsets).toContain(-6318);
+    expect(offsets).toContain(-6319);
+    expect(new Set(offsets).size).toBe(offsets.length);
+    expect(offsets.slice(-original.length)).toEqual(original);
+    expect(offsets.at(-1)).toBe(0);
   });
 
-  test('lightweight index data does not eagerly build month grids', () => {
-    const indexes = createCalendarMonthIndexData('2026-07-10');
-    expect(indexes).toHaveLength(6319);
-    expect(indexes[0]).toBe(0);
-    expect(indexes[6318]).toBe(6318);
-    expect(indexes.every((value, index) => value === index)).toBe(true);
+  test('stable month keys are independent of prepend index', () => {
+    const before = getYearMonthFromRelativeOffset({ ...CURRENT, offset: -12 });
+    const offsets = prependRelativeMonthOffsetBatch({
+      loadedOffsets: createInitialRelativeMonthOffsets(2026, 6),
+      ...CURRENT,
+    });
+    const after = getYearMonthFromRelativeOffset({ ...CURRENT, offset: offsets[offsets.indexOf(-12)] });
+    expect(toMonthKey(before.year, before.monthIndex)).toBe(toMonthKey(after.year, after.monthIndex));
   });
 
-  test('builds a single month lazily with Monday-first weeks and future disabled', () => {
-    const index = new Map([
-      [
-        '2026-07-08',
-        {
-          ...createEmptyDriverDailyStatistics('2026-07-08'),
-          earningsRwf: 12_000,
-        },
-      ],
-    ]);
-    const goals: DriverDailyGoalRecord[] = [
-      {
-        amountRwf: 30_000,
-        effectiveFromLocalDate: '2026-07-08',
-        createdAt: '2026-07-08T00:00:00.000Z',
-        updatedAt: '2026-07-08T00:00:00.000Z',
-      },
-    ];
+  test('exact cumulative layouts remain correct after prepend', () => {
+    const initial = createInitialRelativeMonthOffsets(2026, 6);
+    const prepended = prependRelativeMonthOffsetBatch({ loadedOffsets: initial, ...CURRENT });
+    const layouts = buildCalendarMonthLayouts({ relativeOffsets: prepended, ...CURRENT });
+    layouts.forEach((layout, index) => {
+      expect(layout.weekCount).toBe(getCalendarMonthWeekCount(layout.year, layout.monthIndex));
+      expect(layout.offset).toBe(index === 0 ? 0 : layouts[index - 1].offset + layouts[index - 1].length);
+    });
+    expect(layouts.find((layout) => layout.relativeOffset === 0)?.year).toBe(2026);
+  });
 
-    const july = buildDriverStatisticsCalendarMonthAtIndex({
-      index: getCalendarIndexForMonth(2026, 6),
+  test('prepend restoration keeps the same visible month displacement', () => {
+    expect(getRestoredScrollOffsetAfterPrepend({
+      headerHeight: 80,
+      monthOffset: 10_000,
+      displacementWithinMonth: 37,
+    })).toBe(10_117);
+  });
+
+  test.each([
+    [1600, 29],
+    [1700, 28],
+    [1900, 28],
+    [2000, 29],
+  ])('February %s has %s days', (year, expectedDays) => {
+    const march = createLocalCalendarDate(year, 2, 1);
+    expect(march).not.toBeNull();
+    const lastFebruaryDay = new Date(march as Date);
+    lastFebruaryDay.setDate(0);
+    expect(lastFebruaryDay.getDate()).toBe(expectedDays);
+  });
+
+  test.each([1500, 100, 99, 1])('constructs and round-trips year %s safely', (year) => {
+    const date = createLocalCalendarDate(year, 1, 1);
+    expect(date?.getFullYear()).toBe(year);
+    expect(date?.getMonth()).toBe(1);
+    const localDate = date ? toLocalDateString(date) : '';
+    expect(localDate).toBe(`${String(year).padStart(4, '0')}-02-01`);
+    expect(localDateStringToLocalDate(localDate)?.getFullYear()).toBe(year);
+  });
+
+  test('year 1 is the CE boundary and BCE construction is rejected gracefully', () => {
+    expect(createLocalCalendarDate(1, 0, 1)).not.toBeNull();
+    expect(createLocalCalendarDate(0, 0, 1)).toBeNull();
+    expect(createLocalCalendarDate(-1, 0, 1)).toBeNull();
+    const offsets = prependRelativeMonthOffsetBatch({
+      loadedOffsets: [-24_300, 0],
+      ...CURRENT,
+    });
+    expect(offsets[0]).toBe(-24_306);
+  });
+
+  test('semantic local-date validation rejects impossible dates and supports extended CE years', () => {
+    expect(isValidLocalDateString('0099-02-01')).toBe(true);
+    expect(isValidLocalDateString('0001-01-01')).toBe(true);
+    expect(isValidLocalDateString('2026-02-31')).toBe(false);
+    expect(isValidLocalDateString('-001-01-01')).toBe(false);
+  });
+
+  test('ancient date cells are selectable truthful empty/unconfigured states', () => {
+    const offset = getRelativeOffsetForYearMonth({ ...CURRENT, year: 99, monthIndex: 0 });
+    const month = buildDriverStatisticsCalendarMonthAtOffset({
+      relativeOffset: offset,
       todayLocalDate: '2026-07-10',
-      selectedLocalDate: '2026-07-08',
-      dailyStatisticsIndex: index,
-      goalRecords: goals,
-    });
-
-    expect(july.monthKey).toBe('2026-07');
-    expect(july.label).toBe('July 2026');
-    expect(formatCalendarMonthShortLabel(2026, 6)).toBe('Jul');
-    expect(formatCalendarMonthShortLabel(2026, 0)).toBe('Jan');
-    expect(july.weeks[0][0].kind).toBe('empty');
-    expect(july.weeks[0][2]).toMatchObject({
-      kind: 'date',
-      localDate: '2026-07-01',
-    });
-
-    const selected = july.weeks.flat().find(
-      (cell) => cell.kind === 'date' && cell.localDate === '2026-07-08',
-    );
-    expect(selected).toMatchObject({
-      kind: 'date',
-      isSelected: true,
-      goalState: 'configured',
-      progress: 0.4,
-      earningsRwf: 12_000,
-      goalRwf: 30_000,
-    });
-
-    const beforeGoal = july.weeks.flat().find(
-      (cell) => cell.kind === 'date' && cell.localDate === '2026-07-07',
-    );
-    expect(beforeGoal).toMatchObject({
-      kind: 'date',
-      goalState: 'unconfigured',
-      progress: 0,
-    });
-
-    const future = july.weeks.flat().find(
-      (cell) => cell.kind === 'date' && cell.localDate === '2026-07-11',
-    );
-    expect(future).toMatchObject({
-      kind: 'date',
-      isFuture: true,
-      progress: 0,
-    });
-
-    expect(DRIVER_STATISTICS_CALENDAR_WEEKDAY_LABELS).toHaveLength(7);
-    expect(DRIVER_STATISTICS_CALENDAR_MONTH_ESTIMATED_HEIGHT).toBeGreaterThan(200);
-  });
-
-  test('very old dates before account creation render unconfigured empty state', () => {
-    const month = buildDriverStatisticsCalendarMonthAtIndex({
-      index: 0,
-      todayLocalDate: '2026-07-10',
-      selectedLocalDate: '1500-01-15',
+      selectedLocalDate: '0099-01-15',
       dailyStatisticsIndex: new Map(),
       goalRecords: [],
     });
-
-    expect(month.monthKey).toBe('1500-01');
-    expect(month.label).toBe('January 1500');
     const selected = month.weeks.flat().find(
-      (cell) => cell.kind === 'date' && cell.localDate === '1500-01-15',
+      (cell) => cell.kind === 'date' && cell.localDate === '0099-01-15',
     );
     expect(selected).toMatchObject({
-      kind: 'date',
-      isSelected: true,
-      isFuture: false,
-      goalState: 'unconfigured',
-      progress: 0,
-      earningsRwf: 0,
-      goalRwf: null,
+      kind: 'date', isSelected: true, isFuture: false, earningsRwf: 0,
+      goalState: 'unconfigured', goalRwf: null, progress: 0,
     });
-  });
-
-  test('jump-to-year clamps helper and parse rejects out-of-range input', () => {
-    expect(clampCalendarJumpYear(1400, '2026-07-10')).toBe(1500);
-    expect(clampCalendarJumpYear(3000, '2026-07-10')).toBe(2026);
-    expect(getCalendarIndexForJumpYear(1500, '2026-07-10')).toBe(0);
-    expect(getCalendarIndexForJumpYear(2026, '2026-07-10')).toBe(6318);
-    expect(getCalendarIndexForJumpYear(2000, '2026-07-10')).toBe(
-      getCalendarIndexForMonth(2000, 0),
-    );
-
-    expect(parseCalendarJumpYear('1500', '2026-07-10')).toEqual({ ok: true, year: 1500 });
-    expect(parseCalendarJumpYear('2026', '2026-07-10')).toEqual({ ok: true, year: 2026 });
-    expect(parseCalendarJumpYear('1499', '2026-07-10')).toEqual({ ok: false, reason: 'too-low' });
-    expect(parseCalendarJumpYear('2027', '2026-07-10')).toEqual({ ok: false, reason: 'too-high' });
-    expect(parseCalendarJumpYear('20.26', '2026-07-10')).toEqual({ ok: false, reason: 'invalid' });
-    expect(parseCalendarJumpYear('', '2026-07-10')).toEqual({ ok: false, reason: 'empty' });
   });
 });

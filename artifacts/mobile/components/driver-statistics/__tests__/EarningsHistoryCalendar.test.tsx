@@ -2,9 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { EarningsHistoryCalendar } from '../EarningsHistoryCalendar';
 import {
+  CALENDAR_INITIAL_MONTH_BATCH,
   createEmptyDriverDailyStatistics,
-  getCalendarIndexForLocalDate,
-  getCalendarTotalMonths,
 } from '@/domains/driver-statistics';
 
 jest.mock('react-native', () => {
@@ -118,9 +117,9 @@ jest.mock('@/domains/driver-statistics', () => {
   const actual = jest.requireActual('@/domains/driver-statistics');
   return {
     ...actual,
-    buildDriverStatisticsCalendarMonthAtIndex: (args: unknown) => {
+    buildDriverStatisticsCalendarMonthAtOffset: (args: unknown) => {
       mockMonthBuildSpy(args);
-      return actual.buildDriverStatisticsCalendarMonthAtIndex(args);
+      return actual.buildDriverStatisticsCalendarMonthAtOffset(args);
     },
   };
 });
@@ -163,10 +162,8 @@ describe('EarningsHistoryCalendar', () => {
     );
 
     const list = UNSAFE_getByType('FlatList' as never);
-    expect(list.props.dataLength).toBe(getCalendarTotalMonths('2026-07-10'));
-    expect(list.props.initialScrollIndex).toBe(
-      getCalendarIndexForLocalDate('2026-07-08', '2026-07-10'),
-    );
+    expect(list.props.dataLength).toBe(CALENDAR_INITIAL_MONTH_BATCH);
+    expect(list.props.initialScrollIndex).toBe(CALENDAR_INITIAL_MONTH_BATCH - 1);
     expect(mockMonthBuildSpy.mock.calls.length).toBeLessThan(10);
     expect(mockMonthBuildSpy.mock.calls.length).toBeGreaterThan(0);
     expect(screen.getByTestId('calendar-month-2026-07')).toBeTruthy();
@@ -175,11 +172,11 @@ describe('EarningsHistoryCalendar', () => {
     expect(screen.queryByTestId('calendar-month-2026-08')).toBeNull();
   });
 
-  test('visible month renders correctly for year 1500', () => {
+  test('visible older month renders within the initial finite window', () => {
     render(
       <EarningsHistoryCalendar
         todayLocalDate="2026-07-10"
-        selectedLocalDate="1500-01-15"
+        selectedLocalDate="2007-01-15"
         dailyStatisticsIndex={new Map()}
         goalRecords={[]}
         accentColor="#111"
@@ -187,8 +184,8 @@ describe('EarningsHistoryCalendar', () => {
       />,
     );
 
-    expect(screen.getByTestId('calendar-month-1500-01')).toBeTruthy();
-    expect(screen.getByTestId('calendar-day-1500-01-15').props.accessibilityState.selected).toBe(
+    expect(screen.getByTestId('calendar-month-2007-01')).toBeTruthy();
+    expect(screen.getByTestId('calendar-day-2007-01-15').props.accessibilityState.selected).toBe(
       true,
     );
   });
@@ -216,7 +213,7 @@ describe('EarningsHistoryCalendar', () => {
     render(
       <EarningsHistoryCalendar
         todayLocalDate="2026-07-10"
-        selectedLocalDate="1500-01-15"
+        selectedLocalDate="2007-01-15"
         dailyStatisticsIndex={new Map()}
         goalRecords={[]}
         accentColor="#111"
@@ -224,7 +221,7 @@ describe('EarningsHistoryCalendar', () => {
       />,
     );
 
-    fireEvent.press(screen.getByTestId('calendar-day-1500-01-10'));
-    expect(onSelectDate).toHaveBeenCalledWith('1500-01-10');
+    fireEvent.press(screen.getByTestId('calendar-day-2007-01-10'));
+    expect(onSelectDate).toHaveBeenCalledWith('2007-01-10');
   });
 });

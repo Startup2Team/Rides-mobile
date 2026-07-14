@@ -3,10 +3,22 @@ import { isValidLocalDateString, toLocalDateString } from './driverDailyGoals';
 export function localDateStringToLocalDate(localDate: string) {
   if (!isValidLocalDateString(localDate)) return null;
   const [year, month, day] = localDate.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
+  return createLocalCalendarDate(year, month - 1, day);
+}
+
+/** Constructs a local-noon CE calendar date without Date's special 0-99 year mapping. */
+export function createLocalCalendarDate(year: number, monthIndex: number, day: number) {
+  if (!Number.isInteger(year) || year < 1 || !Number.isInteger(monthIndex) || !Number.isInteger(day)) {
+    return null;
+  }
+  const date = new Date(0);
+  date.setFullYear(year, monthIndex, day);
+  date.setHours(12, 0, 0, 0);
   if (
+    Number.isNaN(date.getTime())
+    ||
     date.getFullYear() !== year
-    || date.getMonth() !== month - 1
+    || date.getMonth() !== monthIndex
     || date.getDate() !== day
   ) {
     return null;

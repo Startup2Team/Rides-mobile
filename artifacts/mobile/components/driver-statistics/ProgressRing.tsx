@@ -149,12 +149,14 @@ function buildLapPositionInterpolation(
   cy: number,
   r: number,
   detailLevel: ProgressRingDetailLevel,
+  includeOverflowShadow: boolean,
 ) {
   const includeFullDetail = detailLevel === 'full';
+  const includeShadowPaths = includeFullDetail || includeOverflowShadow;
   const inputRange: number[] = [0, 1];
   const capXRange: number[] = [cx, cx];
   const capYRange: number[] = [cy - r, cy - r];
-  const shadowPathRanges = (includeFullDetail ? SHADOW_SEGMENTS : []).map(segment => ({
+  const shadowPathRanges = (includeShadowPaths ? SHADOW_SEGMENTS : []).map(segment => ({
     segment,
     outputRange: [
       describeArc(cx, cy, r, segment.start, segment.end),
@@ -292,8 +294,15 @@ function ProgressRingComponent({
   );
   const maxLaps = geometryMaxLapsRef.current;
   const capPositionInterpolation = useMemo(
-    () => buildLapPositionInterpolation(maxLaps, center, center, radius, detailLevel),
-    [center, detailLevel, maxLaps, radius],
+    () => buildLapPositionInterpolation(
+      maxLaps,
+      center,
+      center,
+      radius,
+      detailLevel,
+      allowSmallOverflowShadow,
+    ),
+    [allowSmallOverflowShadow, center, detailLevel, maxLaps, radius],
   );
 
   useEffect(() => {
@@ -621,10 +630,13 @@ function ProgressRingComponent({
   const ringTrackColor = trackColor ?? DEFAULT_TRACK_COLOR;
   const shouldRenderShadow =
     !isUnconfiguredGoal
-    && detailLevel === 'full'
     && (
-      allowSmallOverflowShadow ||
-      (size >= MIN_SHADOW_SIZE && strokeWidth >= MIN_SHADOW_STROKE_WIDTH)
+      allowSmallOverflowShadow
+      || (
+        detailLevel === 'full'
+        && size >= MIN_SHADOW_SIZE
+        && strokeWidth >= MIN_SHADOW_STROKE_WIDTH
+      )
     );
   const arrowScale = strokeWidth / ARROW_BASE_BADGE_DIAMETER;
   const arrowStrokeWidth = Math.max(1.1, strokeWidth * ARROW_STROKE_TO_BADGE_RATIO);

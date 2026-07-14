@@ -242,6 +242,22 @@ describe('ProgressRing animation lifecycle', () => {
     expect(screen.queryByTestId('progress-ring-cap-bridge')).toBeNull();
   });
 
+  test('compact overflow can opt into shadow like the big ring', () => {
+    renderRing({
+      animationMode: 'none',
+      detailLevel: 'compact',
+      progress: 1.5,
+      allowSmallOverflowShadow: true,
+      size: 40,
+      strokeWidth: 9,
+    });
+
+    expect(screen.getByTestId('progress-ring-overflow-arc')).toBeTruthy();
+    expect(screen.getByTestId('progress-ring-raised-cap')).toBeTruthy();
+    expect(screen.getByTestId('progress-ring-overflow-shadow')).toBeTruthy();
+    expect(screen.queryByTestId('progress-ring-cap-bridge')).toBeNull();
+  });
+
   test('full overflow preserves bridge, shadow, and raised cap layers', () => {
     renderRing({ animationMode: 'none', detailLevel: 'full', progress: 2.5 });
 

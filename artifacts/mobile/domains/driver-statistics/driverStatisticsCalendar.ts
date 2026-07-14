@@ -6,30 +6,28 @@ import {
   progressRatioForConfiguredGoal,
 } from './driverDailyGoals';
 import {
+  createLocalCalendarDate,
   isFutureLocalDateString,
   localDateStringToLocalDate,
 } from './driverLocalDates';
 import type { DriverDailyStatistics } from './driverDailyStatistics';
 import { createEmptyDriverDailyStatistics } from './driverDailyStatistics';
 
-/** Fixed earliest calendar year — January of this year through the current month. */
-export const MIN_CALENDAR_YEAR = 1500;
+export type RelativeMonthOffset = number;
+
+export const CALENDAR_INITIAL_MONTH_BATCH = 240;
+export const CALENDAR_PREPEND_MONTH_BATCH = 240;
+export const CALENDAR_PREPEND_THRESHOLD = 12;
 
 export const DRIVER_STATISTICS_CALENDAR_WEEKDAY_LABELS = [
-  'M',
-  'T',
-  'W',
-  'T',
-  'F',
-  'S',
-  'S',
+  'M', 'T', 'W', 'T', 'F', 'S', 'S',
 ] as const;
 
+const CALENDAR_MONTH_VERTICAL_PADDING = 28;
+const CALENDAR_WEEK_ROW_HEIGHT = 86;
+
 export type CalendarDayCell =
-  | {
-      kind: 'empty';
-      key: string;
-    }
+  | { kind: 'empty'; key: string }
   | {
       kind: 'date';
       localDate: string;
@@ -45,38 +43,177 @@ export type CalendarDayCell =
 
 export type DriverStatisticsCalendarMonth = {
   monthKey: string;
+  relativeOffset: RelativeMonthOffset;
   year: number;
   monthIndex: number;
   label: string;
+  weekCount: number;
+  exactHeight: number;
   weeks: Array<Array<CalendarDayCell>>;
+};
+
+export type CalendarMonthLayout = {
+  relativeOffset: RelativeMonthOffset;
+  year: number;
+  monthIndex: number;
+  weekCount: number;
+  length: number;
+  offset: number;
+  index: number;
 };
 
 const monthLabelFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'long',
   year: 'numeric',
 });
+const monthShortLabelFormatter = new Intl.DateTimeFormat('en-US', { month: 'short' });
 
-const monthShortLabelFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-});
+export function getYearMonthFromRelativeOffset({
+  currentYear,
+  currentMonthIndex,
+  offset,
+}: {
+  currentYear: number;
+  currentMonthIndex: number;
+  offset: RelativeMonthOffset;
+}) {
+  if (!Number.isInteger(currentYear) || currentYear < 1) {
+    throw new RangeError('Current calendar year must be a positive Common Era year.');
+  }
+  if (!Number.isInteger(currentMonthIndex) || currentMonthIndex < 0 || currentMonthIndex > 11) {
+    throw new RangeError('Current calendar month index must be between 0 and 11.');
+  }
+  if (!Number.isInteger(offset) || offset > 0) {
+    throw new RangeError('Relative calendar month offsets must be non-positive integers.');
+  }
+  const absoluteMonth = currentYear * 12 + currentMonthIndex + offset;
+  return {
+    year: Math.floor(absoluteMonth / 12),
+    monthIndex: ((absoluteMonth % 12) + 12) % 12,
+  };
+}
+
+export function getRelativeOffsetForYearMonth({
+  currentYear,
+  currentMonthIndex,
+  year,
+  monthIndex,
+}: {
+  currentYear: number;
+  currentMonthIndex: number;
+  year: number;
+  monthIndex: number;
+}): RelativeMonthOffset {
+  if (!Number.isInteger(year) || year < 1 || !Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    throw new RangeError('Target calendar month must be a valid Common Era year and month.');
+  }
+  const offset = (year - currentYear) * 12 + monthIndex - currentMonthIndex;
+  if (offset > 0) throw new RangeError('Future calendar months are not supported.');
+  return offset;
+}
+
+export function getEarliestSupportedRelativeOffset(currentYear: number, currentMonthIndex: number) {
+  return getRelativeOffsetForYearMonth({
+    currentYear,
+    currentMonthIndex,
+    year: 1,
+    monthIndex: 0,
+  });
+}
+
+export function createInitialRelativeMonthOffsets(
+  currentYear: number,
+  currentMonthIndex: number,
+  batchSize = CALENDAR_INITIAL_MONTH_BATCH,
+) {
+  const earliest = getEarliestSupportedRelativeOffset(currentYear, currentMonthIndex);
+  const oldestLoaded = Math.max(earliest, -(Math.max(1, Math.floor(batchSize)) - 1));
+  return Array.from({ length: -oldestLoaded + 1 }, (_, index) => oldestLoaded + index);
+}
+
+export function createRelativeMonthWindowAroundTarget({
+  targetOffset,
+  currentYear,
+  currentMonthIndex,
+  windowSize = CALENDAR_INITIAL_MONTH_BATCH,
+  olderMonthCount = Math.floor(CALENDAR_INITIAL_MONTH_BATCH / 2),
+}: {
+  targetOffset: RelativeMonthOffset;
+  currentYear: number;
+  currentMonthIndex: number;
+  windowSize?: number;
+  olderMonthCount?: number;
+}) {
+  if (!Number.isInteger(targetOffset) || targetOffset > 0) {
+    throw new RangeError('A non-future target month offset is required.');
+  }
+  const earliest = getEarliestSupportedRelativeOffset(currentYear, currentMonthIndex);
+  if (targetOffset < earliest) throw new RangeError('Target month precedes the Common Era boundary.');
+  const safeWindowSize = Math.max(1, Math.floor(windowSize));
+  let oldest = Math.max(earliest, targetOffset - Math.max(0, Math.floor(olderMonthCount)));
+  let newest = Math.min(0, oldest + safeWindowSize - 1);
+  oldest = Math.max(earliest, newest - safeWindowSize + 1);
+  if (targetOffset < oldest) oldest = targetOffset;
+  if (targetOffset > newest) {
+    newest = targetOffset;
+    oldest = Math.max(earliest, newest - safeWindowSize + 1);
+  }
+  return Array.from({ length: newest - oldest + 1 }, (_, index) => oldest + index);
+}
+
+export function prependRelativeMonthOffsetBatch({
+  loadedOffsets,
+  currentYear,
+  currentMonthIndex,
+  batchSize = CALENDAR_PREPEND_MONTH_BATCH,
+}: {
+  loadedOffsets: RelativeMonthOffset[];
+  currentYear: number;
+  currentMonthIndex: number;
+  batchSize?: number;
+}) {
+  const earliest = getEarliestSupportedRelativeOffset(currentYear, currentMonthIndex);
+  const oldestLoaded = loadedOffsets[0] ?? 0;
+  if (oldestLoaded <= earliest) return loadedOffsets;
+  const nextOldest = Math.max(earliest, oldestLoaded - Math.max(1, Math.floor(batchSize)));
+  const prepended = Array.from(
+    { length: oldestLoaded - nextOldest },
+    (_, index) => nextOldest + index,
+  );
+  return [...prepended, ...loadedOffsets];
+}
+
+export function appendNewerRelativeMonthOffsetBatch({
+  loadedOffsets,
+  batchSize = CALENDAR_PREPEND_MONTH_BATCH,
+}: {
+  loadedOffsets: RelativeMonthOffset[];
+  batchSize?: number;
+}) {
+  const newestLoaded = loadedOffsets.at(-1) ?? 0;
+  if (newestLoaded >= 0) return loadedOffsets;
+  const nextNewest = Math.min(0, newestLoaded + Math.max(1, Math.floor(batchSize)));
+  const appended = Array.from(
+    { length: nextNewest - newestLoaded },
+    (_, index) => newestLoaded + index + 1,
+  );
+  return [...loadedOffsets, ...appended];
+}
+
+function getCurrentYearMonth(todayLocalDate: string) {
+  const today = localDateStringToLocalDate(todayLocalDate);
+  if (!today) return null;
+  return { currentYear: today.getFullYear(), currentMonthIndex: today.getMonth() };
+}
 
 export function formatCalendarMonthLabel(year: number, monthIndex: number) {
-  return monthLabelFormatter.format(new Date(year, monthIndex, 1));
+  const date = createLocalCalendarDate(year, monthIndex, 1);
+  return date ? monthLabelFormatter.format(date) : '';
 }
 
 export function formatCalendarMonthShortLabel(year: number, monthIndex: number) {
-  // en-US short month includes a trailing period in some engines ("Jan."); strip it.
-  return monthShortLabelFormatter
-    .format(new Date(year, monthIndex, 1))
-    .replace(/\.$/, '');
-}
-
-export function getCalendarMonthLabelForIndex(
-  index: number,
-  minYear: number = MIN_CALENDAR_YEAR,
-) {
-  const { year, monthIndex } = getCalendarMonthFromIndex(index, minYear);
-  return formatCalendarMonthLabel(year, monthIndex);
+  const date = createLocalCalendarDate(year, monthIndex, 1);
+  return date ? monthShortLabelFormatter.format(date).replace(/\.$/, '') : '';
 }
 
 function padMonthPart(value: number) {
@@ -84,7 +221,7 @@ function padMonthPart(value: number) {
 }
 
 export function toMonthKey(year: number, monthIndex: number) {
-  return `${year}-${padMonthPart(monthIndex + 1)}`;
+  return `${String(year).padStart(4, '0')}-${padMonthPart(monthIndex + 1)}`;
 }
 
 export function monthKeyFromLocalDate(localDate: string) {
@@ -95,72 +232,71 @@ export function monthKeyFromLocalDate(localDate: string) {
 export function startOfMonthLocalDate(localDate: string) {
   const date = localDateStringToLocalDate(localDate);
   if (!date) return localDate;
-  return toLocalDateString(new Date(date.getFullYear(), date.getMonth(), 1));
+  const first = createLocalCalendarDate(date.getFullYear(), date.getMonth(), 1);
+  return first ? toLocalDateString(first) : localDate;
 }
 
 export function addLocalMonths(localDate: string, months: number) {
   const date = localDateStringToLocalDate(localDate);
   if (!date || !Number.isInteger(months)) return localDate;
-  const next = new Date(date.getFullYear(), date.getMonth() + months, 1);
-  return toLocalDateString(next);
+  const absoluteMonth = date.getFullYear() * 12 + date.getMonth() + months;
+  const year = Math.floor(absoluteMonth / 12);
+  const monthIndex = ((absoluteMonth % 12) + 12) % 12;
+  const next = createLocalCalendarDate(year, monthIndex, 1);
+  return next ? toLocalDateString(next) : localDate;
 }
 
-export function getCalendarMonthFromIndex(
-  index: number,
-  minYear: number = MIN_CALENDAR_YEAR,
-): { year: number; monthIndex: number } {
-  const safeIndex = Math.max(0, Math.floor(index));
-  return {
-    year: minYear + Math.floor(safeIndex / 12),
-    monthIndex: safeIndex % 12,
-  };
+export function getCalendarMonthWeekCount(year: number, monthIndex: number) {
+  const firstDay = createLocalCalendarDate(year, monthIndex, 1);
+  const nextMonth = monthIndex === 11
+    ? createLocalCalendarDate(year + 1, 0, 1)
+    : createLocalCalendarDate(year, monthIndex + 1, 1);
+  if (!firstDay || !nextMonth) return null;
+  const lastDay = new Date(nextMonth);
+  lastDay.setDate(0);
+  const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+  return Math.ceil((startOffset + lastDay.getDate()) / 7);
 }
 
-export function getCalendarIndexForMonth(
-  year: number,
-  monthIndex: number,
-  minYear: number = MIN_CALENDAR_YEAR,
-) {
-  return (year - minYear) * 12 + monthIndex;
+export function getCalendarMonthExactHeight(weekCount: number) {
+  return CALENDAR_MONTH_VERTICAL_PADDING + weekCount * CALENDAR_WEEK_ROW_HEIGHT;
 }
 
-export function getCalendarTotalMonths(
-  todayLocalDate: string,
-  minYear: number = MIN_CALENDAR_YEAR,
-) {
-  const today = localDateStringToLocalDate(todayLocalDate);
-  if (!today) return 1;
-  const currentYear = today.getFullYear();
-  const currentMonthIndex = today.getMonth();
-  if (currentYear < minYear) return 1;
-  return (currentYear - minYear) * 12 + currentMonthIndex + 1;
+export function getRestoredScrollOffsetAfterPrepend({
+  headerHeight,
+  monthOffset,
+  displacementWithinMonth,
+}: {
+  headerHeight: number;
+  monthOffset: number;
+  displacementWithinMonth: number;
+}) {
+  return Math.max(0, headerHeight + monthOffset + displacementWithinMonth);
 }
 
-export function getCalendarIndexForLocalDate(
-  localDate: string,
-  todayLocalDate: string,
-  minYear: number = MIN_CALENDAR_YEAR,
-) {
-  const total = getCalendarTotalMonths(todayLocalDate, minYear);
-  const date = localDateStringToLocalDate(localDate);
-  if (!date) return Math.max(0, total - 1);
-
-  const index = getCalendarIndexForMonth(date.getFullYear(), date.getMonth(), minYear);
-  if (index < 0) return 0;
-  if (index >= total) return Math.max(0, total - 1);
-  return index;
-}
-
-export function createCalendarMonthIndexData(
-  todayLocalDate: string,
-  minYear: number = MIN_CALENDAR_YEAR,
-): number[] {
-  const total = getCalendarTotalMonths(todayLocalDate, minYear);
-  const indexes = new Array<number>(total);
-  for (let i = 0; i < total; i += 1) {
-    indexes[i] = i;
-  }
-  return indexes;
+export function buildCalendarMonthLayouts({
+  relativeOffsets,
+  currentYear,
+  currentMonthIndex,
+}: {
+  relativeOffsets: RelativeMonthOffset[];
+  currentYear: number;
+  currentMonthIndex: number;
+}) {
+  let cumulativeOffset = 0;
+  return relativeOffsets.map((relativeOffset, index): CalendarMonthLayout => {
+    const { year, monthIndex } = getYearMonthFromRelativeOffset({
+      currentYear,
+      currentMonthIndex,
+      offset: relativeOffset,
+    });
+    const weekCount = getCalendarMonthWeekCount(year, monthIndex);
+    if (weekCount == null) throw new RangeError(`Calendar month ${year}-${monthIndex + 1} is not representable.`);
+    const length = getCalendarMonthExactHeight(weekCount);
+    const layout = { relativeOffset, year, monthIndex, weekCount, length, offset: cumulativeOffset, index };
+    cumulativeOffset += length;
+    return layout;
+  });
 }
 
 function buildMonthWeeks({
@@ -177,34 +313,30 @@ function buildMonthWeeks({
   selectedLocalDate: string;
   dailyStatisticsIndex: Map<string, DriverDailyStatistics>;
   goalRecords: DriverDailyGoalRecord[];
-}): Array<Array<CalendarDayCell>> {
-  const firstDay = new Date(year, monthIndex, 1);
-  const firstDayIndex = firstDay.getDay();
-  const startOffset = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+}) {
+  const firstDay = createLocalCalendarDate(year, monthIndex, 1);
+  const weekCount = getCalendarMonthWeekCount(year, monthIndex);
+  if (!firstDay || weekCount == null) return [];
+  const nextMonth = monthIndex === 11
+    ? createLocalCalendarDate(year + 1, 0, 1)
+    : createLocalCalendarDate(year, monthIndex + 1, 1);
+  if (!nextMonth) return [];
+  const lastDay = new Date(nextMonth);
+  lastDay.setDate(0);
+  const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
   const cells: CalendarDayCell[] = [];
 
-  for (let i = 0; i < startOffset; i++) {
-    cells.push({ kind: 'empty', key: `empty-${year}-${monthIndex}-lead-${i}` });
+  for (let index = 0; index < startOffset; index += 1) {
+    cells.push({ kind: 'empty', key: `empty-${year}-${monthIndex}-lead-${index}` });
   }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const localDate = toLocalDateString(new Date(year, monthIndex, day));
-    const stats =
-      dailyStatisticsIndex.get(localDate) ?? createEmptyDriverDailyStatistics(localDate);
-    const resolved = resolveConfiguredDailyGoalForDate({
-      records: goalRecords,
-      selectedLocalDate: localDate,
-    });
+  for (let day = 1; day <= lastDay.getDate(); day += 1) {
+    const date = createLocalCalendarDate(year, monthIndex, day);
+    if (!date) continue;
+    const localDate = toLocalDateString(date);
+    const stats = dailyStatisticsIndex.get(localDate) ?? createEmptyDriverDailyStatistics(localDate);
+    const resolved = resolveConfiguredDailyGoalForDate({ records: goalRecords, selectedLocalDate: localDate });
     const isFuture = isFutureLocalDateString(localDate, todayLocalDate);
-    const goalConfigured = resolved.status === 'configured';
-    const progress = isFuture
-      ? 0
-      : progressRatioForConfiguredGoal({
-          earningsRwf: stats.earningsRwf,
-          resolved,
-        });
-
+    const configured = resolved.status === 'configured';
     cells.push({
       kind: 'date',
       localDate,
@@ -212,116 +344,66 @@ function buildMonthWeeks({
       isToday: localDate === todayLocalDate,
       isSelected: localDate === selectedLocalDate,
       isFuture,
-      goalState: goalConfigured ? 'configured' : 'unconfigured',
-      progress,
+      goalState: configured ? 'configured' : 'unconfigured',
+      progress: isFuture ? 0 : progressRatioForConfiguredGoal({ earningsRwf: stats.earningsRwf, resolved }),
       earningsRwf: stats.earningsRwf,
-      goalRwf: goalConfigured ? resolved.amountRwf : null,
+      goalRwf: configured ? resolved.amountRwf : null,
     });
   }
-
   while (cells.length % 7 !== 0) {
-    cells.push({
-      kind: 'empty',
-      key: `empty-${year}-${monthIndex}-trail-${cells.length}`,
-    });
+    cells.push({ kind: 'empty', key: `empty-${year}-${monthIndex}-trail-${cells.length}` });
   }
-
-  const weeks: Array<Array<CalendarDayCell>> = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7));
-  }
-  return weeks;
+  return Array.from({ length: weekCount }, (_, index) => cells.slice(index * 7, index * 7 + 7));
 }
 
-/**
- * Lazily builds a single month grid from a FlatList index.
- * Does not precompute neighboring months.
- */
-export function buildDriverStatisticsCalendarMonthAtIndex({
-  index,
+export function buildDriverStatisticsCalendarMonthAtOffset({
+  relativeOffset,
   todayLocalDate,
   selectedLocalDate,
   dailyStatisticsIndex,
   goalRecords,
-  minYear = MIN_CALENDAR_YEAR,
 }: {
-  index: number;
+  relativeOffset: RelativeMonthOffset;
   todayLocalDate: string;
   selectedLocalDate: string;
   dailyStatisticsIndex: Map<string, DriverDailyStatistics>;
   goalRecords: DriverDailyGoalRecord[];
-  minYear?: number;
 }): DriverStatisticsCalendarMonth {
-  const total = getCalendarTotalMonths(todayLocalDate, minYear);
-  const clampedIndex = Math.min(Math.max(0, index), Math.max(0, total - 1));
-  const { year, monthIndex } = getCalendarMonthFromIndex(clampedIndex, minYear);
-
+  const current = getCurrentYearMonth(todayLocalDate);
+  if (!current) throw new RangeError('A valid current local date is required.');
+  const { year, monthIndex } = getYearMonthFromRelativeOffset({ ...current, offset: relativeOffset });
+  const weekCount = getCalendarMonthWeekCount(year, monthIndex);
+  if (year < 1 || weekCount == null) throw new RangeError('The requested calendar month is outside the supported CE range.');
   return {
     monthKey: toMonthKey(year, monthIndex),
+    relativeOffset,
     year,
     monthIndex,
     label: formatCalendarMonthLabel(year, monthIndex),
-    weeks: buildMonthWeeks({
-      year,
-      monthIndex,
-      todayLocalDate,
-      selectedLocalDate,
-      dailyStatisticsIndex,
-      goalRecords,
-    }),
+    weekCount,
+    exactHeight: getCalendarMonthExactHeight(weekCount),
+    weeks: buildMonthWeeks({ year, monthIndex, todayLocalDate, selectedLocalDate, dailyStatisticsIndex, goalRecords }),
   };
 }
 
-export function clampCalendarJumpYear(
-  year: number,
-  todayLocalDate: string,
-  minYear: number = MIN_CALENDAR_YEAR,
-) {
-  const today = localDateStringToLocalDate(todayLocalDate);
-  const maxYear = today?.getFullYear() ?? new Date().getFullYear();
-  if (!Number.isFinite(year)) return maxYear;
-  return Math.min(maxYear, Math.max(minYear, Math.floor(year)));
+export function getRelativeOffsetForLocalDate(localDate: string, todayLocalDate: string) {
+  const date = localDateStringToLocalDate(localDate);
+  const current = getCurrentYearMonth(todayLocalDate);
+  if (!date || !current) return 0;
+  try {
+    return getRelativeOffsetForYearMonth({
+      ...current,
+      year: date.getFullYear(),
+      monthIndex: date.getMonth(),
+    });
+  } catch {
+    return 0;
+  }
 }
 
-export type ParseCalendarJumpYearResult =
-  | { ok: true; year: number }
-  | { ok: false; reason: 'empty' | 'invalid' | 'too-low' | 'too-high' };
-
-export function parseCalendarJumpYear(
-  input: string,
-  todayLocalDate: string,
-  minYear: number = MIN_CALENDAR_YEAR,
-): ParseCalendarJumpYearResult {
-  const trimmed = input.trim();
-  if (trimmed.length === 0) return { ok: false, reason: 'empty' };
-  if (!/^\d+$/.test(trimmed)) return { ok: false, reason: 'invalid' };
-
-  const year = Number(trimmed);
-  if (!Number.isInteger(year)) return { ok: false, reason: 'invalid' };
-
-  const today = localDateStringToLocalDate(todayLocalDate);
-  const maxYear = today?.getFullYear() ?? new Date().getFullYear();
-  if (year < minYear) return { ok: false, reason: 'too-low' };
-  if (year > maxYear) return { ok: false, reason: 'too-high' };
-  return { ok: true, year };
+export function getCalendarMonthLabelForRelativeOffset(relativeOffset: number, todayLocalDate: string) {
+  const current = getCurrentYearMonth(todayLocalDate);
+  if (!current) return '';
+  const { year, monthIndex } = getYearMonthFromRelativeOffset({ ...current, offset: relativeOffset });
+  return formatCalendarMonthLabel(year, monthIndex);
 }
-
-export function getCalendarIndexForJumpYear(
-  year: number,
-  todayLocalDate: string,
-  minYear: number = MIN_CALENDAR_YEAR,
-) {
-  const clampedYear = clampCalendarJumpYear(year, todayLocalDate, minYear);
-  const today = localDateStringToLocalDate(todayLocalDate);
-  const currentYear = today?.getFullYear() ?? clampedYear;
-  const currentMonthIndex = today?.getMonth() ?? 0;
-  const monthIndex = clampedYear === currentYear ? currentMonthIndex : 0;
-  return getCalendarIndexForLocalDate(
-    toLocalDateString(new Date(clampedYear, monthIndex, 1)),
-    todayLocalDate,
-    minYear,
-  );
-}
-
-/** Approximate height for full-page month rows (up to 6 week rows). */
-export const DRIVER_STATISTICS_CALENDAR_MONTH_ESTIMATED_HEIGHT = 290;
