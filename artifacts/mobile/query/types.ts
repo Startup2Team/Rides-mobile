@@ -30,7 +30,8 @@ export type QueryPolicyName =
   | 'notifications'
   | 'paymentMethods'
   | 'searchAutocomplete'
-  | 'reverseGeocode';
+  | 'reverseGeocode'
+  | 'demandHeatmap';
 
 export type QueryPolicyMap = Record<QueryPolicyName, QueryPolicy>;
 

@@ -88,6 +88,12 @@ export const queryPolicies = {
     gcTime: 10 * minute,
     retry: 1,
   }),
+  demandHeatmap: policy({
+    // Demand shifts continuously; keep it fresh but cheap to poll.
+    staleTime: 60 * 1000,
+    gcTime: 10 * minute,
+    retry: 1,
+  }),
 } satisfies QueryPolicyMap;
 
 export function getQueryPolicy(name: keyof typeof queryPolicies) {

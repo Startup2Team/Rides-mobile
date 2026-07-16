@@ -21,7 +21,8 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useDemandHeatmapQuery } from '@/query/hooks/useDemandHeatmapQuery';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -158,6 +159,7 @@ export default function DriverDashboard() {
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>("standard");
+  const [showHeatmap, setShowHeatmap] = useState(false);
   const { profileImage } = useProfilePhotoActions(
     driverProfile?.profileImage ?? null,
   );
@@ -189,6 +191,15 @@ export default function DriverDashboard() {
   const mapRef = useRef<MapView | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const { vehicles } = useVehicles();
+
+  // Demand heatmap around the driver — only fetched when the layer is toggled on.
+  const { data: heatmap } = useDemandHeatmapQuery({
+    latitude: driverLocation.latitude,
+    longitude: driverLocation.longitude,
+    radiusKm: 5,
+    enabled: showHeatmap,
+  });
+  const maxDemand = heatmap?.cells.reduce((max, cell) => Math.max(max, cell.count), 0) ?? 0;
 
   const clearAdLoopReset = useCallback(() => {
     if (adLoopResetRef.current) {
@@ -787,6 +798,22 @@ export default function DriverDashboard() {
         showsUserLocation={false}
         showsMyLocationButton={false}
       >
+        {showHeatmap &&
+          heatmap?.cells.map(cell => {
+            // Opacity scales with relative demand so hotspots read darker.
+            const intensity = maxDemand > 0 ? cell.count / maxDemand : 0;
+            const fillOpacity = 0.18 + intensity * 0.42;
+            return (
+              <Circle
+                key={`demand-${cell.latitude}-${cell.longitude}`}
+                center={{ latitude: cell.latitude, longitude: cell.longitude }}
+                radius={140}
+                strokeWidth={0}
+                strokeColor="transparent"
+                fillColor={`rgba(255,59,48,${fillOpacity.toFixed(2)})`}
+              />
+            );
+          })}
         <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
             <VehicleMapMarker
@@ -1238,6 +1265,20 @@ export default function DriverDashboard() {
             name="crosshairs-gps"
             size={22}
             color={colors.primary}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mapBtn, { backgroundColor: dashboardPageBackground }]}
+          onPress={() => setShowHeatmap(prev => !prev)}
+          activeOpacity={0.8}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: showHeatmap }}
+          accessibilityLabel="Toggle demand heatmap"
+        >
+          <MaterialCommunityIcons
+            name={showHeatmap ? "fire" : "fire-off"}
+            size={22}
+            color={showHeatmap ? colors.destructive : colors.primary}
           />
         </TouchableOpacity>
       </View>

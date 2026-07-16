@@ -40,6 +40,7 @@ import { useProfile } from "@/domains/profile";
 import { useProfilePhotoActions } from "@/hooks/useProfilePhotoActions";
 import { ProfilePhotoEditSheet } from "@/components/ProfilePhotoEditSheet";
 import { AppText } from "@/components/AppText";
+import { CustomerLevelCard } from "@/components/profile/CustomerLevelCard";
 import { elevation } from "@/constants/elevation";
 import { icons } from "@/constants/icons";
 import { radius } from "@/constants/radius";
@@ -297,6 +298,7 @@ export default function ProfileScreen() {
             insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING + spacing[16],
         }}
       >
+        <CustomerLevelCard />
         {!canAccessDriverMode(driverProfile) && (
           <TouchableOpacity
             style={[styles.driverBanner, { backgroundColor: cardFill }]}
