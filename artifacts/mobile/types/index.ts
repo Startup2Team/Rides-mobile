@@ -339,6 +339,10 @@ export interface MockDriver {
 
 export interface Ride {
   id: string;
+  // Server-assigned ride id once the booking is created on the backend
+  // (POST /customer/rides). Distinct from the local `id` while the ride flow
+  // is transitioning off the local simulation onto the real backend + WS.
+  backendRideId?: string;
   customerId: string;
   customerName?: string;
   customerPhone?: string;

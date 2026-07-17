@@ -65,6 +65,8 @@ import {
   shadowWireStartRideCommand,
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
+import { createRide as createBackendRide, cancelRide as cancelBackendRide } from '@/services/rides';
+import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare } from '@/services/negotiation';
 import { createCompleteRideCommand, createStartRideCommand } from '@/domains/ride/commandCreators';
 import { rideTransactionBoundary } from '@/domains/ride/transactions';
 import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionPhase, RideStatus as RideProjectionStatus } from '@/domains/ride/readModels';
@@ -94,6 +96,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const isMatchingPausedRef = useRef(false);
   const currentRideRef = useRef(currentRide);
   const pendingRequestRef = useRef(pendingRequest);
+  // Server-assigned ride id for the in-flight booking. Populated best-effort by
+  // the real POST /customer/rides so cancel + negotiation calls target the same
+  // ride on the backend while the UI is still driven by the local simulation
+  // (the WebSocket takes over state transitions in the next flow).
+  const backendRideIdRef = useRef<string | null>(null);
   const timerManagerRef = useRef(createRideTimerManager());
   const timers = timerManagerRef.current;
   currentRideRef.current = currentRide;
@@ -552,7 +559,26 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     clearSearchTimers();
     setCurrentRide(ride);
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
-  }, [auth?.user?.id, clearSearchTimers, rideCommandCapabilitySnapshot, scheduleDriverMatch, timers]);
+
+    // Create the ride on the real backend (best-effort). On success we stash the
+    // server ride id so cancel + negotiation hit the same ride. Failures are
+    // non-fatal: the local simulation still drives the UI until the WS lands.
+    backendRideIdRef.current = null;
+    if (auth?.user) {
+      void createBackendRide({
+        vehicleType,
+        pickup: { lat: pickup.latitude, lng: pickup.longitude, address: pickup.address ?? '' },
+        destination: { lat: destination.latitude, lng: destination.longitude, address: destination.address ?? '' },
+        initialFare: fare,
+        distanceKm: parseFloat(dist.toFixed(2)),
+      })
+        .then(res => {
+          backendRideIdRef.current = res.rideId;
+          setCurrentRide(prev => (prev && prev.id === ride.id ? { ...prev, backendRideId: res.rideId } : prev));
+        })
+        .catch(error => reportOperationalFailure('ride.backend.create', error, { rideId: ride.id }));
+    }
+  }, [auth?.user, clearSearchTimers, rideCommandCapabilitySnapshot, scheduleDriverMatch, timers]);
 
   const cancelRide = useCallback(() => {
     const session = timers.endSession();
@@ -583,6 +609,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         rideId: currentRideSnapshot?.id ?? 'unknown',
       });
     }
+    // Cancel the ride on the real backend too (best-effort).
+    const backendRideId = backendRideIdRef.current ?? currentRideSnapshot?.backendRideId ?? null;
+    if (backendRideId) {
+      void cancelBackendRide(backendRideId).catch(error =>
+        reportOperationalFailure('ride.backend.cancel', error, { rideId: backendRideId }),
+      );
+    }
+    backendRideIdRef.current = null;
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
     timers.scheduleTimeout(() => {
       setCurrentRide(prev => prev?.status === 'cancelled' ? null : prev);
@@ -592,6 +626,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const counterOffer = useCallback((amount: number) => {
     setCurrentRide(prev => addCustomerCounterOffer(prev, amount));
 
+    // Mirror the customer's counter-offer to the backend negotiation (best-effort).
+    const backendRideId = backendRideIdRef.current;
+    if (backendRideId) {
+      void proposeBackendFare(backendRideId, amount).catch(error =>
+        reportOperationalFailure('ride.backend.propose', error, { rideId: backendRideId }),
+      );
+    }
+
     timers.scheduleTimeout(() => {
       setCurrentRide(prev => respondToCustomerCounterOffer(prev, amount));
     }, NEGOTIATION_RESPONSE_DELAY_MS);
@@ -599,6 +641,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const acceptDriverOffer = useCallback(() => {
     setCurrentRide(acceptLatestDriverOffer);
+    // Accept the driver's fare on the backend negotiation (best-effort).
+    const backendRideId = backendRideIdRef.current;
+    if (backendRideId) {
+      void acceptBackendFare(backendRideId).catch(error =>
+        reportOperationalFailure('ride.backend.accept', error, { rideId: backendRideId }),
+      );
+    }
   }, []);
 
   const sendDriverOffer = useCallback((amount: number) => {
@@ -690,6 +739,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
+    backendRideIdRef.current = null;
     setCurrentRide(prev => {
       if (!prev) return null;
       const driverOwnedFields = source === 'driver' && driverIdentity?.driverId
