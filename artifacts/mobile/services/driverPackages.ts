@@ -49,8 +49,24 @@ export async function listRidePackages(): Promise<RidePackage[]> {
   return (response.data.data ?? []).map(toPackage);
 }
 
-export async function listActiveCampaigns(): Promise<unknown[]> {
-  const response = await getAppBackendClient().get<Envelope<unknown[] | null>>(
+// GET /driver/campaigns/active — currently-running campaigns (resolution
+// overrides). Only APPROVED drivers can list them.
+export interface CampaignDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  type: string; // GLOBAL|VEHICLE_TYPE|PACKAGE|FIRST_PURCHASE|REFERRAL
+  target_vehicle_type_code?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  override_price_rwf?: number | null;
+  override_rides?: number | null;
+  override_bonus_rides?: number | null;
+}
+
+export async function listActiveCampaigns(): Promise<CampaignDto[]> {
+  const response = await getAppBackendClient().get<Envelope<CampaignDto[] | null>>(
     '/v1/driver/campaigns/active',
   );
   return response.data.data ?? [];

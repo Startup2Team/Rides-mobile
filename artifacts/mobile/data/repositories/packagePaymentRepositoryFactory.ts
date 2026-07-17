@@ -6,6 +6,7 @@ import { transitionManualPaymentClaim } from '@/domains/package-payments/manualP
 import { loadStoredManualPaymentClaims, saveStoredManualPaymentClaims } from '@/persistence/manualPaymentClaimsPersistence';
 import { createPackagePaymentShadowRepository } from '@/data/remote/repositories/packagePaymentShadowRepository';
 import { normalizePackagePaymentRepositoryMode, type PackagePaymentRepositoryMode } from '@/domains/package-payments/packagePaymentRepositoryMode';
+import { backendPackagePaymentRepository } from '@/services/packagePaymentClaims';
 
 export interface PackagePaymentRepositoryFactoryOptions {
   configuration?: PackagePaymentConfiguration | null;
@@ -156,18 +157,23 @@ export function createPackagePaymentRepository(
   const localRepository = new LocalPackagePaymentRepository(
     options.configuration ?? null,
   );
-  const requestedMode = normalizePackagePaymentRepositoryMode(options.mode) ?? (
-    options.enableRemoteDiagnostics && options.remoteRepository ? 'shadow_remote' : 'local'
-  );
+  // Real backend claim repo (services/packagePaymentClaims) is the default
+  // remote implementation. Mode still defaults to 'local' until the backend
+  // ships the /package-payments/manual-claims endpoints — set it via
+  // EXPO_PUBLIC_PACKAGE_PAYMENT_SOURCE=remote (or pass options.mode) to flip.
+  const remoteRepository = options.remoteRepository ?? backendPackagePaymentRepository;
+  const requestedMode = normalizePackagePaymentRepositoryMode(options.mode)
+    ?? normalizePackagePaymentRepositoryMode(process.env.EXPO_PUBLIC_PACKAGE_PAYMENT_SOURCE)
+    ?? (options.enableRemoteDiagnostics ? 'shadow_remote' : 'local');
 
-  if (requestedMode === 'remote' && options.remoteRepository) {
-    return options.remoteRepository;
+  if (requestedMode === 'remote') {
+    return remoteRepository;
   }
 
-  if (requestedMode === 'shadow_remote' && options.remoteRepository) {
+  if (requestedMode === 'shadow_remote') {
     return createPackagePaymentShadowRepository({
       localRepository,
-      remoteRepository: options.remoteRepository,
+      remoteRepository,
       shadowWrites: false,
     });
   }
