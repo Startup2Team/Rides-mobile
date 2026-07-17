@@ -30,6 +30,7 @@ import { AppButton } from '@/components/AppButton';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useAuth } from '@/context/AuthContext';
 import { updateDriverLocation } from '@/services/driverAvailability';
+import { getDailyEarnings } from '@/services/driverEarnings';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -150,7 +151,6 @@ export default function DriverDashboard() {
     useDriverEntitlement();
   const {
     pendingRequest,
-    simulateIncomingRideRequest,
     acceptRideRequest,
     declineRideRequest,
   } = useRide();
@@ -160,6 +160,9 @@ export default function DriverDashboard() {
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>("standard");
   const [showHeatmap, setShowHeatmap] = useState(false);
+  // Authoritative daily earnings from the backend (GET /driver/earnings/daily);
+  // falls back to the locally computed summary when the backend is unreachable.
+  const [backendDailyEarnings, setBackendDailyEarnings] = useState<number | null>(null);
   const { profileImage } = useProfilePhotoActions(
     driverProfile?.profileImage ?? null,
   );
@@ -181,7 +184,6 @@ export default function DriverDashboard() {
   const adLoopResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adCarouselPositionedRef = useRef(false);
   const requestSessionRef = useRef(timers.currentSession());
-  const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownValueRef = useRef(15);
   const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
@@ -343,6 +345,24 @@ export default function DriverDashboard() {
     };
   }, [isOnline]);
 
+  // Pull the backend's authoritative daily earnings whenever the dashboard
+  // regains focus (e.g. after completing a ride).
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void getDailyEarnings()
+        .then(earnings => {
+          if (active) setBackendDailyEarnings(earnings.totalRwf);
+        })
+        .catch(() => {
+          // Backend unreachable — keep the locally computed figure.
+        });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
   useEffect(() => {
     positionAdCarouselAtStart();
   }, [positionAdCarouselAtStart]);
@@ -374,63 +394,52 @@ export default function DriverDashboard() {
     mapRef.current?.animateToRegion(visibleDriverRegion(driverLocation), 350);
   }, [driverLocation]);
 
-  // Ride request simulation
+  // Reset the request sheet + decline any stale request when going offline.
+  // Incoming requests now arrive over the real driver WebSocket (RideProvider),
+  // so there is no local simulation timer here anymore.
   useEffect(() => {
-    const clearRequestTimers = () => {
-      timers.clearTimeout(requestTimeoutRef.current);
-      timers.clearInterval(countdownRef.current);
-      requestTimeoutRef.current = null;
-      countdownRef.current = null;
-    };
-    clearRequestTimers();
-    requestSessionRef.current = timers.startSession();
-    if (!driverProfile) {
-      return clearRequestTimers;
-    }
+    if (!driverProfile) return;
     if (!isOnline) {
+      timers.clearInterval(countdownRef.current);
+      countdownRef.current = null;
       slideAnim.setValue(300);
       setCountdown(15);
       declineRideRequest();
-      return;
     }
-    const session = requestSessionRef.current;
-    requestTimeoutRef.current = timers.scheduleTimeout(
+  }, [declineRideRequest, driverProfile, isOnline, slideAnim, timers]);
+
+  // Animate the request sheet in + run the accept/decline countdown whenever a
+  // real incoming ride request lands.
+  useEffect(() => {
+    if (!pendingRequest) return;
+    const session = timers.startSession();
+    requestSessionRef.current = session;
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+    countdownValueRef.current = 15;
+    setCountdown(15);
+    countdownRef.current = timers.scheduleInterval(
       () => {
-        requestTimeoutRef.current = null;
-        simulateIncomingRideRequest();
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-        countdownValueRef.current = 15;
-        setCountdown(15);
-        countdownRef.current = timers.scheduleInterval(
-          () => {
-            const nextCountdown = Math.max(0, countdownValueRef.current - 1);
-            countdownValueRef.current = nextCountdown;
-            setCountdown(nextCountdown);
-            if (nextCountdown <= 0) {
-              timers.clearInterval(countdownRef.current);
-              countdownRef.current = null;
-              confirmDecline();
-            }
-          },
-          1000,
-          session,
-        );
+        const nextCountdown = Math.max(0, countdownValueRef.current - 1);
+        countdownValueRef.current = nextCountdown;
+        setCountdown(nextCountdown);
+        if (nextCountdown <= 0) {
+          timers.clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          confirmDecline();
+        }
       },
-      5000,
+      1000,
       session,
     );
-    return clearRequestTimers;
-  }, [
-    declineRideRequest,
-    driverProfile,
-    isOnline,
-    simulateIncomingRideRequest,
-    slideAnim,
-    timers,
-  ]);
+    return () => {
+      timers.clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRequest?.id, slideAnim, timers]);
 
   const confirmDecline = () => {
     timers.clearInterval(countdownRef.current);
@@ -1046,7 +1055,7 @@ export default function DriverDashboard() {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {formatRwf(activitySummary.todayEarningsRwf)}
+                {formatRwf(backendDailyEarnings ?? activitySummary.todayEarningsRwf)}
               </AppText>
               <AppText
                 style={[
