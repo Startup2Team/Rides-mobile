@@ -24,6 +24,10 @@ export interface NotificationItem {
   time: string;
   read: boolean;
   rideId?: string;
+  // 'backend' items are real push records whose read-state is synced to the
+  // server; locally-derived items (ride history, packages, static) are omitted
+  // and stay local-only.
+  source?: 'backend' | 'local';
 }
 
 export interface NotificationFeedContext {

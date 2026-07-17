@@ -3,6 +3,7 @@ import { authRepository } from '@/data/repositories/authRepository';
 import { profileRepository } from '@/domains/profile/repository';
 import type { ProfilePhoto, UserProfile } from '@/domains/profile';
 import type { User } from '@/types';
+import { fetchProfile, updateProfile } from '@/services/profile';
 import { profileKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';
@@ -42,10 +43,28 @@ export function useProfileQuery() {
   return usePolicyQuery(queryPolicies.profile, {
     queryKey: profileKeys.current(),
     queryFn: async () => {
-      const [user, profileImage] = await Promise.all([
+      const [storedUser, profileImage] = await Promise.all([
         authRepository.getCurrentUser(),
         profileRepository.getProfileImage(),
       ]);
+      // Backend is authoritative for the display fields (GET /customer/profile).
+      // Merge name + email onto the stored user (which owns mode/isDriver/etc.),
+      // persist so the cache stays consistent, and fall back to the stored user
+      // when offline or unauthenticated so the screen never goes blank.
+      let user = storedUser;
+      if (storedUser) {
+        try {
+          const remote = await fetchProfile();
+          user = {
+            ...storedUser,
+            name: remote.fullName || storedUser.name,
+            email: remote.email ?? storedUser.email,
+          };
+          await authRepository.saveCurrentUser(user);
+        } catch {
+          // Offline / unreachable — keep the locally stored profile.
+        }
+      }
       return {
         user,
         profilePhoto: toProfilePhoto(profileImage),
@@ -69,6 +88,14 @@ export function useUpdateProfileMutation() {
       const current = await authRepository.getCurrentUser();
       if (!current) return null;
       const next = { ...current, ...updates };
+      // Push the backend-owned display fields first (PUT /customer/profile).
+      // Phone changes go through the dedicated OTP flow, not here.
+      if (updates.name !== undefined || updates.email !== undefined) {
+        await updateProfile({
+          ...(updates.name !== undefined ? { fullName: updates.name } : {}),
+          ...(updates.email !== undefined ? { email: updates.email ?? null } : {}),
+        });
+      }
       await authRepository.saveCurrentUser(next);
       return next;
     },

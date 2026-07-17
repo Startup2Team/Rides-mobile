@@ -41,11 +41,21 @@ function toDomain(dto: NotificationDto): AppNotification {
   };
 }
 
+// The backend wraps the feed in an object: { data: { notifications: [...]|null,
+// unread_count } }. Older builds returned a bare array; accept both so a
+// contract tweak can't crash the feed.
+interface NotificationListDto {
+  notifications?: NotificationDto[] | null;
+  unread_count?: number;
+}
+
 export async function listNotifications(): Promise<AppNotification[]> {
-  const response = await getAppBackendClient().get<Envelope<NotificationDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<NotificationListDto | NotificationDto[] | null>>(
     '/v1/users/me/notifications',
   );
-  return (response.data.data ?? []).map(toDomain);
+  const payload = response.data.data;
+  const list = Array.isArray(payload) ? payload : payload?.notifications ?? [];
+  return list.map(toDomain);
 }
 
 export async function getUnreadNotificationCount(): Promise<number> {

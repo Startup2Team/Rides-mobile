@@ -4,6 +4,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { notificationRepository, listNotifications, getUnreadNotificationCount } from '@/domains/notifications/repository';
+import {
+  markNotificationRead as apiMarkNotificationRead,
+  markAllNotificationsRead as apiMarkAllNotificationsRead,
+} from '@/services/notifications';
 import { notificationKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';
@@ -90,6 +94,16 @@ export function useMarkNotificationReadMutation() {
   return useMutation({
     mutationFn: async (notificationId: string) => {
       await notificationRepository.markRead(notificationId);
+      // Backend push records own their read-state on the server; sync it.
+      // Locally-derived items have no server row, so skip them.
+      const cached = queryClient.getQueryData<NotificationItem[]>(notificationKeys.list(userId)) ?? [];
+      if (cached.find(item => item.id === notificationId)?.source === 'backend') {
+        try {
+          await apiMarkNotificationRead(notificationId);
+        } catch {
+          // Offline / unreachable — local overlay keeps the optimistic state.
+        }
+      }
       return notificationId;
     },
     onMutate: async notificationId => {
@@ -150,6 +164,14 @@ export function useMarkAllNotificationsReadMutation() {
     mutationFn: async () => {
       const allNotifications = await listNotifications(feedContext);
       await notificationRepository.saveReadState(toReadState(allNotifications));
+      // Mark the server-side feed read too (no-op if there are none).
+      if (allNotifications.some(item => item.source === 'backend')) {
+        try {
+          await apiMarkAllNotificationsRead();
+        } catch {
+          // Offline / unreachable — local overlay keeps the optimistic state.
+        }
+      }
     },
     onMutate: async () => {
       const key = notificationKeys.list(userId);

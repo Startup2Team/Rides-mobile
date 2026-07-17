@@ -41,6 +41,7 @@ function toNotificationItem(n: AppNotification): NotificationItem {
     time: n.sentAt,
     read: n.isRead,
     rideId: n.data?.ride_id,
+    source: 'backend',
   };
 }
 
