@@ -67,6 +67,33 @@ import {
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
 import { createRide as createBackendRide, cancelRide as cancelBackendRide } from '@/services/rides';
 import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare } from '@/services/negotiation';
+import {
+  acceptRide as driverAcceptRide,
+  declineRide as driverDeclineRide,
+  driverCancelRide,
+  markEnRoute as driverMarkEnRoute,
+  markArrived as driverMarkArrivedBackend,
+  startTrip as driverStartTrip,
+  completeTrip as driverCompleteTrip,
+} from '@/services/driverRides';
+import {
+  proposeFare as driverProposeFare,
+  acceptFare as driverAcceptFare,
+  lockManualFare as driverLockManualFare,
+} from '@/services/driverNegotiation';
+import { openCustomerTrackingSocket, type CustomerTrackingSocket } from '@/services/customerTrackingSocket';
+import { openDriverSocket, type DriverSocket } from '@/services/driverTrackingSocket';
+import {
+  appendNegotiationEvent,
+  applyDriverMatched,
+  applyLifecycleEvent,
+  buildDriverRequestFromPayload,
+  isDriverRequestEvent,
+  isLifecycleEvent,
+  localStatusFromBackend,
+  parseDriverCoords,
+  type BackendEventPayload,
+} from './rideBackendSync';
 import { createCompleteRideCommand, createStartRideCommand } from '@/domains/ride/commandCreators';
 import { rideTransactionBoundary } from '@/domains/ride/transactions';
 import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionPhase, RideStatus as RideProjectionStatus } from '@/domains/ride/readModels';
@@ -101,6 +128,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   // ride on the backend while the UI is still driven by the local simulation
   // (the WebSocket takes over state transitions in the next flow).
   const backendRideIdRef = useRef<string | null>(null);
+  // Live tracking sockets (Flows D + I). `backendDrivingRef` flips true once a
+  // real WS event drives state, so the local simulation timers stand down and
+  // the server becomes the source of truth for status transitions.
+  const customerSocketRef = useRef<CustomerTrackingSocket | null>(null);
+  const driverSocketRef = useRef<DriverSocket | null>(null);
+  const backendDrivingRef = useRef(false);
+  const driverEnRouteFiredRef = useRef<string | null>(null);
   const timerManagerRef = useRef(createRideTimerManager());
   const timers = timerManagerRef.current;
   currentRideRef.current = currentRide;
@@ -561,9 +595,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
 
     // Create the ride on the real backend (best-effort). On success we stash the
-    // server ride id so cancel + negotiation hit the same ride. Failures are
-    // non-fatal: the local simulation still drives the UI until the WS lands.
+    // server ride id so cancel + negotiation hit the same ride, and the customer
+    // tracking socket takes over state once the backend starts pushing events.
     backendRideIdRef.current = null;
+    backendDrivingRef.current = false;
+    driverEnRouteFiredRef.current = null;
     if (auth?.user) {
       void createBackendRide({
         vehicleType,
@@ -609,14 +645,18 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         rideId: currentRideSnapshot?.id ?? 'unknown',
       });
     }
-    // Cancel the ride on the real backend too (best-effort).
+    // Cancel the ride on the real backend too (best-effort). Drivers hit the
+    // driver cancel endpoint; customers the customer one.
     const backendRideId = backendRideIdRef.current ?? currentRideSnapshot?.backendRideId ?? null;
     if (backendRideId) {
-      void cancelBackendRide(backendRideId).catch(error =>
+      const cancelOnBackend = auth?.user?.mode === 'driver' ? driverCancelRide : cancelBackendRide;
+      void cancelOnBackend(backendRideId).catch(error =>
         reportOperationalFailure('ride.backend.cancel', error, { rideId: backendRideId }),
       );
     }
     backendRideIdRef.current = null;
+    backendDrivingRef.current = false;
+    driverEnRouteFiredRef.current = null;
     setCurrentRide(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date().toISOString() } : null);
     timers.scheduleTimeout(() => {
       setCurrentRide(prev => prev?.status === 'cancelled' ? null : prev);
@@ -635,6 +675,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     }
 
     timers.scheduleTimeout(() => {
+      if (backendDrivingRef.current) return;
       setCurrentRide(prev => respondToCustomerCounterOffer(prev, amount));
     }, NEGOTIATION_RESPONSE_DELAY_MS);
   }, [timers]);
@@ -653,13 +694,30 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const sendDriverOffer = useCallback((amount: number) => {
     if (amount <= 0) return;
     setCurrentRide(prev => addDriverOffer(prev, amount));
+    // Mirror the driver's offer to the backend negotiation (best-effort).
+    const backendRideId = backendRideIdRef.current;
+    if (backendRideId) {
+      void driverProposeFare(backendRideId, amount).catch(error =>
+        reportOperationalFailure('ride.driver.propose', error, { rideId: backendRideId }),
+      );
+    }
+    // Only fall back to a simulated customer reply when the backend WS is not
+    // driving the negotiation — real negotiation_message events take over then.
     timers.scheduleTimeout(() => {
+      if (backendDrivingRef.current) return;
       setCurrentRide(prev => addCustomerAutoReply(prev, amount));
     }, NEGOTIATION_RESPONSE_DELAY_MS);
   }, [timers]);
 
   const acceptCustomerOffer = useCallback(() => {
     setCurrentRide(acceptLatestCustomerOffer);
+    // Lock in the customer's fare on the backend negotiation (→ CONFIRMED).
+    const backendRideId = backendRideIdRef.current;
+    if (backendRideId) {
+      void driverAcceptFare(backendRideId).catch(error =>
+        reportOperationalFailure('ride.driver.accept_fare', error, { rideId: backendRideId }),
+      );
+    }
   }, []);
 
   const declineDriverOffer = useCallback(() => {
@@ -683,12 +741,26 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
     setCurrentRide(markRideArrived);
+    // Driver marks arrival at pickup on the backend (→ DRIVER_ARRIVED).
+    const backendRideId = backendRideIdRef.current;
+    if (backendRideId) {
+      void driverMarkArrivedBackend(backendRideId).catch(error =>
+        reportOperationalFailure('ride.driver.arrive', error, { rideId: backendRideId }),
+      );
+    }
   }, [timers]);
 
   const startJourney = useCallback(() => {
     const currentRideSnapshot = currentRideRef.current;
     const startedAt = new Date().toISOString();
     setCurrentRide(startRideJourney);
+    // Driver starts the trip on the backend (→ IN_PROGRESS).
+    const backendRideIdForStart = backendRideIdRef.current;
+    if (backendRideIdForStart) {
+      void driverStartTrip(backendRideIdForStart).catch(error =>
+        reportOperationalFailure('ride.driver.start', error, { rideId: backendRideIdForStart }),
+      );
+    }
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = timers.scheduleInterval(() => {
       setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
@@ -739,7 +811,24 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.endSession();
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
+    // Complete the trip on the backend before clearing the server ride id
+    // (driver-initiated only — the customer receives completion over the WS).
+    const backendRideIdForComplete = backendRideIdRef.current;
+    if (source === 'driver' && backendRideIdForComplete) {
+      const finalDest = currentRideSnapshot
+        ? {
+            destLat: currentRideSnapshot.destination.latitude,
+            destLng: currentRideSnapshot.destination.longitude,
+            destAddress: currentRideSnapshot.destination.address ?? undefined,
+          }
+        : undefined;
+      void driverCompleteTrip(backendRideIdForComplete, finalDest).catch(error =>
+        reportOperationalFailure('ride.driver.complete', error, { rideId: backendRideIdForComplete }),
+      );
+    }
     backendRideIdRef.current = null;
+    driverEnRouteFiredRef.current = null;
+    backendDrivingRef.current = false;
     setCurrentRide(prev => {
       if (!prev) return null;
       const driverOwnedFields = source === 'driver' && driverIdentity?.driverId
@@ -827,6 +916,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       matchedVehicleType: request.matchedVehicleType ?? sessionVehicle?.vehicleType,
     });
     setPendingRequest(null);
+    // Accept the assignment on the real backend (matched → negotiating) and
+    // remember the server ride id so the rest of the lifecycle targets it.
+    const backendRideId = request.backendRideId ?? null;
+    backendRideIdRef.current = backendRideId;
+    driverEnRouteFiredRef.current = null;
+    if (backendRideId) {
+      backendDrivingRef.current = true;
+      void driverAcceptRide(backendRideId).catch(error =>
+        reportOperationalFailure('ride.driver.accept', error, { rideId: backendRideId }),
+      );
+    }
     try {
       shadowWireAcceptRideCommand({
         rideId: request.id,
@@ -846,6 +946,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const request = pendingRequestRef.current;
     setPendingRequest(null);
     if (request) {
+      // Decline on the real backend so the matcher can re-offer to another driver.
+      if (request.backendRideId) {
+        void driverDeclineRide(request.backendRideId).catch(error =>
+          reportOperationalFailure('ride.driver.decline', error, { rideId: request.backendRideId }),
+        );
+      }
       const actorId = auth?.user?.id ?? 'local_user';
       try {
         shadowWireDeclineRideCommand({
@@ -875,17 +981,194 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const riderAcceptWithFare = useCallback((amount: number) => {
     if (amount <= 0) return;
     setCurrentRide(prev => acceptRideWithFare(prev, amount));
+    // Driver locks a manual (non-negotiated) fare on the backend (→ CONFIRMED).
+    const backendRideId = backendRideIdRef.current;
+    if (backendRideId) {
+      void driverLockManualFare(backendRideId, amount).catch(error =>
+        reportOperationalFailure('ride.driver.lock_fare', error, { rideId: backendRideId }),
+      );
+    }
   }, []);
 
+  // ── Flow D: customer live tracking socket ────────────────────────────────
+  // Maps inbound backend events to local ride state, replacing the simulation
+  // timers as the source of truth once the server starts pushing.
+  const handleCustomerTrackingEvent = useCallback(
+    (event: { type: string; payload: BackendEventPayload }) => {
+      const { type, payload } = event;
+
+      if (type === 'driver_location') {
+        const coords = parseDriverCoords(payload);
+        if (coords) setDriverLocation(coords);
+        return;
+      }
+
+      if (type === 'driver_matched') {
+        backendDrivingRef.current = true;
+        clearSearchTimers();
+        const coords = parseDriverCoords(payload);
+        if (coords) setDriverLocation(coords);
+        setCurrentRide(prev => (prev ? applyDriverMatched(prev, payload) : prev));
+        return;
+      }
+
+      if (isLifecycleEvent(type)) {
+        backendDrivingRef.current = true;
+        clearSearchTimers();
+        timers.clearInterval(driverIntervalRef.current);
+        driverIntervalRef.current = null;
+        const coords = parseDriverCoords(payload);
+        if (coords) setDriverLocation(coords);
+        setCurrentRide(prev => (prev ? applyLifecycleEvent(prev, type, payload) : prev));
+
+        if (type === 'ride_completed') {
+          const session = timers.endSession();
+          const snapshot = currentRideRef.current;
+          if (snapshot) {
+            const completed = applyLifecycleEvent(snapshot, 'ride_completed', payload);
+            setRideHistory(hist => [completed, ...hist]);
+            void appendRideHistory(completed).catch(error =>
+              reportOperationalFailure('ride.history.persist', error, { status: completed.status }),
+            );
+          }
+          timers.scheduleTimeout(() => {
+            setCurrentRide(prev => (prev?.status === 'completed' ? null : prev));
+            setDriverLocation(null);
+          }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
+        }
+
+        if (type === 'ride_cancelled') {
+          const session = timers.endSession();
+          timers.scheduleTimeout(() => {
+            setCurrentRide(prev => (prev?.status === 'cancelled' ? null : prev));
+            setDriverLocation(null);
+          }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
+        }
+        return;
+      }
+
+      if (type === 'ride_state') {
+        const local = localStatusFromBackend(payload.status);
+        if (local) {
+          backendDrivingRef.current = true;
+          setCurrentRide(prev => (prev ? { ...prev, status: local } : prev));
+        }
+        return;
+      }
+
+      if (type === 'negotiation_message' || type === 'negotiation_declined') {
+        setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'customer') : prev));
+      }
+    },
+    [clearSearchTimers, timers],
+  );
+
+  // ── Flow I: driver live socket ───────────────────────────────────────────
+  // Receives incoming ride requests + lifecycle/negotiation events, replacing
+  // the local simulateIncomingRideRequest mock.
+  const handleDriverSocketEvent = useCallback(
+    (event: { type: string; payload: BackendEventPayload }) => {
+      const { type, payload } = event;
+
+      if (isDriverRequestEvent(type)) {
+        if (pendingRequestRef.current || currentRideRef.current) return;
+        const sessionVehicle = getEligibleOnlineSessionVehicle(
+          auth?.driverProfile,
+          driverEntitlement?.entitlement,
+        );
+        const request = buildDriverRequestFromPayload(
+          payload,
+          sessionVehicle ? { vehicleId: sessionVehicle.id, vehicleType: sessionVehicle.vehicleType } : undefined,
+        );
+        if (request) setPendingRequest(request);
+        return;
+      }
+
+      if (type === 'driver_location') {
+        const coords = parseDriverCoords(payload);
+        if (coords) setDriverLocation(coords);
+        return;
+      }
+
+      if (type === 'ride_cancelled') {
+        backendDrivingRef.current = true;
+        setPendingRequest(null);
+        const session = timers.endSession();
+        setCurrentRide(prev => (prev ? { ...prev, status: 'cancelled' } : prev));
+        timers.scheduleTimeout(() => {
+          setCurrentRide(prev => (prev?.status === 'cancelled' ? null : prev));
+          setDriverLocation(null);
+        }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
+        return;
+      }
+
+      if (type === 'negotiation_message' || type === 'negotiation_declined') {
+        setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'driver') : prev));
+      }
+    },
+    [auth?.driverProfile, driverEntitlement?.entitlement, timers],
+  );
+
+  const trackedRideId = currentRide?.backendRideId ?? null;
+  const isCustomerTrackingActive =
+    Boolean(trackedRideId) &&
+    auth?.user?.mode !== 'driver' &&
+    currentRide?.status !== 'completed' &&
+    currentRide?.status !== 'cancelled';
   React.useEffect(() => {
+    if (!isCustomerTrackingActive || !trackedRideId) return;
+    const socket = openCustomerTrackingSocket(trackedRideId, {
+      onEvent: handleCustomerTrackingEvent,
+      onError: error => reportOperationalFailure('ride.ws.customer', error, { rideId: trackedRideId }),
+    });
+    customerSocketRef.current = socket;
+    return () => {
+      socket.close();
+      customerSocketRef.current = null;
+    };
+  }, [handleCustomerTrackingEvent, isCustomerTrackingActive, trackedRideId]);
+
+  const isDriverSocketActive =
+    auth?.user?.mode === 'driver' && auth?.driverProfile?.isOnline === true;
+  React.useEffect(() => {
+    if (!isDriverSocketActive) return;
+    const socket = openDriverSocket({
+      onEvent: handleDriverSocketEvent,
+      onError: error => reportOperationalFailure('ride.ws.driver', error),
+    });
+    driverSocketRef.current = socket;
+    return () => {
+      socket.close();
+      driverSocketRef.current = null;
+    };
+  }, [handleDriverSocketEvent, isDriverSocketActive]);
+
+  // Driver: mark en-route once a backend-backed ride is confirmed (covers both
+  // negotiation paths), so it advances to DRIVER_EN_ROUTE. Fires once per ride.
+  React.useEffect(() => {
+    if (auth?.user?.mode !== 'driver') return;
+    if (currentRide?.status !== 'confirmed') return;
+    const backendRideId = backendRideIdRef.current;
+    if (!backendRideId || driverEnRouteFiredRef.current === backendRideId) return;
+    driverEnRouteFiredRef.current = backendRideId;
+    void driverMarkEnRoute(backendRideId).catch(error =>
+      reportOperationalFailure('ride.driver.en_route', error, { rideId: backendRideId }),
+    );
+  }, [auth?.user?.mode, currentRide?.status]);
+
+  React.useEffect(() => {
+    // Local simulation fallback only — when the backend WS is driving state (or
+    // we are the driver) the real driver_en_route event advances the ride.
+    if (backendDrivingRef.current || auth?.user?.mode === 'driver') return;
     if (currentRide?.status === 'confirmed') {
       const timer = timers.scheduleTimeout(() => {
+        if (backendDrivingRef.current) return;
         updateStatus('arriving');
         startLiveTracking();
       }, CONFIRMED_RIDE_START_DELAY_MS);
       return () => timers.clearTimeout(timer);
     }
-  }, [currentRide?.status === 'confirmed', startLiveTracking, timers]);
+  }, [currentRide?.status === 'confirmed', auth?.user?.mode, startLiveTracking, timers]);
 
   React.useEffect(() => () => {
     timers.endSession();
