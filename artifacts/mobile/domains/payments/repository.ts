@@ -1,5 +1,6 @@
 import { paymentRepository as localPaymentRepository } from '@/data/repositories';
 import type { AddPaymentMethodInput, BillingProfile, PaymentMethod, UpdatePaymentMethodInput } from './types';
+import * as backendPaymentMethods from '@/services/paymentMethods';
 
 const DEFAULT_CASH_METHOD: PaymentMethod = {
   id: 'cash_default',
@@ -39,7 +40,17 @@ function buildBillingProfile(methods: PaymentMethod[]): BillingProfile {
   };
 }
 
-export const paymentsRepository = {
+export interface PaymentsRepository {
+  listPaymentMethods(): Promise<PaymentMethod[]>;
+  getDefaultPaymentMethod(): Promise<PaymentMethod | null>;
+  getBillingProfile(): Promise<BillingProfile>;
+  addPaymentMethod(input: AddPaymentMethodInput): Promise<PaymentMethod[]>;
+  updatePaymentMethod(input: UpdatePaymentMethodInput): Promise<PaymentMethod[]>;
+  deletePaymentMethod(methodId: string): Promise<PaymentMethod[]>;
+  setDefaultPaymentMethod(methodId: string): Promise<PaymentMethod[]>;
+}
+
+const localPaymentsRepository: PaymentsRepository = {
   async listPaymentMethods(): Promise<PaymentMethod[]> {
     return normalizeDefault(await listMethodsWithDefault());
   },
@@ -97,6 +108,45 @@ export const paymentsRepository = {
     return next;
   },
 };
+
+// Real backend (GET/POST/PATCH/DELETE /payments/methods). The server owns
+// default/normalization, but we still guarantee a cash fallback and a single
+// default so the UI contract is identical to local.
+const backendPaymentsRepository: PaymentsRepository = {
+  async listPaymentMethods() {
+    const methods = await backendPaymentMethods.listPaymentMethods();
+    return normalizeDefault(methods.length > 0 ? methods : [DEFAULT_CASH_METHOD]);
+  },
+  async getDefaultPaymentMethod() {
+    return backendPaymentMethods.getDefaultPaymentMethod();
+  },
+  async getBillingProfile() {
+    return backendPaymentMethods.getBillingProfile();
+  },
+  async addPaymentMethod(input) {
+    return normalizeDefault(await backendPaymentMethods.addPaymentMethod(input));
+  },
+  async updatePaymentMethod(input) {
+    return normalizeDefault(await backendPaymentMethods.updatePaymentMethod(input));
+  },
+  async deletePaymentMethod(methodId) {
+    return normalizeDefault(await backendPaymentMethods.deletePaymentMethod(methodId));
+  },
+  async setDefaultPaymentMethod(methodId) {
+    return normalizeDefault(await backendPaymentMethods.setDefaultPaymentMethod(methodId));
+  },
+};
+
+// Source switch: defaults to LOCAL until the backend endpoints exist. When they
+// ship, set EXPO_PUBLIC_PAYMENT_METHODS_SOURCE=remote (build-time env) — the
+// entire payments UI then reads/writes the real backend with no other change.
+function resolvePaymentsRepository(): PaymentsRepository {
+  return process.env.EXPO_PUBLIC_PAYMENT_METHODS_SOURCE === 'remote'
+    ? backendPaymentsRepository
+    : localPaymentsRepository;
+}
+
+export const paymentsRepository: PaymentsRepository = resolvePaymentsRepository();
 
 export {
   RemotePaymentRepository,
