@@ -138,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const updated: DriverProfile = {
           ...prev,
           verificationStatus: status ?? prev.verificationStatus,
+          isVerified: status === 'approved',
           isOnline: backend.isOnline,
           acceptanceRate: backend.acceptanceRate || prev.acceptanceRate,
           completedRides: backend.totalRides || prev.completedRides,
