@@ -22,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { appendDriverVehicle, buildDriverVehicleFromApplication, resubmitDriverVehicleApplication } from '@/domain/driverVehicles';
 import { buildInitialDriverDocuments } from '@/domain/driverDocuments';
 import { useVehicle } from '@/domains/vehicle';
+import { ensureBackendVehicle } from '@/services/driverVehicles';
 import { useColors } from '@/hooks/useColors';
 import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocumentUpload';
 import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM, type DocFaces, type DocumentKey, type DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
@@ -228,6 +229,12 @@ export default function DriverAddVehicleScreen() {
     const nextProfile = appendDriverVehicle(driverProfile!, sourceVehicleId ? { ...vehicle, id: sourceVehicleId } : vehicle);
     setSaving(true);
     await saveDriverProfile(nextProfile);
+    // Register the vehicle on the real backend (POST /driver/vehicles), matched
+    // by plate. Best-effort — the local verification flow proceeds regardless.
+    void ensureBackendVehicle({
+      vehicleType: applicationInput.vehicleType,
+      plateNumber: applicationInput.plateNumber,
+    });
     await submitVehicleApplication({
       userId: user?.id ?? 'unknown-user',
       driverProfile: driverProfile!,

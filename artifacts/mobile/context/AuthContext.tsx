@@ -24,6 +24,7 @@ import { configurePushNotifications, registerPushToken, resetPushRegistration } 
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
+import { activateVehicleByPlate } from '@/services/driverVehicles';
 
 interface AuthContextType {
   user: User | null;
@@ -182,10 +183,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setActiveVehicle = useCallback(async (vehicleId: string | null) => {
     const prev = driverProfileRef.current;
     if (!prev || prev.isOnline) return;
-    if (vehicleId !== null && !getApprovedDriverVehicles(prev).some(vehicle => vehicle.id === vehicleId)) return;
+    const selected = vehicleId !== null
+      ? getApprovedDriverVehicles(prev).find(vehicle => vehicle.id === vehicleId)
+      : null;
+    if (vehicleId !== null && !selected) return;
     const updated = setDriverActiveVehicle(prev, vehicleId);
     setDriverProfile(updated);
     await saveStoredDriverProfile(updated);
+    // Tell the backend which vehicle is active (POST /driver/vehicles/{id}/activate).
+    // Matched by plate; best-effort so an offline switch still works locally.
+    if (selected) {
+      try {
+        await activateVehicleByPlate(selected.plateNumber);
+      } catch {
+        // Backend unreachable or rejected (e.g. active ride) — keep local state.
+      }
+    }
   }, []);
 
   const setDriverOnline = useCallback(async (isOnline: boolean) => {

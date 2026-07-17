@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth, useOptionalAuth } from '@/context/AuthContext';
 import { vehicleRepository } from '@/data/repositories';
+import { deleteVehicleByPlate } from '@/services/driverVehicles';
 import { appendDriverVehicle, getDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
 import type { DriverVehicleProfile } from '@/types';
 import { driverKeys } from '../keys';
@@ -140,6 +141,9 @@ export function useDeleteVehicleMutation() {
 
   return useMutation({
     mutationFn: async (vehicleId: string) => {
+      const removedPlate = driverProfile
+        ? getDriverVehicles(driverProfile).find(item => item.id === vehicleId)?.plateNumber ?? null
+        : null;
       await vehicleRepository.deleteVehicle(vehicleId);
       if (driverProfile) {
         const nextProfile = {
@@ -148,6 +152,10 @@ export function useDeleteVehicleMutation() {
           activeVehicle: driverProfile.activeVehicle?.vehicleId === vehicleId ? { vehicleId: null } : driverProfile.activeVehicle,
         };
         await saveDriverProfile(nextProfile);
+      }
+      // Mirror the removal to the backend, matched by plate (best-effort).
+      if (removedPlate) {
+        void deleteVehicleByPlate(removedPlate).catch(() => {});
       }
       return vehicleId;
     },
