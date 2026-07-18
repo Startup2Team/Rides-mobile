@@ -22,6 +22,7 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { requestOtp } from '@/services/authSession';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: 'ðŸ‡·ðŸ‡¼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -48,17 +49,30 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountrySheet, setShowCountrySheet] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (submitting) return;
     if (phone.replace(/\D/g, '').length < selectedCountry.minLength) {
       setError('Enter a valid phone number');
       return;
     }
     setError('');
-    router.push({
-      pathname: '/(auth)/otp',
-      params: { phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`, mode: 'login' },
-    });
+    setSubmitting(true);
+    const phoneNumber = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
+    try {
+      // Actually request the OTP from the backend before showing the code screen.
+      // Previously login only navigated, so no OTP was ever sent (nothing in logs).
+      await requestOtp({ phoneNumber });
+      router.push({
+        pathname: '/(auth)/otp',
+        params: { phone: phoneNumber, mode: 'login' },
+      });
+    } catch {
+      setError("Couldn't send the code. Check the number and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -140,6 +154,7 @@ export default function LoginScreen() {
           <AppButton
             title="Send OTP Code"
             onPress={handleContinue}
+            loading={submitting}
             fullWidth
             size="lg"
             disabled={phone.replace(/\D/g, '').length < selectedCountry.minLength}
