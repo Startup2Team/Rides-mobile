@@ -1,8 +1,5 @@
-import { useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import { useRide } from '@/context/RideContext';
-import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { notificationRepository, listNotifications, getUnreadNotificationCount } from '@/domains/notifications/repository';
 import {
   markNotificationRead as apiMarkNotificationRead,
@@ -11,67 +8,27 @@ import {
 import { notificationKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';
-import type { NotificationFeedContext, NotificationItem } from '@/domains/notifications';
-import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import type { NotificationItem } from '@/domains/notifications';
 
-function useNotificationFeedContext(): NotificationFeedContext {
-  const { user } = useAuth();
-  const { currentRide, pendingRequest, rideHistory } = useRide();
-  const { entitlement, isLoading, rideCredits } = useDriverEntitlement();
-
-  return useMemo(() => ({
-    currentRide: currentRide ?? null,
-    pendingRequest: pendingRequest ?? null,
-    rideHistory,
-    driverId: user?.id,
-    driverMode: user?.mode === 'driver',
-    entitlement: entitlement ?? EMPTY_DRIVER_ENTITLEMENT,
-    rideCredits: isLoading ? Number.POSITIVE_INFINITY : rideCredits,
-  }), [currentRide, entitlement, isLoading, pendingRequest, rideCredits, rideHistory, user?.id, user?.mode]);
-}
-
-function useNotificationFeedInvalidation(signature: string, userId: string | null | undefined) {
-  const queryClient = useQueryClient();
-  useEffect(() => {
-    void queryClient.invalidateQueries({ queryKey: notificationKeys.list(userId ?? 'anonymous') });
-    void queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount(userId ?? 'anonymous') });
-  }, [queryClient, signature, userId]);
-}
-
-function useFeedSignature(feedContext: NotificationFeedContext) {
-  return useMemo(() => JSON.stringify({
-    currentRideId: feedContext.currentRide?.id ?? null,
-    currentRideStatus: feedContext.currentRide?.status ?? null,
-    pendingRequestId: feedContext.pendingRequest?.id ?? null,
-    rideHistory: feedContext.rideHistory.map(ride => [ride.id, ride.status, ride.completedAt ?? null]),
-    driverMode: feedContext.driverMode,
-    driverId: feedContext.driverId ?? null,
-    entitlementUpdatedAt: feedContext.entitlement.updatedAt,
-    rideCredits: feedContext.rideCredits,
-  }), [feedContext]);
-}
+// The notifications feed is sourced entirely from the backend, so the query no
+// longer needs a ride/driver-derived feed context or manual invalidation on
+// local ride-state changes; React Query's staleTime + refetch drives freshness.
 
 export function useNotificationsQuery() {
   const { user } = useAuth();
-  const feedContext = useNotificationFeedContext();
-  const signature = useFeedSignature(feedContext);
-  useNotificationFeedInvalidation(signature, user?.id);
 
   return usePolicyQuery(queryPolicies.notifications, {
     queryKey: notificationKeys.list(user?.id ?? 'anonymous'),
-    queryFn: async () => listNotifications(feedContext),
+    queryFn: async () => listNotifications(),
   });
 }
 
 export function useUnreadNotificationCountQuery() {
   const { user } = useAuth();
-  const feedContext = useNotificationFeedContext();
-  const signature = useFeedSignature(feedContext);
-  useNotificationFeedInvalidation(signature, user?.id);
 
   return usePolicyQuery(queryPolicies.notifications, {
     queryKey: notificationKeys.unreadCount(user?.id ?? 'anonymous'),
-    queryFn: async () => getUnreadNotificationCount(feedContext),
+    queryFn: async () => getUnreadNotificationCount(),
   });
 }
 
@@ -158,11 +115,10 @@ export function useMarkAllNotificationsReadMutation() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id ?? 'anonymous';
-  const feedContext = useNotificationFeedContext();
 
   return useMutation({
     mutationFn: async () => {
-      const allNotifications = await listNotifications(feedContext);
+      const allNotifications = await listNotifications();
       await notificationRepository.saveReadState(toReadState(allNotifications));
       // Mark the server-side feed read too (no-op if there are none).
       if (allNotifications.some(item => item.source === 'backend')) {
