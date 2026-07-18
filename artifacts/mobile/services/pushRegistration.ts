@@ -1,14 +1,16 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { updateProfile } from './profile';
+import { getPushToken } from './fcmToken';
+import { registerDeviceToken, unregisterDeviceToken } from './notifications';
 
 // FCM push registration. The backend (Firebase Admin SDK) sends directly to a
-// device's *native* FCM token, so we register `getDevicePushToken()` (the raw
-// FCM token on Android / APNs token on iOS) — NOT an Expo push token — via
-// PUT /customer/profile, which writes users.fcm_token (the row the ride/
-// negotiation push path reads). All calls are best-effort: permission denied,
-// no Google Play Services, a missing google-services.json (dev/emulator) or an
-// offline backend simply results in a no-op, never a thrown error.
+// device's *native* FCM token, so we register the native token (a real FCM
+// registration token on Android, and — via @react-native-firebase/messaging —
+// on iOS too; see services/fcmToken.ts) with POST /users/me/device-token, the
+// multi-device store the ride / negotiation / driver push paths read. All calls
+// are best-effort: permission denied, no Google Play Services, a missing
+// google-services.json (dev/emulator) or an offline backend simply results in a
+// no-op, never a thrown error.
 
 let configured = false;
 let lastRegistered: string | null = null;
@@ -23,7 +25,7 @@ export function configurePushNotifications(): void {
       shouldShowBanner: true,
       shouldShowList: true,
       shouldPlaySound: true,
-      shouldSetBadge: false,
+      shouldSetBadge: true,
     }),
   });
 
@@ -33,6 +35,7 @@ export function configurePushNotifications(): void {
       importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#0A84FF',
     });
   }
 }
@@ -49,23 +52,26 @@ export async function registerPushToken(): Promise<string | null> {
     }
     if (!granted) return null;
 
-    const token = await Notifications.getDevicePushTokenAsync();
-    const value = typeof token.data === 'string' ? token.data : String(token.data);
-    if (!value) return null;
+    const push = await getPushToken();
+    if (!push) return null;
 
-    // Avoid a redundant PUT if we already registered this exact token.
-    if (value === lastRegistered) return value;
-    await updateProfile({ fcmToken: value });
-    lastRegistered = value;
-    return value;
+    // Avoid a redundant POST if we already registered this exact token.
+    if (push.token === lastRegistered) return push.token;
+    await registerDeviceToken(push.token, push.platform);
+    lastRegistered = push.token;
+    return push.token;
   } catch {
     // No permission / no Play Services / no google-services.json / offline.
     return null;
   }
 }
 
-// Clear the cached token so the next registerPushToken() re-sends (e.g. after
-// logout → login as a different user).
+// Unregister this device's token with the backend (best-effort) so pushes stop
+// reaching it, then clear the cache so a later login re-registers.
 export function resetPushRegistration(): void {
+  const token = lastRegistered;
   lastRegistered = null;
+  if (!token) return;
+  // Fire-and-forget: offline / already-gone tokens are pruned on first dead send.
+  void unregisterDeviceToken(token).catch(() => {});
 }

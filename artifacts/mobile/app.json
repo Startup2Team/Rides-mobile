@@ -16,10 +16,17 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "rw.rides.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Rides uses your precise location while the app is open to find nearby vehicles and set accurate pickup locations.",
         "NSCameraUsageDescription": "Rides needs access to your camera to take a profile picture.",
-        "NSPhotoLibraryUsageDescription": "Rides needs access to your photo library to select a profile picture."
+        "NSPhotoLibraryUsageDescription": "Rides needs access to your photo library to select a profile picture.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -56,7 +63,14 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "color": "#0A84FF",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
       "expo-secure-store",
       [
         "expo-location",

@@ -73,3 +73,16 @@ export async function markNotificationRead(id: string): Promise<void> {
 export async function markAllNotificationsRead(): Promise<void> {
   await getAppBackendClient().post('/v1/users/me/notifications/mark-all-read', {});
 }
+
+// Register (or refresh) a native push token for the signed-in user so FCM can
+// reach every device they're logged in on. `platform` lets the backend tune the
+// payload (Android vs iOS/APNs). Multi-device: the backend upserts and also
+// mirrors to the legacy users.fcm_token column.
+export async function registerDeviceToken(token: string, platform: string): Promise<void> {
+  await getAppBackendClient().post('/v1/users/me/device-token', { body: { token, platform } });
+}
+
+// Unregister a token (e.g. logout on this device) so pushes stop reaching it.
+export async function unregisterDeviceToken(token: string): Promise<void> {
+  await getAppBackendClient().delete('/v1/users/me/device-token', { body: { token } });
+}
