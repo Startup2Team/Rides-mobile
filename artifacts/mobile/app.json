@@ -46,12 +46,16 @@
       "favicon": "./assets/images/app-icon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
       [
         "expo-build-properties",
         {
           "android": {
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true
+          },
+          "ios": {
+            "useFrameworks": "static"
           }
         }
       ],

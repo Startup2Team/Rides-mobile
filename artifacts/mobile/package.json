@@ -102,6 +102,8 @@
     "@babel/runtime": "^7.29.7",
     "@mapbox/polyline": "^1.2.1",
     "@react-native-community/datetimepicker": "8.4.4",
+    "@react-native-firebase/app": "22.4.0",
+    "@react-native-firebase/messaging": "22.4.0",
     "@react-navigation/native": "^7.2.5",
     "expo": "~54.0.35",
     "expo-build-properties": "~1.0.10",
