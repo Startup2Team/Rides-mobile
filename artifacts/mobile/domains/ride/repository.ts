@@ -51,6 +51,8 @@ function toMobileRide(r: CustomerRide): Ride {
 
 // Real backend: GET /customer/rides (list) and /customer/rides/{id} (detail).
 export const rideHistoryRepository = {
+  // CUSTOMER (passenger) history — hits /v1/customer/rides. Do not use this on
+  // driver screens: it returns the signed-in user's rides as a PASSENGER.
   async listRideHistory(_options?: RideHistoryOptions): Promise<Ride[]> {
     return (await listRides()).map(toMobileRide);
   },
@@ -61,5 +63,16 @@ export const rideHistoryRepository = {
     } catch {
       return null;
     }
+  },
+
+  // DRIVER ride history. The backend currently exposes only
+  // /v1/driver/rides/active and /v1/driver/rides/{id} — there is NO driver
+  // ride-LIST endpoint (see services/driverRides.ts), so a per-ride driver
+  // history cannot be fetched. Returning an empty list here keeps driver
+  // screens from silently reading the WRONG dataset (customer/passenger rides);
+  // driver aggregates are sourced from /driver/stats and /driver/earnings/*
+  // instead. NEEDS-BACKEND: a paginated GET /v1/driver/rides list endpoint.
+  async listDriverRideHistory(_options?: RideHistoryOptions): Promise<Ride[]> {
+    return [];
   },
 };

@@ -18,12 +18,10 @@ import { ProgressRing } from "@/components/driver-statistics/ProgressRing";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useDriverEntitlement } from "@/context/DriverEntitlementContext";
-import { useRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
-import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
-import {
-  getDriverRatingSummary,
-  type DriverRatingSummary,
-} from "@/domain/driverWallet";
+import { useDriverRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
+import { useDriverRatingsQuery } from "@/query/hooks/useDriverRatingsQuery";
+import { useDriverStatsQuery } from "@/query/hooks/useDriverStatsQuery";
+import { useDriverDailyEarningsQuery } from "@/query/hooks/useDriverEarningsQuery";
 import {
   DEFAULT_DAILY_GOAL_RWF,
   isCurrentLocalDate,
@@ -131,13 +129,14 @@ export default function DriverStatsDetail() {
 
   const { user, driverProfile } = useAuth();
   const { entitlement } = useDriverEntitlement();
-  const { data: rideHistory = [], refetch: refetchRideHistory } =
-    useRideHistoryQuery(user?.id);
+  // Driver ride history has no backend list endpoint yet (empty). Per-date
+  // earnings/trips are only backend-authoritative for TODAY (daily endpoint).
+  const { data: rideHistory = [] } = useDriverRideHistoryQuery(user?.id);
+  const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
+    useDriverRatingsQuery();
+  const { data: driverStats } = useDriverStatsQuery();
+  const { data: dailyEarnings } = useDriverDailyEarningsQuery();
 
-  const [ratingSummary, setRatingSummary] = useState<DriverRatingSummary>({
-    averageRating: null,
-    ratingCount: 0,
-  });
   const [dailyGoalRecords, setDailyGoalRecords] = useState<
     DriverDailyGoalRecord[]
   >(() => {
@@ -158,18 +157,6 @@ export default function DriverStatsDetail() {
   });
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [calendarVisible, setCalendarVisible] = useState(false);
-
-  // Load rating summary
-  React.useEffect(() => {
-    async function loadRatings() {
-      const stored = await loadStoredDriverRatings();
-      const summary = user?.id
-        ? getDriverRatingSummary(stored.data ?? [], user.id)
-        : { averageRating: null, ratingCount: 0 };
-      setRatingSummary(summary);
-    }
-    void loadRatings();
-  }, [user?.id]);
 
   const refreshDailyGoals = useCallback(async () => {
     const stored = await loadStoredDriverDailyGoals();
@@ -223,10 +210,21 @@ export default function DriverStatsDetail() {
     [rideHistory],
   );
 
-  const activeStats = useMemo(
-    () => getDailyStatsForDate(selectedDate),
-    [selectedDate, getDailyStatsForDate],
-  );
+  const activeStats = useMemo(() => {
+    // TODAY is the only date with a backend earnings/trips endpoint. Other
+    // dates have no per-date driver endpoint yet, so they read empty rather
+    // than showing fabricated numbers. NEEDS-BACKEND: per-date driver rides.
+    if (isCurrentLocalDate(selectedDate) && dailyEarnings) {
+      const tripsCount = dailyEarnings.rides;
+      const earnings = dailyEarnings.totalRwf;
+      return {
+        tripsCount,
+        earnings,
+        earningsPerTrip: tripsCount > 0 ? earnings / tripsCount : 0,
+      };
+    }
+    return getDailyStatsForDate(selectedDate);
+  }, [selectedDate, getDailyStatsForDate, dailyEarnings]);
 
   // Extract values based on active metric
   const currentValue = useMemo(() => {
@@ -240,11 +238,12 @@ export default function DriverStatsDetail() {
       case "rating":
         return ratingSummary.averageRating ?? 0;
       case "acceptance":
-        return driverProfile?.acceptanceRate ?? 0;
+        // Backend-authoritative acceptance rate (GET /v1/driver/stats).
+        return driverStats?.acceptanceRate ?? driverProfile?.acceptanceRate ?? 0;
       default:
         return 0;
     }
-  }, [activeMetric, activeStats, ratingSummary, driverProfile]);
+  }, [activeMetric, activeStats, ratingSummary, driverStats, driverProfile]);
 
   const selectedLocalDate = useMemo(
     () => toLocalDateString(selectedDate),
@@ -293,26 +292,6 @@ export default function DriverStatsDetail() {
     // Shared mock action
     alert("Sharing statistics report!");
   };
-
-  // Mock hourly data for the chart based on selected date and active stats
-  const hourlyData = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, i) => ({ hour: i, value: 0 }));
-    // Spread the active stats across midday peak hours for visualization
-    if (currentValue > 0) {
-      hours[8].value = currentValue * 0.15;
-      hours[9].value = currentValue * 0.25;
-      hours[12].value = currentValue * 0.1;
-      hours[13].value = currentValue * 0.2;
-      hours[17].value = currentValue * 0.18;
-      hours[18].value = currentValue * 0.12;
-    }
-    return hours;
-  }, [currentValue]);
-
-  const maxHourlyValue = useMemo(() => {
-    const max = Math.max(...hourlyData.map((h) => h.value));
-    return max > 0 ? max : 1;
-  }, [hourlyData]);
 
   const formattedDateTitle = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
@@ -526,63 +505,20 @@ export default function DriverStatsDetail() {
             </AppText>
           </View>
 
-          {/* Svg / Custom View Bar Chart */}
-          <View style={styles.chartArea}>
-            {/* Dashed Target Line */}
-            <View
-              style={[
-                styles.chartTargetLine,
-                { borderBottomColor: config.color + "44", top: "40%" },
-              ]}
+          {/* An hourly breakdown needs a per-hour driver endpoint that does not
+              exist yet. Rather than fabricate a distribution, show a clear empty
+              state. NEEDS-BACKEND: hourly earnings/trips breakdown. */}
+          <View style={styles.chartEmptyState}>
+            <Feather
+              name="bar-chart-2"
+              size={28}
+              color={colors.mutedForeground}
             />
-
-            <View style={styles.barsContainer}>
-              {hourlyData.map((h, i) => {
-                const heightRatio = h.value / maxHourlyValue;
-                const barHeight =
-                  heightRatio > 0
-                    ? Math.max(4, Math.round(heightRatio * 110))
-                    : 0;
-
-                // Show X labels at specific hours
-                const showLabel = h.hour % 6 === 0;
-
-                return (
-                  <View key={i} style={styles.chartBarSlot}>
-                    <View
-                      style={[
-                        styles.chartBarTrack,
-                        { backgroundColor: colors.border },
-                      ]}
-                    >
-                      {barHeight > 0 && (
-                        <View
-                          style={[
-                            styles.chartBarFill,
-                            {
-                              backgroundColor: config.color,
-                              height: barHeight,
-                            },
-                          ]}
-                        />
-                      )}
-                    </View>
-                    {showLabel ? (
-                      <AppText
-                        style={[
-                          styles.chartAxisLabel,
-                          { color: colors.mutedForeground },
-                        ]}
-                      >
-                        {String(h.hour).padStart(2, "0")}
-                      </AppText>
-                    ) : (
-                      <View style={styles.chartAxisSpacer} />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+            <AppText
+              style={[styles.chartEmptyText, { color: colors.mutedForeground }]}
+            >
+              Hourly breakdown isn't available yet
+            </AppText>
           </View>
         </View>
 
@@ -902,6 +838,16 @@ const styles = StyleSheet.create({
     height: 140,
     position: "relative",
     justifyContent: "flex-end",
+  },
+  chartEmptyState: {
+    height: 140,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  chartEmptyText: {
+    ...typography.caption,
+    textAlign: "center",
   },
   chartTargetLine: {
     position: "absolute",

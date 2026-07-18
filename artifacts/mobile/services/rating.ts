@@ -60,3 +60,22 @@ export async function getMyRatings(): Promise<RideRating[]> {
   );
   return (response.data.data ?? []).map(dto => toDomain(dto, dto.ride_id ?? ''));
 }
+
+export interface RatingSummary {
+  averageRating: number | null;
+  ratingCount: number;
+}
+
+// Aggregates the caller's received ratings (GET /users/me/ratings) into an
+// average + count. Rounds to one decimal, matching the driver UI presentation.
+export function summarizeRatings(ratings: RideRating[]): RatingSummary {
+  const scored = ratings.filter(rating => Number.isFinite(rating.score));
+  if (scored.length === 0) {
+    return { averageRating: null, ratingCount: 0 };
+  }
+  const total = scored.reduce((sum, rating) => sum + rating.score, 0);
+  return {
+    averageRating: Math.round((total / scored.length) * 10) / 10,
+    ratingCount: scored.length,
+  };
+}

@@ -50,6 +50,22 @@ const derivedSource: DriverStatisticsSourceMetadata = {
   confidence: 'medium',
 };
 
+const backendSource: DriverStatisticsSourceMetadata = {
+  source: 'backend',
+  confidence: 'high',
+  note: 'Backend-authoritative driver statistics.',
+};
+
+const unavailableSource: DriverStatisticsSourceMetadata = {
+  source: 'unavailable',
+  confidence: 'high',
+  note: 'No backend endpoint yet — value is unavailable.',
+};
+
+function finiteOrNull(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function metric<TValue>(value: TValue, source: DriverStatisticsSourceMetadata): DriverStatisticsMetric<TValue> {
   return { value, source };
 }
@@ -69,15 +85,31 @@ export function createDriverStatisticsViewModel(input: DriverStatisticsInput): D
     rideHistory: input.rideHistory,
     window: period,
   });
-  const completedTrips = buckets.reduce((sum, bucket) => sum + bucket.completedTrips, 0);
-  const periodEarningsRwf = buckets.reduce((sum, bucket) => sum + bucket.earningsRwf, 0);
+  const backend = input.backend;
+  const backendPeriodEarnings = finiteOrNull(backend?.periodEarningsRwf);
+  const backendPeriodTrips = finiteOrNull(backend?.periodCompletedTrips);
+  const backendAllTimeTrips = finiteOrNull(backend?.allTimeCompletedTrips);
+  const backendAcceptanceRate = finiteOrNull(backend?.acceptanceRate);
+  const backendCompletionRate = finiteOrNull(backend?.completionRate);
+  const backendPriorityTier = finiteOrNull(backend?.priorityTier);
+
+  const localCompletedTrips = buckets.reduce((sum, bucket) => sum + bucket.completedTrips, 0);
+  const localPeriodEarningsRwf = buckets.reduce((sum, bucket) => sum + bucket.earningsRwf, 0);
+  // Prefer backend period figures when available; fall back to locally derived.
+  const completedTrips = backendPeriodTrips ?? localCompletedTrips;
+  const periodEarningsRwf = backendPeriodEarnings ?? localPeriodEarningsRwf;
+  const periodEarningsSource = backendPeriodEarnings !== null ? backendSource : localRideHistorySource;
+  const completedTripsSource = backendPeriodTrips !== null ? backendSource : localRideHistorySource;
   const earningsPerTripRwf = completedTrips > 0 ? periodEarningsRwf / completedTrips : null;
-  const allTimeCompletedTrips = safeProfileNumber(input.driverProfile?.completedRides);
+  const allTimeCompletedTrips = backendAllTimeTrips ?? safeProfileNumber(input.driverProfile?.completedRides);
+  const allTimeCompletedTripsSource = backendAllTimeTrips !== null ? backendSource : localProfileSource;
   const allTimeRideRevenueRwf = safeProfileNumber(input.driverProfile?.earningsTotal);
   const dailyDeclines = safeProfileNumber(input.driverProfile?.dailyDeclines);
   const dailyRides = safeProfileNumber(input.driverProfile?.dailyRides);
   const acceptanceDecisionCount = dailyRides + dailyDeclines;
-  const acceptanceRate = acceptanceDecisionCount > 0 ? safeProfileNumber(input.driverProfile?.acceptanceRate) : null;
+  const localAcceptanceRate = acceptanceDecisionCount > 0 ? safeProfileNumber(input.driverProfile?.acceptanceRate) : null;
+  const acceptanceRate = backendAcceptanceRate ?? localAcceptanceRate;
+  const acceptanceRateSource = backendAcceptanceRate !== null ? backendSource : localProfileLowSource;
   const remainingRideCredits = getRideBalance(input.driverEntitlement);
   const remainingBonusRides = getActiveBonusRides(input.driverEntitlement);
   const purchases = input.driverEntitlement?.purchaseHistory ?? [];
@@ -92,13 +124,15 @@ export function createDriverStatisticsViewModel(input: DriverStatisticsInput): D
     buckets,
     insights: getDriverStatisticsInsights({ buckets, completedTrips, earningsPerTripRwf, period }),
     metrics: {
-      periodEarningsRwf: metric(periodEarningsRwf, localRideHistorySource),
-      completedTrips: metric(completedTrips, localRideHistorySource),
+      periodEarningsRwf: metric(periodEarningsRwf, periodEarningsSource),
+      completedTrips: metric(completedTrips, completedTripsSource),
       earningsPerTripRwf: metric(earningsPerTripRwf, earningsPerTripRwf === null ? { source: 'unavailable', confidence: 'high' } : derivedSource),
-      allTimeCompletedTrips: metric(allTimeCompletedTrips, localProfileSource),
+      allTimeCompletedTrips: metric(allTimeCompletedTrips, allTimeCompletedTripsSource),
       allTimeRideRevenueRwf: metric(allTimeRideRevenueRwf, localProfileLowSource),
       driverRating: metric(input.driverRatingSummary, localRatingsSource),
-      acceptanceRate: metric(acceptanceRate, localProfileLowSource),
+      acceptanceRate: metric(acceptanceRate, acceptanceRateSource),
+      completionRate: metric(backendCompletionRate, backendCompletionRate !== null ? backendSource : unavailableSource),
+      priorityTier: metric(backendPriorityTier, backendPriorityTier !== null ? backendSource : unavailableSource),
       dailyDeclines: metric(dailyDeclines, localProfileLowSource),
       priorityRisk: metric({
         isReduced: dailyDeclines >= PRIORITY_DECLINE_THRESHOLD,

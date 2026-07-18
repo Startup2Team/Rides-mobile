@@ -38,6 +38,23 @@ export const queryPolicies = {
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
+  driverStats: policy({
+    // All-time counters shift slowly; refetch on focus keeps them current
+    // after a completed ride without hammering the endpoint.
+    staleTime: 2 * minute,
+    gcTime: 20 * minute,
+    refetchOnMount: 'always',
+  }),
+  driverEarnings: policy({
+    // Earnings change the moment a trip completes — keep them fresh.
+    staleTime: 60 * 1000,
+    gcTime: 20 * minute,
+    refetchOnMount: 'always',
+  }),
+  driverRatings: policy({
+    staleTime: 2 * minute,
+    gcTime: 30 * minute,
+  }),
   driverVehicles: policy({
     staleTime: 5 * minute,
     gcTime: 30 * minute,

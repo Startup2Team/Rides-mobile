@@ -30,7 +30,7 @@ import { AppButton } from '@/components/AppButton';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useAuth } from '@/context/AuthContext';
 import { updateDriverLocation } from '@/services/driverAvailability';
-import { getDailyEarnings } from '@/services/driverEarnings';
+import type { DriverEarnings } from '@/services/driverEarnings';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
@@ -43,7 +43,6 @@ import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits, getActiveBonusRides, getActiveRideCredits, getEntitlementVehicleForProfile, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
-import { getDriverRatingSummary, type DriverRatingSummary } from '@/domain/driverWallet';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
 import { elevation } from '@/constants/elevation';
@@ -55,12 +54,13 @@ import { spacing, semanticSpacing } from '@/constants/spacing';
 import { zIndex } from '@/constants/zIndex';
 import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
-import { loadStoredDriverRatings } from '@/persistence/driverRatingPersistence';
+import { getDailyEarnings } from '@/services/driverEarnings';
+import { useDriverRatingsQuery } from '@/query/hooks/useDriverRatingsQuery';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
-import { useRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
+import { useDriverRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 import { NotificationsIcon } from "@/components/NotificationsIcon";
 import { fonts } from "@/constants/fonts";
 import {
@@ -78,10 +78,6 @@ const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH =
   DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
-const EMPTY_RATING_SUMMARY: DriverRatingSummary = {
-  averageRating: null,
-  ratingCount: 0,
-};
 const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
 
 function visibleDriverRegion(location: typeof KIGALI_CENTER) {
@@ -154,20 +150,22 @@ export default function DriverDashboard() {
     acceptRideRequest,
     declineRideRequest,
   } = useRide();
-  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
+  const { data: rideHistory = [] } = useDriverRideHistoryQuery(user?.id);
 
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>("standard");
   const [showHeatmap, setShowHeatmap] = useState(false);
-  // Authoritative daily earnings from the backend (GET /driver/earnings/daily);
-  // falls back to the locally computed summary when the backend is unreachable.
-  const [backendDailyEarnings, setBackendDailyEarnings] = useState<number | null>(null);
+  // Authoritative daily earnings + trip count from the backend
+  // (GET /driver/earnings/daily); falls back to the locally computed summary
+  // when the backend is unreachable.
+  const [backendDailyEarnings, setBackendDailyEarnings] = useState<DriverEarnings | null>(null);
   const { profileImage } = useProfilePhotoActions(
     driverProfile?.profileImage ?? null,
   );
-  const [ratingSummary, setRatingSummary] =
-    useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  // Real driver rating from GET /v1/users/me/ratings.
+  const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
+    useDriverRatingsQuery();
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
@@ -260,24 +258,6 @@ export default function DriverDashboard() {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      void loadStoredDriverRatings().then((stored) => {
-        if (active) {
-          setRatingSummary(
-            user?.id
-              ? getDriverRatingSummary(stored.data ?? [], user.id)
-              : EMPTY_RATING_SUMMARY,
-          );
-        }
-      });
-      return () => {
-        active = false;
-      };
-    }, [user?.id]),
-  );
-
   // Location
   useEffect(() => {
     let mounted = true;
@@ -352,7 +332,7 @@ export default function DriverDashboard() {
       let active = true;
       void getDailyEarnings()
         .then(earnings => {
-          if (active) setBackendDailyEarnings(earnings.totalRwf);
+          if (active) setBackendDailyEarnings(earnings);
         })
         .catch(() => {
           // Backend unreachable — keep the locally computed figure.
@@ -1055,7 +1035,7 @@ export default function DriverDashboard() {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {formatRwf(backendDailyEarnings ?? activitySummary.todayEarningsRwf)}
+                {formatRwf(backendDailyEarnings?.totalRwf ?? activitySummary.todayEarningsRwf)}
               </AppText>
               <AppText
                 style={[
@@ -1078,7 +1058,7 @@ export default function DriverDashboard() {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {activitySummary.completedRidesToday}
+                {backendDailyEarnings?.rides ?? activitySummary.completedRidesToday}
               </AppText>
               <AppText
                 style={[

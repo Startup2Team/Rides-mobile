@@ -37,10 +37,36 @@ export async function getWeeklyEarnings(): Promise<DriverEarnings> {
   return toEarnings(response.data.data);
 }
 
-// Stats shape is backend-defined; return it loosely for the stats screen to read.
-export async function getDriverStats(): Promise<Record<string, unknown>> {
-  const response = await getAppBackendClient().get<Envelope<Record<string, unknown>>>('/v1/driver/stats');
-  return response.data.data ?? {};
+// Backend-authoritative driver performance stats from GET /driver/stats.
+// acceptance_rate and completion_rate are percentages (0..100); priority_tier
+// is an integer tier. total_rides is the driver's all-time completed-ride count.
+export interface DriverStats {
+  totalRides: number;
+  acceptanceRate: number | null;
+  completionRate: number | null;
+  priorityTier: number | null;
+}
+
+interface DriverStatsDto {
+  total_rides?: number;
+  acceptance_rate?: number;
+  completion_rate?: number;
+  priority_tier?: number;
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+export async function getDriverStats(): Promise<DriverStats> {
+  const response = await getAppBackendClient().get<Envelope<DriverStatsDto | null>>('/v1/driver/stats');
+  const dto = response.data.data ?? {};
+  return {
+    totalRides: Math.max(0, finiteNumber(dto.total_rides) ?? 0),
+    acceptanceRate: finiteNumber(dto.acceptance_rate),
+    completionRate: finiteNumber(dto.completion_rate),
+    priorityTier: finiteNumber(dto.priority_tier),
+  };
 }
 
 export interface DriverCredits {

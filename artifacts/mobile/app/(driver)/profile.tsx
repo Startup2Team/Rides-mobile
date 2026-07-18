@@ -22,16 +22,10 @@ import { SymbolView } from "expo-symbols";
 import { GlassScrollView } from "@/components/GlassScrollView";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useColors } from "@/hooks/useColors";
-import {
-  formatDriverRatingSummary,
-  getDriverRatingSummary,
-  type DriverRatingSummary,
-} from "@/domain/driverWallet";
 import { useVehicles } from "@/domains/vehicle";
 import { APP_NAME } from "@/constants/branding";
 import { getShareRouteForMode } from "@/navigation/shareNavigation";
 import { getRatingInformationRoute } from "@/navigation/ratingNavigation";
-import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
 import { leaveRidesFeedback, rateRides } from "@/utils/communityActions";
 import { TAB_BAR_SCREEN_BOTTOM_PADDING } from "@/constants/tabBar";
 import { PrivacySecurityIcon } from "@/components/PrivacySecurityIcon";
@@ -51,20 +45,20 @@ import { prefetchRatingInformationImages } from "@/constants/ratingInformationIm
 import { sizes } from "@/constants/sizes";
 import { spacing, semanticSpacing } from "@/constants/spacing";
 import { navigateToCustomerHomeAfterCompletion } from "@/navigation/navigationPolicy";
-import { useRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
+import { useDriverRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
+import { useDriverRatingsQuery } from "@/query/hooks/useDriverRatingsQuery";
+import { useDriverStatsQuery } from "@/query/hooks/useDriverStatsQuery";
 import { usePressGuard } from "@/hooks/usePressGuard";
-
-const EMPTY_RATING_SUMMARY: DriverRatingSummary = {
-  averageRating: null,
-  ratingCount: 0,
-};
 
 export default function DriverProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === "dark";
   const { user, driverProfile, switchMode, profile } = useProfile();
-  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
+  const { data: rideHistory = [] } = useDriverRideHistoryQuery(user?.id);
+  const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
+    useDriverRatingsQuery();
+  const { data: driverStats } = useDriverStatsQuery();
   const { vehicles } = useVehicles();
   const vehicleCounts = React.useMemo(
     () => ({
@@ -78,8 +72,6 @@ export default function DriverProfileScreen() {
     }),
     [vehicles],
   );
-  const [ratingSummary, setRatingSummary] =
-    React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
   const { profileImage, handleImagePick, handleDeletePhoto } =
     useProfilePhotoActions();
   const completedRides = rideHistory.filter(
@@ -93,21 +85,9 @@ export default function DriverProfileScreen() {
   const [showPhotoSheet, setShowPhotoSheet] = React.useState(false);
   const cardFill = isDark ? "#1C1C1E" : "#FFFFFF";
   const pageBackground = isDark ? "#000000" : "#F2F2F7";
-
-  React.useEffect(() => {
-    let cancelled = false;
-    async function loadRatingSummary() {
-      const stored = await loadStoredDriverRatings();
-      const summary = user?.id
-        ? getDriverRatingSummary(stored.data ?? [], user.id)
-        : EMPTY_RATING_SUMMARY;
-      if (!cancelled) setRatingSummary(summary);
-    }
-    void loadRatingSummary();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+  // All-time trips are backend-authoritative (GET /v1/driver/stats); fall back
+  // to the local profile counter only until the stats endpoint responds.
+  const allTimeTrips = driverStats?.totalRides ?? driverProfile?.completedRides ?? 0;
 
   const handleEditProfile = usePressGuard(() => router.push("/edit-profile"));
   const handleRatingInfo = usePressGuard(() => {
@@ -219,7 +199,7 @@ export default function DriverProfileScreen() {
                   <AppText
                     style={[styles.statHeaderVal, { color: colors.foreground }]}
                   >
-                    {ratingSummary.averageRating?.toFixed(1) ?? "5.0"}
+                    {ratingSummary.averageRating?.toFixed(1) ?? "—"}
                   </AppText>
                 </View>
                 <AppText
@@ -236,7 +216,7 @@ export default function DriverProfileScreen() {
                 <AppText
                   style={[styles.statHeaderVal, { color: colors.foreground }]}
                 >
-                  {driverProfile?.completedRides ?? 0}
+                  {allTimeTrips}
                 </AppText>
                 <AppText
                   style={[
