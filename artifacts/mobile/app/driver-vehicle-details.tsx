@@ -27,6 +27,8 @@ import {
   getLicenseComplianceStatus,
 } from '@/domain/vehicleCompliance';
 import { submitVehicleDocumentUpdate as submitVerificationVehicleDocumentUpdate } from '@/domain/verificationSubmissions';
+import { useQueryClient } from '@tanstack/react-query';
+import { driverKeys } from '@/query/keys';
 import { useColors } from '@/hooks/useColors';
 import { useVehicle } from '@/domains/vehicle';
 import { VEHICLE_LABELS, type DriverVehicleDocumentRecord, type DriverVehicleDocumentSet } from '@/types';
@@ -48,23 +50,19 @@ export default function DriverVehicleDetailsScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const { driverProfile, user, saveDriverProfile } = useAuth();
+  const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const handleRefresh = React.useCallback(async () => {
+    // Real refetch: invalidate the driver vehicle queries so this screen and the
+    // list reload from the backend-backed source, replacing the fixed-delay no-op.
     setIsRefreshing(true);
-    const start = Date.now();
     try {
-      // Simulate status check/reload delay
+      await queryClient.invalidateQueries({ queryKey: driverKeys.all });
     } finally {
-      const elapsed = Date.now() - start;
-      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
-      const remaining = minDuration - elapsed;
-      if (remaining > 0) {
-        await new Promise((resolve) => setTimeout(resolve, remaining));
-      }
       setIsRefreshing(false);
     }
-  }, []);
+  }, [queryClient]);
   const params = useLocalSearchParams<{ vehicleId?: string; updateDocument?: string }>();
   const vehicleId = typeof params.vehicleId === 'string' ? params.vehicleId : null;
   const requestedUpdateDocument = typeof params.updateDocument === 'string' ? params.updateDocument : null;

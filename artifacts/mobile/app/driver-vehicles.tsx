@@ -2,7 +2,7 @@ import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { Platform, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -29,7 +29,7 @@ export default function DriverVehiclesScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const { driverProfile } = useAuth();
   const { entitlement, isLoading } = useDriverEntitlement();
-  const { vehicles, setPrimaryVehicle } = useVehicles();
+  const { vehicles, setPrimaryVehicle, refreshVehicles, isRefreshing } = useVehicles();
   const params = useLocalSearchParams<{ sourceVehicleId?: string }>();
 
   const statusCounts = React.useMemo(() => ({
@@ -40,27 +40,24 @@ export default function DriverVehiclesScreen() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const online = driverProfile?.isOnline === true;
   const sourceVehicleId = typeof params.sourceVehicleId === 'string' ? params.sourceVehicleId : null;
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const handleRefresh = React.useCallback(async () => {
-    setIsRefreshing(true);
-    const start = Date.now();
-    try {
-      // Simulate status check/reload delay
-    } finally {
-      const elapsed = Date.now() - start;
-      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
-      const remaining = minDuration - elapsed;
-      if (remaining > 0) {
-        await new Promise((resolve) => setTimeout(resolve, remaining));
-      }
-      setIsRefreshing(false);
-    }
-  }, []);
+    // Real refetch of the driver's vehicles (GET /v1/driver/vehicles-backed
+    // query), replacing the previous fixed-delay no-op.
+    await refreshVehicles();
+  }, [refreshVehicles]);
 
   const handleSelectVehicle = async (vehicleId: string) => {
     if (online) return;
-    await setPrimaryVehicle(vehicleId);
+    try {
+      await setPrimaryVehicle(vehicleId);
+    } catch {
+      // Backend rejected the switch (409) — the driver has an active ride.
+      Alert.alert(
+        'Cannot switch vehicle',
+        'You cannot change your active vehicle during an ongoing ride. Finish the ride first, then try again.',
+      );
+    }
   };
 
   const handleAddVehicle = () => {
