@@ -4,9 +4,9 @@ import type { AddPaymentMethodInput, BillingProfile, UpdatePaymentMethodInput } 
 
 // Real-backend customer payment methods under /api/v1/payments/methods.
 // Snake_case wire format, matching the rest of the API and the contract in
-// Rides-api/docs/backend/MOBILE_PAYMENT_CONTRACTS.md. These endpoints do not
-// exist on the backend yet; this module is ready to switch on the moment they
-// ship (see domains/payments/repository.ts source resolver).
+// Rides-api/docs/backend/MOBILE_PAYMENT_CONTRACTS.md. These endpoints are live
+// on the backend (internal/paymentmethods); the repository source resolver in
+// domains/payments/repository.ts selects this module when real backend is on.
 
 interface PaymentMethodDto {
   id: string;

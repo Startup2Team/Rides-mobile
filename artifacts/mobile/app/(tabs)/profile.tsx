@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Feather,
   MaterialCommunityIcons,
-  FontAwesome,
 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "expo-symbols";
@@ -22,7 +21,6 @@ import { useColors } from "@/hooks/useColors";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { APP_NAME } from "@/constants/branding";
 import { getShareRouteForMode } from "@/navigation/shareNavigation";
-import { getRatingInformationRoute } from "@/navigation/ratingNavigation";
 import {
   canAccessDriverMode,
   getDriverApplicationAction,
@@ -44,7 +42,6 @@ import { CustomerLevelCard } from "@/components/profile/CustomerLevelCard";
 import { elevation } from "@/constants/elevation";
 import { icons } from "@/constants/icons";
 import { radius } from "@/constants/radius";
-import { prefetchRatingInformationImages } from "@/constants/ratingInformationImages";
 import { sizes } from "@/constants/sizes";
 import { spacing, semanticSpacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
@@ -171,10 +168,6 @@ export default function ProfileScreen() {
   const lastName = nameParts.slice(1).join(" ").toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
   const handleEditProfile = usePressGuard(() => router.push("/edit-profile"));
-  const handleRatingInfo = usePressGuard(() => {
-    prefetchRatingInformationImages();
-    router.push(getRatingInformationRoute(user?.mode) as never);
-  });
   const handleSwitchToDriver = usePressGuard(() => {
     if (canAccessDriverMode(driverProfile)) {
       Alert.alert("Switch to Driver Mode", "Switch to driver dashboard?", [
@@ -230,28 +223,6 @@ export default function ProfileScreen() {
                   {lastName}
                 </AppText>
               ) : null}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.ratingBadge}
-              onPress={handleRatingInfo}
-              activeOpacity={0.72}
-              accessibilityRole="button"
-              accessibilityLabel="Open rating information"
-              accessibilityHint="Explains how your rating works"
-              hitSlop={8}
-            >
-              <FontAwesome
-                name="star"
-                size={icons.size.xxs}
-                color={colors.primary}
-              />
-              <AppText
-                variant="label"
-                style={[styles.ratingText, { color: colors.foreground }]}
-              >
-                5.0
-              </AppText>
             </TouchableOpacity>
           </View>
 
@@ -589,16 +560,6 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     letterSpacing: -0.8,
     flexShrink: 1,
-  },
-  ratingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: spacing[4],
-  },
-  ratingText: {
-    ...typography.label,
-    fontFamily: typography.title.fontFamily,
   },
   contactDetails: {
     marginTop: spacing[4],

@@ -53,6 +53,7 @@ const CONTACT_CHANNELS = [
     id: 'phone',
     icon: 'phone' as const,
     label: 'Call Support',
+    // TODO: real support number — placeholder until Rides publishes a live support line.
     detail: '+250 788 123 456',
     onPress: () => void openExternalUrl('tel:+250788123456'),
   },
@@ -68,6 +69,7 @@ const CONTACT_CHANNELS = [
     icon: 'whatsapp' as const,
     label: 'WhatsApp',
     detail: 'Chat with us',
+    // TODO: real support WhatsApp number — placeholder wa.me link.
     onPress: () => void openExternalUrl('https://wa.me/250788123456'),
     family: 'mci' as const,
   },
@@ -122,6 +124,7 @@ export default function HelpSupportScreen() {
         </View>
 
         {/* Response time */}
+        {/* TODO: real support number / SLA — the response-time and hours below are placeholders. */}
         <View style={[styles.infoBox, { backgroundColor: colors.muted }]}>
          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
             Average response time: under 2 hours · Available 7 days a week, 7 AM – 10 PM

@@ -8,6 +8,7 @@ import { APP_NAME, SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { openExternalUrl } from '@/utils/openExternalUrl';
+import { submitSupportTicket } from '@/services/support';
 import { usePressGuard } from '@/hooks/usePressGuard';
 import { typography } from '@/constants/typography';
 import { icons } from '@/constants/icons';
@@ -20,30 +21,35 @@ const REPORT_TYPES = [
     email: SAFETY_EMAIL,
     icon: 'user-x' as const,
     label: 'Driver Behavior',
+    type: 'driver_behavior',
   },
   {
     detail: 'Get help finding something left behind after a trip.',
     email: SUPPORT_EMAIL,
     icon: 'briefcase' as const,
     label: 'Lost Item',
+    type: 'lost_item',
   },
   {
     detail: 'Tell us about a fare, cash, or Mobile Money concern.',
     email: SUPPORT_EMAIL,
     icon: 'credit-card' as const,
     label: 'Fare or Payment Issue',
+    type: 'payment',
   },
   {
     detail: 'Report a serious concern about your safety during a trip.',
     email: SAFETY_EMAIL,
     icon: 'shield' as const,
     label: 'Safety Concern',
+    type: 'safety',
   },
   {
     detail: 'Share another issue connected to a recent ride.',
     email: SUPPORT_EMAIL,
     icon: 'message-circle' as const,
     label: 'Other Ride Issue',
+    type: 'other',
   },
 ];
 
@@ -52,8 +58,14 @@ export default function ReportRideIssueScreen() {
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
 
-  const openReport = (label: string, email: string) => {
+  const openReport = (label: string, email: string, type: string) => {
     const subject = `${APP_NAME} ride issue: ${label}`;
+    // Record a support ticket on the backend (best-effort). The mailto below
+    // remains the channel where the customer adds the trip details, since this
+    // screen only captures the issue category.
+    void submitSupportTicket({ subject, type }).catch(() => {
+      // Non-blocking: an offline/unreachable backend must not stop the email flow.
+    });
     const body = [
       `Hi ${APP_NAME} support,`,
       '',
@@ -111,10 +123,10 @@ function ReportRow({
 }: {
   colors: ReturnType<typeof useColors>;
   index: number;
-  onOpen: (label: string, email: string) => void;
+  onOpen: (label: string, email: string, type: string) => void;
   report: typeof REPORT_TYPES[number];
 }) {
-  const guardedPress = usePressGuard(() => onOpen(report.label, report.email));
+  const guardedPress = usePressGuard(() => onOpen(report.label, report.email, report.type));
 
   return (
     <>

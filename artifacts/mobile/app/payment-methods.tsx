@@ -123,7 +123,6 @@ export default function PaymentMethodsScreen() {
       return;
     }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 400));
 
     const meta = PROVIDER_META[provider];
     const newMethod: PaymentMethod = {
