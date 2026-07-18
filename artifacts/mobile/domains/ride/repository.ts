@@ -1,4 +1,5 @@
 import { listRides, getRide, type CustomerRide } from '@/services/rides';
+import { listDriverRides } from '@/services/driverRides';
 import type { RideStatus, VehicleType } from '@/types';
 import type { Ride } from './types';
 
@@ -65,14 +66,14 @@ export const rideHistoryRepository = {
     }
   },
 
-  // DRIVER ride history. The backend currently exposes only
-  // /v1/driver/rides/active and /v1/driver/rides/{id} — there is NO driver
-  // ride-LIST endpoint (see services/driverRides.ts), so a per-ride driver
-  // history cannot be fetched. Returning an empty list here keeps driver
-  // screens from silently reading the WRONG dataset (customer/passenger rides);
-  // driver aggregates are sourced from /driver/stats and /driver/earnings/*
-  // instead. NEEDS-BACKEND: a paginated GET /v1/driver/rides list endpoint.
+  // DRIVER ride history — hits GET /v1/driver/rides (driver-scoped, paginated).
+  // Best-effort: on any error, returns [] so driver screens degrade to their
+  // /driver/stats + /driver/earnings/* aggregates rather than showing an error.
   async listDriverRideHistory(_options?: RideHistoryOptions): Promise<Ride[]> {
-    return [];
+    try {
+      return (await listDriverRides()).map(toMobileRide);
+    } catch {
+      return [];
+    }
   },
 };

@@ -9,6 +9,16 @@ interface Envelope<T> {
   data: T;
 }
 
+// GET /api/v1/driver/rides — the driver's ride history (paginated). Returns the
+// same RideResponse shape as the customer list, scoped to this driver.
+export async function listDriverRides(limit = 20, offset = 0): Promise<CustomerRide[]> {
+  const response = await getAppBackendClient().get<Envelope<{ rides: RideResponseDto[] | null }>>(
+    '/v1/driver/rides',
+    { query: { limit, offset } },
+  );
+  return (response.data.data.rides ?? []).map(mapRideResponse);
+}
+
 export async function getActiveDriverRide(): Promise<CustomerRide | null> {
   const response = await getAppBackendClient().get<Envelope<RideResponseDto | null>>(
     '/v1/driver/rides/active',
