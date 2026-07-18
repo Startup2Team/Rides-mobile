@@ -2,7 +2,6 @@ import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -31,31 +30,54 @@ import { radius } from '@/constants/radius';
 import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { DRIVER_PACKAGES_ROUTE } from '@/navigation/driverPackagesNavigation';
-import { closeTemporaryScreen, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { closeTemporaryScreen, navigateToDriverHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
 import * as Clipboard from 'expo-clipboard';
 import { useToast } from '@/context/ToastContext';
-import { resolveManualPaymentInfo, type ResolvedManualPaymentInfo } from '@/services/manualPayment';
-import { uploadPaymentProofImage } from '@/services/paymentProof';
-import { createPackagePaymentRepository } from '@/data/repositories/packagePaymentRepositoryFactory';
+import { VEHICLE_LABELS } from '@/types';
+import { usePackagePaymentConfigQuery } from '@/query/hooks/usePackagePaymentConfigQuery';
+import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
+import {
+  useCancelManualPaymentClaimMutation,
+  useCreateManualPaymentClaimMutation,
+  useResubmitManualPaymentClaimMutation,
+  useSubmitManualPaymentClaimMutation,
+} from '@/query/hooks/useManualPaymentClaimMutations';
+import {
+  toManualPaymentClaimReadModel,
+  type ManualPaymentClaim,
+  type ManualPaymentClaimReadModel,
+  type ManualPaymentProvider,
+  type ManualPaymentProviderConfiguration,
+} from '@/domains/package-payments';
+import { ManualPackagePaymentInstructions } from '@/components/package-payments/ManualPackagePaymentInstructions';
+import { ManualPaymentClaimStatusCard } from '@/components/package-payments/ManualPaymentClaimStatusCard';
+import { PackagePaymentUnavailable } from '@/components/package-payments/PackagePaymentUnavailable';
+import { normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { reportOperationalWarning } from '@/observability/monitoring';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
+
+// A manual claim is still "live" (needs the driver's attention / blocks starting
+// a fresh payment) while it is awaiting or in review, or needs clarification.
+const ACTIVE_CLAIM_STATUSES = new Set(['submitted', 'pending_review', 'needs_clarification']);
 
 export default function DriverPackagePaymentScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
-  const { offerId } = useLocalSearchParams<{ offerId?: string }>();
+  const { offerId } = useLocalSearchParams<{ offerId?: string; claimId?: string }>();
   const { driverProfile, user } = useAuth();
-  const { activatePackage, createPackagePurchase, entitlement, updatePackagePurchaseStatus } = useDriverEntitlement();
+  const { createPackagePurchase, entitlement, updatePackagePurchaseStatus, activatePackage } = useDriverEntitlement();
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const checkoutVehicle: DriverEntitlementVehicleRef | null = activeVehicle
     ?? (entitlement.vehicleId && entitlement.vehicleType
       ? { vehicleId: entitlement.vehicleId, vehicleType: entitlement.vehicleType }
       : null);
   const checkoutVehicleId = activeVehicle?.id ?? entitlement.vehicleId ?? null;
+
   const [ridePackage, setRidePackage] = useState<DriverPackageOfferSnapshot | null>(null);
   const [offerFailure, setOfferFailure] = useState<LockedOfferLoadFailure | null>(null);
   const [offerLoading, setOfferLoading] = useState(true);
@@ -71,32 +93,41 @@ export default function DriverPackagePaymentScreen() {
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const { showToast } = useToast();
 
-  // Manual (proof-based) payment. Proof = MoMo transaction reference (text) OR a
-  // screenshot of the confirmation (photo). At least one is required; the driver
-  // can supply both. The claim moves created → submitted; rides are ONLY granted
-  // after an admin approves it (v2 manual-claims flow).
-  const [paymentMethod, setPaymentMethod] = useState<'momo' | 'manual'>('momo');
-  const [manualInfo, setManualInfo] = useState<ResolvedManualPaymentInfo | null>(null);
-  const [proofRef, setProofRef] = useState('');
-  const [proofImageUri, setProofImageUri] = useState<string | null>(null);
+  // Manual (proof-based) claim flow. Configuration decides which mode is live:
+  //   automatic → Mobile Money prompt (below); manual → submit a payment claim
+  //   for admin review; disabled → an unavailable shell.
+  const { configuration } = usePackagePaymentConfigQuery();
+  const mode = configuration?.mode ?? 'automatic';
+  const manualConfig = configuration?.manual;
+  const providers: ManualPaymentProviderConfiguration[] = manualConfig?.providers ?? [];
+  const transactionReferenceRequired = manualConfig?.transactionReferenceRequired ?? true;
+
+  const { claims, refetch: refetchClaims } = useManualPaymentClaimsQuery({ driverId: user?.id });
+  const createClaim = useCreateManualPaymentClaimMutation();
+  const submitClaim = useSubmitManualPaymentClaimMutation();
+  const resubmitClaim = useResubmitManualPaymentClaimMutation();
+  const cancelClaim = useCancelManualPaymentClaimMutation();
+
+  const [formVisible, setFormVisible] = useState(false);
+  const [payerPhone, setPayerPhone] = useState(driverProfile?.momoCode ?? '');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [manualError, setManualError] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
-  const [manualSubmitted, setManualSubmitted] = useState(false);
-  const packagePaymentRepository = useMemo(() => createPackagePaymentRepository(), []);
+  const [submittedClaim, setSubmittedClaim] = useState<ManualPaymentClaimReadModel | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    void resolveManualPaymentInfo().then(info => {
-      if (active) setManualInfo(info);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const manualProvider: ManualPaymentProvider = useMemo(() => {
+    const enabled = providers.filter(p => p.enabled);
+    if (enabled.some(p => p.provider === selectedProvider)) return selectedProvider as ManualPaymentProvider;
+    return (enabled[0]?.provider ?? 'mtn') as ManualPaymentProvider;
+  }, [providers, selectedProvider]);
 
-  const handleCopy = async (value: string, label: string) => {
-    await Clipboard.setStringAsync(value);
-    showToast(`${label} copied`, 'info');
-  };
+  // A claim already in flight (from the server, or one we just submitted) takes
+  // priority over starting a new payment.
+  const activeClaim: ManualPaymentClaimReadModel | null = useMemo(() => {
+    if (submittedClaim) return submittedClaim;
+    const list = (claims ?? []) as ManualPaymentClaimReadModel[];
+    return list.find(c => c && ACTIVE_CLAIM_STATUSES.has(c.status)) ?? null;
+  }, [submittedClaim, claims]);
 
   const clearPaymentTimers = () => {
     paymentTimers.current.forEach(timer => clearTimeout(timer));
@@ -199,89 +230,95 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
   };
 
-  const handlePickProofImage = async () => {
-    setError(null);
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError('Allow photo access to attach a payment screenshot, or use the transaction reference instead.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.7,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        setProofImageUri(result.assets[0].uri);
-      }
-    } catch {
-      setError('Could not open your photos. Use the transaction reference instead.');
-    }
+  const handleCopyProvider = async (_provider: ManualPaymentProviderConfiguration, instruction: string) => {
+    await Clipboard.setStringAsync(instruction);
+    showToast('USSD copied', 'success');
   };
 
-  const handleSubmitManualProof = async () => {
+  const handleSubmitManualClaim = async () => {
     if (!ridePackage) return;
     if (isPackageOfferExpired(ridePackage)) {
-      setError('This package offer expired. Please refresh packages.');
+      setManualError('This package offer expired. Please refresh packages.');
       return;
     }
-    const ref = proofRef.trim();
-    // Proof = transaction reference (text) OR a screenshot (photo). Require one.
-    if (!ref && !proofImageUri) {
-      setError('Add your MoMo transaction reference or attach a payment screenshot.');
+    setManualError(null);
+    const normalizedPhone = normalizeRwandaPhoneNumber(payerPhone);
+    if (!normalizedPhone) {
+      setManualError('Manual payment claim is invalid.');
       return;
     }
-    const payerPhone = (phoneNumber || manualInfo?.phoneNumber || '').trim();
-    if (!payerPhone) {
-      setError('Enter the phone number you paid from.');
+    const ref = transactionReference.trim();
+    if (transactionReferenceRequired && !ref) {
+      setManualError('A transaction reference is required.');
       return;
     }
-    setManualSubmitting(true);
-    setError(null);
-    try {
-      // Optional photo proof → object storage → proof_image_id. Best-effort:
-      // if storage is unavailable the text reference still submits the claim.
-      let proofImageId: string | undefined;
-      if (proofImageUri) {
-        try {
-          proofImageId = await uploadPaymentProofImage(proofImageUri);
-        } catch {
-          if (!ref) {
-            setError('Screenshot upload is unavailable right now. Add your transaction reference to submit.');
-            setManualSubmitting(false);
-            return;
-          }
-          // Have a text reference — proceed without the image.
-        }
-      }
 
-      // v2 manual-claims flow: create the claim, then submit it for admin
-      // review. Rides are NOT granted here — only when an admin approves.
-      const created = await packagePaymentRepository.createManualPaymentClaim({
+    setManualSubmitting(true);
+    try {
+      const created = await createClaim.mutateAsync({
         offer: ridePackage,
         driverId: user?.id ?? '',
-        provider: selectedProvider,
-        payerPhoneNumber: payerPhone,
+        provider: manualProvider,
+        payerPhoneNumber: normalizedPhone,
         transactionReference: ref || undefined,
-        proofImageId,
       });
       if (created.failure || !created.data) {
-        throw new Error(created.failure?.message ?? 'Could not submit your payment proof.');
+        setManualError(created.failure?.message ?? 'Could not submit your payment claim.');
+        reportOperationalWarning('package-payment.manual.create', {
+          operation: 'DriverPackagePaymentScreen',
+          result: created.failure?.code ?? 'unknown',
+          mode,
+        });
+        return;
       }
-      const submitted = await packagePaymentRepository.submitManualPaymentClaim({
-        claim: created.data,
-        actorId: user?.id,
+      const submitted = await submitClaim.mutateAsync({ claim: created.data, actorId: user?.id });
+      if (submitted.failure || !submitted.data) {
+        setManualError(submitted.failure?.message ?? 'Could not submit your payment claim.');
+        reportOperationalWarning('package-payment.manual.submit', {
+          operation: 'DriverPackagePaymentScreen',
+          result: submitted.failure?.code ?? 'unknown',
+          mode,
+        });
+        return;
+      }
+      setSubmittedClaim(toManualPaymentClaimReadModel(submitted.data, { authority: 'remote_backed' }));
+      setFormVisible(false);
+      reportOperationalWarning('package-payment.manual.review', {
+        operation: 'DriverPackagePaymentScreen',
+        status: submitted.data.status,
+        mode,
       });
-      if (submitted.failure) {
-        throw new Error(submitted.failure.message);
-      }
-
-      setManualSubmitted(true);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Could not submit your payment proof.');
+    } catch {
+      setManualError('Could not submit your payment claim.');
+      reportOperationalWarning('package-payment.manual.error', {
+        operation: 'DriverPackagePaymentScreen',
+        result: 'exception',
+        mode,
+      });
     } finally {
       setManualSubmitting(false);
     }
+  };
+
+  const handleCancelClaim = async (claimId: string, version: number) =>
+    cancelClaim.mutateAsync({ claim: { id: claimId, version } as ManualPaymentClaim });
+
+  const handleResubmitClaim = async (
+    claimId: string,
+    version: number,
+    updates: { provider: ManualPaymentProvider; phone: string; reference?: string },
+  ) => {
+    const result = await resubmitClaim.mutateAsync({
+      claim: {
+        id: claimId,
+        version,
+        provider: updates.provider,
+        payerPhoneNumber: updates.phone,
+        transactionReference: updates.reference,
+      } as ManualPaymentClaim,
+    });
+    if (result.data) setSubmittedClaim(toManualPaymentClaimReadModel(result.data, { authority: 'remote_backed' }));
+    return result;
   };
 
   if (offerLoading) {
@@ -311,6 +348,7 @@ export default function DriverPackagePaymentScreen() {
   const isFree = ridePackage.priceRwf === 0;
   const isWaiting = paymentStatus === 'pending' || paymentStatus === 'processing';
   const isIncomplete = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'expired';
+  const vehicleLabel = ridePackage.vehicleType ? VEHICLE_LABELS[ridePackage.vehicleType] : null;
 
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
     <GlassHeader title="Package Payment" onBackPress={() => router.back()} />
@@ -324,8 +362,77 @@ export default function DriverPackagePaymentScreen() {
     >
       {receipt ? (
         <ReceiptCard activation={receipt} colors={colors} />
-      ) : manualSubmitted ? (
-        <ManualPendingCard amount={ridePackage.priceRwf} reference={proofRef} colors={colors} />
+      ) : mode === 'disabled' ? (
+        <PackagePaymentUnavailable
+          offer={ridePackage}
+          reasonText="Package payments are temporarily unavailable. Please try again later."
+          onBack={() => replaceFlowScreen(router, '/driver-packages')}
+        />
+      ) : activeClaim ? (
+        <View style={styles.claimShell}>
+          <ManualPaymentClaimStatusCard
+            claim={activeClaim}
+            onRefetch={() => { void refetchClaims?.(); }}
+            onCancel={handleCancelClaim}
+            onResubmit={handleResubmitClaim}
+          />
+        </View>
+      ) : mode === 'manual' && !isFree ? (
+        <View style={styles.manualShell}>
+          <ManualPackagePaymentInstructions
+            offer={ridePackage}
+            vehicleLabel={vehicleLabel}
+            providers={providers}
+            onCopyProvider={(provider, instruction) => void handleCopyProvider(provider, instruction)}
+          />
+          <View style={styles.manualForm}>
+            {formVisible ? (
+              <>
+                <AppInput
+                  label="Payer phone number"
+                  accessibilityLabel="Payer phone number"
+                  placeholder="+250 7xxxxxxxx"
+                  value={payerPhone}
+                  onChangeText={setPayerPhone}
+                  keyboardType="phone-pad"
+                  leftIcon="smartphone"
+                />
+                <AppInput
+                  label={`Transaction reference${transactionReferenceRequired ? ' *' : ''}`}
+                  accessibilityLabel="Transaction reference"
+                  placeholder={transactionReferenceRequired ? 'Enter the payment reference' : 'Optional payment reference'}
+                  value={transactionReference}
+                  onChangeText={setTransactionReference}
+                  autoCapitalize="characters"
+                  leftIcon="hash"
+                />
+                {manualError ? (
+                  <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
+                    <Feather name="alert-triangle" size={15} color={colors.destructive} />
+                    <AppText style={[styles.errorText, { color: colors.destructive }]}>{manualError}</AppText>
+                  </View>
+                ) : null}
+                <AppButton
+                  title="Submit payment"
+                  accessibilityLabel="Submit payment"
+                  onPress={() => void handleSubmitManualClaim()}
+                  loading={manualSubmitting}
+                  fullWidth
+                  size="lg"
+                />
+              </>
+            ) : (
+              <AppButton
+                title="I have paid"
+                accessibilityLabel="I have paid"
+                onPress={() => { setManualError(null); setFormVisible(true); }}
+                variant="secondary"
+                fullWidth
+                size="lg"
+              />
+            )}
+          </View>
+        </View>
       ) : (
         <View style={styles.paymentContent}>
           <View style={styles.summaryPanel}>
@@ -364,53 +471,35 @@ export default function DriverPackagePaymentScreen() {
             <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} tone="success" />
           ) : (
             <>
-              <MethodTabs value={paymentMethod} onChange={setPaymentMethod} disabled={isWaiting} colors={colors} />
-
-              {paymentMethod === 'momo' ? (
-                <>
-                  <View style={styles.sectionHeading}>
-                    <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</AppText>
-                    <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
-                      Choose a provider and confirm the phone number that will receive the prompt.
-                    </AppText>
-                  </View>
-                  <View style={styles.providerChoiceRow}>
-                    {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
-                      <ProviderOption
-                        key={option}
-                        colors={colors}
-                        isSelected={selectedProvider === option}
-                        label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
-                        provider={option}
-                        shortLabel={option === 'mtn' ? 'MTN' : 'Airtel'}
-                        onPress={() => setSelectedProvider(option)}
-                      />
-                    ))}
-                  </View>
-                  <AppInput
-                    label="Mobile Money Phone Number"
-                    placeholder="+250 7xxxxxxxx"
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    keyboardType="phone-pad"
-                    leftIcon="smartphone"
+              <View style={styles.sectionHeading}>
+                <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</AppText>
+                <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+                  Choose a provider and confirm the phone number that will receive the prompt.
+                </AppText>
+              </View>
+              <View style={styles.providerChoiceRow}>
+                {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
+                  <ProviderOption
+                    key={option}
+                    colors={colors}
+                    isSelected={selectedProvider === option}
+                    label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+                    provider={option}
+                    shortLabel={option === 'mtn' ? 'MTN' : 'Airtel'}
+                    onPress={() => setSelectedProvider(option)}
                   />
-                  {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} tone="waiting" /> : null}
-                  {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} tone="error" /> : null}
-                </>
-              ) : (
-                <ManualPaymentSection
-                  amount={ridePackage.priceRwf}
-                  info={manualInfo}
-                  proofRef={proofRef}
-                  onChangeProofRef={setProofRef}
-                  proofImageUri={proofImageUri}
-                  onPickImage={() => void handlePickProofImage()}
-                  onClearImage={() => setProofImageUri(null)}
-                  onCopy={handleCopy}
-                  colors={colors}
-                />
-              )}
+                ))}
+              </View>
+              <AppInput
+                label="Mobile Money Phone Number"
+                placeholder="+250 7xxxxxxxx"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                keyboardType="phone-pad"
+                leftIcon="smartphone"
+              />
+              {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} tone="waiting" /> : null}
+              {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} tone="error" /> : null}
             </>
           )}
 
@@ -427,15 +516,6 @@ export default function DriverPackagePaymentScreen() {
             </View>
           ) : isFree ? (
             <AppButton title="Activate Package" onPress={() => void handleSendPaymentPrompt()} loading={loading} fullWidth size="lg" />
-          ) : paymentMethod === 'manual' ? (
-            <AppButton
-              title="I've Paid — Submit for Review"
-              onPress={() => void handleSubmitManualProof()}
-              disabled={!proofRef.trim() && !proofImageUri}
-              loading={manualSubmitting}
-              fullWidth
-              size="lg"
-            />
           ) : (
             <AppButton
               title="Send Payment Prompt"
@@ -450,9 +530,7 @@ export default function DriverPackagePaymentScreen() {
             <View style={styles.secureNote}>
               <Feather name="lock" size={13} color={colors.mutedForeground} />
               <AppText style={[styles.secureNoteText, { color: colors.mutedForeground }]}>
-                {paymentMethod === 'manual'
-                  ? 'Your ride credits are added as soon as we verify your payment.'
-                  : 'You will confirm this payment securely on your phone.'}
+                You will confirm this payment securely on your phone.
               </AppText>
             </View>
           ) : null}
@@ -529,172 +607,11 @@ function ReceiptCard({ activation, colors }: {
   </View>;
 }
 
-function MethodTabs({ value, onChange, disabled, colors }: {
-  value: 'momo' | 'manual'; onChange: (v: 'momo' | 'manual') => void; disabled?: boolean;
-  colors: ReturnType<typeof useColors>;
-}) {
-  const options: { key: 'momo' | 'manual'; label: string; icon: React.ComponentProps<typeof Feather>['name'] }[] = [
-    { key: 'momo', label: 'Mobile Money', icon: 'smartphone' },
-    { key: 'manual', label: 'Manual (Proof)', icon: 'edit-3' },
-  ];
-  return (
-    <View style={[styles.methodTabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {options.map(option => {
-        const active = value === option.key;
-        return (
-          <TouchableOpacity
-            key={option.key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            disabled={disabled}
-            onPress={() => onChange(option.key)}
-            style={[styles.methodTab, active ? { backgroundColor: colors.primary } : null]}
-            activeOpacity={0.8}
-          >
-            <Feather name={option.icon} size={15} color={active ? '#fff' : colors.mutedForeground} />
-            <AppText style={[styles.methodTabText, { color: active ? '#fff' : colors.mutedForeground }]}>{option.label}</AppText>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-function CopyRow({ label, value, onCopy, colors, emphasize }: {
-  label: string; value: string; onCopy: () => void; colors: ReturnType<typeof useColors>; emphasize?: boolean;
-}) {
-  return (
-    <View style={styles.copyRow}>
-      <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{label}</AppText>
-      <TouchableOpacity onPress={onCopy} style={styles.copyValue} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Copy ${label}`}>
-        <AppText style={[emphasize ? styles.copyValueEmphasis : styles.copyValueText, { color: emphasize ? colors.primary : colors.foreground }]}>{value}</AppText>
-        <Feather name="copy" size={14} color={colors.mutedForeground} />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, proofImageUri, onPickImage, onClearImage, onCopy, colors }: {
-  amount: number; info: ResolvedManualPaymentInfo | null; proofRef: string;
-  onChangeProofRef: (v: string) => void;
-  proofImageUri: string | null; onPickImage: () => void; onClearImage: () => void;
-  onCopy: (value: string, label: string) => void;
-  colors: ReturnType<typeof useColors>;
-}) {
-  const payCode = info?.payCode ?? '…';
-  const phone = info?.phoneNumber ?? '…';
-  return (
-    <>
-      <View style={styles.sectionHeading}>
-        <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay manually</AppText>
-        <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
-          Send {formatRwf(amount)} using the details below, then submit your proof — your MoMo transaction reference or a screenshot of the confirmation.
-        </AppText>
-      </View>
-
-      <View style={[styles.payTargetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <CopyRow label="Amount" value={formatRwf(amount)} onCopy={() => onCopy(String(amount), 'Amount')} colors={colors} />
-        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-        <CopyRow label="MoMo Pay Code" value={payCode} onCopy={() => onCopy(payCode, 'Pay code')} colors={colors} emphasize />
-        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-        <CopyRow label="Phone Number" value={phone} onCopy={() => onCopy(phone, 'Phone number')} colors={colors} />
-      </View>
-
-      <View style={[styles.instructionsBox, { backgroundColor: colors.primaryHex + '0A', borderColor: colors.primaryHex + '22' }]}>
-        <Feather name="info" size={15} color={colors.primary} />
-        <AppText style={[styles.instructionsText, { color: colors.mutedForeground }]}>
-          {info?.instructions ?? 'Pay with MTN MoMo, then submit your transaction reference or a screenshot below.'}
-        </AppText>
-      </View>
-
-      <AppInput
-        label="Transaction ID / Reference"
-        placeholder="e.g. 1234567890 (from your MoMo SMS)"
-        value={proofRef}
-        onChangeText={onChangeProofRef}
-        leftIcon="hash"
-        autoCapitalize="characters"
-      />
-
-      <View style={styles.proofPhotoBlock}>
-        <AppText style={[styles.proofPhotoLabel, { color: colors.mutedForeground }]}>
-          Payment screenshot (optional)
-        </AppText>
-        {proofImageUri ? (
-          <View style={[styles.proofPreview, { borderColor: colors.border }]}>
-            <Image source={{ uri: proofImageUri }} style={styles.proofPreviewImage} resizeMode="cover" />
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Remove screenshot"
-              onPress={onClearImage}
-              style={[styles.proofRemove, { backgroundColor: colors.destructiveHex + '18' }]}
-            >
-              <Feather name="x" size={15} color={colors.destructive} />
-              <AppText style={[styles.proofRemoveText, { color: colors.destructive }]}>Remove</AppText>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Attach payment screenshot"
-            onPress={onPickImage}
-            activeOpacity={0.75}
-            style={[styles.proofPickButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          >
-            <Feather name="image" size={17} color={colors.primary} />
-            <AppText style={[styles.proofPickText, { color: colors.foreground }]}>Attach a screenshot</AppText>
-          </TouchableOpacity>
-        )}
-      </View>
-    </>
-  );
-}
-
-function ManualPendingCard({ amount, reference, colors }: {
-  amount: number; reference: string; colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View style={[styles.paymentContent, styles.receiptCard]}>
-      <View style={[styles.receiptIconHalo, { backgroundColor: colors.warningHex + '18' }]}>
-        <View style={[styles.receiptIcon, { backgroundColor: colors.warning }]}>
-          <Feather name="clock" size={30} color="#fff" />
-        </View>
-      </View>
-      <AppText style={[styles.receiptTitle, { color: colors.foreground }]}>Payment Submitted</AppText>
-      <AppText style={[styles.receiptText, { color: colors.mutedForeground }]}>
-        We received your payment proof for {formatRwf(amount)}. Your ride credits will be added once our team verifies it — usually within a few minutes.
-      </AppText>
-      {reference ? (
-        <AppText style={[styles.receiptCredits, { color: colors.foreground }]}>Reference: {reference}</AppText>
-      ) : null}
-      <View style={styles.receiptAction}>
-        <AppButton title="Go to Dashboard" onPress={() => navigateToDriverHomeAfterCompletion(router)} fullWidth size="lg" />
-      </View>
-      <AppButton title="View Packages" onPress={() => closeTemporaryScreen(router, DRIVER_PACKAGES_ROUTE)} variant="plain" />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  methodTabs: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: radius.card, borderWidth: 1 },
-  methodTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: radius.md },
-  methodTabText: { ...typography.bodySmall },
-  payTargetCard: { borderRadius: radius.card, borderWidth: 1, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[4] },
-  copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing[10] },
-  copyValue: { flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
-  copyValueText: { ...typography.bodySmall },
-  copyValueEmphasis: { ...typography.title },
-  instructionsBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10], padding: 12, borderRadius: radius.card, borderWidth: 1 },
-  instructionsText: { flex: 1, ...typography.caption, lineHeight: 18 },
-  proofPhotoBlock: { gap: spacing[6] },
-  proofPhotoLabel: { ...typography.label },
-  proofPickButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[8], paddingVertical: spacing[14], borderRadius: radius.card, borderWidth: 1, borderStyle: 'dashed' },
-  proofPickText: { ...typography.bodySmall },
-  proofPreview: { borderRadius: radius.card, borderWidth: 1, overflow: 'hidden' },
-  proofPreviewImage: { width: '100%', height: 160 },
-  proofRemove: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[6], paddingVertical: spacing[10] },
-  proofRemoveText: { ...typography.bodySmall },
+  manualShell: { gap: semanticSpacing.screenPadding },
+  manualForm: { marginHorizontal: semanticSpacing.screenPadding, gap: spacing[14] },
+  claimShell: { marginHorizontal: semanticSpacing.screenPadding },
   centered: { alignItems: 'center', justifyContent: 'center', gap: icons.semantic.row, padding: semanticSpacing.sectionGap },
   invalidIconHalo: { width: sizes.thumbnail.md, height: sizes.thumbnail.md, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[2] },
   invalidTitle: { ...typography.h2, letterSpacing: -0.3 },
@@ -706,26 +623,25 @@ const styles = StyleSheet.create({
   summaryIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   summaryTitleBlock: { flex: 1, gap: 2 },
   summaryEyebrow: { ...typography.tiny, letterSpacing: 0.8 },
-  packageName: { ...typography.h2,  },
+  packageName: { ...typography.h2 },
   campaignBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing[4], alignSelf: 'flex-start', paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 5, borderRadius: radius.pill },
-  campaignBadgeText: { ...typography.tiny,  },
+  campaignBadgeText: { ...typography.tiny },
   summaryDivider: { height: StyleSheet.hairlineWidth },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.cardPadding },
-  summaryLabel: { ...typography.label,  },
-  summaryValue: { ...typography.bodySmall,  },
-  totalLabel: { ...typography.bodySmall,  },
-  credits: { ...typography.title,  },
-  price: { ...typography.h2,  },
+  summaryLabel: { ...typography.label },
+  summaryValue: { ...typography.bodySmall },
+  totalLabel: { ...typography.bodySmall },
+  price: { ...typography.h2 },
   sectionHeading: { gap: spacing[4] },
-  sectionTitle: { ...typography.title,  },
+  sectionTitle: { ...typography.title },
   sectionDescription: { ...typography.caption, lineHeight: 17 },
   providerChoiceRow: { gap: 9 },
   providerOption: { minHeight: 62, borderRadius: 15, borderWidth: 1, paddingHorizontal: semanticSpacing.rowGap, paddingVertical: spacing[10], flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   providerIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   providerLogo: { width: 27, height: 27 },
   providerTextBlock: { flex: 1, gap: 1 },
-  providerOptionText: { ...typography.bodySmall,  },
-  providerOptionSubtext: { ...typography.tiny,  },
+  providerOptionText: { ...typography.bodySmall },
+  providerOptionSubtext: { ...typography.tiny },
   radioOuter: { width: spacing[20], height: spacing[20], borderRadius: radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioInner: { width: spacing[10], height: spacing[10], borderRadius: 5 },
   notice: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: 11, borderRadius: radius.card, borderWidth: 1 },
@@ -736,7 +652,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: spacing[10] },
   actionButton: { flex: 1 },
   secureNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[6] },
-  secureNoteText: { ...typography.tiny,  },
+  secureNoteText: { ...typography.tiny },
   receiptCard: { alignItems: 'center', gap: semanticSpacing.rowGap },
   receiptIconHalo: { width: 86, height: 86, borderRadius: 43, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   receiptIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },

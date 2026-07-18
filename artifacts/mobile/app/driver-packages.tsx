@@ -188,6 +188,17 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
       </AppText>
     </View>
 
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="Buy rides with a custom amount"
+      style={[styles.historyLink, { backgroundColor: cardFill, borderColor: colors.border }]}
+      onPress={() => router.push('/driver-custom-topup')}
+    >
+      <Feather name="edit-3" size={16} color={colors.primary} />
+      <AppText style={[styles.historyLinkText, { color: colors.foreground }]}>Custom top-up</AppText>
+      <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: 'auto' }} />
+    </TouchableOpacity>
+
     {isCatalogLoading && !hasCatalogSnapshot ? (
       <PackageState
         colors={colors}

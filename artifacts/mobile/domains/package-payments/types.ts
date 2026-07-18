@@ -24,6 +24,13 @@ export interface ManualPackagePaymentConfiguration {
 export interface PackagePaymentConfiguration {
   mode: PackagePaymentMode;
   manual?: ManualPackagePaymentConfiguration;
+  /**
+   * Owner-set price (RWF) of one ride credit, keyed by BACKEND vehicle-type code
+   * (MOTO_BIKE, CAB_TAXI, HEAVY_FUSO, LIGHT_HILUX, TUK_TUK). Single source of
+   * truth for the custom-amount top-up preview: rides = floor(amount / price).
+   * Optional so older configs / fallbacks stay valid.
+   */
+  pricePerRideRwf?: Record<string, number>;
   version: string;
   updatedAt: string;
 }

@@ -91,6 +91,7 @@ interface ConfigurationDto {
     proof_image_enabled: boolean;
     proof_image_required?: boolean | null;
   } | null;
+  price_per_ride_rwf?: Record<string, number> | null;
   version: string;
   updated_at: string;
 }
@@ -150,6 +151,7 @@ function toConfiguration(dto: ConfigurationDto): PackagePaymentConfiguration {
     mode: dto.mode,
     version: dto.version,
     updatedAt: dto.updated_at,
+    pricePerRideRwf: dto.price_per_ride_rwf ?? undefined,
     manual: dto.manual
       ? {
           providers: dto.manual.providers.map(p => ({
