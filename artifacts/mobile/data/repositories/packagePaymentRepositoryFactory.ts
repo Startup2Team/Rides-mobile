@@ -158,13 +158,13 @@ export function createPackagePaymentRepository(
     options.configuration ?? null,
   );
   // Real backend claim repo (services/packagePaymentClaims) is the default
-  // remote implementation. Mode still defaults to 'local' until the backend
-  // ships the /package-payments/manual-claims endpoints — set it via
-  // EXPO_PUBLIC_PACKAGE_PAYMENT_SOURCE=remote (or pass options.mode) to flip.
+  // implementation now that /package-payments/manual-claims (+ admin approve/
+  // reject → grant) is built + verified. Set EXPO_PUBLIC_PACKAGE_PAYMENT_SOURCE
+  // =local (or pass options.mode) to fall back to the on-device store.
   const remoteRepository = options.remoteRepository ?? backendPackagePaymentRepository;
   const requestedMode = normalizePackagePaymentRepositoryMode(options.mode)
     ?? normalizePackagePaymentRepositoryMode(process.env.EXPO_PUBLIC_PACKAGE_PAYMENT_SOURCE)
-    ?? (options.enableRemoteDiagnostics ? 'shadow_remote' : 'local');
+    ?? (options.enableRemoteDiagnostics ? 'shadow_remote' : 'remote');
 
   if (requestedMode === 'remote') {
     return remoteRepository;

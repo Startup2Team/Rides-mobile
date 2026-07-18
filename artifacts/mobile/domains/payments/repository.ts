@@ -137,13 +137,13 @@ const backendPaymentsRepository: PaymentsRepository = {
   },
 };
 
-// Source switch: defaults to LOCAL until the backend endpoints exist. When they
-// ship, set EXPO_PUBLIC_PAYMENT_METHODS_SOURCE=remote (build-time env) — the
-// entire payments UI then reads/writes the real backend with no other change.
+// Source switch: defaults to the REAL BACKEND now that the payment-methods
+// endpoints are built + verified. Set EXPO_PUBLIC_PAYMENT_METHODS_SOURCE=local
+// to fall back to the on-device store (offline/dev only).
 function resolvePaymentsRepository(): PaymentsRepository {
-  return process.env.EXPO_PUBLIC_PAYMENT_METHODS_SOURCE === 'remote'
-    ? backendPaymentsRepository
-    : localPaymentsRepository;
+  return process.env.EXPO_PUBLIC_PAYMENT_METHODS_SOURCE === 'local'
+    ? localPaymentsRepository
+    : backendPaymentsRepository;
 }
 
 export const paymentsRepository: PaymentsRepository = resolvePaymentsRepository();

@@ -1,7 +1,8 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -34,7 +35,8 @@ import { closeTemporaryScreen, navigateToDriverHomeAfterCompletion } from '@/nav
 import * as Clipboard from 'expo-clipboard';
 import { useToast } from '@/context/ToastContext';
 import { resolveManualPaymentInfo, type ResolvedManualPaymentInfo } from '@/services/manualPayment';
-import { purchasePackage, submitPaymentProof } from '@/services/driverPackages';
+import { uploadPaymentProofImage } from '@/services/paymentProof';
+import { createPackagePaymentRepository } from '@/data/repositories/packagePaymentRepositoryFactory';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -69,12 +71,17 @@ export default function DriverPackagePaymentScreen() {
   const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const { showToast } = useToast();
 
-  // Manual (proof-based) payment.
+  // Manual (proof-based) payment. Proof = MoMo transaction reference (text) OR a
+  // screenshot of the confirmation (photo). At least one is required; the driver
+  // can supply both. The claim moves created → submitted; rides are ONLY granted
+  // after an admin approves it (v2 manual-claims flow).
   const [paymentMethod, setPaymentMethod] = useState<'momo' | 'manual'>('momo');
   const [manualInfo, setManualInfo] = useState<ResolvedManualPaymentInfo | null>(null);
   const [proofRef, setProofRef] = useState('');
+  const [proofImageUri, setProofImageUri] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualSubmitted, setManualSubmitted] = useState(false);
+  const packagePaymentRepository = useMemo(() => createPackagePaymentRepository(), []);
 
   useEffect(() => {
     let active = true;
@@ -192,6 +199,26 @@ export default function DriverPackagePaymentScreen() {
     setError(null);
   };
 
+  const handlePickProofImage = async () => {
+    setError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError('Allow photo access to attach a payment screenshot, or use the transaction reference instead.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        setProofImageUri(result.assets[0].uri);
+      }
+    } catch {
+      setError('Could not open your photos. Use the transaction reference instead.');
+    }
+  };
+
   const handleSubmitManualProof = async () => {
     if (!ridePackage) return;
     if (isPackageOfferExpired(ridePackage)) {
@@ -199,38 +226,54 @@ export default function DriverPackagePaymentScreen() {
       return;
     }
     const ref = proofRef.trim();
-    if (!ref) {
-      setError('Enter the transaction ID from your MoMo confirmation SMS.');
+    // Proof = transaction reference (text) OR a screenshot (photo). Require one.
+    if (!ref && !proofImageUri) {
+      setError('Add your MoMo transaction reference or attach a payment screenshot.');
+      return;
+    }
+    const payerPhone = (phoneNumber || manualInfo?.phoneNumber || '').trim();
+    if (!payerPhone) {
+      setError('Enter the phone number you paid from.');
       return;
     }
     setManualSubmitting(true);
     setError(null);
     try {
-      // Track the purchase locally as pending review — credits are NOT granted
-      // until an admin confirms the manual payment.
-      const purchase = await createPackagePurchase({
-        offer: ridePackage,
-        provider: selectedProvider,
-        phoneNumber: phoneNumber || manualInfo?.phoneNumber || '',
-      });
-      setActivePurchase(purchase);
-      await updatePackagePurchaseStatus(purchase.transactionId, 'processing');
-      setPaymentStatus('processing');
+      // Optional photo proof → object storage → proof_image_id. Best-effort:
+      // if storage is unavailable the text reference still submits the claim.
+      let proofImageId: string | undefined;
+      if (proofImageUri) {
+        try {
+          proofImageId = await uploadPaymentProofImage(proofImageUri);
+        } catch {
+          if (!ref) {
+            setError('Screenshot upload is unavailable right now. Add your transaction reference to submit.');
+            setManualSubmitting(false);
+            return;
+          }
+          // Have a text reference — proceed without the image.
+        }
+      }
 
-      // Real backend (best-effort; safe if the payment API isn't wired yet):
-      // create the purchase, then submit the proof for admin review.
-      try {
-        const { purchaseId } = await purchasePackage({
-          packageId: ridePackage.packageId,
-          idempotencyKey: `${purchase.transactionId}-${Date.now()}`,
-        });
-        await submitPaymentProof(purchaseId, {
-          paymentRef: ref,
-          providerTxnId: ref,
-          status: 'SUBMITTED',
-        });
-      } catch {
-        // Keep the local pending state; the proof can be re-submitted later.
+      // v2 manual-claims flow: create the claim, then submit it for admin
+      // review. Rides are NOT granted here — only when an admin approves.
+      const created = await packagePaymentRepository.createManualPaymentClaim({
+        offer: ridePackage,
+        driverId: user?.id ?? '',
+        provider: selectedProvider,
+        payerPhoneNumber: payerPhone,
+        transactionReference: ref || undefined,
+        proofImageId,
+      });
+      if (created.failure || !created.data) {
+        throw new Error(created.failure?.message ?? 'Could not submit your payment proof.');
+      }
+      const submitted = await packagePaymentRepository.submitManualPaymentClaim({
+        claim: created.data,
+        actorId: user?.id,
+      });
+      if (submitted.failure) {
+        throw new Error(submitted.failure.message);
       }
 
       setManualSubmitted(true);
@@ -361,6 +404,9 @@ export default function DriverPackagePaymentScreen() {
                   info={manualInfo}
                   proofRef={proofRef}
                   onChangeProofRef={setProofRef}
+                  proofImageUri={proofImageUri}
+                  onPickImage={() => void handlePickProofImage()}
+                  onClearImage={() => setProofImageUri(null)}
                   onCopy={handleCopy}
                   colors={colors}
                 />
@@ -385,7 +431,7 @@ export default function DriverPackagePaymentScreen() {
             <AppButton
               title="I've Paid — Submit for Review"
               onPress={() => void handleSubmitManualProof()}
-              disabled={!proofRef.trim()}
+              disabled={!proofRef.trim() && !proofImageUri}
               loading={manualSubmitting}
               fullWidth
               size="lg"
@@ -528,9 +574,11 @@ function CopyRow({ label, value, onCopy, colors, emphasize }: {
   );
 }
 
-function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, onCopy, colors }: {
+function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, proofImageUri, onPickImage, onClearImage, onCopy, colors }: {
   amount: number; info: ResolvedManualPaymentInfo | null; proofRef: string;
-  onChangeProofRef: (v: string) => void; onCopy: (value: string, label: string) => void;
+  onChangeProofRef: (v: string) => void;
+  proofImageUri: string | null; onPickImage: () => void; onClearImage: () => void;
+  onCopy: (value: string, label: string) => void;
   colors: ReturnType<typeof useColors>;
 }) {
   const payCode = info?.payCode ?? '…';
@@ -540,7 +588,7 @@ function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, onCopy
       <View style={styles.sectionHeading}>
         <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay manually</AppText>
         <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
-          Send {formatRwf(amount)} using the details below, then paste your transaction ID to submit for verification.
+          Send {formatRwf(amount)} using the details below, then submit your proof — your MoMo transaction reference or a screenshot of the confirmation.
         </AppText>
       </View>
 
@@ -555,7 +603,7 @@ function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, onCopy
       <View style={[styles.instructionsBox, { backgroundColor: colors.primaryHex + '0A', borderColor: colors.primaryHex + '22' }]}>
         <Feather name="info" size={15} color={colors.primary} />
         <AppText style={[styles.instructionsText, { color: colors.mutedForeground }]}>
-          {info?.instructions ?? 'Pay with MTN MoMo, then paste your transaction ID below.'}
+          {info?.instructions ?? 'Pay with MTN MoMo, then submit your transaction reference or a screenshot below.'}
         </AppText>
       </View>
 
@@ -567,6 +615,37 @@ function ManualPaymentSection({ amount, info, proofRef, onChangeProofRef, onCopy
         leftIcon="hash"
         autoCapitalize="characters"
       />
+
+      <View style={styles.proofPhotoBlock}>
+        <AppText style={[styles.proofPhotoLabel, { color: colors.mutedForeground }]}>
+          Payment screenshot (optional)
+        </AppText>
+        {proofImageUri ? (
+          <View style={[styles.proofPreview, { borderColor: colors.border }]}>
+            <Image source={{ uri: proofImageUri }} style={styles.proofPreviewImage} resizeMode="cover" />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Remove screenshot"
+              onPress={onClearImage}
+              style={[styles.proofRemove, { backgroundColor: colors.destructiveHex + '18' }]}
+            >
+              <Feather name="x" size={15} color={colors.destructive} />
+              <AppText style={[styles.proofRemoveText, { color: colors.destructive }]}>Remove</AppText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Attach payment screenshot"
+            onPress={onPickImage}
+            activeOpacity={0.75}
+            style={[styles.proofPickButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          >
+            <Feather name="image" size={17} color={colors.primary} />
+            <AppText style={[styles.proofPickText, { color: colors.foreground }]}>Attach a screenshot</AppText>
+          </TouchableOpacity>
+        )}
+      </View>
     </>
   );
 }
@@ -608,6 +687,14 @@ const styles = StyleSheet.create({
   copyValueEmphasis: { ...typography.title },
   instructionsBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10], padding: 12, borderRadius: radius.card, borderWidth: 1 },
   instructionsText: { flex: 1, ...typography.caption, lineHeight: 18 },
+  proofPhotoBlock: { gap: spacing[6] },
+  proofPhotoLabel: { ...typography.label },
+  proofPickButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[8], paddingVertical: spacing[14], borderRadius: radius.card, borderWidth: 1, borderStyle: 'dashed' },
+  proofPickText: { ...typography.bodySmall },
+  proofPreview: { borderRadius: radius.card, borderWidth: 1, overflow: 'hidden' },
+  proofPreviewImage: { width: '100%', height: 160 },
+  proofRemove: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[6], paddingVertical: spacing[10] },
+  proofRemoveText: { ...typography.bodySmall },
   centered: { alignItems: 'center', justifyContent: 'center', gap: icons.semantic.row, padding: semanticSpacing.sectionGap },
   invalidIconHalo: { width: sizes.thumbnail.md, height: sizes.thumbnail.md, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[2] },
   invalidTitle: { ...typography.h2, letterSpacing: -0.3 },
