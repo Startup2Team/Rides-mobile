@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
 import { useRide } from '@/context/RideContext';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
+import { calcFare } from '@/context/ride/rideFare';
+import { estimateFare } from '@/services/fare';
 import type { RideLocation, VehicleType } from '@/types';
 import {
   arePickupAndDropoffSame,
@@ -118,11 +121,47 @@ export function useHomeBooking({
       )
     : 0, [destination, pickup.latitude, pickup.longitude]);
 
+  // Displayed fare quote — server-authoritative via GET /v1/customer/fare-estimate
+  // so it cannot be tampered with client-side. calcFare stays only as the offline
+  // fallback once the request settles without data.
+  const fareEnabled = destination !== null && hasUsablePickup(pickup);
+  const fareQuery = useQuery({
+    queryKey: [
+      'fareEstimate',
+      selectedVehicle,
+      pickup.latitude,
+      pickup.longitude,
+      destination?.latitude ?? null,
+      destination?.longitude ?? null,
+    ],
+    enabled: fareEnabled,
+    queryFn: () => estimateFare({
+      vehicleType: selectedVehicle,
+      pickupLat: pickup.latitude,
+      pickupLng: pickup.longitude,
+      destLat: destination!.latitude,
+      destLng: destination!.longitude,
+    }),
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const estimatedFare = useMemo(() => {
+    if (!fareEnabled) return null;
+    if (fareQuery.data) return fareQuery.data.totalFareRwf;
+    if (fareQuery.isLoading) return null;
+    return calcFare(selectedVehicle, distance);
+  }, [distance, fareEnabled, fareQuery.data, fareQuery.isLoading, selectedVehicle]);
+  const estimatedFareLoading = fareEnabled && fareQuery.isLoading;
+
   return {
     bookLoading,
     destText,
     destination,
     distance,
+    estimatedFare,
+    estimatedFareLoading,
     handleBook,
     pickup,
     selectedVehicle,

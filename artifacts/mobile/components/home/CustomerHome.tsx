@@ -115,6 +115,8 @@ export default function CustomerHome() {
     destText,
     destination,
     distance: dist,
+    estimatedFare,
+    estimatedFareLoading,
     handleBook,
     pickup,
     selectedVehicle,
@@ -483,6 +485,8 @@ export default function CustomerHome() {
           route,
           routeLoading,
           distance: dist,
+          estimatedFare,
+          estimatedFareLoading,
           onBook: handleBook,
           booking: bookLoading,
         }}

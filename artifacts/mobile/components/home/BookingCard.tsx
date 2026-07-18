@@ -39,6 +39,8 @@ export type BookingCardData = {
   route: RouteSummary | null;
   routeLoading: boolean;
   distance: number;
+  estimatedFare?: number | null;
+  estimatedFareLoading?: boolean;
   onBook: () => void;
   booking: boolean;
 };
@@ -62,6 +64,8 @@ export function BookingCard({
   route,
   routeLoading,
   distance,
+  estimatedFare,
+  estimatedFareLoading,
   onBook,
   booking,
   colors,
@@ -215,6 +219,21 @@ export function BookingCard({
                         : route
                           ? formatDistance(route.distanceMeters)
                           : `${distance.toFixed(1)} km`}
+                    </AppText>
+                  </View>
+                </View>
+                <View style={[styles.rideInfoCard, { backgroundColor: colors.card }]}>
+                  <MaterialCommunityIcons name="cash" size={icons.semantic.button} color={colors.primary} />
+                  <View style={styles.rideInfoText}>
+                    <AppText variant="tiny" style={[styles.rideInfoLabel, { color: colors.mutedForeground }]}>
+                      Est. Fare
+                    </AppText>
+                    <AppText variant="label" style={[styles.rideInfoValue, { color: colors.foreground }]} numberOfLines={1}>
+                      {estimatedFareLoading
+                        ? '...'
+                        : estimatedFare != null
+                          ? `${estimatedFare.toLocaleString()} RWF`
+                          : '--'}
                     </AppText>
                   </View>
                 </View>

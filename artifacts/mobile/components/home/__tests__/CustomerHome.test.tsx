@@ -4,6 +4,13 @@ import CustomerHome from '../CustomerHome';
 
 declare const __dirname: string;
 
+// useHomeBooking fetches a server fare estimate via React Query. Stub useQuery so
+// the component renders without a real QueryClient (and without leaving gc timers
+// that keep the jest process alive).
+jest.mock('@tanstack/react-query', () => ({
+  useQuery: () => ({ data: { totalFareRwf: 1500 }, isLoading: false, isError: false }),
+}));
+
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
 const mockClearRoutePreview = jest.fn();
