@@ -148,6 +148,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const updated: DriverProfile = {
           ...prev,
           verificationStatus: status ?? prev.verificationStatus,
+          // canAccessDriverMode() gates on isVerified too — keep it in lockstep
+          // with the backend approval, otherwise an approved driver can never
+          // switch into driver mode (switchMode silently bails).
+          isVerified: status === 'approved' ? true : status === 'rejected' ? false : prev.isVerified,
           isOnline: backend.isOnline,
           acceptanceRate: backend.acceptanceRate || prev.acceptanceRate,
           completedRides: backend.totalRides || prev.completedRides,
