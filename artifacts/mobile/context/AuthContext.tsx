@@ -13,6 +13,7 @@ import {
   saveStoredDriverProfile,
   saveStoredUser,
 } from '@/persistence/authPersistence';
+import { AppState, type AppStateStatus } from 'react-native';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
@@ -38,17 +39,25 @@ interface AuthContextType {
   setDriverOnline: (isOnline: boolean) => Promise<void>;
   switchMode: (mode: AppMode) => Promise<void>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
+  // Re-pull the driver's real approval status + online state from the backend.
+  // Screens that show approval state (e.g. submission confirmation) call this on
+  // focus so a PENDING → APPROVED transition appears without a cold restart.
+  refreshDriverProfile: () => Promise<void>;
 }
 
-// Backend approval_status (PENDING|APPROVED|REJECTED|SUSPENDED) → mobile status.
+// Backend approval_status → mobile status. The backend uses PENDING_REVIEW for a
+// freshly submitted application; NEEDS_MORE_INFO is actionable (re-submit), so it
+// maps to 'rejected' which drives the "Update Application" CTA.
 function mapApprovalStatus(status: string): DriverProfile['verificationStatus'] | null {
   switch (status) {
     case 'APPROVED':
       return 'approved';
     case 'REJECTED':
     case 'SUSPENDED':
+    case 'NEEDS_MORE_INFO':
       return 'rejected';
     case 'PENDING':
+    case 'PENDING_REVIEW':
       return 'pending_review';
     default:
       return null;
@@ -151,6 +160,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Not a driver yet, or backend unreachable — keep the local profile.
     }
   }, []);
+
+  // Re-sync from the backend whenever the app returns to the foreground, so an
+  // approval that happened while the app was backgrounded (or a profile change)
+  // is reflected everywhere — home header badge, submission screen, etc. — even
+  // if the user never cold-restarts.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      void syncProfileFromBackend();
+      void syncDriverProfileFromBackend();
+    });
+    return () => subscription.remove();
+  }, [syncProfileFromBackend, syncDriverProfileFromBackend]);
 
   const login = useCallback(async (newUser: User) => {
     setUser(newUser);
@@ -282,6 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setDriverOnline,
     switchMode,
     recordCompletedRide,
+    refreshDriverProfile: syncDriverProfileFromBackend,
   }), [
     driverProfile,
     isLoading,
@@ -292,6 +315,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveVehicle,
     setDriverOnline,
     switchMode,
+    syncDriverProfileFromBackend,
     updateUser,
     user,
   ]);
