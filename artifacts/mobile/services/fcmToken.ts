@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 // Acquires the correct native push token per platform for the backend, which
 // sends via the Firebase Admin SDK (`messaging.Send`) and therefore needs a
@@ -28,6 +28,10 @@ export interface PushToken {
 // indirected through a variable so the bundler treats it as optional rather
 // than a hard, must-resolve dependency.
 function loadFirebaseMessaging(): (() => FirebaseMessaging) | null {
+  // In Expo Go / any build without the native Firebase module, requiring it
+  // throws "Native module RNFBAppModule not found". Check the native module is
+  // actually present first so the optional dependency stays truly silent.
+  if (!NativeModules.RNFBAppModule) return null;
   try {
     const moduleName = '@react-native-firebase/messaging';
     // eslint-disable-next-line @typescript-eslint/no-var-requires

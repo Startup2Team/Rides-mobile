@@ -16,8 +16,12 @@ import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
-import { verifyOtp } from '@/services/authSession';
+import { requestOtp, verifyOtp } from '@/services/authSession';
 import type { User } from '@/types';
+
+// Client-side throttle before a fresh OTP can be requested again. The backend
+// also rate-limits OTP sends (5/hour), so keep this comfortably under that.
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function OTPScreen() {
   const colors = useColors();
@@ -33,12 +37,40 @@ export default function OTPScreen() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const [resending, setResending] = useState(false);
+  const [resendIn, setResendIn] = useState(RESEND_COOLDOWN_SECONDS);
 
   useEffect(() => {
     if (expiryTimer <= 0) return;
     const t = setTimeout(() => setExpiryTimer(s => s - 1), 1000);
     return () => clearTimeout(t);
   }, [expiryTimer]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const handleResend = async () => {
+    if (resending || resendIn > 0) return;
+    setResending(true);
+    setError('');
+    try {
+      // Actually re-request the OTP from the backend (POST /auth/register) —
+      // this is what generates a fresh code, sends the SMS (when configured),
+      // and shows up in the server logs. The old button only reset local state.
+      await requestOtp({ phoneNumber: phone, fullName: name });
+      setCode(Array(otpLength).fill(''));
+      setExpiryTimer(OTP_VALIDITY_SECONDS);
+      setResendIn(RESEND_COOLDOWN_SECONDS);
+      inputRefs.current[0]?.focus();
+    } catch {
+      setError("Couldn't resend the code. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleInput = (val: string, idx: number) => {
     const cleaned = val.replace(/\D/g, '').slice(-1);
@@ -143,18 +175,18 @@ export default function OTPScreen() {
         ) : null}
       </View>
 
-      {expiryTimer <= 0 ? (
-        <TouchableOpacity
-          onPress={() => {
-            setCode(Array(otpLength).fill(''));
-            setError('');
-            setExpiryTimer(OTP_VALIDITY_SECONDS);
-          }}
-          style={styles.resend}
-        >
-          <AppText variant="label" style={[styles.resendText, { color: colors.primary }]}>Resend code</AppText>
-        </TouchableOpacity>
-      ) : null}
+      <TouchableOpacity
+        onPress={handleResend}
+        disabled={resending || resendIn > 0}
+        style={[styles.resend, (resending || resendIn > 0) && { opacity: 0.5 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Resend verification code"
+        accessibilityState={{ disabled: resending || resendIn > 0 }}
+      >
+        <AppText variant="label" style={[styles.resendText, { color: colors.primary }]}>
+          {resending ? 'Sending…' : resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
+        </AppText>
+      </TouchableOpacity>
     </View>
   );
 }
