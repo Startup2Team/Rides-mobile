@@ -1,6 +1,6 @@
 import React from 'react';
 import { Feather } from '@expo/vector-icons';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { AppButton } from '@/components/AppButton';
 import { useColors } from '@/hooks/useColors';
 import type { ManualPaymentProviderConfiguration } from '@/domains/package-payments';
@@ -10,6 +10,19 @@ export interface ManualPaymentProviderCardProps {
   instruction: string;
   amountLabel: string;
   onCopy: () => void;
+}
+
+// Open the phone dialer pre-filled with the USSD string. The `#` must be
+// percent-encoded (%23) or the dialer drops everything after it; `*` is left
+// as-is. The user still presses the call button — carriers/OSes block auto-firing
+// USSD from a link — but the full code lands in their dialer.
+async function dialUssd(instruction: string) {
+  const url = `tel:${encodeURIComponent(instruction)}`;
+  try {
+    await Linking.openURL(url);
+  } catch {
+    // Dialer unavailable (e.g. simulator) — the Copy action is the fallback.
+  }
 }
 
 const PROVIDER_DISPLAY: Record<ManualPaymentProviderConfiguration['provider'], { title: string; iconColor: string }> = {
@@ -47,6 +60,15 @@ export function ManualPaymentProviderCard({ provider, instruction, amountLabel, 
           {instruction}
         </Text>
       </View>
+
+      <AppButton
+        title="Dial to pay"
+        onPress={() => void dialUssd(instruction)}
+        accessibilityLabel={`Dial ${meta.title} payment code`}
+        icon="phone-call"
+        fullWidth
+        size="lg"
+      />
 
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Amount: {amountLabel}</Text>
