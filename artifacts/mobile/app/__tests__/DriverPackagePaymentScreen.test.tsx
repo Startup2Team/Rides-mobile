@@ -468,8 +468,8 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     await waitFor(() => expect(mockCreateManualPaymentClaim).toHaveBeenCalled());
     await waitFor(() => expect(mockSubmitManualPaymentClaim).toHaveBeenCalled());
 
-    expect(await screen.findByText('PAYMENT CONFIRMATION SUBMITTED')).toBeTruthy();
-    expect(screen.getByText('Your payment claim is waiting for review.')).toBeTruthy();
+    expect(await screen.findByText('WAITING FOR APPROVAL')).toBeTruthy();
+    expect(screen.getByText(/updates on its own/)).toBeTruthy();
     expect(mockActivatePackage).not.toHaveBeenCalled();
     expect(mockUpdatePackagePurchaseStatus).not.toHaveBeenCalled();
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();

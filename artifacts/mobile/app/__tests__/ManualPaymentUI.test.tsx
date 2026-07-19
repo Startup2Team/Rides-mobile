@@ -319,7 +319,7 @@ describe('Manual Package Payment Driver UI (Phase MP9)', () => {
 
     render(<DriverPackagePaymentScreen />, { wrapper: createWrapper() });
 
-    await waitFor(() => expect(screen.queryByText('PAYMENT CONFIRMATION SUBMITTED')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText('WAITING FOR APPROVAL')).toBeTruthy());
     expect(screen.getByText('+250***0000')).toBeTruthy();
     expect(screen.getByText('***123')).toBeTruthy();
     expect(screen.queryByText('ABC12345')).toBeNull(); // Raw transaction reference should NOT be shown

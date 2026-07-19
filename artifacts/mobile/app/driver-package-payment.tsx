@@ -118,9 +118,18 @@ export default function DriverPackagePaymentScreen() {
 
   // A claim already in flight (from the server, or one we just submitted) takes
   // priority over starting a new payment.
-  const activeClaim: ManualPaymentClaimReadModel | null = useMemo(() => {
-    if (submittedClaim) return submittedClaim;
+  const currentClaim: ManualPaymentClaimReadModel | null = useMemo(() => {
     const list = (claims ?? []) as ManualPaymentClaimReadModel[];
+    // Prefer the freshest (auto-polled) version of the claim submitted THIS
+    // session, so an admin approval/rejection detected by polling flips the card
+    // to the success/declined state on its own — no manual refresh. Falls back to
+    // the just-submitted snapshot until the list catches up.
+    if (submittedClaim) {
+      return list.find(c => c && c.id === submittedClaim.id) ?? submittedClaim;
+    }
+    // Otherwise surface only a pre-existing IN-FLIGHT claim (returning to the
+    // screen mid-review). A past approved/rejected claim must not block buying a
+    // new package, so terminal statuses are ignored here.
     return list.find(c => c && ACTIVE_CLAIM_STATUSES.has(c.status)) ?? null;
   }, [submittedClaim, claims]);
 
@@ -211,6 +220,9 @@ export default function DriverPackagePaymentScreen() {
       }
       setSubmittedClaim(toManualPaymentClaimReadModel(submitted.data, { authority: 'remote_backed' }));
       setFormVisible(false);
+      // Pull the claims list so the auto-polling status card tracks this claim
+      // and flips to approved/declined on its own.
+      void refetchClaims?.();
       reportOperationalWarning('package-payment.manual.review', {
         operation: 'DriverPackagePaymentScreen',
         status: submitted.data.status,
@@ -294,13 +306,14 @@ export default function DriverPackagePaymentScreen() {
           reasonText="Package payments are temporarily unavailable. Please try again later."
           onBack={() => replaceFlowScreen(router, '/driver-packages')}
         />
-      ) : activeClaim ? (
+      ) : currentClaim ? (
         <View style={styles.claimShell}>
           <ManualPaymentClaimStatusCard
-            claim={activeClaim}
+            claim={currentClaim}
             onRefetch={() => { void refetchClaims?.(); }}
             onCancel={handleCancelClaim}
             onResubmit={handleResubmitClaim}
+            onDone={() => navigateToDriverHomeAfterCompletion(router)}
           />
         </View>
       ) : !isFree ? (

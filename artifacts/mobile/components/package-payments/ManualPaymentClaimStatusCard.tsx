@@ -14,6 +14,8 @@ export interface ManualPaymentClaimStatusCardProps {
   isRefetching?: boolean;
   onCancel: (claimId: string, version: number) => Promise<any>;
   onResubmit: (claimId: string, version: number, updates: { provider: 'mtn' | 'airtel'; phone: string; reference?: string }) => Promise<any>;
+  /** Called from the success CTA once the payment is approved (e.g. go to dashboard). */
+  onDone?: () => void;
 }
 
 function formatRwf(amount: number) {
@@ -30,6 +32,7 @@ export function ManualPaymentClaimStatusCard({
   isRefetching = false,
   onCancel,
   onResubmit,
+  onDone,
 }: ManualPaymentClaimStatusCardProps) {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
@@ -171,6 +174,15 @@ export function ManualPaymentClaimStatusCard({
         </View>
       ) : null}
 
+      {claim.status === 'rejected' && (claim.rejectionMessage || claim.rejectionReasonCode) ? (
+        <View style={[styles.clarificationBox, { backgroundColor: colors.destructiveHex + '0A', borderColor: colors.destructive }]}>
+          <Text style={[styles.clarificationLabel, { color: colors.destructive }]}>WHY IT WASN’T CONFIRMED</Text>
+          <Text style={[styles.clarificationText, { color: colors.foreground }]}>
+            {claim.rejectionMessage || claim.rejectionReasonCode}
+          </Text>
+        </View>
+      ) : null}
+
       {isEditing ? (
         <View style={styles.form}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Update details</Text>
@@ -281,7 +293,14 @@ export function ManualPaymentClaimStatusCard({
           </>
         ) : (
           <>
-            {claim.status === 'needs_clarification' && (
+            {claim.status === 'approved' && onDone && (
+              <AppButton
+                title="Go to Dashboard"
+                onPress={onDone}
+                style={styles.btn}
+              />
+            )}
+            {presentation.canResubmit && (
               <AppButton
                 title="Edit & Resubmit"
                 onPress={startEditing}

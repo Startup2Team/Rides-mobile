@@ -40,11 +40,11 @@ describe('manual payment claim presentation', () => {
       terminal: false,
     });
     expect(getManualPaymentClaimPresentation('approved')).toMatchObject({
-      title: 'Payment approved',
+      title: 'Payment confirmed',
       expectActivation: true,
       terminal: true,
     });
-    expect(getManualPaymentClaimRefreshPolicy('pending_review').refetchInterval).toBe(45_000);
+    expect(getManualPaymentClaimRefreshPolicy('pending_review').refetchInterval).toBe(15_000);
     expect(getManualPaymentClaimRefreshPolicy('approved').refetchInterval).toBe(false);
   });
 
