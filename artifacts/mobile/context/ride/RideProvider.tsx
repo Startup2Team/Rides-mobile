@@ -28,9 +28,7 @@ import {
   acceptLatestDriverOffer,
   acceptRideWithFare,
   addCustomerCounterOffer,
-  addCustomerAutoReply,
   addDriverOffer,
-  respondToCustomerCounterOffer,
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
 import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
@@ -44,7 +42,6 @@ import {
   CONFIRMED_RIDE_START_DELAY_MS,
   JOURNEY_TRACKING_INTERVAL_MS,
   JOURNEY_TRACKING_NOISE,
-  NEGOTIATION_RESPONSE_DELAY_MS,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
@@ -592,21 +589,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [auth?.user?.id, auth?.user?.mode, clearSearchTimers, rideCommandCapabilitySnapshot, timers]);
 
   const counterOffer = useCallback((amount: number) => {
+    // Optimistically show the customer's own counter-offer, then send it to the
+    // backend. The driver's real reply arrives over the WebSocket
+    // (negotiation_message) — there is no simulated reply anymore.
     setCurrentRide(prev => addCustomerCounterOffer(prev, amount));
-
-    // Mirror the customer's counter-offer to the backend negotiation (best-effort).
     const backendRideId = backendRideIdRef.current;
     if (backendRideId) {
       void proposeBackendFare(backendRideId, amount).catch(error =>
         reportOperationalFailure('ride.backend.propose', error, { rideId: backendRideId }),
       );
     }
-
-    timers.scheduleTimeout(() => {
-      if (backendDrivingRef.current) return;
-      setCurrentRide(prev => respondToCustomerCounterOffer(prev, amount));
-    }, NEGOTIATION_RESPONSE_DELAY_MS);
-  }, [timers]);
+  }, []);
 
   const acceptDriverOffer = useCallback(() => {
     setCurrentRide(acceptLatestDriverOffer);
@@ -621,21 +614,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const sendDriverOffer = useCallback((amount: number) => {
     if (amount <= 0) return;
+    // Optimistically show the driver's own offer, then send it to the backend.
+    // The customer's real reply arrives over the WebSocket (negotiation_message)
+    // — there is no simulated reply anymore.
     setCurrentRide(prev => addDriverOffer(prev, amount));
-    // Mirror the driver's offer to the backend negotiation (best-effort).
     const backendRideId = backendRideIdRef.current;
     if (backendRideId) {
       void driverProposeFare(backendRideId, amount).catch(error =>
         reportOperationalFailure('ride.driver.propose', error, { rideId: backendRideId }),
       );
     }
-    // Only fall back to a simulated customer reply when the backend WS is not
-    // driving the negotiation — real negotiation_message events take over then.
-    timers.scheduleTimeout(() => {
-      if (backendDrivingRef.current) return;
-      setCurrentRide(prev => addCustomerAutoReply(prev, amount));
-    }, NEGOTIATION_RESPONSE_DELAY_MS);
-  }, [timers]);
+  }, []);
 
   const acceptCustomerOffer = useCallback(() => {
     setCurrentRide(acceptLatestCustomerOffer);
