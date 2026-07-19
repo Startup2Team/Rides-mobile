@@ -1,7 +1,7 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -10,15 +10,12 @@ import { AppInput } from '@/components/AppInput';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
-import { PAYMENT_PROVIDER_LOGOS } from '@/components/driver-onboarding/onboardingData';
 import { useAuth } from '@/context/AuthContext';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import {
   isPackageOfferExpired,
   type DriverEntitlementVehicleRef,
   type DriverPackageOfferSnapshot,
-  type DriverPackagePurchase,
-  type DriverPackagePurchaseStatus,
   type MobileMoneyPackageProvider,
   type PackageActivation,
 } from '@/domain/driverRidePackages';
@@ -70,7 +67,7 @@ export default function DriverPackagePaymentScreen() {
   const isDark = useColorScheme() === 'dark';
   const { offerId } = useLocalSearchParams<{ offerId?: string; claimId?: string }>();
   const { driverProfile, user } = useAuth();
-  const { createPackagePurchase, entitlement, updatePackagePurchaseStatus, activatePackage } = useDriverEntitlement();
+  const { entitlement, activatePackage } = useDriverEntitlement();
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const checkoutVehicle: DriverEntitlementVehicleRef | null = activeVehicle
     ?? (entitlement.vehicleId && entitlement.vehicleType
@@ -81,23 +78,21 @@ export default function DriverPackagePaymentScreen() {
   const [ridePackage, setRidePackage] = useState<DriverPackageOfferSnapshot | null>(null);
   const [offerFailure, setOfferFailure] = useState<LockedOfferLoadFailure | null>(null);
   const [offerLoading, setOfferLoading] = useState(true);
-  const [selectedProvider, setSelectedProvider] = useState<MobileMoneyPackageProvider>(
-    driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn',
-  );
-  const [phoneNumber, setPhoneNumber] = useState(driverProfile?.momoCode ?? '');
-  const [paymentStatus, setPaymentStatus] = useState<DriverPackagePurchaseStatus>('idle');
-  const [activePurchase, setActivePurchase] = useState<DriverPackagePurchase | null>(null);
+  const selectedProvider: MobileMoneyPackageProvider =
+    driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn';
   const [receipt, setReceipt] = useState<PackageActivation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const paymentTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const { showToast } = useToast();
 
-  // Manual (proof-based) claim flow. Configuration decides which mode is live:
-  //   automatic → Mobile Money prompt (below); manual → submit a payment claim
-  //   for admin review; disabled → an unavailable shell.
+  // Manual (proof-based) claim flow is the only real paid path today (there is no
+  // live automatic MoMo collection yet), so a paid package always routes through
+  // the manual claim: dial USSD → pay → submit proof → admin approves → rides.
+  // The backend config endpoint always returns 'manual'; if it is unreachable we
+  // still default to 'manual' rather than a fake auto-success. 'disabled' only
+  // ever comes explicitly from the backend.
   const { configuration } = usePackagePaymentConfigQuery();
-  const mode = configuration?.mode ?? 'automatic';
+  const mode = configuration?.mode ?? 'manual';
   const manualConfig = configuration?.manual;
   const providers: ManualPaymentProviderConfiguration[] = manualConfig?.providers ?? [];
   const transactionReferenceRequired = manualConfig?.transactionReferenceRequired ?? true;
@@ -129,13 +124,6 @@ export default function DriverPackagePaymentScreen() {
     return list.find(c => c && ACTIVE_CLAIM_STATUSES.has(c.status)) ?? null;
   }, [submittedClaim, claims]);
 
-  const clearPaymentTimers = () => {
-    paymentTimers.current.forEach(timer => clearTimeout(timer));
-    paymentTimers.current = [];
-  };
-
-  useEffect(() => () => clearPaymentTimers(), []);
-
   useEffect(() => {
     let active = true;
     setOfferLoading(true);
@@ -153,24 +141,6 @@ export default function DriverPackagePaymentScreen() {
     };
   }, [checkoutVehicleId, checkoutVehicle?.vehicleType, offerId, user?.id]);
 
-  const schedulePaymentSuccess = (purchase: DriverPackagePurchase) => {
-    const processingTimer = setTimeout(() => {
-      setPaymentStatus('processing');
-      void updatePackagePurchaseStatus(purchase.transactionId, 'processing');
-    }, 700);
-    const successTimer = setTimeout(async () => {
-      try {
-        const result = await updatePackagePurchaseStatus(purchase.transactionId, 'successful');
-        setPaymentStatus('successful');
-        if (result.activation) setReceipt(result.activation);
-      } catch (paymentError) {
-        setPaymentStatus('failed');
-        setError(paymentError instanceof Error ? paymentError.message : 'Payment was not completed');
-      }
-    }, 1800);
-    paymentTimers.current = [processingTimer, successTimer];
-  };
-
   const handleActivateFreePackage = async () => {
     if (!ridePackage) return;
     if (isPackageOfferExpired(ridePackage)) {
@@ -186,48 +156,6 @@ export default function DriverPackagePaymentScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSendPaymentPrompt = async () => {
-    if (!ridePackage) return;
-    if (isPackageOfferExpired(ridePackage)) {
-      setError('This package offer expired. Please refresh packages.');
-      return;
-    }
-    if (ridePackage.priceRwf <= 0) {
-      await handleActivateFreePackage();
-      return;
-    }
-    clearPaymentTimers();
-    setLoading(true);
-    setError(null);
-    try {
-      const purchase = await createPackagePurchase({
-        offer: ridePackage,
-        provider: selectedProvider,
-        phoneNumber,
-      });
-      setActivePurchase(purchase);
-      setPaymentStatus('pending');
-      schedulePaymentSuccess(purchase);
-    } catch (paymentError) {
-      setPaymentStatus('failed');
-      setError(paymentError instanceof Error ? paymentError.message : 'Payment was not completed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChooseAnotherMethod = async () => {
-    clearPaymentTimers();
-    if (activePurchase && (paymentStatus === 'pending' || paymentStatus === 'processing')) {
-      await updatePackagePurchaseStatus(activePurchase.transactionId, 'cancelled');
-      setPaymentStatus('cancelled');
-      return;
-    }
-    setPaymentStatus('idle');
-    setActivePurchase(null);
-    setError(null);
   };
 
   const handleCopyProvider = async (_provider: ManualPaymentProviderConfiguration, instruction: string) => {
@@ -346,8 +274,6 @@ export default function DriverPackagePaymentScreen() {
   }
 
   const isFree = ridePackage.priceRwf === 0;
-  const isWaiting = paymentStatus === 'pending' || paymentStatus === 'processing';
-  const isIncomplete = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'expired';
   const vehicleLabel = ridePackage.vehicleType ? VEHICLE_LABELS[ridePackage.vehicleType] : null;
 
   return <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
@@ -377,7 +303,7 @@ export default function DriverPackagePaymentScreen() {
             onResubmit={handleResubmitClaim}
           />
         </View>
-      ) : mode === 'manual' && !isFree ? (
+      ) : !isFree ? (
         <View style={styles.manualShell}>
           <ManualPackagePaymentInstructions
             offer={ridePackage}
@@ -467,41 +393,7 @@ export default function DriverPackagePaymentScreen() {
             </View>
           </View>
 
-          {isFree ? (
-            <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} tone="success" />
-          ) : (
-            <>
-              <View style={styles.sectionHeading}>
-                <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</AppText>
-                <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
-                  Choose a provider and confirm the phone number that will receive the prompt.
-                </AppText>
-              </View>
-              <View style={styles.providerChoiceRow}>
-                {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(option => (
-                  <ProviderOption
-                    key={option}
-                    colors={colors}
-                    isSelected={selectedProvider === option}
-                    label={option === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
-                    provider={option}
-                    shortLabel={option === 'mtn' ? 'MTN' : 'Airtel'}
-                    onPress={() => setSelectedProvider(option)}
-                  />
-                ))}
-              </View>
-              <AppInput
-                label="Mobile Money Phone Number"
-                placeholder="+250 7xxxxxxxx"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                keyboardType="phone-pad"
-                leftIcon="smartphone"
-              />
-              {isWaiting ? <Notice icon="smartphone" text="Waiting for Mobile Money confirmation. Confirm the payment on your phone." colors={colors} tone="waiting" /> : null}
-              {isIncomplete ? <Notice icon="alert-circle" text="Payment was not completed" colors={colors} tone="error" /> : null}
-            </>
-          )}
+          <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} tone="success" />
 
           {error ? (
             <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
@@ -509,62 +401,11 @@ export default function DriverPackagePaymentScreen() {
               <AppText style={[styles.errorText, { color: colors.destructive }]}>{error}</AppText>
             </View>
           ) : null}
-          {isIncomplete ? (
-            <View style={styles.actions}>
-              <AppButton title="Choose Another Method" onPress={handleChooseAnotherMethod} variant="secondary" style={styles.actionButton} />
-              <AppButton title="Try Again" onPress={() => void handleSendPaymentPrompt()} loading={loading} style={styles.actionButton} />
-            </View>
-          ) : isFree ? (
-            <AppButton title="Activate Package" onPress={() => void handleSendPaymentPrompt()} loading={loading} fullWidth size="lg" />
-          ) : (
-            <AppButton
-              title="Send Payment Prompt"
-              onPress={() => void handleSendPaymentPrompt()}
-              disabled={!phoneNumber.trim()}
-              loading={loading || isWaiting}
-              fullWidth
-              size="lg"
-            />
-          )}
-          {!isFree && !isWaiting ? (
-            <View style={styles.secureNote}>
-              <Feather name="lock" size={13} color={colors.mutedForeground} />
-              <AppText style={[styles.secureNoteText, { color: colors.mutedForeground }]}>
-                You will confirm this payment securely on your phone.
-              </AppText>
-            </View>
-          ) : null}
+          <AppButton title="Activate Package" onPress={() => void handleActivateFreePackage()} loading={loading} fullWidth size="lg" />
         </View>
       )}
     </GlassScrollView>
   </View>;
-}
-
-function ProviderOption({ colors, isSelected, label, onPress, provider, shortLabel }: {
-  colors: ReturnType<typeof useColors>; isSelected: boolean; label: string; onPress: () => void;
-  provider: MobileMoneyPackageProvider; shortLabel: string;
-}) {
-  return <TouchableOpacity
-    accessibilityRole="radio"
-    accessibilityState={{ checked: isSelected }}
-    style={[styles.providerOption, {
-      backgroundColor: isSelected ? colors.primaryHex + '0D' : colors.surface,
-      borderColor: isSelected ? colors.primary : colors.border,
-    }]}
-    onPress={onPress}
-    activeOpacity={0.75}
-  >
-    <View style={styles.providerIcon}>
-      <Image source={PAYMENT_PROVIDER_LOGOS[provider]} style={styles.providerLogo} resizeMode="contain" />
-    </View>
-    <View style={styles.providerTextBlock}>
-      <AppText style={[styles.providerOptionText, { color: colors.foreground }]}>{shortLabel}</AppText>
-      <AppText style={[styles.providerOptionSubtext, { color: colors.mutedForeground }]}>{label}</AppText>
-    </View>
-    <View style={[styles.radioOuter, { borderColor: isSelected ? colors.primary : colors.border }]}>
-      {isSelected ? <View style={[styles.radioInner, { backgroundColor: colors.primary }]} /> : null}
-    </View>
-  </TouchableOpacity>;
 }
 
 function Notice({ colors, icon, text, tone }: {
