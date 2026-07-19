@@ -984,7 +984,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (type === 'negotiation_message' || type === 'negotiation_declined') {
+      if (type === 'negotiation_message' || type === 'negotiation_declined' || type === 'negotiation_text') {
         setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'customer') : prev));
       }
     },
@@ -1030,7 +1030,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (type === 'negotiation_message' || type === 'negotiation_declined') {
+      if (type === 'negotiation_message' || type === 'negotiation_declined' || type === 'negotiation_text') {
         setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'driver') : prev));
       }
     },
