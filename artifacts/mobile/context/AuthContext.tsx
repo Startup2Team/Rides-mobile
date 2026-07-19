@@ -145,6 +145,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const status = mapApprovalStatus(backend.approvalStatus);
       setDriverProfile(prev => {
         if (!prev) return prev;
+        // Bridge the backend approval onto the LOCAL vehicle rows. A vehicle is
+        // stored locally as 'pending_review' at apply time and never updated, so
+        // screens (home header, profile, vehicles list) keep showing "in review"
+        // long after the backend approved the driver. The backend approves the
+        // driver + their vehicle together, so mirror the decision onto any local
+        // vehicle still stuck in draft/pending_review.
+        const syncedVehicles =
+          status && prev.vehicles
+            ? prev.vehicles.map(v => {
+                if (v.status !== 'pending_review' && v.status !== 'draft') return v;
+                const nextStatus =
+                  status === 'approved'
+                    ? ('approved' as const)
+                    : status === 'rejected'
+                      ? ('rejected' as const)
+                      : v.status;
+                return { ...v, status: nextStatus };
+              })
+            : prev.vehicles;
         const updated: DriverProfile = {
           ...prev,
           verificationStatus: status ?? prev.verificationStatus,
@@ -152,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // with the backend approval, otherwise an approved driver can never
           // switch into driver mode (switchMode silently bails).
           isVerified: status === 'approved' ? true : status === 'rejected' ? false : prev.isVerified,
+          vehicles: syncedVehicles,
           isOnline: backend.isOnline,
           acceptanceRate: backend.acceptanceRate || prev.acceptanceRate,
           completedRides: backend.totalRides || prev.completedRides,
