@@ -16,16 +16,12 @@ import {
   VehicleType,
 } from '@/types';
 import { observability } from '@/observability/context/observabilityContext';
-import { buildDriverWithUploadedPhoto } from '@/utils/driverProfileImage';
 import { RideContextType } from './rideTypes';
 import { resolveCapabilities, type CapabilitySnapshot } from '@/capabilities';
 import { calcDistance, calcFare } from './rideFare';
 import {
-  buildInitialDriverOffer,
   buildInitialNegotiationMessages,
   buildMockRideRequest,
-  getDriverMatchDelay,
-  pickMockDriver,
 } from './rideMatching';
 import {
   acceptLatestCustomerOffer,
@@ -38,7 +34,7 @@ import {
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
 import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
-import { createRideTimerManager, type RideSessionToken } from './rideTimerManager';
+import { createRideTimerManager } from './rideTimerManager';
 import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   ARRIVING_TRACKING_INTERVAL_MS,
@@ -46,8 +42,6 @@ import {
   ARRIVING_TRACKING_STEPS,
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   CONFIRMED_RIDE_START_DELAY_MS,
-  DRIVER_MATCH_RESUME_DELAY_MS,
-  DRIVER_OFFER_DELAY_MS,
   JOURNEY_TRACKING_INTERVAL_MS,
   JOURNEY_TRACKING_NOISE,
   NEGOTIATION_RESPONSE_DELAY_MS,
@@ -157,86 +151,19 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     driverOfferTimeoutRef.current = null;
   }, [timers]);
 
-  const assignMatchedDriver = useCallback((
-    vehicleType: VehicleType,
-    pickup: RideLocation,
-    destination: RideLocation,
-    dist: number,
-    session: RideSessionToken,
-  ) => {
-    if (!timers.isActive(session) || isMatchingPausedRef.current) return;
-
-    const picked = pickMockDriver(vehicleType);
-    const initialMessages = buildInitialNegotiationMessages(pickup, destination);
-
-    void buildDriverWithUploadedPhoto(picked).then(driver => {
-      if (!timers.isActive(session) || isMatchingPausedRef.current) return;
-
-      setDriverLocation(driver.location);
-
-      setCancelledSearchDraft(null);
-
-      setCurrentRide(prev => {
-        if (!prev || prev.status !== 'searching' || isMatchingPausedRef.current) return prev;
-        return {
-          ...prev,
-          status: 'negotiating',
-          driver,
-          driverId: driver.id,
-          matchedVehicleId: driver.id,
-          matchedVehicleType: driver.vehicleType,
-          negotiation: initialMessages,
-        };
-      });
-
-      driverOfferTimeoutRef.current = timers.scheduleTimeout(() => {
-        driverOfferTimeoutRef.current = null;
-        if (isMatchingPausedRef.current) return;
-        setCurrentRide(prev => {
-          if (!prev || prev.status !== 'negotiating') return prev;
-          const driverMsg = buildInitialDriverOffer(vehicleType, dist);
-          return { ...prev, negotiation: [...prev.negotiation, driverMsg] };
-        });
-      }, DRIVER_OFFER_DELAY_MS, session);
-    });
-  }, [timers]);
-
-  const scheduleDriverMatch = useCallback((
-    vehicleType: VehicleType,
-    pickup: RideLocation,
-    destination: RideLocation,
-    dist: number,
-    delayMs?: number,
-  ) => {
-    const delay = delayMs ?? getDriverMatchDelay();
-    const session = timers.currentSession();
-    matchDriverTimeoutRef.current = timers.scheduleTimeout(() => {
-      matchDriverTimeoutRef.current = null;
-      assignMatchedDriver(vehicleType, pickup, destination, dist, session);
-    }, delay, session);
-  }, [assignMatchedDriver, timers]);
-
   const pauseDriverMatching = useCallback(() => {
     isMatchingPausedRef.current = true;
     setIsMatchingPaused(true);
     clearSearchTimers();
   }, [clearSearchTimers]);
 
+  // Matching is driven entirely by the backend customer tracking socket
+  // (`driver_matched` → negotiating). Resuming just clears the paused flag; the
+  // real match arrives over the WebSocket, so there is nothing local to restart.
   const resumeDriverMatching = useCallback(() => {
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
-    setCurrentRide(prev => {
-      if (!prev || prev.status !== 'searching') return prev;
-      scheduleDriverMatch(
-        prev.vehicleType,
-        prev.pickup,
-        prev.destination,
-        prev.distance,
-        DRIVER_MATCH_RESUME_DELAY_MS,
-      );
-      return prev;
-    });
-  }, [scheduleDriverMatch]);
+  }, []);
 
   const updateStatus = (status: RideStatus, extra?: Partial<Ride>) => {
     setCurrentRide(prev => prev ? { ...prev, status, ...extra } : null);
@@ -592,7 +519,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.startSession();
     clearSearchTimers();
     setCurrentRide(ride);
-    scheduleDriverMatch(vehicleType, pickup, destination, parseFloat(dist.toFixed(2)));
+    // Status stays `searching`; the real backend `driver_matched` event
+    // (delivered over the customer tracking socket) transitions to `negotiating`.
 
     // Create the ride on the real backend (best-effort). On success we stash the
     // server ride id so cancel + negotiation hit the same ride, and the customer
@@ -614,7 +542,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(error => reportOperationalFailure('ride.backend.create', error, { rideId: ride.id }));
     }
-  }, [auth?.user, clearSearchTimers, rideCommandCapabilitySnapshot, scheduleDriverMatch, timers]);
+  }, [auth?.user, clearSearchTimers, rideCommandCapabilitySnapshot, timers]);
 
   const cancelRide = useCallback(() => {
     const session = timers.endSession();
