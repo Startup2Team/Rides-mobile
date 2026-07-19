@@ -83,3 +83,42 @@ export async function getDriverCredits(): Promise<DriverCredits> {
     entitlements: response.data.data.entitlements ?? [],
   };
 }
+
+// Backend-authoritative per-vehicle-type ride entitlements from
+// GET /v1/driver/entitlements. Unlike /driver/credits (which SUMS rides + bonus
+// into total_remaining), this keeps rides_remaining and bonus_remaining SEPARATE
+// so the driver home can render the "Rides" and "Bonus Rides" tiles distinctly.
+// `code` is the backend vehicle-type code (e.g. "MOTO_BIKE").
+export interface DriverBackendEntitlement {
+  vehicleTypeCode: string;
+  ridesRemaining: number;
+  bonusRemaining: number;
+  unlimitedUntil: string | null;
+}
+
+interface DriverEntitlementDto {
+  vehicle_type_id?: string;
+  // Backend serializes the vehicle-type code as `vehicle_type_code`
+  // (internal/packages/types.go Entitlement). Keep `code` as a defensive alias.
+  vehicle_type_code?: string;
+  code?: string;
+  rides_remaining?: number;
+  bonus_remaining?: number;
+  unlimited_until?: string | null;
+  updated_at?: string;
+  total_remaining?: number;
+}
+
+export async function getDriverBackendEntitlements(): Promise<DriverBackendEntitlement[]> {
+  const response = await getAppBackendClient().get<
+    Envelope<{ entitlements: DriverEntitlementDto[] | null }>
+  >('/v1/driver/entitlements');
+  return (response.data.data.entitlements ?? [])
+    .map(dto => ({
+      vehicleTypeCode: dto?.vehicle_type_code ?? dto?.code ?? '',
+      ridesRemaining: Math.max(0, finiteNumber(dto?.rides_remaining) ?? 0),
+      bonusRemaining: Math.max(0, finiteNumber(dto?.bonus_remaining) ?? 0),
+      unlimitedUntil: dto?.unlimited_until ?? null,
+    }))
+    .filter(entitlement => entitlement.vehicleTypeCode.length > 0);
+}

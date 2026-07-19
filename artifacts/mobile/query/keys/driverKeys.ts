@@ -19,4 +19,5 @@ export const driverKeys = {
   },
   ratings: () => ['driver', 'ratings'] as const,
   credits: () => ['driver', 'credits'] as const,
+  entitlements: () => ['driver', 'entitlements'] as const,
 } as const;

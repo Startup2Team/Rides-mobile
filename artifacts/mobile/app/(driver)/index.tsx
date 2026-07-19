@@ -56,7 +56,8 @@ import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation'
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { getDailyEarnings } from '@/services/driverEarnings';
 import { useDriverRatingsQuery } from '@/query/hooks/useDriverRatingsQuery';
-import { useDriverCreditsQuery } from '@/query/hooks/useDriverCreditsQuery';
+import { useDriverBackendEntitlementsQuery } from '@/query/hooks/useDriverBackendEntitlementsQuery';
+import { toBackendTransportType } from '@/constants/vehicles';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
@@ -167,10 +168,12 @@ export default function DriverDashboard() {
   // Real driver rating from GET /v1/users/me/ratings.
   const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
     useDriverRatingsQuery();
-  // Authoritative granted ride balance from GET /v1/driver/credits — reflects
-  // admin-approved manual payment claims (rides posted to the ledger), which the
-  // locally-persisted entitlement would not show.
-  const { data: backendCredits } = useDriverCreditsQuery({ enabled: !!user?.id });
+  // Authoritative per-vehicle-type ride entitlements from
+  // GET /v1/driver/entitlements — reflects package activations AND admin-approved
+  // manual payment claims (rides posted to the ledger), which the locally-persisted
+  // entitlement would not show. rides_remaining and bonus_remaining are kept
+  // SEPARATE (do not sum) so each tile is driven by the right figure.
+  const { data: backendEntitlements } = useDriverBackendEntitlementsQuery({ enabled: !!user?.id });
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
@@ -257,6 +260,19 @@ export default function DriverDashboard() {
   );
   const approvedVehicles = vehicles.filter(
     (vehicle) => vehicle.status === "approved",
+  );
+
+  // The backend entitlement ledger is keyed per vehicle TYPE (not per vehicle),
+  // so we match on the backend transport-type code. Returns null when the query
+  // has no data (offline) or has no row for that type, letting callers fall back
+  // to the locally-persisted entitlement.
+  const backendEntitlementForVehicleType = useCallback(
+    (vehicleType: VehicleType | null | undefined) => {
+      if (!backendEntitlements || !vehicleType) return null;
+      const code = toBackendTransportType(vehicleType);
+      return backendEntitlements.find((item) => item.vehicleTypeCode === code) ?? null;
+    },
+    [backendEntitlements],
   );
 
   useEffect(() => {
@@ -489,7 +505,17 @@ export default function DriverDashboard() {
         return;
       }
 
-      if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
+      // Backend entitlement for THIS vehicle's type is authoritative when present;
+      // fall back to the local entitlement when the backend has no row for it.
+      const selectionBackendEntitlement = backendEntitlementForVehicleType(
+        vehicle.vehicleType,
+      );
+      const selectionHasCredits = selectionBackendEntitlement
+        ? selectionBackendEntitlement.ridesRemaining +
+            selectionBackendEntitlement.bonusRemaining >
+          0
+        : getActiveRideCredits(vehicleEntitlementForSelection) > 0;
+      if (!selectionHasCredits) {
         navigateToDriverPackages(router);
         return;
       }
@@ -517,7 +543,13 @@ export default function DriverDashboard() {
         },
       });
     },
-    [driverProfile, entitlement, onlineScale, saveDriverProfile],
+    [
+      backendEntitlementForVehicleType,
+      driverProfile,
+      entitlement,
+      onlineScale,
+      saveDriverProfile,
+    ],
   );
 
   const toggleOnline = () => {
@@ -535,7 +567,15 @@ export default function DriverDashboard() {
         void handleVehicleSessionStart(approvedVehicles[0]);
         return;
       }
-      if (!canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
+      // Verification/eligibility already gated above via canDriverGoOnline. The
+      // remaining gate is ride credits: trust the backend entitlement for the
+      // active vehicle type when present, otherwise the local entitlement.
+      const hasCredits = activeBackendEntitlement
+        ? activeBackendEntitlement.ridesRemaining +
+            activeBackendEntitlement.bonusRemaining >
+          0
+        : canDriverGoOnlineWithCredits(driverProfile, entitlement);
+      if (!hasCredits) {
         navigateToDriverPackages(router);
         return;
       }
@@ -611,24 +651,34 @@ export default function DriverDashboard() {
     entitlement,
     rideHistory,
   });
-  const remainingCreditsText =
-    backendCredits?.totalRemaining != null
-      ? String(backendCredits.totalRemaining)
-      : isEntitlementLoading
-        ? "-"
-        : String(getRideBalance(activeVehicleEntitlement));
-  const bonusRidesText = isEntitlementLoading
-    ? "-"
-    : String(getActiveBonusRides(activeVehicleEntitlement));
+  // Backend entitlement for the active vehicle's TYPE — authoritative when present.
+  const activeBackendEntitlement = backendEntitlementForVehicleType(activeVehicleType);
+  // "Rides" tile ← backend rides_remaining; "Bonus Rides" tile ← backend
+  // bonus_remaining (kept separate — never summed). Fall back to the local
+  // entitlement when the backend has no row for this type (offline).
+  const remainingCreditsText = activeBackendEntitlement
+    ? String(activeBackendEntitlement.ridesRemaining)
+    : isEntitlementLoading
+      ? "-"
+      : String(getRideBalance(activeVehicleEntitlement));
+  const bonusRidesText = activeBackendEntitlement
+    ? String(activeBackendEntitlement.bonusRemaining)
+    : isEntitlementLoading
+      ? "-"
+      : String(getActiveBonusRides(activeVehicleEntitlement));
   const statusLabel = isOnline ? "Online" : "Offline";
   const isVerified = driverProfile?.isVerified === true;
   const ratingLabel =
     ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
       ? ratingSummary.averageRating.toFixed(1)
       : "0.0";
-  const showNoCreditsWarning =
-    !isEntitlementLoading &&
-    getActiveRideCredits(activeVehicleEntitlement) === 0;
+  // Backend-authoritative "no rides" gate for the active vehicle type. When the
+  // backend has a row for this type, trust rides_remaining + bonus_remaining;
+  // otherwise fall back to the local entitlement.
+  const showNoCreditsWarning = activeBackendEntitlement
+    ? activeBackendEntitlement.ridesRemaining + activeBackendEntitlement.bonusRemaining === 0
+    : !isEntitlementLoading &&
+      getActiveRideCredits(activeVehicleEntitlement) === 0;
   const request = pendingRequest;
   const requestPickupLabel = formatRequestLocation(
     request?.pickup,
