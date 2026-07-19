@@ -22,6 +22,7 @@ export type QueryPolicyName =
   | 'driverStats'
   | 'driverEarnings'
   | 'driverRatings'
+  | 'driverCredits'
   | 'driverVehicles'
   | 'driverVehicle'
   | 'packages'

@@ -56,6 +56,7 @@ import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation'
 import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { getDailyEarnings } from '@/services/driverEarnings';
 import { useDriverRatingsQuery } from '@/query/hooks/useDriverRatingsQuery';
+import { useDriverCreditsQuery } from '@/query/hooks/useDriverCreditsQuery';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
 import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
@@ -166,6 +167,10 @@ export default function DriverDashboard() {
   // Real driver rating from GET /v1/users/me/ratings.
   const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
     useDriverRatingsQuery();
+  // Authoritative granted ride balance from GET /v1/driver/credits — reflects
+  // admin-approved manual payment claims (rides posted to the ledger), which the
+  // locally-persisted entitlement would not show.
+  const { data: backendCredits } = useDriverCreditsQuery({ enabled: !!user?.id });
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
@@ -606,9 +611,12 @@ export default function DriverDashboard() {
     entitlement,
     rideHistory,
   });
-  const remainingCreditsText = isEntitlementLoading
-    ? "-"
-    : String(getRideBalance(activeVehicleEntitlement));
+  const remainingCreditsText =
+    backendCredits?.totalRemaining != null
+      ? String(backendCredits.totalRemaining)
+      : isEntitlementLoading
+        ? "-"
+        : String(getRideBalance(activeVehicleEntitlement));
   const bonusRidesText = isEntitlementLoading
     ? "-"
     : String(getActiveBonusRides(activeVehicleEntitlement));

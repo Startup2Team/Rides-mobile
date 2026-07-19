@@ -18,4 +18,5 @@ export const driverKeys = {
     (period: string): readonly ['driver', 'earnings', string];
   },
   ratings: () => ['driver', 'ratings'] as const,
+  credits: () => ['driver', 'credits'] as const,
 } as const;

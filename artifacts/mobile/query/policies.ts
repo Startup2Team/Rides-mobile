@@ -55,6 +55,14 @@ export const queryPolicies = {
     staleTime: 2 * minute,
     gcTime: 30 * minute,
   }),
+  driverCredits: policy({
+    // Ride credits change when a package is activated or an admin approves a
+    // manual payment claim (granting rides). Refetch on focus/mount so a grant
+    // that happened while the app was backgrounded shows up promptly.
+    staleTime: 30 * 1000,
+    gcTime: 20 * minute,
+    refetchOnMount: 'always',
+  }),
   driverVehicles: policy({
     staleTime: 5 * minute,
     gcTime: 30 * minute,
