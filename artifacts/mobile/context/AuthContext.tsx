@@ -231,25 +231,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const prev = driverProfileRef.current;
     if (!prev || prev.isOnline === isOnline) return;
     if (isOnline) {
+      // Approval is a DRIVER-level fact (backend approval → canAccessDriverMode),
+      // NOT the local vehicle row's status: that row can still read
+      // 'pending_review' from application time even after the backend approved the
+      // driver, which wrongly blocked going online. Gate on the driver's approval.
+      if (!canAccessDriverMode(prev)) return;
       const vehicle = getDriverVehicleForSession(prev);
-      if (!vehicle || vehicle.status !== 'approved') return;
       const updated: DriverProfile = {
         ...prev,
         isOnline: true,
         onlineVehicleSession: {
-          vehicleId: vehicle.id,
-          vehicleType: vehicle.vehicleType,
+          vehicleId: vehicle?.id ?? 'primary',
+          vehicleType: vehicle?.vehicleType ?? prev.vehicleType ?? 'moto',
           startedAt: new Date().toISOString(),
         },
       };
       setDriverProfile(updated);
       await saveStoredDriverProfile(updated);
-      // Real backend: POST /driver/availability. Best-effort (credit-gating is
-      // enforced server-side once the live ride flow is wired).
+      // Mark the driver online on the backend so customers' nearby-driver search
+      // (WHERE is_online = TRUE) can find them. Best-effort: if it fails we roll
+      // the local state back so the toggle reflects reality instead of lying.
       try {
         await setDriverAvailability(true);
       } catch {
-        // keep local online state
+        const reverted: DriverProfile = { ...updated, isOnline: false, onlineVehicleSession: null };
+        setDriverProfile(reverted);
+        await saveStoredDriverProfile(reverted);
       }
       return;
     }

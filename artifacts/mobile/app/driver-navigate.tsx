@@ -26,7 +26,7 @@ import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/u
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { KIGALI_CENTER, VehicleType } from '@/types';
-import { getArrivalVerification } from './driverNavigateArrival';
+import { getArrivalVerification } from '@/domain/driverNavigateArrival';
 import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';

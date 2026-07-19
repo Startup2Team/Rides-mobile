@@ -29,7 +29,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useAuth } from '@/context/AuthContext';
-import { updateDriverLocation } from '@/services/driverAvailability';
+import { updateDriverLocation, setDriverAvailability } from '@/services/driverAvailability';
 import type { DriverEarnings } from '@/services/driverEarnings';
 import { useColors } from '@/hooks/useColors';
 import { useRide } from '@/context/RideContext';
@@ -59,6 +59,7 @@ import { useDriverRatingsQuery } from '@/query/hooks/useDriverRatingsQuery';
 import { useDriverBackendEntitlementsQuery } from '@/query/hooks/useDriverBackendEntitlementsQuery';
 import { toBackendTransportType } from '@/constants/vehicles';
 import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useToast } from '@/context/ToastContext';
 import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
@@ -70,7 +71,7 @@ import {
   formatRequestLocation,
   formatTripDistance,
   formatTripDuration,
-} from "../driverRequestCard";
+} from "@/domain/driverRequestCard";
 const MAP_TYPES = ["standard", "satellite", "hybrid"] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
 const CTA_AVATAR_SIZE = 34;
@@ -174,6 +175,7 @@ export default function DriverDashboard() {
   // entitlement would not show. rides_remaining and bonus_remaining are kept
   // SEPARATE (do not sum) so each tile is driven by the right figure.
   const { data: backendEntitlements } = useDriverBackendEntitlementsQuery({ enabled: !!user?.id });
+  const { showToast } = useToast();
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
@@ -518,6 +520,7 @@ export default function DriverDashboard() {
           0
         : getActiveRideCredits(vehicleEntitlementForSelection) > 0;
       if (!selectionHasCredits) {
+        showToast("You have no ride credits. Buy a package to go online.", "info");
         navigateToDriverPackages(router);
         return;
       }
@@ -544,6 +547,15 @@ export default function DriverDashboard() {
           startedAt,
         },
       });
+      // Mark online on the backend so customers' nearby-driver search (WHERE
+      // is_online = TRUE) finds this driver. The location poller (keyed on
+      // isOnline) fires an immediate GPS fix once we're online, giving the
+      // nearby query a row to match against. Best-effort — local state is set.
+      try {
+        await setDriverAvailability(true);
+      } catch {
+        // keep local online state; the availability call retries on next toggle
+      }
     },
     [
       backendEntitlementForVehicleType,
@@ -551,13 +563,21 @@ export default function DriverDashboard() {
       entitlement,
       onlineScale,
       saveDriverProfile,
+      showToast,
     ],
   );
 
   const toggleOnline = () => {
     const next = !isOnline;
-    if (next && isEntitlementLoading) return;
+    if (next && isEntitlementLoading) {
+      showToast("Checking your ride credits — try again in a moment.", "info");
+      return;
+    }
     if (next && !canDriverGoOnline(driverProfile)) {
+      showToast(
+        "Your driver account isn't approved to go online yet.",
+        "error",
+      );
       return;
     }
     if (next) {
@@ -578,6 +598,7 @@ export default function DriverDashboard() {
           0
         : canDriverGoOnlineWithCredits(driverProfile, entitlement);
       if (!hasCredits) {
+        showToast("You have no ride credits. Buy a package to go online.", "info");
         navigateToDriverPackages(router);
         return;
       }
