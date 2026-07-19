@@ -327,12 +327,14 @@ export default function DriverDashboard() {
       try {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         if (cancelled) return;
+        // expo-location reports speed in metres/second; the backend field is
+        // speed_kmh, so convert (m/s → km/h) before sending.
+        const speedMps = loc.coords.speed;
         await updateDriverLocation({
           lat: loc.coords.latitude,
           lng: loc.coords.longitude,
           heading: loc.coords.heading ?? undefined,
-          speed: loc.coords.speed ?? undefined,
-          accuracy: loc.coords.accuracy ?? undefined,
+          speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
         });
       } catch {
         // ignore — retry on the next tick

@@ -68,3 +68,25 @@ export function reportOperationalFailure(category: string, error?: unknown, cont
 export function isMonitoringEnabled() {
   return initialized;
 }
+
+/**
+ * Dev-only contract guard. Warns (Sentry + console) when a container key that a
+ * response mapper depends on is ABSENT from the payload — i.e. the backend JSON
+ * shape has drifted from what the mapper expects. This is deliberately quiet for
+ * legitimately-empty collections: an existing key holding `[]`/`{}`/`null` is a
+ * valid empty state and does NOT warn; only a MISSING key (shape mismatch) does.
+ *
+ * Use it in the mappers that read a nested container (e.g. `data.documents`,
+ * `data.saved_locations`) so a future backend rename surfaces loudly in dev
+ * instead of silently defaulting to an empty list.
+ */
+export function expectField(obj: unknown, key: string, context: string): void {
+  if (!__DEV__) return;
+  const present = obj != null && typeof obj === 'object' && key in (obj as Record<string, unknown>);
+  if (present) return;
+  reportOperationalWarning('contract.shape_mismatch', { context, field: key });
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[contract] expected field "${key}" missing in ${context} — backend response shape may have changed`,
+  );
+}

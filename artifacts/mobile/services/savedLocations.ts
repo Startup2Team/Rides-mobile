@@ -1,4 +1,5 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
+import { expectField } from '@/observability/monitoring';
 
 // Real backend saved locations under /api/v1/users/me/saved-locations.
 
@@ -45,11 +46,15 @@ export interface SavedLocationInput {
   lng: number;
 }
 
+// Backend shape: { data: { saved_locations: [ ... ] } } — the array is nested
+// under `saved_locations`, not the top-level data envelope.
 export async function listSavedLocations(): Promise<SavedLocation[]> {
-  const response = await getAppBackendClient().get<Envelope<SavedLocationDto[] | null>>(
-    '/v1/users/me/saved-locations',
-  );
-  return (response.data.data ?? []).map(toDomain);
+  const response = await getAppBackendClient().get<
+    Envelope<{ saved_locations: SavedLocationDto[] | null } | null>
+  >('/v1/users/me/saved-locations');
+  const payload = response.data.data;
+  expectField(payload, 'saved_locations', 'savedLocations.list');
+  return (payload?.saved_locations ?? []).map(toDomain);
 }
 
 export async function createSavedLocation(input: SavedLocationInput): Promise<SavedLocation> {

@@ -1,5 +1,6 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
 import { getAccessToken } from '@/persistence/authTokens';
+import { expectField } from '@/observability/monitoring';
 
 // Driver document upload = 3 steps:
 //   1. POST /uploads/presigned-url {content_type, purpose} → {upload_url, file_url}
@@ -20,8 +21,28 @@ export interface DriverDocument {
   id: string;
   documentType: string;
   fileUrl: string;
+  // The backend (GET /v1/driver/documents) does NOT emit a review status on this
+  // list, so `status` stays optional and is left undefined here.
   status?: string;
   createdAt?: string;
+}
+
+// Backend shape: GET /v1/driver/documents → { data: { documents: [ ... ] } }
+// where each entry is a driver_documents row (snake_case, `uploaded_at`).
+interface DriverDocumentDto {
+  id: string;
+  document_type: string;
+  file_url: string;
+  uploaded_at: string;
+}
+
+function toDriverDocument(dto: DriverDocumentDto): DriverDocument {
+  return {
+    id: dto.id,
+    documentType: dto.document_type,
+    fileUrl: dto.file_url,
+    createdAt: dto.uploaded_at,
+  };
 }
 
 interface Envelope<T> {
@@ -89,8 +110,10 @@ export async function uploadDriverDocument(
 }
 
 export async function listDriverDocuments(): Promise<DriverDocument[]> {
-  const response = await getAppBackendClient().get<Envelope<DriverDocument[] | null>>(
-    '/v1/driver/documents',
-  );
-  return response.data.data ?? [];
+  const response = await getAppBackendClient().get<
+    Envelope<{ documents: DriverDocumentDto[] | null } | null>
+  >('/v1/driver/documents');
+  const payload = response.data.data;
+  expectField(payload, 'documents', 'driverDocuments.list');
+  return (payload?.documents ?? []).map(toDriverDocument);
 }

@@ -1,4 +1,5 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
+import { BackendError } from '@/data/remote/contracts/backendErrors';
 import { mapRideResponse, type CustomerRide, type RideResponseDto } from '@/services/rides';
 
 // Driver ride lifecycle under /api/v1/driver/rides/*. Same RideResponse shape as
@@ -19,12 +20,20 @@ export async function listDriverRides(limit = 20, offset = 0): Promise<CustomerR
   return (response.data.data.rides ?? []).map(mapRideResponse);
 }
 
+// GET /driver/rides/active → the driver's in-flight ride, or null when there is
+// none. The backend returns HTTP 404 (not {data:null}) when there's no active
+// ride and the transport throws on it, so we catch the 404 and return null.
 export async function getActiveDriverRide(): Promise<CustomerRide | null> {
-  const response = await getAppBackendClient().get<Envelope<RideResponseDto | null>>(
-    '/v1/driver/rides/active',
-  );
-  const data = response.data.data;
-  return data ? mapRideResponse(data) : null;
+  try {
+    const response = await getAppBackendClient().get<Envelope<RideResponseDto | null>>(
+      '/v1/driver/rides/active',
+    );
+    const data = response.data.data;
+    return data ? mapRideResponse(data) : null;
+  } catch (error) {
+    if (error instanceof BackendError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export async function getDriverRide(rideId: string): Promise<CustomerRide> {

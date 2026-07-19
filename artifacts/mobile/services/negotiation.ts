@@ -3,41 +3,54 @@ import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
 // Real backend fare negotiation under /api/v1/customer/rides/{id}/negotiation/*.
 // Both sides propose amounts / send messages until someone accepts or declines.
 
+// Mirrors the app's NegotiationMessage domain vocabulary (see types/index.ts):
+//   actorRole ← backend `sender`   ("customer" | "driver" | "system")
+//   kind      ← backend `type`     ("offer" | "text")
+// plus the offer outcome (`response`: ACCEPTED | DECLINED | ...) and `isFinal`.
 export interface NegotiationEntry {
   id: string;
   rideId: string;
-  actorRole: string; // CUSTOMER | DRIVER
-  kind: string; // proposal | message | accept | decline | ...
+  actorRole: string; // customer | driver | system
+  kind: string; // offer | text
   amount: number | null;
   text: string | null;
+  response: string | null; // ACCEPTED | DECLINED | ... (offers only)
+  isFinal: boolean;
   createdAt: string;
 }
 
-interface NegotiationEntryDto {
+// Backend negotiation/history entry (internal/negotiation/service.go HistoryEntry).
+// Note: the backend does NOT send a ride_id here — the caller already knows it
+// from context, so we thread it in via the mapper.
+export interface NegotiationHistoryEntryDto {
   id: string;
-  ride_id: string;
-  actor_role?: string;
-  role?: string;
-  kind?: string;
-  type?: string;
-  amount: number | null;
-  text: string | null;
-  created_at: string;
+  type?: string; // "offer" | "text"
+  sender?: string; // "customer" | "driver" | "system"
+  amount?: number | null;
+  response?: string | null;
+  text?: string | null;
+  is_final?: boolean;
+  timestamp?: unknown; // RFC3339 string in practice; typed loosely as backend uses interface{}
 }
 
 interface Envelope<T> {
   data: T;
 }
 
-function toEntry(dto: NegotiationEntryDto): NegotiationEntry {
+export function mapNegotiationHistoryEntry(
+  dto: NegotiationHistoryEntryDto,
+  rideId: string,
+): NegotiationEntry {
   return {
     id: dto.id,
-    rideId: dto.ride_id,
-    actorRole: dto.actor_role ?? dto.role ?? '',
-    kind: dto.kind ?? dto.type ?? '',
+    rideId,
+    actorRole: dto.sender ?? '',
+    kind: dto.type ?? '',
     amount: dto.amount ?? null,
     text: dto.text ?? null,
-    createdAt: dto.created_at,
+    response: dto.response ?? null,
+    isFinal: dto.is_final ?? false,
+    createdAt: typeof dto.timestamp === 'string' ? dto.timestamp : '',
   };
 }
 
@@ -60,8 +73,8 @@ export async function sendNegotiationMessage(rideId: string, text: string): Prom
 }
 
 export async function getNegotiationHistory(rideId: string): Promise<NegotiationEntry[]> {
-  const response = await getAppBackendClient().get<Envelope<NegotiationEntryDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<NegotiationHistoryEntryDto[] | null>>(
     `${base(rideId)}/history`,
   );
-  return (response.data.data ?? []).map(toEntry);
+  return (response.data.data ?? []).map(entry => mapNegotiationHistoryEntry(entry, rideId));
 }

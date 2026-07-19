@@ -1,4 +1,5 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
+import { expectField } from '@/observability/monitoring';
 
 // Real backend ratings: submit/get per ride under /api/v1/customer/rides/{id},
 // and the caller's own ratings under /api/v1/users/me/ratings.
@@ -54,11 +55,15 @@ export async function getRideRating(rideId: string): Promise<RideRating | null> 
   return data ? toDomain(data, rideId) : null;
 }
 
+// Backend shape: { data: { ratings: [ ... ], limit, offset } } — the array is
+// nested under `ratings`, not the top-level data envelope.
 export async function getMyRatings(): Promise<RideRating[]> {
-  const response = await getAppBackendClient().get<Envelope<RatingDto[] | null>>(
-    '/v1/users/me/ratings',
-  );
-  return (response.data.data ?? []).map(dto => toDomain(dto, dto.ride_id ?? ''));
+  const response = await getAppBackendClient().get<
+    Envelope<{ ratings: RatingDto[] | null; limit?: number; offset?: number } | null>
+  >('/v1/users/me/ratings');
+  const payload = response.data.data;
+  expectField(payload, 'ratings', 'ratings.mine');
+  return (payload?.ratings ?? []).map(dto => toDomain(dto, dto.ride_id ?? ''));
 }
 
 export interface RatingSummary {

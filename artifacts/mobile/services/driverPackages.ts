@@ -102,35 +102,52 @@ export async function getPurchaseStatus(purchaseId: string): Promise<Record<stri
 }
 
 export interface ManualPaymentInfo {
-  payCode: string;
-  number: string;
+  payCode: string; // merchant MoMo code the driver pays to (backend: momo_code)
+  momoName: string; // merchant display name (backend: momo_name)
   instructions: string;
-  [key: string]: unknown;
+  enabled: boolean; // false when the merchant code is unconfigured
+}
+
+// Backend shape: { data: { momo_code, momo_name, instructions, enabled } }
+// (internal/packages/handler.go ManualPaymentInfo).
+interface ManualPaymentInfoDto {
+  momo_code?: string;
+  momo_name?: string;
+  instructions?: string;
+  enabled?: boolean;
 }
 
 // GET /driver/packages/payment-info — where to send a manual payment.
 export async function getManualPaymentInfo(): Promise<ManualPaymentInfo> {
-  const response = await getAppBackendClient().get<Envelope<ManualPaymentInfo>>(
+  const response = await getAppBackendClient().get<Envelope<ManualPaymentInfoDto | null>>(
     '/v1/driver/packages/payment-info',
   );
-  return response.data.data;
+  const dto = response.data.data ?? {};
+  return {
+    payCode: dto.momo_code ?? '',
+    momoName: dto.momo_name ?? '',
+    instructions: dto.instructions ?? '',
+    enabled: dto.enabled ?? false,
+  };
 }
 
+// Matches the backend's ProofInput (internal/packages/purchase.go): the driver
+// must provide at least a transaction `reference` OR a `screenshotUrl`.
 export interface PaymentProofInput {
-  paymentRef: string;
-  providerTxnId: string;
-  status: string;
+  reference?: string; // MoMo transaction id from the SMS
+  phone?: string; // number they paid from
+  screenshotUrl?: string; // optional; uploaded via the upload API
+  note?: string; // optional free text
 }
 
 // POST /driver/packages/purchases/{id}/proof — submit manual-payment proof for admin review.
 export async function submitPaymentProof(purchaseId: string, proof: PaymentProofInput): Promise<void> {
-  await getAppBackendClient().post(`/v1/driver/packages/purchases/${purchaseId}/proof`, {
-    body: {
-      payment_ref: proof.paymentRef,
-      provider_txn_id: proof.providerTxnId,
-      status: proof.status,
-    },
-  });
+  const body: Record<string, unknown> = {};
+  if (proof.reference !== undefined) body.reference = proof.reference;
+  if (proof.phone !== undefined) body.phone = proof.phone;
+  if (proof.screenshotUrl !== undefined) body.screenshot_url = proof.screenshotUrl;
+  if (proof.note !== undefined) body.note = proof.note;
+  await getAppBackendClient().post(`/v1/driver/packages/purchases/${purchaseId}/proof`, { body });
 }
 
 export async function getPurchaseHistory(): Promise<unknown[]> {

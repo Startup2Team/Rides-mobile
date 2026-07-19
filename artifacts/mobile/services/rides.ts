@@ -1,4 +1,5 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
+import { BackendError } from '@/data/remote/contracts/backendErrors';
 import { toBackendTransportType, fromBackendTransportType } from '@/constants/vehicles';
 import type { VehicleType } from '@/types';
 
@@ -139,11 +140,20 @@ export async function getRide(rideId: string): Promise<CustomerRide> {
 }
 
 // GET /customer/rides/active → the in-flight ride, or null when there is none.
+// The backend returns HTTP 404 (not {data:null}) when the customer has no active
+// ride, and the transport throws on 404. "No active ride" is a normal state
+// (e.g. cold start with nothing in flight), so we catch it and return null
+// rather than letting it bubble up as a backend error.
 export async function getActiveRide(): Promise<CustomerRide | null> {
   const client = getAppBackendClient();
-  const response = await client.get<Envelope<RideResponseDto | null>>('/v1/customer/rides/active');
-  const data = response.data.data;
-  return data ? toDomain(data) : null;
+  try {
+    const response = await client.get<Envelope<RideResponseDto | null>>('/v1/customer/rides/active');
+    const data = response.data.data;
+    return data ? toDomain(data) : null;
+  } catch (error) {
+    if (error instanceof BackendError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export async function cancelRide(rideId: string): Promise<void> {

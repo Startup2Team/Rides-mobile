@@ -12,16 +12,18 @@ export interface DriverLocationUpdate {
   lat: number;
   lng: number;
   heading?: number;
-  speed?: number;
-  accuracy?: number;
+  speed?: number; // km/h — sent to the backend as `speed_kmh`
+  // `accuracy` is intentionally omitted: the backend's UpdateLocation handler
+  // (internal/driver/handler.go) decodes only lat/lng/speed_kmh/heading and
+  // ignores anything else, so we don't send it.
 }
 
 // POST /driver/location — high-frequency; the backend rate-limits to ~20/min and
-// returns 204 on trim, so callers can fire-and-forget.
+// returns 204 on trim, so callers can fire-and-forget. The backend decodes the
+// speed field as `speed_kmh` (NOT `speed`).
 export async function updateDriverLocation(update: DriverLocationUpdate): Promise<void> {
   const body: Record<string, unknown> = { lat: update.lat, lng: update.lng };
   if (update.heading !== undefined) body.heading = update.heading;
-  if (update.speed !== undefined) body.speed = update.speed;
-  if (update.accuracy !== undefined) body.accuracy = update.accuracy;
+  if (update.speed !== undefined) body.speed_kmh = update.speed;
   await getAppBackendClient().post('/v1/driver/location', { body });
 }

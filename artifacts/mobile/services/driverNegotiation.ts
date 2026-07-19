@@ -1,35 +1,16 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
-import type { NegotiationEntry } from '@/services/negotiation';
+import {
+  mapNegotiationHistoryEntry,
+  type NegotiationEntry,
+  type NegotiationHistoryEntryDto,
+} from '@/services/negotiation';
 
 // Driver side of fare negotiation under /api/v1/driver/rides/{id}/negotiation/*.
 // Adds lock-fare (fix a manual fare) and initiate-call vs the customer side.
-
-interface NegotiationEntryDto {
-  id: string;
-  ride_id: string;
-  actor_role?: string;
-  role?: string;
-  kind?: string;
-  type?: string;
-  amount: number | null;
-  text: string | null;
-  created_at: string;
-}
+// Shares the history DTO + mapper with the customer side (same backend shape).
 
 interface Envelope<T> {
   data: T;
-}
-
-function toEntry(dto: NegotiationEntryDto): NegotiationEntry {
-  return {
-    id: dto.id,
-    rideId: dto.ride_id,
-    actorRole: dto.actor_role ?? dto.role ?? '',
-    kind: dto.kind ?? dto.type ?? '',
-    amount: dto.amount ?? null,
-    text: dto.text ?? null,
-    createdAt: dto.created_at,
-  };
 }
 
 const base = (rideId: string) => `/v1/driver/rides/${rideId}/negotiation`;
@@ -51,10 +32,10 @@ export async function sendNegotiationMessage(rideId: string, text: string): Prom
 }
 
 export async function getNegotiationHistory(rideId: string): Promise<NegotiationEntry[]> {
-  const response = await getAppBackendClient().get<Envelope<NegotiationEntryDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<NegotiationHistoryEntryDto[] | null>>(
     `${base(rideId)}/history`,
   );
-  return (response.data.data ?? []).map(toEntry);
+  return (response.data.data ?? []).map(entry => mapNegotiationHistoryEntry(entry, rideId));
 }
 
 // Driver-only: lock a manual (non-negotiated) fare.
