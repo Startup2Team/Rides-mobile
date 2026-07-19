@@ -12,7 +12,50 @@ import type {
   VehicleType,
 } from '@/types';
 
+import { normalizeRwandaPlateNumber } from '@/utils/rwandaValidation';
+
 type LegacyDriverDocuments = Partial<Record<keyof DriverVehicleDocumentSet, DriverVehicleDocumentRecord>>;
+
+// Reconcile the BACKEND vehicle list (authoritative for which vehicles exist and,
+// via the driver's approval, their status) with the locally-stored rich vehicle
+// data (documents/photos/license). Matched by normalized plate. This is the
+// bridge that stops a local row being stuck 'pending_review' after the backend
+// approved the driver, and surfaces vehicles that only exist on the backend.
+export function reconcileDriverVehicles(
+  local: DriverVehicleProfile[],
+  backend: { id: string; vehicleType: VehicleType | null; plateNumber: string }[],
+  verificationStatus: DriverVerificationStatus | null | undefined,
+): DriverVehicleProfile[] {
+  const plate = (p: string) => normalizeRwandaPlateNumber(p ?? '');
+  const statusFor = (fallback: DriverVehicleStatus): DriverVehicleStatus =>
+    verificationStatus === 'approved'
+      ? 'approved'
+      : verificationStatus === 'rejected'
+        ? 'rejected'
+        : fallback;
+
+  const backendByPlate = new Map(backend.map(b => [plate(b.plateNumber), b]));
+  const merged: DriverVehicleProfile[] = local.map(v => {
+    const b = backendByPlate.get(plate(v.plateNumber));
+    if (!b) return v; // local draft not yet pushed to the backend — keep as-is
+    return { ...v, id: b.id, status: statusFor(v.status) };
+  });
+
+  const localPlates = new Set(local.map(v => plate(v.plateNumber)));
+  for (const b of backend) {
+    if (localPlates.has(plate(b.plateNumber))) continue;
+    // Backend-only vehicle (added on another device / by an admin): surface a
+    // minimal profile so it isn't invisible on this device.
+    merged.push({
+      id: b.id,
+      vehicleType: b.vehicleType ?? 'moto',
+      status: statusFor('approved'),
+      plateNumber: b.plateNumber,
+      licenseNumber: '',
+    });
+  }
+  return merged;
+}
 
 export const DRIVER_VEHICLE_DOCUMENT_REQUIREMENTS = {
   license: { frontRequired: true, backRequired: true },

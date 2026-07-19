@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth, useOptionalAuth } from '@/context/AuthContext';
 import { vehicleRepository } from '@/data/repositories';
-import { activateVehicleByPlate, deleteVehicleByPlate, ensureBackendVehicle } from '@/services/driverVehicles';
+import { activateVehicleByPlate, deleteVehicleByPlate, ensureBackendVehicle, listBackendVehicles } from '@/services/driverVehicles';
 import { ConflictError } from '@/data/remote/contracts/backendErrors';
-import { appendDriverVehicle, getDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
+import { appendDriverVehicle, getDriverVehicles, reconcileDriverVehicles, setDriverActiveVehicle } from '@/domain/driverVehicles';
 import type { DriverVehicleProfile } from '@/types';
 import { driverKeys } from '../keys';
 import { queryPolicies } from '../policies';
@@ -29,7 +29,23 @@ export function useDriverVehiclesQuery(userId?: string | null) {
   return usePolicyQuery(queryPolicies.driverVehicle, {
     queryKey: buildVehicleQueryKey(resolvedUserId),
     enabled: Boolean(resolvedUserId),
-    queryFn: async () => (await vehicleRepository.getVehicles()) ?? [],
+    // Backend is authoritative for which vehicles exist + their approval; local
+    // storage supplies the rich data (documents/photos/license). Reconcile the
+    // two so a vehicle can't stay stuck 'pending_review' after backend approval.
+    // Falls back to local when the backend is unreachable (offline).
+    queryFn: async () => {
+      const local = (await vehicleRepository.getVehicles()) ?? [];
+      try {
+        const backend = await listBackendVehicles();
+        return reconcileDriverVehicles(
+          local,
+          backend,
+          auth?.driverProfile?.verificationStatus ?? null,
+        );
+      } catch {
+        return local;
+      }
+    },
   });
 }
 
