@@ -57,6 +57,7 @@ import {
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
 import { createRide as createBackendRide, cancelRide as cancelBackendRide } from '@/services/rides';
+import { estimateFare } from '@/services/fare';
 import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare } from '@/services/negotiation';
 import {
   acceptRide as driverAcceptRide,
@@ -475,8 +476,24 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const dist = calcDistance(pickup, destination);
-    const fare = calcFare(vehicleType, dist);
+    const localDist = calcDistance(pickup, destination);
+    const localFare = calcFare(vehicleType, localDist);
+    // Prefer the backend fare estimate — the SAME source the booking screen shows
+    // (GET /customer/fare-estimate) — so distance / fare / ETA are consistent on
+    // every screen instead of a different local formula per screen. Falls back to
+    // the local calc when offline / unauthenticated.
+    const estimate = auth?.user
+      ? await estimateFare({
+          vehicleType,
+          pickupLat: pickup.latitude,
+          pickupLng: pickup.longitude,
+          destLat: destination.latitude,
+          destLng: destination.longitude,
+        }).catch(() => null)
+      : null;
+    const dist = estimate?.distanceKm ?? localDist;
+    const fare = estimate?.totalFareRwf ?? localFare;
+    const duration = estimate?.durationMinutes ?? Math.round(localDist * 3 + 5);
 
       const ride: Ride = {
       id: generateRideId(),
@@ -489,7 +506,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       destination,
       status: 'searching',
       distance: parseFloat(dist.toFixed(2)),
-      duration: Math.round(dist * 3 + 5),
+      duration,
       suggestedFare: fare,
       negotiation: [],
       createdAt: new Date().toISOString(),
