@@ -19,6 +19,7 @@ import { observability } from '@/observability/context/observabilityContext';
 import { RideContextType } from './rideTypes';
 import { resolveCapabilities, type CapabilitySnapshot } from '@/capabilities';
 import { calcDistance, calcFare } from './rideFare';
+import { haversineKm } from '@/utils/mapUtils';
 import {
   buildInitialNegotiationMessages,
   buildMockRideRequest,
@@ -89,6 +90,17 @@ import {
 import { createCompleteRideCommand, createStartRideCommand } from '@/domains/ride/commandCreators';
 import { rideTransactionBoundary } from '@/domains/ride/transactions';
 import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionPhase, RideStatus as RideProjectionStatus } from '@/domains/ride/readModels';
+
+// Rough live ETA (minutes) from the driver's real position to a target, using a
+// city-average speed. Replaces the static placeholder ETA from the match event so
+// "arrives in N min" ticks down as the driver actually approaches (pickup before
+// the trip, destination during it).
+const AVG_TRIP_SPEED_KMH = 22;
+function etaMinutesTo(from: Coords, to: Coords | null | undefined): number | null {
+  if (!to) return null;
+  const km = haversineKm(from, { latitude: to.latitude, longitude: to.longitude });
+  return Math.max(1, Math.round((km / AVG_TRIP_SPEED_KMH) * 60));
+}
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -933,7 +945,19 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
       if (type === 'driver_location') {
         const coords = parseDriverCoords(payload);
-        if (coords) setDriverLocation(coords);
+        if (coords) {
+          setDriverLocation(coords);
+          // Recompute a live ETA from the driver's real position → pickup (before
+          // the trip) or destination (during it), so it reflects reality instead
+          // of the static placeholder set at match time.
+          setCurrentRide(prev => {
+            if (!prev?.driver) return prev;
+            const target = prev.status === 'in_progress' ? prev.destination : prev.pickup;
+            const eta = etaMinutesTo(coords, target);
+            if (eta == null || eta === prev.driver.eta) return prev;
+            return { ...prev, driver: { ...prev.driver, eta } };
+          });
+        }
         return;
       }
 
@@ -942,7 +966,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         clearSearchTimers();
         const coords = parseDriverCoords(payload);
         if (coords) setDriverLocation(coords);
-        setCurrentRide(prev => (prev ? applyDriverMatched(prev, payload) : prev));
+        setCurrentRide(prev => {
+          if (!prev) return prev;
+          const matched = applyDriverMatched(prev, payload);
+          // Seed a real ETA from the driver's position → pickup right away, so it
+          // isn't the placeholder until the first location tick.
+          if (coords && matched.driver) {
+            const eta = etaMinutesTo(coords, matched.pickup);
+            if (eta != null) return { ...matched, driver: { ...matched.driver, eta } };
+          }
+          return matched;
+        });
         return;
       }
 
