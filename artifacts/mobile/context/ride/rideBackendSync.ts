@@ -133,14 +133,26 @@ export function appendNegotiationEvent(
   payload: BackendEventPayload,
   viewer: 'customer' | 'driver',
 ): Ride {
-  const actor = (str(payload.actor_role) ?? str(payload.role) ?? '').toUpperCase();
+  // The sender field differs per backend event: negotiation_message → proposed_by,
+  // negotiation_text → sender, negotiation_declined → declined_by. (actor_role/role
+  // kept as defensive fallbacks.) Reading the wrong key made every incoming offer
+  // parse as 'system', so the counterparty's price never showed as theirs.
+  const actor = (
+    str(payload.actor_role) ??
+    str(payload.role) ??
+    str(payload.proposed_by) ??
+    str(payload.sender) ??
+    str(payload.declined_by) ??
+    ''
+  ).toUpperCase();
   const sender: NegotiationMessage['sender'] =
     actor === 'DRIVER' ? 'driver' : actor === 'CUSTOMER' ? 'customer' : 'system';
 
   if (sender !== 'system' && sender === viewer) return ride;
 
   const amount = num(payload.amount);
-  const text = str(payload.text);
+  // negotiation_text sends the message under `body`, not `text`.
+  const text = str(payload.text) ?? str(payload.body);
   const isFinal = payload.is_final === true || payload.kind === 'accept';
 
   let message: NegotiationMessage | null = null;
