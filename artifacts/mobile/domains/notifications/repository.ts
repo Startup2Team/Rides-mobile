@@ -90,4 +90,9 @@ export function getNotificationAccentColor(type: NotificationItem['type']) {
   return TYPE_ICON_COLOR[type];
 }
 
-export { createRemoteNotificationRepositoryPrototype, createNotificationShadowRepository } from '@/data/remote/repositories/RemoteNotificationRepository';
+// NOTE: the remote/shadow repository factories are intentionally NOT re-exported
+// here. RemoteNotificationRepository imports the local read helpers above, so
+// re-exporting it back through this module created a require cycle
+// (repository → RemoteNotificationRepository → repository) that risked
+// uninitialized values. Import those factories from
+// '@/data/remote/repositories/RemoteNotificationRepository' directly.

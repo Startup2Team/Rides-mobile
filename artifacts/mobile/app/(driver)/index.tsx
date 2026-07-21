@@ -121,7 +121,7 @@ const LOOPED_DASHBOARD_ADS = [
   DASHBOARD_ADS[0],
 ];
 const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
-  require("../../assets/images/verified badge.png"),
+  require("../../assets/images/verified-badge.png"),
   ...DASHBOARD_ADS.map((ad) => ad.image),
 ];
 
