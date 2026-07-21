@@ -308,22 +308,29 @@ export default function CustomerHome() {
   useEffect(() => {
     if (locationStatus !== 'available') return;
     let active = true;
-    getNearbyDrivers(userLocation.latitude, userLocation.longitude, selectedVehicle)
-      .then(pins => {
-        if (!active) return;
-        setNearbyDrivers(
-          pins.map((pin, i) => ({
-            id: `nearby-driver-${i}`,
-            latitude: pin.latitude,
-            longitude: pin.longitude,
-          })),
-        );
-      })
-      .catch(() => {
-        if (active) setNearbyDrivers([]);
-      });
+    const fetchNearby = () => {
+      getNearbyDrivers(userLocation.latitude, userLocation.longitude, selectedVehicle)
+        .then(pins => {
+          if (!active) return;
+          setNearbyDrivers(
+            pins.map((pin, i) => ({
+              id: `nearby-driver-${i}`,
+              latitude: pin.latitude,
+              longitude: pin.longitude,
+            })),
+          );
+        })
+        .catch(() => {
+          if (active) setNearbyDrivers([]);
+        });
+    };
+    fetchNearby();
+    // Poll so a driver going offline drops off the map (and a newly-online one
+    // appears) within ~10s, instead of only refreshing when the customer moves.
+    const intervalId = setInterval(fetchNearby, 10_000);
     return () => {
       active = false;
+      clearInterval(intervalId);
     };
   }, [userLocation.latitude, userLocation.longitude, selectedVehicle, locationStatus]);
   const visibleDrivers = nearbyDrivers;

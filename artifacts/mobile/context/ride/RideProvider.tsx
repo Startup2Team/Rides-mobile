@@ -1152,6 +1152,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.endSession();
   }, [timers]);
 
+  // Once a ride COMPLETES, drop the saved booking draft so returning Home lands on
+  // a clean home screen — not the pickup/booking form (the draft-restore is only
+  // meant for a CANCELLED search the rider may want to resume, not a finished trip).
+  React.useEffect(() => {
+    if (currentRide?.status === 'completed') {
+      setCancelledSearchDraft(null);
+      setRestoreBookingOnHomeFocus(false);
+    }
+  }, [currentRide?.status]);
+
   const loadHistory = useCallback(async () => {
     try {
       const history = await loadRideHistory();
