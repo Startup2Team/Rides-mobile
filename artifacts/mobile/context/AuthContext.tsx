@@ -64,6 +64,56 @@ function mapApprovalStatus(status: string): DriverProfile['verificationStatus'] 
   }
 }
 
+// Build a LOCAL driver profile from the backend's GET /driver/profile response.
+// Used on login / app-load when there is no local profile yet (fresh login, or
+// logout cleared storage) so a driver is recognised as a driver — the backend is
+// the source of truth for driver identity, not local storage.
+type BackendDriverProfile = Awaited<ReturnType<typeof getDriverProfile>>;
+function buildLocalDriverProfile(b: BackendDriverProfile): DriverProfile {
+  const status = mapApprovalStatus(b.approvalStatus);
+  const approved = b.approvalStatus === 'APPROVED';
+  const vehicleType = b.vehicleType ?? 'moto';
+  return {
+    verificationStatus: status ?? 'pending_review',
+    vehicleType,
+    plateNumber: b.vehiclePlate,
+    licenseNumber: b.licenseNumber,
+    province: b.province,
+    district: b.district,
+    sector: b.sector,
+    cell: b.cell,
+    village: b.village,
+    city: b.city,
+    momoCode: b.momoPayCode ?? '',
+    momoProvider: b.momoProvider === 'airtel' ? 'airtel' : 'mtn',
+    dob: '',
+    isOnline: b.isOnline,
+    isVerified: approved,
+    acceptanceRate: b.acceptanceRate ?? 0,
+    completedRides: b.totalRides ?? 0,
+    dailyRides: 0,
+    dailyDeclines: 0,
+    policyAccepted: b.policyAccepted ?? false,
+    earningsTotal: 0,
+    passengerSeats: b.passengerSeats ?? undefined,
+    loadCapacityKg: b.loadCapacityKg ?? undefined,
+    rejectionReason: b.rejectionReason ?? undefined,
+    vehicles: [
+      {
+        id: b.id,
+        vehicleType,
+        status: approved
+          ? ('approved' as const)
+          : status === 'rejected'
+            ? ('rejected' as const)
+            : ('pending_review' as const),
+        plateNumber: b.vehiclePlate,
+        licenseNumber: b.licenseNumber,
+      },
+    ],
+  };
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -102,8 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (storedDriverProfile.data) {
         setDriverProfile(storedDriverProfile.data);
-        void syncDriverProfileFromBackend();
       }
+      // Always reconcile driver identity from the backend when authed (the call
+      // self-guards on the token). A driver may have NO local profile after a
+      // fresh login / logout, so this is what recognises them as a driver.
+      void syncDriverProfileFromBackend();
     } catch {
       // ignore
     } finally {
@@ -135,16 +188,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Sync the driver's real approval status + online state from the backend
-  // (GET /driver/profile). Only for existing drivers; merges non-destructively.
+  // (GET /driver/profile). The backend is the source of truth for driver
+  // IDENTITY: on a fresh login (or after logout cleared local storage) there is
+  // no local profile, so if the backend says this user is a driver we BUILD one —
+  // otherwise a real driver would come back as a customer with a "Join as rider"
+  // prompt. Non-driver users 404 here (caught) and stay customers.
   const syncDriverProfileFromBackend = useCallback(async () => {
-    if (!driverProfileRef.current) return;
     try {
       const token = await getAccessToken();
       if (!token) return;
       const backend = await getDriverProfile();
       const status = mapApprovalStatus(backend.approvalStatus);
       setDriverProfile(prev => {
-        if (!prev) return prev;
+        if (!prev) {
+          const built = buildLocalDriverProfile(backend);
+          void saveStoredDriverProfile(built);
+          return built;
+        }
         // Bridge the backend approval onto the LOCAL vehicle rows. A vehicle is
         // stored locally as 'pending_review' at apply time and never updated, so
         // screens (home header, profile, vehicles list) keep showing "in review"
@@ -204,8 +264,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
     await saveStoredUser(newUser);
     void syncProfileFromBackend();
+    // Recognise a returning driver: pull their real driver profile from the
+    // backend (identity survives logout, which clears local storage).
+    void syncDriverProfileFromBackend();
     void registerPushToken();
-  }, [syncProfileFromBackend]);
+  }, [syncProfileFromBackend, syncDriverProfileFromBackend]);
 
   const logout = useCallback(async () => {
     setUser(null);
