@@ -97,7 +97,10 @@ const PRESENTATIONS: Record<ManualPaymentClaimStatus, ManualPaymentClaimPresenta
 };
 
 export function getManualPaymentClaimPresentation(status: ManualPaymentClaimStatus): ManualPaymentClaimPresentation {
-  return PRESENTATIONS[status];
+  // Defensive: a missing/unknown status (e.g. a null or a value the backend adds
+  // later) must never crash the screen — fall back to a neutral non-terminal
+  // 'submitted' presentation instead of returning undefined.
+  return PRESENTATIONS[status] ?? PRESENTATIONS.submitted;
 }
 
 export function getManualPaymentClaimRefreshPolicy(status: ManualPaymentClaimStatus) {
