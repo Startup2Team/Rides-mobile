@@ -92,9 +92,19 @@ export function getCoordDistance(
 }
 
 export function arePickupAndDropoffSame(pickupLoc: RideLocation, dropoffLoc: RideLocation): boolean {
+  // Primary signal: physical proximity. Two points more than 30m apart are
+  // different places even when they share a reverse-geocoded street name — very
+  // common in Kigali, where a whole avenue reverse-geocodes to a single label
+  // (e.g. "KG 17 Ave"). Comparing address strings first would flag every
+  // distinct drop-off on the same street as "the same location".
   if (getCoordDistance(pickupLoc, dropoffLoc) < SAME_LOCATION_THRESHOLD_METERS) {
     return true;
   }
+  // Fallback only when the coordinates can't be trusted — a free-typed / generic
+  // location carries a placeholder offset instead of real coordinates, so the
+  // address text is the only reliable signal there.
+  const coordsUnreliable = pickupLoc.locationType === 'generic' || dropoffLoc.locationType === 'generic';
+  if (!coordsUnreliable) return false;
   const pickupAddress = (pickupLoc.address ?? '').trim().toLowerCase();
   const dropoffAddress = (dropoffLoc.address ?? '').trim().toLowerCase();
   return pickupAddress.length > 0 && pickupAddress === dropoffAddress;
