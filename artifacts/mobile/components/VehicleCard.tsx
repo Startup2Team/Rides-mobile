@@ -73,7 +73,7 @@ export function VehicleCard({ type, selected, onSelect, estimatedFare, compact }
       </View>
       <View style={styles.right}>
         <AppText style={[styles.fare, { color: selected ? colors.primary : colors.foreground }]}>
-          {estimatedFare ? `${estimatedFare.toLocaleString()} RWF` : `From ${VEHICLE_BASE_FARE[type].toLocaleString()}`}
+          {estimatedFare ? `${Math.round(estimatedFare).toLocaleString()} RWF` : `From ${VEHICLE_BASE_FARE[type].toLocaleString()}`}
         </AppText>
       </View>
     </TouchableOpacity>

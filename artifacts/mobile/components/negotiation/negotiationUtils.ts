@@ -6,7 +6,8 @@ export const DRIVER_TYPING_DELAY_MS = 450;
 export type NegotiationStatusTone = 'neutral' | 'active' | 'waiting' | 'limit';
 
 export function formatFare(amount?: number) {
-  return amount ? `${amount.toLocaleString()} RWF` : '--';
+  // Fares are whole RWF — round defensively so a float never renders decimals.
+  return amount ? `${Math.round(amount).toLocaleString()} RWF` : '--';
 }
 
 export function formatMessageTime(timestamp: string) {

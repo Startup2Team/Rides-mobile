@@ -36,9 +36,6 @@ import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTrack
 import { createRideTimerManager } from './rideTimerManager';
 import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
-  ARRIVING_TRACKING_INTERVAL_MS,
-  ARRIVING_TRACKING_NOISE,
-  ARRIVING_TRACKING_STEPS,
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   CONFIRMED_RIDE_START_DELAY_MS,
   JOURNEY_TRACKING_INTERVAL_MS,
@@ -96,9 +93,13 @@ import type { ActiveRideReadModel, RideParticipant, RidePhase as RideProjectionP
 // "arrives in N min" ticks down as the driver actually approaches (pickup before
 // the trip, destination during it).
 const AVG_TRIP_SPEED_KMH = 22;
-function etaMinutesTo(from: Coords, to: Coords | null | undefined): number | null {
+function distanceKmTo(from: Coords, to: Coords | null | undefined): number | null {
   if (!to) return null;
-  const km = haversineKm(from, { latitude: to.latitude, longitude: to.longitude });
+  return haversineKm(from, { latitude: to.latitude, longitude: to.longitude });
+}
+function etaMinutesTo(from: Coords, to: Coords | null | undefined): number | null {
+  const km = distanceKmTo(from, to);
+  if (km == null) return null;
   return Math.max(1, Math.round((km / AVG_TRIP_SPEED_KMH) * 60));
 }
 
@@ -670,19 +671,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     cancelRide();
   }, [cancelRide]);
 
-  const startLiveTracking = useCallback(() => {
-    let step = 0;
-    timers.clearInterval(driverIntervalRef.current);
-    driverIntervalRef.current = timers.scheduleInterval(() => {
-      step++;
-      setDriverLocation(prev => addTrackingNoise(prev, ARRIVING_TRACKING_NOISE));
-      if (step === ARRIVING_TRACKING_STEPS) {
-        timers.clearInterval(driverIntervalRef.current);
-        driverIntervalRef.current = null;
-      }
-    }, ARRIVING_TRACKING_INTERVAL_MS);
-  }, [timers]);
-
   const markArrived = useCallback(() => {
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
@@ -954,8 +942,18 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
             if (!prev?.driver) return prev;
             const target = prev.status === 'in_progress' ? prev.destination : prev.pickup;
             const eta = etaMinutesTo(coords, target);
-            if (eta == null || eta === prev.driver.eta) return prev;
-            return { ...prev, driver: { ...prev.driver, eta } };
+            const distanceKm = distanceKmTo(coords, target);
+            const etaChanged = eta != null && eta !== prev.driver.eta;
+            const distanceChanged = distanceKm != null && distanceKm !== prev.driver.distanceKm;
+            if (!etaChanged && !distanceChanged) return prev;
+            return {
+              ...prev,
+              driver: {
+                ...prev.driver,
+                ...(eta != null ? { eta } : {}),
+                ...(distanceKm != null ? { distanceKm } : {}),
+              },
+            };
           });
         }
         return;
@@ -969,11 +967,22 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         setCurrentRide(prev => {
           if (!prev) return prev;
           const matched = applyDriverMatched(prev, payload);
-          // Seed a real ETA from the driver's position → pickup right away, so it
-          // isn't the placeholder until the first location tick.
+          // Seed a real ETA + distance from the driver's position → pickup right
+          // away, so the customer cards aren't the placeholder until the first
+          // location tick.
           if (coords && matched.driver) {
             const eta = etaMinutesTo(coords, matched.pickup);
-            if (eta != null) return { ...matched, driver: { ...matched.driver, eta } };
+            const distanceKm = distanceKmTo(coords, matched.pickup);
+            if (eta != null || distanceKm != null) {
+              return {
+                ...matched,
+                driver: {
+                  ...matched.driver,
+                  ...(eta != null ? { eta } : {}),
+                  ...(distanceKm != null ? { distanceKm } : {}),
+                },
+              };
+            }
           }
           return matched;
         });
@@ -1126,17 +1135,18 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     // Local simulation fallback only — when the backend WS is driving state (or
-    // we are the driver) the real driver_en_route event advances the ride.
+    // we are the driver) the real driver_en_route event advances the ride. The
+    // driver marker now moves solely from real `driver_location` events, so this
+    // fallback only advances status (no simulated jitter).
     if (backendDrivingRef.current || auth?.user?.mode === 'driver') return;
     if (currentRide?.status === 'confirmed') {
       const timer = timers.scheduleTimeout(() => {
         if (backendDrivingRef.current) return;
         updateStatus('arriving');
-        startLiveTracking();
       }, CONFIRMED_RIDE_START_DELAY_MS);
       return () => timers.clearTimeout(timer);
     }
-  }, [currentRide?.status === 'confirmed', auth?.user?.mode, startLiveTracking, timers]);
+  }, [currentRide?.status === 'confirmed', auth?.user?.mode, timers]);
 
   React.useEffect(() => () => {
     timers.endSession();

@@ -149,9 +149,11 @@ export function useHomeBooking({
 
   const estimatedFare = useMemo(() => {
     if (!fareEnabled) return null;
-    if (fareQuery.data) return fareQuery.data.totalFareRwf;
+    // Fares are whole RWF — round so the UI never renders a decimal quote
+    // (the backend fare is integer; the estimate can carry float noise).
+    if (fareQuery.data) return Math.round(fareQuery.data.totalFareRwf);
     if (fareQuery.isLoading) return null;
-    return calcFare(selectedVehicle, distance);
+    return Math.round(calcFare(selectedVehicle, distance));
   }, [distance, fareEnabled, fareQuery.data, fareQuery.isLoading, selectedVehicle]);
   const estimatedFareLoading = fareEnabled && fareQuery.isLoading;
 

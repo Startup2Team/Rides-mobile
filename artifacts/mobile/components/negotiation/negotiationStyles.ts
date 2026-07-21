@@ -214,6 +214,7 @@ export const styles = StyleSheet.create({
   limitBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12 },
   limitText: { flex: 1, ...typography.caption, fontFamily: typography.label.fontFamily},
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  fareErrorText: { ...typography.caption, fontFamily: typography.label.fontFamily, marginTop: 6, marginLeft: 4 },
   currencyBadge: { height: 48, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   currencyText: { ...typography.label, fontFamily: typography.badge.fontFamily},
   offerInput: {
