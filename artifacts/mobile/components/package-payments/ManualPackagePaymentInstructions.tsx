@@ -11,6 +11,8 @@ export interface ManualPackagePaymentInstructionsProps {
   offer: DriverPackageOfferSnapshot;
   vehicleLabel?: string | null;
   providers: ManualPaymentProviderConfiguration[];
+  recipientName?: string | null;
+  recipientPhone?: string | null;
   onCopyProvider: (provider: ManualPaymentProviderConfiguration, instruction: string) => void;
 }
 
@@ -26,6 +28,8 @@ export function ManualPackagePaymentInstructions({
   offer,
   vehicleLabel,
   providers,
+  recipientName,
+  recipientPhone,
   onCopyProvider,
 }: ManualPackagePaymentInstructionsProps) {
   const colors = useColors();
@@ -42,6 +46,16 @@ export function ManualPackagePaymentInstructions({
           Pay using the code below, then return to Rides.
         </Text>
       </View>
+
+      {recipientPhone ? (
+        <View style={[styles.payToCard, { backgroundColor: colors.primaryHex + '0D', borderColor: colors.primary }]}>
+          <Text style={[styles.payToLabel, { color: colors.primary }]}>PAY TO</Text>
+          <Text style={[styles.payToPhone, { color: colors.foreground }]} selectable>{recipientPhone}</Text>
+          {recipientName ? (
+            <Text style={[styles.payToName, { color: colors.mutedForeground }]}>{recipientName}</Text>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.detailRow}>
@@ -95,6 +109,26 @@ const styles = StyleSheet.create({
   },
   summary: {
     gap: 4,
+  },
+  payToCard: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 14,
+    gap: 2,
+  },
+  payToLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.8,
+  },
+  payToPhone: {
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+  },
+  payToName: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
   },
   badge: {
     alignSelf: 'flex-start',

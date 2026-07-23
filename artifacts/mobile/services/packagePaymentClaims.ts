@@ -90,6 +90,8 @@ interface ConfigurationDto {
     transaction_reference_required: boolean;
     proof_image_enabled: boolean;
     proof_image_required?: boolean | null;
+    recipient_name?: string | null;
+    recipient_phone?: string | null;
   } | null;
   price_per_ride_rwf?: Record<string, number> | null;
   version: string;
@@ -165,6 +167,8 @@ function toConfiguration(dto: ConfigurationDto): PackagePaymentConfiguration {
           transactionReferenceRequired: dto.manual.transaction_reference_required,
           proofImageEnabled: dto.manual.proof_image_enabled,
           proofImageRequired: dto.manual.proof_image_required ?? undefined,
+          recipientName: dto.manual.recipient_name ?? undefined,
+          recipientPhone: dto.manual.recipient_phone ?? undefined,
         }
       : undefined,
   };

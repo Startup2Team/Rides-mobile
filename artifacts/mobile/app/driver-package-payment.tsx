@@ -95,7 +95,6 @@ export default function DriverPackagePaymentScreen() {
   const mode = configuration?.mode ?? 'manual';
   const manualConfig = configuration?.manual;
   const providers: ManualPaymentProviderConfiguration[] = manualConfig?.providers ?? [];
-  const transactionReferenceRequired = manualConfig?.transactionReferenceRequired ?? true;
 
   const { claims, refetch: refetchClaims } = useManualPaymentClaimsQuery({ driverId: user?.id });
   const createClaim = useCreateManualPaymentClaimMutation();
@@ -105,7 +104,6 @@ export default function DriverPackagePaymentScreen() {
 
   const [formVisible, setFormVisible] = useState(false);
   const [payerPhone, setPayerPhone] = useState(driverProfile?.momoCode ?? '');
-  const [transactionReference, setTransactionReference] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [submittedClaim, setSubmittedClaim] = useState<ManualPaymentClaimReadModel | null>(null);
@@ -181,12 +179,7 @@ export default function DriverPackagePaymentScreen() {
     setManualError(null);
     const normalizedPhone = normalizeRwandaPhoneNumber(payerPhone);
     if (!normalizedPhone) {
-      setManualError('Manual payment claim is invalid.');
-      return;
-    }
-    const ref = transactionReference.trim();
-    if (transactionReferenceRequired && !ref) {
-      setManualError('A transaction reference is required.');
+      setManualError('Enter the number you paid from.');
       return;
     }
 
@@ -197,7 +190,6 @@ export default function DriverPackagePaymentScreen() {
         driverId: user?.id ?? '',
         provider: manualProvider,
         payerPhoneNumber: normalizedPhone,
-        transactionReference: ref || undefined,
       });
       if (created.failure || !created.data) {
         setManualError(created.failure?.message ?? 'Could not submit your payment claim.');
@@ -246,7 +238,7 @@ export default function DriverPackagePaymentScreen() {
   const handleResubmitClaim = async (
     claimId: string,
     version: number,
-    updates: { provider: ManualPaymentProvider; phone: string; reference?: string },
+    updates: { provider: ManualPaymentProvider; phone: string },
   ) => {
     const result = await resubmitClaim.mutateAsync({
       claim: {
@@ -254,7 +246,6 @@ export default function DriverPackagePaymentScreen() {
         version,
         provider: updates.provider,
         payerPhoneNumber: updates.phone,
-        transactionReference: updates.reference,
       } as ManualPaymentClaim,
     });
     if (result.data) setSubmittedClaim(toManualPaymentClaimReadModel(result.data, { authority: 'remote_backed' }));
@@ -322,29 +313,25 @@ export default function DriverPackagePaymentScreen() {
             offer={ridePackage}
             vehicleLabel={vehicleLabel}
             providers={providers}
+            recipientName={manualConfig?.recipientName}
+            recipientPhone={manualConfig?.recipientPhone}
             onCopyProvider={(provider, instruction) => void handleCopyProvider(provider, instruction)}
           />
           <View style={styles.manualForm}>
             {formVisible ? (
               <>
                 <AppInput
-                  label="Payer phone number"
-                  accessibilityLabel="Payer phone number"
+                  label="Number you paid from"
+                  accessibilityLabel="Number you paid from"
                   placeholder="+250 7xxxxxxxx"
                   value={payerPhone}
                   onChangeText={setPayerPhone}
                   keyboardType="phone-pad"
                   leftIcon="smartphone"
                 />
-                <AppInput
-                  label={`Transaction reference${transactionReferenceRequired ? ' *' : ''}`}
-                  accessibilityLabel="Transaction reference"
-                  placeholder={transactionReferenceRequired ? 'Enter the payment reference' : 'Optional payment reference'}
-                  value={transactionReference}
-                  onChangeText={setTransactionReference}
-                  autoCapitalize="characters"
-                  leftIcon="hash"
-                />
+                <AppText style={[styles.helperText, { color: colors.mutedForeground }]}>
+                  Just share the number you sent the money from — we match it to the payment on our side. No transaction ID needed.
+                </AppText>
                 {manualError ? (
                   <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
                     <Feather name="alert-triangle" size={15} color={colors.destructive} />
@@ -501,6 +488,7 @@ const styles = StyleSheet.create({
   notice: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: 11, borderRadius: radius.card, borderWidth: 1 },
   noticeIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   noticeText: { flex: 1, ...typography.caption, lineHeight: 18 },
+  helperText: { ...typography.caption, lineHeight: 17, marginTop: -spacing[6] },
   inlineError: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
   errorText: { flex: 1, ...typography.caption, lineHeight: 18 },
   actions: { flexDirection: 'row', gap: spacing[10] },

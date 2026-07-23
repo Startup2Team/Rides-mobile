@@ -24,6 +24,7 @@ import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
 import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
+import type { ManualPaymentClaimReadModel } from '@/domains/package-payments';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
@@ -31,6 +32,11 @@ import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPoli
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
 }
+
+// A claim in one of these statuses is still "in flight": the driver already
+// submitted a payment for this package and is awaiting review, so the offer must
+// not be re-offered as if it were unclaimed (prevents duplicate submissions).
+const ACTIVE_CLAIM_STATUSES = new Set(['submitted', 'pending_review', 'needs_clarification']);
 
 
 
@@ -63,6 +69,22 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
   const generationRef = useRef(syncGeneration);
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const { claims } = useManualPaymentClaimsQuery({ driverId: user?.id });
+
+  // Index the freshest in-flight claim per package so an offer with a pending
+  // payment renders as "under review" instead of a fresh, buyable offer. Keyed
+  // on packageId (the meaningful join for a driver's single active vehicle);
+  // custom top-ups carry an empty packageId and are ignored here.
+  const activeClaimByPackageId = React.useMemo(() => {
+    const map = new Map<string, ManualPaymentClaimReadModel>();
+    for (const claim of (claims ?? []) as ManualPaymentClaimReadModel[]) {
+      if (!claim?.packageId || !ACTIVE_CLAIM_STATUSES.has(claim.status)) continue;
+      const existing = map.get(claim.packageId);
+      if (!existing || claim.createdAt.localeCompare(existing.createdAt) > 0) {
+        map.set(claim.packageId, claim);
+      }
+    }
+    return map;
+  }, [claims]);
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
@@ -229,6 +251,7 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
         activeCampaigns,
       });
       const isOfferUsed = pkg.priceRwf === 0 && hasUsedPackageOffer(entitlement, pkg.packageId);
+      const pendingClaim = activeClaimByPackageId.get(pkg.packageId);
       return (
         <PackageCard
           key={`${pkg.packageId}:${pkg.packageVersion}`}
@@ -236,6 +259,7 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
           cardFill={cardFill}
           colors={colors}
           disabled={isOfferUsed}
+          pending={Boolean(pendingClaim)}
           unavailable={isEntitlementLoading}
           selected={selectedOffer?.packageId === pkg.packageId}
           onPress={() => void handleSelectPackage(pkg)}
@@ -263,10 +287,10 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
   </View>;
 }
 
-function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage, selected, unavailable = false }: {
-  cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; onPress: () => void; ridePackage: DriverRidePackageOffer; selected?: boolean; unavailable?: boolean;
+function PackageCard({ cardFill, colors, disabled = false, pending = false, onPress, ridePackage, selected, unavailable = false }: {
+  cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; pending?: boolean; onPress: () => void; ridePackage: DriverRidePackageOffer; selected?: boolean; unavailable?: boolean;
 }) {
-  const isDisabled = disabled || unavailable;
+  const isDisabled = disabled || unavailable || pending;
   const fill = selected ? colors.primaryHex + '0A' : cardFill;
 
   return <TouchableOpacity
@@ -314,13 +338,20 @@ function PackageCard({ cardFill, colors, disabled = false, onPress, ridePackage,
           <AppText style={[styles.normalPrice, { color: colors.mutedForeground }]}>{formatRwf(ridePackage.basePriceRwf)}</AppText>
         ) : null}
       </View>
-      {disabled ? <AppText style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</AppText> : null}
+      {pending ? (
+        <View style={[styles.pendingBadge, { backgroundColor: colors.warningHex + '18' }]}>
+          <Feather name="clock" size={11} color={colors.warning} />
+          <AppText style={[styles.pendingBadgeText, { color: colors.warning }]}>Payment under review</AppText>
+        </View>
+      ) : disabled ? (
+        <AppText style={[styles.unavailableText, { color: colors.mutedForeground }]}>Already used</AppText>
+      ) : null}
     </View>
     <View style={[
       styles.selectionControl,
       { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : 'transparent' },
     ]}>
-      {selected ? <Feather name="check" size={17} color="#fff" /> : null}
+      {pending ? <Feather name="clock" size={15} color={colors.warning} /> : selected ? <Feather name="check" size={17} color="#fff" /> : null}
     </View>
   </TouchableOpacity>;
 }
@@ -362,6 +393,8 @@ const styles = StyleSheet.create({
   price: { ...typography.body,  },
   normalPrice: { ...typography.tiny, textDecorationLine: 'line-through' },
   unavailableText: { ...typography.tiny, marginTop: 2 },
+  pendingBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing[4], alignSelf: 'flex-start', paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 4, borderRadius: radius.pill, marginTop: 2 },
+  pendingBadgeText: { ...typography.tiny },
   selectionControl: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: spacing[2] },
   activationError: { marginHorizontal: semanticSpacing.cardPadding, marginBottom: spacing[10], borderWidth: 1, borderRadius: radius.lg, padding: spacing[10], flexDirection: 'row', alignItems: 'center', gap: spacing[8] },
   activationErrorText: { ...typography.caption, flex: 1, lineHeight: 18 },
