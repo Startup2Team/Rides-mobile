@@ -1077,6 +1077,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // The customer accepting the fare confirms the ride on the backend, which
+      // pushes ride_confirmed to the driver socket. Without handling it here the
+      // driver stayed stuck on the negotiation screen ("typing…") while the
+      // customer had already advanced. Apply it so status → 'confirmed' and the
+      // driver flow navigation moves them to the navigate/pickup screen.
+      if (type === 'ride_confirmed') {
+        backendDrivingRef.current = true;
+        setCurrentRide(prev => (prev ? applyLifecycleEvent(prev, 'ride_confirmed', payload) : prev));
+        return;
+      }
+
       if (type === 'negotiation_message' || type === 'negotiation_declined' || type === 'negotiation_text') {
         setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'driver') : prev));
       }
