@@ -1496,6 +1496,17 @@ export default function DriverDashboard() {
               </View>
             </View>
           </View>
+          {request?.suggestedFare != null && request.suggestedFare > 0 ? (
+            <View style={[styles.suggestedFareRow, { backgroundColor: colors.primaryHex + '12' }]}>
+              <MaterialCommunityIcons name="cash-multiple" size={18} color={colors.primary} />
+              <AppText style={[styles.suggestedFareLabel, { color: colors.mutedForeground }]}>
+                Suggested fare
+              </AppText>
+              <AppText style={[styles.suggestedFareValue, { color: colors.primary }]}>
+                {`${request.suggestedFare.toLocaleString('en-RW')} RWF`}
+              </AppText>
+            </View>
+          ) : null}
           <View style={styles.metaRow}>
             <View
               style={[styles.metaInfoCard, { backgroundColor: colors.muted }]}
@@ -2144,6 +2155,17 @@ const styles = StyleSheet.create({
   routeInlineLabel: { ...typography.tiny, textTransform: "uppercase" },
   routeValue: { ...typography.bodySmall },
   routeText: { ...typography.label, flex: 1 },
+  suggestedFareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  suggestedFareLabel: { ...typography.caption, flex: 1 },
+  suggestedFareValue: { ...typography.bodySmall, fontFamily: "Inter_700Bold" },
   metaRow: { flexDirection: "row", gap: 5 },
   metaInfoCard: {
     flex: 1,

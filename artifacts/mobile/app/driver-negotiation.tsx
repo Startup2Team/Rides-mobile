@@ -129,6 +129,13 @@ export default function DriverNegotiationScreen() {
                 <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>ETA</AppText>
                 <AppText style={[styles.tripStatValue, { color: colors.foreground }]}>~{currentRide.duration} min</AppText>
               </View>
+              {currentRide.suggestedFare != null && currentRide.suggestedFare > 0 ? (
+                <View style={styles.tripStatInline}>
+                  <Feather name="dollar-sign" size={icons.size.xxs} color={colors.primary} />
+                  <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>Suggested</AppText>
+                  <AppText style={[styles.tripStatValue, { color: colors.primary }]}>{formatFare(currentRide.suggestedFare)}</AppText>
+                </View>
+              ) : null}
             </View>
           </View>
 
