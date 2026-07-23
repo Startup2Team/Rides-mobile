@@ -99,6 +99,9 @@ export default function RideScreen() {
 
   const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
     useRideStatus(currentRide);
+  // The ride is confirmed (driver assigned, before they mark "en route"). The
+  // rider should already have map controls + a Call-driver button in this state.
+  const isConfirmed = currentRide?.status === 'confirmed';
   const {
     handleCallDriver,
     handleCancelArrived,
@@ -267,7 +270,7 @@ export default function RideScreen() {
     }
   }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
 
-  const showMapControls = isArriving || isArrived || isInProgress;
+  const showMapControls = isConfirmed || isArriving || isArrived || isInProgress;
 
   const cycleMapType = useCallback(() => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
@@ -481,6 +484,7 @@ export default function RideScreen() {
         />
         <RideActionsSection
           colors={colors}
+          isConfirmed={isConfirmed}
           isArrived={isArrived}
           isArriving={isArriving}
           isInProgress={isInProgress}

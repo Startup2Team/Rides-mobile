@@ -330,7 +330,7 @@ export default function DriverPackagePaymentScreen() {
                   leftIcon="smartphone"
                 />
                 <AppText style={[styles.helperText, { color: colors.mutedForeground }]}>
-                  Just share the number you sent the money from — we match it to the payment on our side. No transaction ID needed.
+                  We match this to your MoMo payment — no transaction ID needed.
                 </AppText>
                 {manualError ? (
                   <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>

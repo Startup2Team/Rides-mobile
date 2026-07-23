@@ -129,8 +129,11 @@ export async function createRide(input: CreateRideInput): Promise<{ rideId: stri
 
 export async function listRides(): Promise<CustomerRide[]> {
   const client = getAppBackendClient();
-  const response = await client.get<Envelope<RideResponseDto[] | null>>('/v1/customer/rides');
-  return (response.data.data ?? []).map(toDomain);
+  // The backend wraps the list: { data: { rides: [...], limit, offset } }.
+  // (Reading response.data.data as a bare array silently yielded an empty
+  // history — completed rides never showed in "My Trips".)
+  const response = await client.get<Envelope<{ rides: RideResponseDto[] } | null>>('/v1/customer/rides');
+  return (response.data.data?.rides ?? []).map(toDomain);
 }
 
 export async function getRide(rideId: string): Promise<CustomerRide> {

@@ -268,9 +268,9 @@ export function ManualPaymentClaimStatusCard({
           </>
         ) : (
           <>
-            {claim.status === 'approved' && onDone && (
+            {onDone && (
               <AppButton
-                title="Go to Dashboard"
+                title={claim.status === 'approved' ? 'Go to Dashboard' : 'Continue using Rides'}
                 onPress={onDone}
                 style={styles.btn}
               />

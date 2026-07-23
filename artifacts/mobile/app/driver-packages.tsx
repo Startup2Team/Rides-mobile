@@ -24,6 +24,8 @@ import { useColors } from '@/hooks/useColors';
 import { saveLockedPackageOffer } from '@/persistence/lockedPackageOfferPersistence';
 import { VEHICLE_LABELS } from '@/types';
 import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
+import { useDriverBackendEntitlementsQuery } from '@/query/hooks/useDriverBackendEntitlementsQuery';
+import { toBackendTransportType } from '@/constants/vehicles';
 import type { ManualPaymentClaimReadModel } from '@/domains/package-payments';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
@@ -88,6 +90,19 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
   const vehicleType = activeVehicle?.vehicleType ?? driverProfile?.vehicleType ?? null;
+
+  // Backend-authoritative credits for this vehicle type. A free "launch" starter
+  // is only for drivers who haven't onboarded yet, so once they hold any credits
+  // (from the starter itself or any package) we stop offering the free one —
+  // this survives reload, unlike the local activation list.
+  const { data: backendEntitlements } = useDriverBackendEntitlementsQuery({ enabled: !!user?.id });
+  const backendCode = vehicleType ? toBackendTransportType(vehicleType) : null;
+  const vehicleEntitlement = backendCode
+    ? (backendEntitlements ?? []).find(e => e.vehicleTypeCode === backendCode)
+    : undefined;
+  const hasCreditsForVehicle = !!vehicleEntitlement
+    && (vehicleEntitlement.ridesRemaining + vehicleEntitlement.bonusRemaining) > 0;
+
   const packages = offerSourceReady ? getActivePackages(vehicleType, catalog) : [];
   const vehicleLabel = vehicleType ? VEHICLE_LABELS[vehicleType] : 'Vehicle';
   const activeCampaigns = getActiveDriverRideCampaigns(campaigns);
@@ -250,7 +265,12 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
         entitlement,
         activeCampaigns,
       });
-      const isOfferUsed = pkg.priceRwf === 0 && hasUsedPackageOffer(entitlement, pkg.packageId);
+      // A free launch starter disappears once the driver has onboarded (holds
+      // credits, or already claimed this offer locally) — don't re-offer it.
+      const isFreeOffer = pkg.priceRwf === 0;
+      if (isFreeOffer && (hasCreditsForVehicle || hasUsedPackageOffer(entitlement, pkg.packageId))) {
+        return null;
+      }
       const pendingClaim = activeClaimByPackageId.get(pkg.packageId);
       return (
         <PackageCard
@@ -258,7 +278,6 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
           ridePackage={pkg}
           cardFill={cardFill}
           colors={colors}
-          disabled={isOfferUsed}
           pending={Boolean(pendingClaim)}
           unavailable={isEntitlementLoading}
           selected={selectedOffer?.packageId === pkg.packageId}
