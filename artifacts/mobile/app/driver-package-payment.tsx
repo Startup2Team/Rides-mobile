@@ -125,11 +125,15 @@ export default function DriverPackagePaymentScreen() {
     if (submittedClaim) {
       return list.find(c => c && c.id === submittedClaim.id) ?? submittedClaim;
     }
-    // Otherwise surface only a pre-existing IN-FLIGHT claim (returning to the
-    // screen mid-review). A past approved/rejected claim must not block buying a
-    // new package, so terminal statuses are ignored here.
-    return list.find(c => c && ACTIVE_CLAIM_STATUSES.has(c.status)) ?? null;
-  }, [submittedClaim, claims]);
+    // Otherwise surface only a pre-existing IN-FLIGHT claim FOR THIS PACKAGE
+    // (returning to the screen mid-review). Scoping to this offer's packageId is
+    // what lets a driver buy OTHER packages while one is under review — an active
+    // claim on package A must not hijack the payment screen for package B. A past
+    // approved/rejected claim never blocks (terminal statuses ignored here).
+    return list.find(
+      c => c && ACTIVE_CLAIM_STATUSES.has(c.status) && c.packageId === ridePackage?.packageId,
+    ) ?? null;
+  }, [submittedClaim, claims, ridePackage?.packageId]);
 
   useEffect(() => {
     let active = true;
