@@ -32,14 +32,12 @@ import {
   addDriverOffer,
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
-import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
+import { markRideArrived, startRideJourney } from './rideTracking';
 import { createRideTimerManager } from './rideTimerManager';
 import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   CONFIRMED_RIDE_START_DELAY_MS,
-  JOURNEY_TRACKING_INTERVAL_MS,
-  JOURNEY_TRACKING_NOISE,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
@@ -695,10 +693,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         reportOperationalFailure('ride.driver.start', error, { rideId: backendRideIdForStart }),
       );
     }
+    // No simulated jitter — the driver marker moves ONLY from real
+    // driver_location WS events. Just clear any stale interval from a prior ride.
     timers.clearInterval(driverIntervalRef.current);
-    driverIntervalRef.current = timers.scheduleInterval(() => {
-      setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
-    }, JOURNEY_TRACKING_INTERVAL_MS);
+    driverIntervalRef.current = null;
     if (!currentRideSnapshot) return;
     const actorRole = auth?.user?.mode === 'driver' && rideCommandCapabilitySnapshot.state.isApprovedDriver
       ? 'driver'

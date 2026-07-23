@@ -10,7 +10,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
-import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useRideActions } from '@/hooks/ride/useRideActions';
@@ -114,17 +113,9 @@ export default function RideScreen() {
     isArriving ? arrivingRouteOrigin : null,
     isArriving && currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
   );
-  const driverNavigationRoute = isArriving
-    ? driverToPickupRoute?.coordinates ?? []
-    : rideRoute?.coordinates ?? [];
-
-  const liveDriverCoords = useDriverTracking({
-    enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
-    routeCoordinates: driverNavigationRoute,
-    stepCount: isArriving ? 10 : 24,
-  });
-
-  const activeDriverLocation = liveDriverCoords ?? driverLocation;
+  // The driver marker comes ONLY from the driver's real position pushed over the
+  // WS (context driverLocation) — no simulated walk along the route polyline.
+  const activeDriverLocation = driverLocation;
 
   useEffect(() => {
     const status = currentRide?.status ?? null;
@@ -135,12 +126,12 @@ export default function RideScreen() {
     }
 
     if (status === 'arrived' && previousStatus === 'arriving' && currentRide) {
-      const lockAt = liveDriverCoords ?? driverLocation ?? currentRide.pickup;
+      const lockAt = driverLocation ?? currentRide.pickup;
       setArrivedDriverCoords(lockAt);
     }
 
     previousRideStatusRef.current = status;
-  }, [currentRide, currentRide?.status, driverLocation, liveDriverCoords]);
+  }, [currentRide, currentRide?.status, driverLocation]);
 
   useEffect(() => {
     if (isArriving && activeDriverLocation) {
@@ -281,7 +272,7 @@ export default function RideScreen() {
 
     const driverCoord = isArrived
       ? arrivedDriverCoords ?? driverLocation ?? currentRide.pickup
-      : liveDriverCoords ?? driverLocation;
+      : driverLocation;
 
     if (currentRide.status === 'arriving' && driverCoord) {
       mapRef.current.fitToCoordinates(
@@ -320,7 +311,6 @@ export default function RideScreen() {
     currentRide,
     driverLocation,
     isArrived,
-    liveDriverCoords,
     mapFitEdgePadding,
     rideRoute,
   ]);
