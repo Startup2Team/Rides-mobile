@@ -309,7 +309,10 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
 function PackageCard({ cardFill, colors, disabled = false, pending = false, onPress, ridePackage, selected, unavailable = false }: {
   cardFill: string; colors: ReturnType<typeof useColors>; disabled?: boolean; pending?: boolean; onPress: () => void; ridePackage: DriverRidePackageOffer; selected?: boolean; unavailable?: boolean;
 }) {
-  const isDisabled = disabled || unavailable || pending;
+  // `pending` (a payment already under review for this package) is informational
+  // only — the driver may buy the same or another package again while waiting,
+  // and each purchase shows as "under review". It must NOT disable the card.
+  const isDisabled = disabled || unavailable;
   const fill = selected ? colors.primaryHex + '0A' : cardFill;
 
   return <TouchableOpacity
@@ -370,7 +373,7 @@ function PackageCard({ cardFill, colors, disabled = false, pending = false, onPr
       styles.selectionControl,
       { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : 'transparent' },
     ]}>
-      {pending ? <Feather name="clock" size={15} color={colors.warning} /> : selected ? <Feather name="check" size={17} color="#fff" /> : null}
+      {selected ? <Feather name="check" size={17} color="#fff" /> : pending ? <Feather name="clock" size={15} color={colors.warning} /> : null}
     </View>
   </TouchableOpacity>;
 }

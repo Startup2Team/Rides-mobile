@@ -103,7 +103,7 @@ export default function DriverPackagePaymentScreen() {
   const cancelClaim = useCancelManualPaymentClaimMutation();
 
   const [formVisible, setFormVisible] = useState(false);
-  const [payerPhone, setPayerPhone] = useState(driverProfile?.momoCode ?? '');
+  const [payerPhone, setPayerPhone] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [submittedClaim, setSubmittedClaim] = useState<ManualPaymentClaimReadModel | null>(null);

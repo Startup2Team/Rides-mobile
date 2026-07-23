@@ -66,7 +66,7 @@ export default function DriverCustomTopUpScreen() {
     (driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn') as ManualPaymentProvider,
   );
   const [amountText, setAmountText] = useState('');
-  const [payerPhone, setPayerPhone] = useState(driverProfile?.momoCode ?? '');
+  const [payerPhone, setPayerPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittedClaim, setSubmittedClaim] = useState<ManualPaymentClaimReadModel | null>(null);
