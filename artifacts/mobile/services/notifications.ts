@@ -74,6 +74,17 @@ export async function markAllNotificationsRead(): Promise<void> {
   await getAppBackendClient().post('/v1/users/me/notifications/mark-all-read', {});
 }
 
+// Reverse a read on the backend (PATCH …/{id}/unread).
+export async function markNotificationUnread(id: string): Promise<void> {
+  await getAppBackendClient().patch(`/v1/users/me/notifications/${id}/unread`, {});
+}
+
+// Permanently delete a notification on the backend (DELETE …/{id}). Previously
+// "delete" only hid it locally and it reappeared on refresh.
+export async function deleteNotification(id: string): Promise<void> {
+  await getAppBackendClient().delete(`/v1/users/me/notifications/${id}`);
+}
+
 // Register (or refresh) a native push token for the signed-in user so FCM can
 // reach every device they're logged in on. `platform` lets the backend tune the
 // payload (Android vs iOS/APNs). Multi-device: the backend upserts and also

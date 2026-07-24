@@ -26,7 +26,7 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
-import { submitSupportTicket } from '@/services/support';
+import { deleteAccount } from '@/services/authSession';
 import { usePressGuard } from '@/hooks/usePressGuard';
 import { DailyGoalIcon } from "@/components/DailyGoalIcon";
 import { PrivacySecurityIcon } from "@/components/PrivacySecurityIcon";
@@ -68,27 +68,27 @@ export default function SettingsScreen() {
       "Delete Account",
       "This will permanently delete your account and all ride history. This cannot be undone.",
       [
+        { text: "Cancel", style: "cancel" },
         {
           text: 'Delete Forever',
           style: 'destructive',
           onPress: async () => {
-            // No self-serve deletion endpoint exists yet — file a deletion
-            // request for the team to action, then sign the user out locally.
+            // Real server-side deletion (DELETE /v1/auth/account): the backend
+            // anonymizes the account and revokes all sessions. Only sign out
+            // AFTER it succeeds — never pretend it worked when it didn't.
             try {
-              await submitSupportTicket({
-                subject: 'Account deletion request',
-                type: 'account_deletion',
-              });
+              await deleteAccount();
             } catch {
-              // Proceed with local sign-out even if the request fails to send.
+              Alert.alert(
+                'Could not delete account',
+                "Something went wrong deleting your account. Check your connection and try again, or contact support if it keeps happening.",
+              );
+              return;
             }
             await logout();
             replaceAuthBoundary(router, '/(auth)/welcome');
           },
         },
-        { text: 'Cancel', style: 'cancel' },
-        { text: "Delete Forever", style: "destructive", onPress: () => {} },
-        { text: "Cancel", style: "cancel" },
       ],
     );
   };

@@ -143,40 +143,50 @@ export default function RatingScreen() {
 
   const persistRating = async () => {
     if (ratingSavedRef.current || stars < 1 || stars > 5) return;
+    // The backend resolves the driver from the ride, so a ride id is all we need
+    // to submit. driverId is only required for the LOCAL mirror — a missing one
+    // must NOT silently drop the whole rating (the previous bug).
+    if (!ratedRide?.id) return;
     const driverId = ratedRide?.driverId ?? ratedRide?.driver?.id;
-    if (!ratedRide?.id || !driverId) return;
 
-    try {
-      shadowWireSubmitRatingCommand({
-        rideId: ratedRide.id,
-        rating: stars,
-        comment: review || null,
-        ratedUserId: driverId,
-        actorId: user?.id ?? ratedRide.customerId ?? 'local_user',
-        actorRole: user?.mode === 'driver' ? 'driver' : 'customer',
-      });
-    } catch (error) {
-      reportOperationalFailure('ride.shadow.rating', error, { rideId: ratedRide.id, driverId });
+    if (driverId) {
+      try {
+        shadowWireSubmitRatingCommand({
+          rideId: ratedRide.id,
+          rating: stars,
+          comment: review || null,
+          ratedUserId: driverId,
+          actorId: user?.id ?? ratedRide.customerId ?? 'local_user',
+          actorRole: user?.mode === 'driver' ? 'driver' : 'customer',
+        });
+      } catch (error) {
+        reportOperationalFailure('ride.shadow.rating', error, { rideId: ratedRide.id, driverId });
+      }
     }
 
+    // Real backend: POST /customer/rides/{id}/rate — always attempt, regardless
+    // of whether we could resolve a local driverId.
     try {
-      // Real backend: POST /customer/rides/{id}/rate
       await submitRideRating(ratedRide.id, { score: stars, comment: review || null });
+      ratingSavedRef.current = true;
     } catch (error) {
       reportOperationalFailure('ride.rating.submit', error, { rideId: ratedRide.id, driverId });
     }
 
-    try {
-      await saveDriverRatingOnce(buildLocalDriverRating({
-        comment: review,
-        customerId: ratedRide.customerId ?? user?.id,
-        driverId,
-        rideId: ratedRide.id,
-        stars: stars as DriverRatingStars,
-      }));
-      ratingSavedRef.current = true;
-    } catch (error) {
-      reportOperationalFailure('driver.rating.persist', error, { rideId: ratedRide.id, driverId });
+    // Local mirror only when we have a driver to key it on.
+    if (driverId) {
+      try {
+        await saveDriverRatingOnce(buildLocalDriverRating({
+          comment: review,
+          customerId: ratedRide.customerId ?? user?.id,
+          driverId,
+          rideId: ratedRide.id,
+          stars: stars as DriverRatingStars,
+        }));
+        ratingSavedRef.current = true;
+      } catch (error) {
+        reportOperationalFailure('driver.rating.persist', error, { rideId: ratedRide.id, driverId });
+      }
     }
   };
 

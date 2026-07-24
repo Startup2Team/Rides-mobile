@@ -24,6 +24,21 @@ function mapStatus(status: string): RideStatus {
   return STATUS_MAP[status] ?? 'idle';
 }
 
+// Real trip duration from the backend timestamps when the ride actually ran;
+// otherwise a distance-based ESTIMATE (used pre-/mid-trip as an ETA). Previously
+// this was ALWAYS the estimate (distance*3+5), so ride-detail showed an invented
+// "Duration" for completed trips even though started_at/completed_at were known.
+function resolveDuration(r: CustomerRide): number {
+  if (r.startedAt && r.completedAt) {
+    const start = Date.parse(r.startedAt);
+    const end = Date.parse(r.completedAt);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return Math.max(1, Math.round((end - start) / 60000));
+    }
+  }
+  return Math.round((r.estimatedDistanceKm ?? 0) * 3 + 5);
+}
+
 function toMobileRide(r: CustomerRide): Ride {
   const distance = r.estimatedDistanceKm ?? 0;
   return {
@@ -40,7 +55,7 @@ function toMobileRide(r: CustomerRide): Ride {
     },
     status: mapStatus(r.status),
     distance,
-    duration: Math.round(distance * 3 + 5),
+    duration: resolveDuration(r),
     suggestedFare: r.estimatedFareRwf ?? r.agreedFare ?? r.finalFareRwf ?? 0,
     agreedFare: r.agreedFare ?? r.finalFareRwf ?? undefined,
     negotiation: [],

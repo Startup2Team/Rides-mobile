@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
@@ -35,7 +36,7 @@ const LINKS = [
 const STATS = [
   { label: 'Countries', value: '1', sub: 'Rwanda' },
   { label: 'Vehicle types', value: '4', sub: 'Moto · Cab · Hilux · Fuso' },
-  { label: 'Languages', value: '4', sub: 'EN · FR · RW · LG' },
+  { label: 'Languages', value: '3', sub: 'EN · FR · RW' },
 ];
 
 export default function AboutScreen() {
@@ -60,7 +61,9 @@ export default function AboutScreen() {
             Rwanda's ride platform — Moto to Fuso
           </Text>
           <View style={[styles.versionBadge, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            <Text style={[styles.versionText, { color: colors.mutedForeground }]}>Version 1.0.0</Text>
+            <Text style={[styles.versionText, { color: colors.mutedForeground }]}>
+              Version {Constants.expoConfig?.version ?? '1.0.0'}
+            </Text>
           </View>
         </View>
 

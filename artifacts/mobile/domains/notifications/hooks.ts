@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   useClearNotificationsMutation,
+  useDeleteNotificationMutation,
   useMarkAllNotificationsReadMutation,
   useMarkNotificationReadMutation,
   useMarkNotificationUnreadMutation,
@@ -47,6 +48,7 @@ export function useNotifications() {
   const markRead = useMarkNotificationReadMutation();
   const markUnread = useMarkNotificationUnreadMutation();
   const markAllRead = useMarkAllNotificationsReadMutation();
+  const deleteNotification = useDeleteNotificationMutation();
   const clearNotifications = useClearNotificationsMutation();
 
   const notifications = notificationsQuery.data ?? [];
@@ -62,6 +64,7 @@ export function useNotifications() {
     markNotificationRead: markRead.mutateAsync,
     markNotificationUnread: markUnread.mutateAsync,
     markAllNotificationsRead: markAllRead.mutateAsync,
+    deleteNotification: deleteNotification.mutateAsync,
     clearNotifications: clearNotifications.mutateAsync,
   };
 }

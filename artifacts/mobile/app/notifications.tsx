@@ -72,7 +72,7 @@ export default function NotificationsScreen() {
   const { user } = useAuth();
   const { loadHistory } = useRide();
   const { showToast } = useToast();
-  const { notifications, unreadCount, refreshNotifications, markNotificationRead, markNotificationUnread, markAllNotificationsRead } = useNotifications();
+  const { notifications, unreadCount, refreshNotifications, markNotificationRead, markNotificationUnread, markAllNotificationsRead, deleteNotification: deleteNotificationRemote } = useNotifications();
   const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
@@ -147,13 +147,19 @@ export default function NotificationsScreen() {
 
   const deleteNotification = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Hide immediately, then soft-delete on the backend (kept recoverable). The
+    // local dismiss also covers locally-derived items that have no server row.
     setDismissedIds(prev => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
-    showToast('Notification deleted', 'error');
-  }, [showToast]);
+    void deleteNotificationRemote(id).catch(() => {
+      // Offline / unreachable — it stays hidden locally and the backend soft
+      // delete will be retried on the next explicit delete.
+    });
+    showToast('Notification deleted');
+  }, [deleteNotificationRemote, showToast]);
 
   const confirmDeleteNotification = useCallback((id: string) => {
     Alert.alert(

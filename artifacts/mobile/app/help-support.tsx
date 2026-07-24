@@ -10,7 +10,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
-import { SAFETY_EMAIL, SUPPORT_EMAIL } from '@/constants/branding';
+import {
+  SAFETY_EMAIL,
+  SUPPORT_EMAIL,
+  SUPPORT_PHONE_DISPLAY,
+  SUPPORT_PHONE_E164,
+  SUPPORT_WHATSAPP,
+} from '@/constants/branding';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { openExternalUrl } from '@/utils/openExternalUrl';
@@ -53,9 +59,8 @@ const CONTACT_CHANNELS = [
     id: 'phone',
     icon: 'phone' as const,
     label: 'Call Support',
-    // TODO: real support number — placeholder until Rides publishes a live support line.
-    detail: '+250 788 123 456',
-    onPress: () => void openExternalUrl('tel:+250788123456'),
+    detail: SUPPORT_PHONE_DISPLAY,
+    onPress: () => void openExternalUrl(`tel:${SUPPORT_PHONE_E164}`),
   },
   {
     id: 'email',
@@ -69,8 +74,7 @@ const CONTACT_CHANNELS = [
     icon: 'whatsapp' as const,
     label: 'WhatsApp',
     detail: 'Chat with us',
-    // TODO: real support WhatsApp number — placeholder wa.me link.
-    onPress: () => void openExternalUrl('https://wa.me/250788123456'),
+    onPress: () => void openExternalUrl(`https://wa.me/${SUPPORT_WHATSAPP}`),
     family: 'mci' as const,
   },
 ];
@@ -123,11 +127,11 @@ export default function HelpSupportScreen() {
           })}
         </View>
 
-        {/* Response time */}
-        {/* TODO: real support number / SLA — the response-time and hours below are placeholders. */}
+        {/* Response time — kept generic on purpose: no published SLA to promise
+            yet. Replace with real hours/response target once support ops define one. */}
         <View style={[styles.infoBox, { backgroundColor: colors.muted }]}>
          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Average response time: under 2 hours · Available 7 days a week, 7 AM – 10 PM
+            Reach us any day by phone, WhatsApp, or email — we&apos;ll get back to you as soon as we can.
           </Text>
         </View>
       </GlassScrollView>

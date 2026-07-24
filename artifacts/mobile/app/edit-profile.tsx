@@ -22,7 +22,6 @@ import { AppInput } from '@/components/AppInput';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
-import { updateProfile } from '@/services/profile';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useProfileActions } from '@/domains/profile';
@@ -89,12 +88,10 @@ export default function EditProfileScreen() {
     }
     setSaving(true);
     try {
-      // Real backend: PUT /customer/profile persists full_name + email. The
-      // emergency-contact fields have no backend equivalent, so they stay local.
-      await updateProfile({
-        fullName: name.trim(),
-        email: email.trim() || null,
-      });
+      // Single write path: updateUser() pushes the backend-owned fields
+      // (PUT /customer/profile with full_name + email) AND saves locally. It
+      // used to be preceded by a direct updateProfile() call, which fired the
+      // exact same PUT twice per save — removed.
       await updateUser({
         name: name.trim(),
         email: email.trim() || undefined,

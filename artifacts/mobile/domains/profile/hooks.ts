@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { profileRepository } from './repository';
+import { fetchProfile, updateProfile, uploadProfilePhoto } from '@/services/profile';
 import type { DriverProfile, ProfileIdentity, ProfilePhoto, UserProfile } from './types';
 import type { User } from '@/types';
 import { useProfilePhotoQuery, useProfileQuery, useUpdateProfileMutation } from '@/query/hooks/useProfileQuery';
@@ -90,7 +91,22 @@ export function useProfilePhoto(fallbackImage?: string | null) {
 
   const refreshProfileImage = useCallback(async () => {
     const next = await profileRepository.getProfileImage();
-    setStoredProfileImage(next);
+    if (next) {
+      setStoredProfileImage(next);
+      return;
+    }
+    // No local cache (fresh install / a different device) — hydrate the avatar
+    // from the backend profile, where it now lives as an R2 URL. Best-effort:
+    // stay on whatever we have if offline.
+    try {
+      const profile = await fetchProfile();
+      if (profile.profileImageUrl) {
+        await profileRepository.saveProfileImage(profile.profileImageUrl);
+        setStoredProfileImage(profile.profileImageUrl);
+      }
+    } catch {
+      // Offline / unreachable — keep the current image.
+    }
   }, []);
 
   useFocusEffect(
@@ -123,7 +139,10 @@ export function useProfilePhoto(fallbackImage?: string | null) {
           }
           result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 1,
+            // Compress + square-crop on capture so the uploaded avatar is small
+            // (the "break them down" step) — full-res phone photos are wasteful
+            // for a profile picture.
+            quality: 0.7,
             allowsEditing: true,
             aspect: [1, 1],
           });
@@ -137,17 +156,31 @@ export function useProfilePhoto(fallbackImage?: string | null) {
           }
           result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 1,
+            quality: 0.7,
             allowsEditing: true,
             aspect: [1, 1],
           });
         }
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
-          await profileRepository.saveProfileImage(asset.uri);
+          // Optimistic preview from the local file while the upload runs.
           setStoredProfileImage(asset.uri);
-          showToast('Photo updated', 'info');
-          return asset.uri;
+          try {
+            // Upload to R2 + persist the public URL on the backend profile, so
+            // the avatar survives reinstall, syncs across devices, and is visible
+            // to drivers/support — not siloed on this device.
+            const fileUrl = await uploadProfilePhoto(asset.uri);
+            await profileRepository.saveProfileImage(fileUrl);
+            setStoredProfileImage(fileUrl);
+            showToast('Photo updated', 'info');
+            return fileUrl;
+          } catch (uploadError) {
+            console.error('Failed to upload profile photo:', uploadError);
+            // Revert the optimistic preview to the last persisted image.
+            await refreshProfileImage();
+            showToast("Couldn't upload your photo. Check your connection and try again.", 'error');
+            return null;
+          }
         }
       } catch (error) {
         console.error('Failed to pick image:', error);
@@ -155,12 +188,19 @@ export function useProfilePhoto(fallbackImage?: string | null) {
       }
       return null;
     },
-    [showToast],
+    [showToast, refreshProfileImage],
   );
 
   const handleDeletePhoto = useCallback(async () => {
     await profileRepository.removeProfileImage();
     setStoredProfileImage(null);
+    // Clear it on the backend too, so it doesn't re-hydrate from R2 on next focus
+    // / another device. Best-effort — local removal already happened.
+    try {
+      await updateProfile({ profileImageUrl: null });
+    } catch {
+      // Offline — the backend still holds the old URL; it'll clear on next delete.
+    }
     if (driverProfile) {
       const nextProfile: DriverProfile = { ...driverProfile };
       delete nextProfile.profileImage;
