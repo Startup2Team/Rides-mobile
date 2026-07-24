@@ -41,12 +41,31 @@ function resolveDuration(r: CustomerRide): number {
 
 function toMobileRide(r: CustomerRide): Ride {
   const distance = r.estimatedDistanceKm ?? 0;
+  const vehicleType = (r.vehicleType ?? 'moto') as VehicleType;
+  // Build the nested driver object the detail screen renders. The backend
+  // returns driver name/phone/rating/plate on the ride; previously only the flat
+  // driverId/driverName were mapped, so the whole driver card was dead code.
+  // location/eta aren't meaningful for a past trip — use the dropoff as a stable
+  // placeholder Coords so the (required) fields are satisfied.
+  const driver: Ride['driver'] = r.driverId
+    ? {
+        id: r.driverId,
+        name: r.driverName ?? 'Driver',
+        phone: r.driverPhone ?? '',
+        vehicleType,
+        plateNumber: r.driverPlate ?? '',
+        rating: r.driverRating ?? 0,
+        location: { latitude: r.destination.lat, longitude: r.destination.lng },
+        eta: 0,
+      }
+    : undefined;
   return {
     id: r.id,
     customerId: '',
     driverId: r.driverId ?? undefined,
     driverName: r.driverName ?? undefined,
-    vehicleType: (r.vehicleType ?? 'moto') as VehicleType,
+    driver,
+    vehicleType,
     pickup: { latitude: r.pickup.lat, longitude: r.pickup.lng, address: r.pickup.address },
     destination: {
       latitude: r.destination.lat,
@@ -57,7 +76,9 @@ function toMobileRide(r: CustomerRide): Ride {
     distance,
     duration: resolveDuration(r),
     suggestedFare: r.estimatedFareRwf ?? r.agreedFare ?? r.finalFareRwf ?? 0,
-    agreedFare: r.agreedFare ?? r.finalFareRwf ?? undefined,
+    // Prefer the actually-charged final fare (includes surcharges/waiting/etc.)
+    // over the negotiated agreed_fare for a completed trip.
+    agreedFare: r.finalFareRwf ?? r.agreedFare ?? undefined,
     negotiation: [],
     createdAt: r.createdAt,
     completedAt: r.completedAt ?? undefined,

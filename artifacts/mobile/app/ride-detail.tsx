@@ -1,8 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -126,25 +128,59 @@ export default function RideDetailScreen() {
   const rideDetailQuery = useRideDetailQuery(rideId);
   const ride = rideDetailQuery.data ?? null;
 
-  if (!ride) {
+  // Still fetching (and nothing cached) — show a spinner instead of flashing the
+  // "Ride not found" empty state on every open.
+  if (rideDetailQuery.isLoading && !ride) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <GlassHeader title="Ride Details" />
         <View style={styles.empty}>
-          <Feather name="map" size={sizes.avatar.md} color={colors.mutedForeground} />
-          <AppText variant="h3" style={[styles.emptyTitle, { color: colors.foreground }]}>Ride not found</AppText>
+          <ActivityIndicator color={colors.primary} />
           <AppText variant="bodySmall" style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            This ride may not be available in your history anymore.
+            Loading trip…
           </AppText>
         </View>
       </View>
     );
   }
 
+  if (!ride) {
+    // Distinguish a real error (retry) from a genuinely-missing ride.
+    const isError = rideDetailQuery.isError;
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <GlassHeader title="Ride Details" />
+        <View style={styles.empty}>
+          <Feather name={isError ? 'wifi-off' : 'map'} size={sizes.avatar.md} color={colors.mutedForeground} />
+          <AppText variant="h3" style={[styles.emptyTitle, { color: colors.foreground }]}>
+            {isError ? "Couldn't load this trip" : 'Ride not found'}
+          </AppText>
+          <AppText variant="bodySmall" style={[styles.emptyText, { color: colors.mutedForeground }]}>
+            {isError
+              ? 'Check your connection and try again.'
+              : 'This ride may not be available in your history anymore.'}
+          </AppText>
+          <TouchableOpacity
+            onPress={() => rideDetailQuery.refetch()}
+            style={[styles.retryBtn, { borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+          >
+            <AppText variant="label" style={{ color: colors.primary }}>Try again</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const isCancelled = ride.status === 'cancelled';
+  const isCompleted = ride.status === 'completed';
   const completedAt = ride.completedAt ?? ride.createdAt;
   const dateStr = formatRideDate(completedAt);
   const timeStr = formatRideTime(completedAt);
   const fare = ride.agreedFare ?? ride.suggestedFare;
+  // Only a completed trip was actually "paid"; cancelled/other were not charged.
+  const fareLabel = isCancelled ? 'Fare (not charged)' : isCompleted ? 'Total paid' : 'Fare';
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <GlassHeader title="Ride Details" />
@@ -162,7 +198,7 @@ export default function RideDetailScreen() {
         <View style={[styles.summaryCard, { backgroundColor: colors.card }]}>
           <View style={styles.summaryTopRow}>
             <View style={{ flex: 1 }}>
-              <AppText variant="caption" style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Total paid</AppText>
+              <AppText variant="caption" style={[styles.summaryLabel, { color: colors.mutedForeground }]}>{fareLabel}</AppText>
               <AppText variant="display" style={[styles.fareValue, { color: colors.foreground }]}>
                 {fare.toLocaleString()} RWF
               </AppText>
@@ -265,6 +301,13 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: semanticSpacing.inlineGap, paddingHorizontal: spacing[32] },
   emptyTitle: { ...typography.h3, fontFamily: typography.badge.fontFamily },
   emptyText: { ...typography.bodySmall, textAlign: 'center' },
+  retryBtn: {
+    marginTop: spacing[4],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
   summaryCard: {
     borderRadius: radius['3xl'] - spacing[2],
     padding: radius['3xl'] - spacing[2],
