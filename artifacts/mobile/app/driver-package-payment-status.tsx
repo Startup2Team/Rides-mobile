@@ -8,6 +8,8 @@ import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
 import { getManualPaymentClaimPresentation } from '@/domains/package-payments';
+import { useQuery } from '@tanstack/react-query';
+import { getPurchaseHistory } from '@/services/driverPackages';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -23,6 +25,20 @@ export default function DriverPackagePaymentStatusScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
   const { claims, isLoading } = useManualPaymentClaimsQuery();
+  // Automatic (MoMo RequestToPay) purchases — previously invisible here.
+  const purchasesQuery = useQuery({
+    queryKey: ['driver', 'package-purchases'],
+    queryFn: getPurchaseHistory,
+    staleTime: 15_000,
+  });
+  const purchases = purchasesQuery.data ?? [];
+
+  const purchaseBadge = (status: string) => {
+    const s = status.toUpperCase();
+    if (s === 'PAID') return { label: 'Payment confirmed', bg: colors.successHex + '18', text: colors.success };
+    if (s === 'FAILED') return { label: 'Payment failed', bg: colors.destructiveHex + '18', text: colors.destructive };
+    return { label: 'Awaiting payment', bg: colors.warningHex + '18', text: colors.warning };
+  };
 
   const handleClaimPress = (claim: any) => {
     router.push({
@@ -71,20 +87,65 @@ export default function DriverPackagePaymentStatusScreen() {
         }}
         scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
       >
-        {isLoading ? (
+        {isLoading && purchasesQuery.isLoading ? (
           <View style={styles.centerCard}>
-            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>Loading confirmations...</Text>
+            <Text style={[styles.infoText, { color: colors.mutedForeground }]}>Loading payments...</Text>
           </View>
-        ) : claims.length === 0 ? (
+        ) : purchases.length === 0 && claims.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Feather name="list" size={24} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No payment confirmations yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No payments yet</Text>
             <Text style={[styles.emptyDetail, { color: colors.mutedForeground }]}>
-              Your manual package payment confirmations will appear here.
+              Your package payments — automatic and manual — will appear here.
             </Text>
           </View>
         ) : (
           <View style={styles.list}>
+            {/* Automatic MoMo purchases (read-only history) */}
+            {purchases.map((p) => {
+              const badge = purchaseBadge(p.status);
+              return (
+                <View
+                  key={p.id}
+                  style={[styles.card, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.titleBlock}>
+                      <Text style={[styles.packageName, { color: colors.foreground }]}>{p.packageName}</Text>
+                      <Text style={[styles.claimId, { color: colors.mutedForeground }]}>ID: {p.id}</Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.badgeText, { color: badge.text }]}>{badge.label}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <View style={styles.cardBody}>
+                    <View style={styles.row}>
+                      <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount</Text>
+                      <Text style={[styles.value, { color: colors.foreground }]}>{formatRwf(p.pricePaidRwf)}</Text>
+                    </View>
+                    <View style={styles.row}>
+                      <Text style={[styles.label, { color: colors.mutedForeground }]}>Provider</Text>
+                      <Text style={[styles.value, { color: colors.foreground }]}>{p.provider ? providerLabel(p.provider) : 'Mobile Money'}</Text>
+                    </View>
+                    <View style={styles.row}>
+                      <Text style={[styles.label, { color: colors.mutedForeground }]}>When</Text>
+                      <Text style={[styles.value, { color: colors.foreground }]}>{new Date(p.createdAt).toLocaleString()}</Text>
+                    </View>
+                    {p.status.toUpperCase() === 'PAID' ? (
+                      <View style={styles.row}>
+                        <Text style={[styles.label, { color: colors.mutedForeground }]}>Rides added</Text>
+                        <Text style={[styles.value, { color: colors.foreground }]}>
+                          {p.ridesGranted}{p.bonusRidesGranted > 0 ? ` +${p.bonusRidesGranted}` : ''}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+
+            {/* Manual proof-based claims */}
             {claims.map((claim) => (
               <TouchableOpacity
                 key={claim.id}
