@@ -19,6 +19,11 @@ function providerLabel(provider: string) {
   return provider === 'mtn' ? 'MTN MoMo' : 'Airtel Money';
 }
 
+// Only an in-flight claim is worth opening (to resubmit / see the live status);
+// a terminal claim (approved/rejected/expired) is read-only history and must NOT
+// route to the checkout screen — its locked offer is gone → "offer unavailable".
+const ACTIONABLE_CLAIM_STATUSES = new Set(['submitted', 'pending_review', 'needs_clarification']);
+
 export default function DriverPackagePaymentStatusScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -146,11 +151,14 @@ export default function DriverPackagePaymentStatusScreen() {
             })}
 
             {/* Manual proof-based claims */}
-            {claims.map((claim) => (
+            {claims.map((claim) => {
+              const actionable = ACTIONABLE_CLAIM_STATUSES.has(claim.status);
+              return (
               <TouchableOpacity
                 key={claim.id}
                 style={[styles.card, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}
-                onPress={() => handleClaimPress(claim)}
+                onPress={actionable ? () => handleClaimPress(claim) : undefined}
+                disabled={!actionable}
                 activeOpacity={0.78}
               >
                 <View style={styles.cardHeader}>
@@ -179,12 +187,15 @@ export default function DriverPackagePaymentStatusScreen() {
                     </Text>
                   </View>
                 </View>
-                <View style={styles.cardFooter}>
-                  <Text style={[styles.footerText, { color: colors.primary }]}>View details</Text>
-                  <Feather name="chevron-right" size={14} color={colors.primary} />
-                </View>
+                {actionable ? (
+                  <View style={styles.cardFooter}>
+                    <Text style={[styles.footerText, { color: colors.primary }]}>View details</Text>
+                    <Feather name="chevron-right" size={14} color={colors.primary} />
+                  </View>
+                ) : null}
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
