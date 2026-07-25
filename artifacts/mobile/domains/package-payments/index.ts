@@ -14,6 +14,7 @@ export * from './manualPaymentPackageActivationPort';
 export * from './manualPaymentReview';
 export * from './manualPaymentReviewPolicy';
 export * from './manualPaymentVerification';
+export * from './paymentReceipt';
 export * from './packagePaymentConfiguration';
 export * from './manualPaymentUssdInstruction';
 export * from './packagePaymentRepositoryMode';
