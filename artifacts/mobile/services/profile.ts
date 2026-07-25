@@ -16,6 +16,8 @@ export interface CustomerProfile {
   profileImageUrl: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  // Active VIEW ("customer" | "driver"), separate from driver capability.
+  preferredMode: 'customer' | 'driver' | null;
 }
 
 interface ProfileDto {
@@ -28,6 +30,7 @@ interface ProfileDto {
   profile_image_url?: string | null;
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
+  preferred_mode?: string | null;
 }
 
 interface ApiEnvelope<T> {
@@ -45,6 +48,7 @@ function toDomain(dto: ProfileDto): CustomerProfile {
     profileImageUrl: dto.profile_image_url ?? null,
     emergencyContactName: dto.emergency_contact_name ?? null,
     emergencyContactPhone: dto.emergency_contact_phone ?? null,
+    preferredMode: dto.preferred_mode === 'driver' ? 'driver' : dto.preferred_mode === 'customer' ? 'customer' : null,
   };
 }
 

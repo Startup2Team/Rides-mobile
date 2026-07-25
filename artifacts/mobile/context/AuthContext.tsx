@@ -193,6 +193,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: profile.email ?? prev.email,
           emergencyContactName: profile.emergencyContactName ?? prev.emergencyContactName,
           emergencyContactPhone: profile.emergencyContactPhone ?? prev.emergencyContactPhone,
+          // Restore the driver's chosen VIEW (customer/driver). Only for drivers —
+          // a non-driver is always a customer regardless of any stale value.
+          mode: prev.isDriver && profile.preferredMode ? profile.preferredMode : prev.mode,
         };
         void saveStoredUser(updated);
         return updated;
