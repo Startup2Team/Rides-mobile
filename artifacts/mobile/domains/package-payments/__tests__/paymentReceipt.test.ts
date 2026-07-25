@@ -96,7 +96,7 @@ describe('formatting helpers', () => {
 
   it('produces a filesystem-safe filename', () => {
     const receipt = buildPurchaseReceipt(paidPurchase)!;
-    expect(receiptFileName(receipt)).toMatch(/^RCPT-[A-Z0-9]+\.html$/);
+    expect(receiptFileName(receipt)).toMatch(/^RCPT-[A-Z0-9]+\.pdf$/);
   });
 });
 

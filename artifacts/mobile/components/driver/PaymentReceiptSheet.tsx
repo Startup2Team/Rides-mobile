@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
@@ -28,18 +29,27 @@ import {
 
 const ENTRANCE_TRANSLATE_Y = 24;
 
+/** Torn-stub divider: the one flourish that makes it read as a receipt. */
+function Perforation({ color }: { color: string }) {
+  return (
+    <View style={styles.perforation}>
+      {Array.from({ length: 26 }).map((_, i) => (
+        <View key={i} style={[styles.perfDash, { backgroundColor: color }]} />
+      ))}
+    </View>
+  );
+}
+
 interface Props {
   receipt: PaymentReceipt | null;
   onClose: () => void;
 }
 
 /**
- * Receipt preview for a settled package payment, with a download that hands the
- * document to the OS share sheet (Save to Files, Print, Mail, AirDrop).
- *
- * The document is HTML rather than a PDF so the feature ships over OTA — a PDF
- * would need expo-print, which is a native module and therefore a new build.
- * Printing from the share sheet produces a PDF anyway.
+ * Receipt preview for a settled package payment. Download renders a real PDF
+ * (expo-print) and hands it to the OS share sheet — Save to Files, Mail, AirDrop,
+ * Print. The file is renamed to the receipt number, because printToFileAsync
+ * writes to a random temp name that would reach the driver as "abc123.pdf".
  */
 export function PaymentReceiptSheet({ receipt, onClose }: Props) {
   const colors = useColors();
@@ -94,25 +104,48 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
     setBusy(true);
     setNote(null);
     try {
-      if (!FileSystem.cacheDirectory) {
-        throw new Error('Cache directory unavailable');
-      }
-      const fileUri = `${FileSystem.cacheDirectory}${receiptFileName(receipt)}`;
-      await FileSystem.writeAsStringAsync(fileUri, renderReceiptHtml(receipt), {
-        encoding: FileSystem.EncodingType.UTF8,
+      const { uri: tempUri } = await Print.printToFileAsync({
+        html: renderReceiptHtml(receipt),
+        base64: false,
       });
+
+      // Give the file the receipt number so it lands in Files as RCPT-XXXX.pdf.
+      let fileUri = tempUri;
+      if (FileSystem.cacheDirectory) {
+        const named = `${FileSystem.cacheDirectory}${receiptFileName(receipt)}`;
+        try {
+          await FileSystem.deleteAsync(named, { idempotent: true });
+          await FileSystem.moveAsync({ from: tempUri, to: named });
+          fileUri = named;
+        } catch {
+          // Keep the temp name rather than lose the receipt.
+        }
+      }
 
       if (!(await Sharing.isAvailableAsync())) {
         setNote('Sharing is unavailable on this device.');
         return;
       }
       await Sharing.shareAsync(fileUri, {
-        mimeType: 'text/html',
+        mimeType: 'application/pdf',
         dialogTitle: `Receipt ${receipt.receiptNumber}`,
-        UTI: 'public.html',
+        UTI: 'com.adobe.pdf',
       });
     } catch {
       setNote("Couldn't prepare the receipt. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, receipt]);
+
+  const handlePrint = React.useCallback(async () => {
+    if (!receipt || busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await Print.printAsync({ html: renderReceiptHtml(receipt) });
+    } catch {
+      setNote("Couldn't open the printer sheet.");
     } finally {
       setBusy(false);
     }
@@ -133,18 +166,17 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
         ? `${receipt.ridesGranted} + ${receipt.bonusRidesGranted} bonus`
         : `${receipt.ridesGranted}`;
 
-  const lines: { label: string; value: string }[] = [
-    { label: 'Receipt number', value: receipt.receiptNumber },
+  // Amount, package and rides live in the hero — don't repeat them as rows.
+  const lines: { label: string; value: string; mono?: boolean }[] = [
     { label: 'Date paid', value: formatReceiptDate(receipt.paidAt) },
-    { label: 'Package', value: receipt.packageName },
-    ...(receipt.vehicleType ? [{ label: 'Vehicle', value: receipt.vehicleType }] : []),
-    { label: 'Payment method', value: providerDisplayName(receipt.provider) },
+    { label: 'Method', value: providerDisplayName(receipt.provider) },
     {
-      label: 'Payment type',
-      value: receipt.source === 'automatic' ? 'Automatic (MoMo)' : 'Manual (proof reviewed)',
+      label: 'Type',
+      value: receipt.source === 'automatic' ? 'Automatic (MoMo)' : 'Manual (reviewed)',
     },
-    ...(rides ? [{ label: 'Rides added', value: rides }] : []),
-    { label: 'Reference', value: receipt.reference },
+    ...(receipt.vehicleType ? [{ label: 'Vehicle', value: receipt.vehicleType }] : []),
+    ...(receipt.driverName ? [{ label: 'Driver', value: receipt.driverName }] : []),
+    { label: 'Reference', value: receipt.reference, mono: true },
   ];
 
   return (
@@ -191,34 +223,63 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Paper — mirrors the downloaded document so the preview is honest. */}
+          {/* Paper — mirrors the PDF so the preview is honest. */}
           <View style={[styles.paper, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.paperHead}>
               <AppText style={[styles.wordmark, { color: colors.foreground }]}>Rides</AppText>
+              <AppText style={[styles.receiptNo, { color: colors.mutedForeground }]}>
+                {receipt.receiptNumber}
+              </AppText>
+            </View>
+
+            {/* Hero: what was paid, and that it landed. */}
+            <View style={styles.hero}>
+              <AppText style={[styles.amount, { color: colors.foreground }]}>
+                {formatReceiptAmount(receipt.amountRwf)}
+              </AppText>
+              <AppText style={[styles.heroPackage, { color: colors.mutedForeground }]} numberOfLines={2}>
+                {receipt.packageName}
+              </AppText>
               <View style={[styles.paidPill, { backgroundColor: colors.successHex + '18' }]}>
-                <AppText style={[styles.paidPillText, { color: colors.success }]}>Payment confirmed</AppText>
+                <Feather name="check" size={11} color={colors.success} />
+                <AppText style={[styles.paidPillText, { color: colors.success }]}>Paid</AppText>
               </View>
             </View>
 
-            <AppText style={[styles.amount, { color: colors.foreground }]}>
-              {formatReceiptAmount(receipt.amountRwf)}
-            </AppText>
-            <AppText style={[styles.amountCaption, { color: colors.mutedForeground }]}>
-              Paid for {receipt.packageName}
-            </AppText>
+            {rides ? (
+              <View style={[styles.ridesBanner, { backgroundColor: colors.primaryHex + '12' }]}>
+                <Feather name="plus-circle" size={13} color={colors.primary} />
+                <AppText style={[styles.ridesBannerText, { color: colors.primary }]}>
+                  {rides} rides added
+                </AppText>
+              </View>
+            ) : null}
 
-            <View style={[styles.paperDivider, { backgroundColor: colors.border }]} />
+            <Perforation color={colors.border} />
 
             <View style={styles.lines}>
               {lines.map(line => (
                 <View key={line.label} style={styles.line}>
-                  <AppText style={[styles.lineLabel, { color: colors.mutedForeground }]}>{line.label}</AppText>
-                  <AppText style={[styles.lineValue, { color: colors.foreground }]} numberOfLines={2}>
+                  <AppText style={[styles.lineLabel, { color: colors.mutedForeground }]}>
+                    {line.label}
+                  </AppText>
+                  <AppText
+                    style={[
+                      styles.lineValue,
+                      { color: colors.foreground },
+                      line.mono ? styles.lineValueMono : null,
+                    ]}
+                    numberOfLines={2}
+                  >
                     {line.value}
                   </AppText>
                 </View>
               ))}
             </View>
+
+            <AppText style={[styles.footnote, { color: colors.mutedForeground }]}>
+              Keep this reference when contacting Rides support about this payment.
+            </AppText>
           </View>
 
           {note ? (
@@ -228,14 +289,23 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
 
         <View style={styles.actions}>
           <TouchableOpacity
-            style={[styles.secondaryButton, { borderColor: colors.border }]}
+            style={[styles.iconButton, { borderColor: colors.border }]}
             onPress={handleCopyReference}
             accessibilityRole="button"
             accessibilityLabel="Copy payment reference"
             activeOpacity={0.78}
           >
-            <Feather name="copy" size={15} color={colors.foreground} />
-            <AppText style={[styles.secondaryButtonText, { color: colors.foreground }]}>Copy ref</AppText>
+            <Feather name="copy" size={16} color={colors.foreground} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.iconButton, { borderColor: colors.border }]}
+            onPress={handlePrint}
+            accessibilityRole="button"
+            accessibilityLabel="Print receipt"
+            activeOpacity={0.78}
+          >
+            <Feather name="printer" size={16} color={colors.foreground} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -252,7 +322,7 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
             ) : (
               <Feather name="download" size={15} color="#FFFFFF" />
             )}
-            <AppText style={styles.primaryButtonText}>{busy ? 'Preparing…' : 'Download'}</AppText>
+            <AppText style={styles.primaryButtonText}>{busy ? 'Preparing…' : 'Download PDF'}</AppText>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -286,20 +356,45 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   scroll: { flexGrow: 0 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 8, gap: 10 },
-  paper: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 4 },
+  paper: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 18 },
   paperHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
-  wordmark: { fontSize: 19, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
-  paidPill: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
-  paidPillText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  amount: { marginTop: 14, fontSize: 30, fontFamily: 'Inter_700Bold', letterSpacing: -0.8 },
-  amountCaption: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  paperDivider: { height: StyleSheet.hairlineWidth, marginVertical: 14 },
-  lines: { gap: 8 },
+  wordmark: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  receiptNo: { fontSize: 11, fontFamily: 'Inter_500Medium', letterSpacing: 0.3 },
+  hero: { alignItems: 'center', paddingTop: 18, paddingBottom: 4, gap: 6 },
+  amount: { fontSize: 34, fontFamily: 'Inter_700Bold', letterSpacing: -1.2 },
+  heroPackage: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  paidPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  paidPillText: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.3 },
+  ridesBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  ridesBannerText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  perforation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 16,
+  },
+  perfDash: { width: 5, height: StyleSheet.hairlineWidth * 2, borderRadius: 1, opacity: 0.9 },
+  lines: { gap: 9 },
   line: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -308,6 +403,14 @@ const styles = StyleSheet.create({
   },
   lineLabel: { fontSize: 12, fontFamily: 'Inter_400Regular', flexShrink: 0 },
   lineValue: { fontSize: 12, fontFamily: 'Inter_600SemiBold', flex: 1, textAlign: 'right' },
+  lineValueMono: { fontFamily: 'Menlo', fontSize: 11 },
+  footnote: {
+    marginTop: 16,
+    fontSize: 10,
+    lineHeight: 15,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+  },
   note: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingHorizontal: 8 },
   actions: {
     flexDirection: 'row',
@@ -326,6 +429,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   secondaryButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  iconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
   primaryButton: {
     flex: 1,
     flexDirection: 'row',

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { PaymentReceiptSheet } from '@/components/driver/PaymentReceiptSheet';
+import { SegmentedFilter } from '@/components/driver/SegmentedFilter';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
@@ -172,6 +173,16 @@ export default function DriverPackagePaymentStatusScreen() {
     });
   }, [filter, query, rows]);
 
+  const counts = React.useMemo(
+    () => ({
+      all: rows.length,
+      confirmed: rows.filter(r => r.outcome === 'confirmed').length,
+      pending: rows.filter(r => r.outcome === 'pending').length,
+      failed: rows.filter(r => r.outcome === 'failed').length,
+    }),
+    [rows],
+  );
+
   const loading = isLoading && purchasesQuery.isLoading;
   const hasAnyPayment = rows.length > 0;
 
@@ -301,10 +312,11 @@ export default function DriverPackagePaymentStatusScreen() {
 
   const listHeader = hasAnyPayment ? (
     <View style={styles.controls}>
+      {/* Recessed search field, iOS style — no border competing with the cards. */}
       <View
         style={[
           styles.searchField,
-          { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border },
+          { backgroundColor: isDark ? '#1C1C1E' : 'rgba(120,120,128,0.12)' },
         ]}
       >
         <Feather name="search" size={15} color={colors.mutedForeground} />
@@ -322,37 +334,12 @@ export default function DriverPackagePaymentStatusScreen() {
         />
       </View>
 
-      <View style={styles.chipRow}>
-        {FILTERS.map(chip => {
-          const active = filter === chip.id;
-          return (
-            <TouchableOpacity
-              key={chip.id}
-              onPress={() => setFilter(chip.id)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: active ? colors.primary : isDark ? '#1C1C1E' : '#FFFFFF',
-                  borderColor: active ? colors.primary : colors.border,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`Show ${chip.label.toLowerCase()} payments`}
-              activeOpacity={0.78}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: active ? '#FFFFFF' : colors.mutedForeground },
-                ]}
-              >
-                {chip.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <SegmentedFilter
+        options={FILTERS.map(f => ({ id: f.id, label: f.label, count: counts[f.id] }))}
+        value={filter}
+        onChange={setFilter}
+        accessibilityLabel="Filter payments by outcome"
+      />
     </View>
   ) : null;
 
@@ -410,20 +397,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    height: 42,
+    height: 40,
     paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 12,
   },
   searchInput: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular', padding: 0 },
-  chipRow: { flexDirection: 'row', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  chipText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   separator: { height: 14 },
   card: {
     marginHorizontal: 16,

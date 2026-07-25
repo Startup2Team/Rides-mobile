@@ -175,10 +175,16 @@ interface PackagePurchaseDto {
 }
 
 export async function getPurchaseHistory(): Promise<PackagePurchase[]> {
-  const response = await getAppBackendClient().get<Envelope<PackagePurchaseDto[] | null>>(
-    '/v1/driver/packages/history',
-  );
-  return (response.data.data ?? []).map(p => ({
+  // The endpoint responds { data: { purchases: [...] } }. Reading data as a bare
+  // array made `.map` throw, the query fail, and every automatic MoMo purchase
+  // vanish from Payment Status. Accept both shapes so a contract tweak can't
+  // silently empty the list again (same defensive read as listNotifications).
+  const response = await getAppBackendClient().get<
+    Envelope<{ purchases?: PackagePurchaseDto[] | null } | PackagePurchaseDto[] | null>
+  >('/v1/driver/packages/history');
+  const payload = response.data.data;
+  const list = Array.isArray(payload) ? payload : payload?.purchases ?? [];
+  return list.map(p => ({
     id: p.id,
     status: p.status,
     packageName: p.package_name,
