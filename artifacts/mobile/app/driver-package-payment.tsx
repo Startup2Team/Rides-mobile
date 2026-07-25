@@ -124,7 +124,6 @@ export default function DriverPackagePaymentScreen() {
   const resubmitClaim = useResubmitManualPaymentClaimMutation();
   const cancelClaim = useCancelManualPaymentClaimMutation();
 
-  const [formVisible, setFormVisible] = useState(false);
   const [payerPhone, setPayerPhone] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
@@ -137,13 +136,8 @@ export default function DriverPackagePaymentScreen() {
   const [autoPhase, setAutoPhase] = useState<AutoPurchasePhase>('idle');
   const [autoError, setAutoError] = useState<string | null>(null);
   const [autoPurchaseId, setAutoPurchaseId] = useState<string | null>(null);
+  const [showManualFallback, setShowManualFallback] = useState(false);
 
-  // Prefill the number to charge with the driver's own phone, in LOCAL form
-  // (no country code) — strip a leading +250 / 250 to a leading 0 so the field
-  // reads "0791377973", and the user can just type their own number.
-  useEffect(() => {
-    if (!momoPhone && user?.phone) setMomoPhone(user.phone.replace(/^\+?250/, '0'));
-  }, [user?.phone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePayWithMoMo = async () => {
     if (!ridePackage) return;
@@ -330,7 +324,6 @@ export default function DriverPackagePaymentScreen() {
         return;
       }
       setSubmittedClaim(toManualPaymentClaimReadModel(submitted.data, { authority: 'remote_backed' }));
-      setFormVisible(false);
       // Pull the claims list so the auto-polling status card tracks this claim
       // and flips to approved/declined on its own.
       void refetchClaims?.();
@@ -552,62 +545,64 @@ export default function DriverPackagePaymentScreen() {
 
           </View>
 
-          {/* Already paid to the merchant code directly? Submit proof for admin review. */}
-          <View style={styles.sectionHeading}>
-            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Already paid manually?</AppText>
-            <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
-              If you paid our merchant code directly, submit proof and an admin will confirm it.
-            </AppText>
-          </View>
-          <ManualPackagePaymentInstructions
-            offer={ridePackage}
-            vehicleLabel={vehicleLabel}
-            providers={providers}
-            recipientName={manualConfig?.recipientName}
-            recipientPhone={manualConfig?.recipientPhone}
-            onCopyProvider={(provider, instruction) => void handleCopyProvider(provider, instruction)}
-          />
-          <View style={styles.manualForm}>
-            {formVisible ? (
-              <>
-                <AppInput
-                  label="Number you paid from"
-                  accessibilityLabel="Number you paid from"
-                  placeholder="+250 7xxxxxxxx"
-                  value={payerPhone}
-                  onChangeText={setPayerPhone}
-                  keyboardType="phone-pad"
-                  leftIcon="smartphone"
-                />
-                <AppText style={[styles.helperText, { color: colors.mutedForeground }]}>
-                  We match this to your MoMo payment — no transaction ID needed.
-                </AppText>
-                {manualError ? (
-                  <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
-                    <Feather name="alert-triangle" size={15} color={colors.destructive} />
-                    <AppText style={[styles.errorText, { color: colors.destructive }]}>{manualError}</AppText>
-                  </View>
-                ) : null}
-                <AppButton
-                  title="Submit payment"
-                  accessibilityLabel="Submit payment"
-                  onPress={() => void handleSubmitManualClaim()}
-                  loading={manualSubmitting}
-                  fullWidth
-                  size="lg"
-                />
-              </>
-            ) : (
+          {/* Manual fallback — ONLY offered when the automatic payment failed. */}
+          {autoPhase === 'failed' ? (
+            !showManualFallback ? (
               <AppButton
-                title="I have paid"
-                accessibilityLabel="I have paid"
-                onPress={() => { setManualError(null); setFormVisible(true); }}
+                title="Pay manually instead"
+                accessibilityLabel="Pay manually instead"
+                onPress={() => { setManualError(null); setShowManualFallback(true); }}
                 variant="secondary"
                 fullWidth
                 size="lg"
               />
-            )}
-          </View>
+            ) : (
+              <>
+                <View style={styles.sectionHeading}>
+                  <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay manually</AppText>
+                  <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+                    Pay one of the merchant codes below, then submit the number you paid from — an admin will confirm it.
+                  </AppText>
+                </View>
+                <ManualPackagePaymentInstructions
+                  offer={ridePackage}
+                  vehicleLabel={vehicleLabel}
+                  providers={providers}
+                  recipientName={manualConfig?.recipientName}
+                  recipientPhone={manualConfig?.recipientPhone}
+                  onCopyProvider={(provider, instruction) => void handleCopyProvider(provider, instruction)}
+                />
+                <View style={styles.manualForm}>
+                  <AppInput
+                    label="Number you paid from"
+                    accessibilityLabel="Number you paid from"
+                    placeholder="07XX XXX XXX"
+                    value={payerPhone}
+                    onChangeText={setPayerPhone}
+                    keyboardType="phone-pad"
+                    leftIcon="smartphone"
+                  />
+                  <AppText style={[styles.helperText, { color: colors.mutedForeground }]}>
+                    We match this to your MoMo payment — no transaction ID needed.
+                  </AppText>
+                  {manualError ? (
+                    <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
+                      <Feather name="alert-triangle" size={15} color={colors.destructive} />
+                      <AppText style={[styles.errorText, { color: colors.destructive }]}>{manualError}</AppText>
+                    </View>
+                  ) : null}
+                  <AppButton
+                    title="Submit payment"
+                    accessibilityLabel="Submit payment"
+                    onPress={() => void handleSubmitManualClaim()}
+                    loading={manualSubmitting}
+                    fullWidth
+                    size="lg"
+                  />
+                </View>
+              </>
+            )
+          ) : null}
         </View>
         )
       ) : (
