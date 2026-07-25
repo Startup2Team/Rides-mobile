@@ -1,7 +1,7 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -138,9 +138,11 @@ export default function DriverPackagePaymentScreen() {
   const [autoError, setAutoError] = useState<string | null>(null);
   const [autoPurchaseId, setAutoPurchaseId] = useState<string | null>(null);
 
-  // Prefill the number to charge with the driver's own phone.
+  // Prefill the number to charge with the driver's own phone, in LOCAL form
+  // (no country code) — strip a leading +250 / 250 to a leading 0 so the field
+  // reads "0791377973", and the user can just type their own number.
   useEffect(() => {
-    if (!momoPhone && user?.phone) setMomoPhone(user.phone);
+    if (!momoPhone && user?.phone) setMomoPhone(user.phone.replace(/^\+?250/, '0'));
   }, [user?.phone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePayWithMoMo = async () => {
@@ -506,7 +508,7 @@ export default function DriverPackagePaymentScreen() {
             <AppInput
               label="MoMo number to charge"
               accessibilityLabel="MoMo number to charge"
-              placeholder="+250 7xxxxxxxx"
+              placeholder="07XX XXX XXX"
               value={momoPhone}
               onChangeText={setMomoPhone}
               keyboardType="phone-pad"
@@ -514,12 +516,24 @@ export default function DriverPackagePaymentScreen() {
               editable={autoPhase !== 'pending' && autoPhase !== 'initiating'}
             />
             {autoPhase === 'pending' ? (
-              <Notice
-                icon="clock"
-                tone="waiting"
-                colors={colors}
-                text="Check your phone and enter your MoMo PIN to approve. This can take a few seconds…"
-              />
+              <View style={[styles.waitingCard, { backgroundColor: colors.primaryHex + '0D', borderColor: colors.primaryHex + '2A' }]}>
+                <ActivityIndicator color={colors.primary} />
+                <AppText style={[styles.waitingTitle, { color: colors.foreground }]}>Approve on your phone</AppText>
+                <AppText style={[styles.waitingText, { color: colors.mutedForeground }]}>
+                  Enter your MoMo PIN on the prompt we just sent to finish paying.
+                </AppText>
+                <TouchableOpacity
+                  onPress={() => void Linking.openURL('tel:' + encodeURIComponent('*182*7*1#'))}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dial star 182 star 7 star 1 hash to confirm the payment"
+                  style={styles.dialHint}
+                >
+                  <Feather name="phone-call" size={14} color={colors.primary} />
+                  <AppText style={[styles.dialHintText, { color: colors.primary }]}>
+                    Taking a while? Dial *182*7*1# to confirm
+                  </AppText>
+                </TouchableOpacity>
+              </View>
             ) : null}
             {autoError ? (
               <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
@@ -743,6 +757,11 @@ const styles = StyleSheet.create({
   providerOptionSubtext: { ...typography.tiny },
   radioOuter: { width: spacing[20], height: spacing[20], borderRadius: radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioInner: { width: spacing[10], height: spacing[10], borderRadius: 5 },
+  waitingCard: { alignItems: 'center', gap: spacing[8], paddingVertical: semanticSpacing.cardPadding, paddingHorizontal: semanticSpacing.cardPadding, borderRadius: radius.card, borderWidth: 1 },
+  waitingTitle: { ...typography.title },
+  waitingText: { ...typography.bodySmall, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
+  dialHint: { flexDirection: 'row', alignItems: 'center', gap: spacing[6], marginTop: spacing[4] },
+  dialHintText: { ...typography.caption },
   notice: { flexDirection: 'row', alignItems: 'center', gap: spacing[10], padding: 11, borderRadius: radius.card, borderWidth: 1 },
   noticeIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   noticeText: { flex: 1, ...typography.caption, lineHeight: 18 },
