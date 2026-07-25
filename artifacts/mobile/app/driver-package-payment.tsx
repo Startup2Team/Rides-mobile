@@ -1,7 +1,8 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View, useColorScheme } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -51,9 +52,30 @@ import { ManualPaymentClaimStatusCard } from '@/components/package-payments/Manu
 import { PackagePaymentUnavailable } from '@/components/package-payments/PackagePaymentUnavailable';
 import { normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 import { reportOperationalWarning } from '@/observability/monitoring';
+import { purchasePackage, getPurchaseStatus } from '@/services/driverPackages';
+import { driverKeys } from '@/query/keys/driverKeys';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
+}
+
+type AutoPurchasePhase = 'idle' | 'initiating' | 'pending' | 'paid' | 'failed';
+
+// Client-side idempotency key for a purchase attempt (backend requires it).
+function purchaseIdempotencyKey(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Collapse the many backend status spellings into the three UI states.
+function mapPurchaseStatus(raw: string): 'pending' | 'paid' | 'failed' {
+  const s = raw.toUpperCase();
+  if (['PAID', 'SUCCESS', 'SUCCESSFUL', 'COMPLETED'].includes(s)) return 'paid';
+  if (['FAILED', 'EXPIRED', 'CANCELLED', 'CANCELED', 'REJECTED'].includes(s)) return 'failed';
+  return 'pending';
 }
 
 // A manual claim is still "live" (needs the driver's attention / blocks starting
@@ -107,6 +129,97 @@ export default function DriverPackagePaymentScreen() {
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [submittedClaim, setSubmittedClaim] = useState<ManualPaymentClaimReadModel | null>(null);
+
+  // ── Automated MoMo purchase (MTN RequestToPay) ─────────────────────────────
+  const queryClient = useQueryClient();
+  const [momoProvider, setMomoProvider] = useState<MobileMoneyPackageProvider>('mtn');
+  const [momoPhone, setMomoPhone] = useState('');
+  const [autoPhase, setAutoPhase] = useState<AutoPurchasePhase>('idle');
+  const [autoError, setAutoError] = useState<string | null>(null);
+  const [autoPurchaseId, setAutoPurchaseId] = useState<string | null>(null);
+
+  // Prefill the number to charge with the driver's own phone.
+  useEffect(() => {
+    if (!momoPhone && user?.phone) setMomoPhone(user.phone);
+  }, [user?.phone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePayWithMoMo = async () => {
+    if (!ridePackage) return;
+    if (isPackageOfferExpired(ridePackage)) {
+      setAutoError('This package offer expired. Please refresh packages.');
+      return;
+    }
+    const normalized = normalizeRwandaPhoneNumber(momoPhone);
+    if (!normalized) {
+      setAutoError('Enter the MoMo number to charge.');
+      return;
+    }
+    setAutoError(null);
+    setAutoPhase('initiating');
+    try {
+      const { purchaseId, status } = await purchasePackage({
+        packageId: ridePackage.packageId,
+        idempotencyKey: purchaseIdempotencyKey(),
+        momoPhone: normalized,
+        momoProvider,
+      });
+      setAutoPurchaseId(purchaseId);
+      if (mapPurchaseStatus(status) === 'paid') {
+        setAutoPhase('paid');
+        void queryClient.invalidateQueries({ queryKey: driverKeys.entitlements() });
+      } else {
+        setAutoPhase('pending');
+      }
+    } catch (e) {
+      setAutoPhase('failed');
+      setAutoError(e instanceof Error ? e.message : "Couldn't start the payment. Please try again.");
+    }
+  };
+
+  // While a prompt is out, poll for settlement. The backend's 30s reconcile +
+  // webhook actually grant the credits; we just watch for PAID/FAILED here.
+  useEffect(() => {
+    if (autoPhase !== 'pending' || !autoPurchaseId) return;
+    let active = true;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      if (!active) return;
+      attempts += 1;
+      try {
+        const res = await getPurchaseStatus(autoPurchaseId);
+        const st = mapPurchaseStatus(String(res.status ?? ''));
+        if (st === 'paid') {
+          if (active) {
+            setAutoPhase('paid');
+            void queryClient.invalidateQueries({ queryKey: driverKeys.entitlements() });
+          }
+          return;
+        }
+        if (st === 'failed') {
+          if (active) {
+            setAutoPhase('failed');
+            setAutoError('The payment failed or expired. You can try again.');
+          }
+          return;
+        }
+      } catch {
+        // transient — keep polling
+      }
+      if (!active) return;
+      if (attempts >= 40) {
+        setAutoPhase('failed');
+        setAutoError('Timed out waiting for approval. Check your phone and try again.');
+        return;
+      }
+      timer = setTimeout(() => void tick(), 3000);
+    };
+    timer = setTimeout(() => void tick(), 3000);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [autoPhase, autoPurchaseId, queryClient]);
 
   const manualProvider: ManualPaymentProvider = useMemo(() => {
     const enabled = providers.filter(p => p.enabled);
@@ -312,7 +425,126 @@ export default function DriverPackagePaymentScreen() {
           />
         </View>
       ) : !isFree ? (
-        <View style={styles.manualShell}>
+        autoPhase === 'paid' ? (
+          <AutoReceiptCard offer={ridePackage} colors={colors} />
+        ) : (
+        <View style={styles.paymentContent}>
+          {/* Package summary */}
+          <View style={styles.summaryPanel}>
+            <View style={styles.summaryHeader}>
+              <View style={[styles.summaryIcon, { backgroundColor: colors.primary }]}>
+                <Feather name="navigation" size={icons.semantic.row} color="#fff" />
+              </View>
+              <View style={styles.summaryTitleBlock}>
+                <AppText style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</AppText>
+                <AppText style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</AppText>
+              </View>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryRow}>
+              <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Rides</AppText>
+              <AppText style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.ridesGranted}</AppText>
+            </View>
+            <View style={styles.summaryRow}>
+              <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus Rides</AppText>
+              <AppText style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRidesGranted}</AppText>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryRow}>
+              <AppText style={[styles.totalLabel, { color: colors.foreground }]}>Total due</AppText>
+              <AppText style={[styles.price, { color: colors.primary }]}>{formatRwf(ridePackage.priceRwf)}</AppText>
+            </View>
+          </View>
+
+          {/* Provider + number */}
+          <View style={styles.sectionHeading}>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Pay with Mobile Money</AppText>
+            <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+              We&apos;ll send a prompt to your phone — enter your MoMo PIN to approve.
+            </AppText>
+          </View>
+          <View style={styles.providerChoiceRow}>
+            {(['mtn', 'airtel'] as MobileMoneyPackageProvider[]).map(p => {
+              const disabled = p === 'airtel';
+              const busy = autoPhase === 'pending' || autoPhase === 'initiating';
+              const selected = momoProvider === p && !disabled;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  disabled={disabled || busy}
+                  onPress={() => { setMomoProvider(p); setAutoError(null); }}
+                  activeOpacity={0.85}
+                  style={[styles.providerOption, {
+                    backgroundColor: colors.card,
+                    borderColor: selected ? colors.primary : colors.border,
+                    opacity: disabled ? 0.5 : 1,
+                  }]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected, disabled }}
+                  accessibilityLabel={p === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money (coming soon)'}
+                >
+                  <View style={[styles.providerIcon, { backgroundColor: (p === 'mtn' ? '#FFCC00' : '#E30613') + '22' }]}>
+                    <Feather name="smartphone" size={18} color={p === 'mtn' ? '#B8860B' : '#E30613'} />
+                  </View>
+                  <View style={styles.providerTextBlock}>
+                    <AppText style={[styles.providerOptionText, { color: colors.foreground }]}>
+                      {p === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'}
+                    </AppText>
+                    <AppText style={[styles.providerOptionSubtext, { color: colors.mutedForeground }]}>
+                      {disabled ? 'Coming soon' : 'Instant — approve with your PIN'}
+                    </AppText>
+                  </View>
+                  <View style={[styles.radioOuter, { borderColor: selected ? colors.primary : colors.border }]}>
+                    {selected ? <View style={[styles.radioInner, { backgroundColor: colors.primary }]} /> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.manualForm}>
+            <AppInput
+              label="MoMo number to charge"
+              accessibilityLabel="MoMo number to charge"
+              placeholder="+250 7xxxxxxxx"
+              value={momoPhone}
+              onChangeText={setMomoPhone}
+              keyboardType="phone-pad"
+              leftIcon="smartphone"
+              editable={autoPhase !== 'pending' && autoPhase !== 'initiating'}
+            />
+            {autoPhase === 'pending' ? (
+              <Notice
+                icon="clock"
+                tone="waiting"
+                colors={colors}
+                text="Check your phone and enter your MoMo PIN to approve. This can take a few seconds…"
+              />
+            ) : null}
+            {autoError ? (
+              <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
+                <Feather name="alert-triangle" size={15} color={colors.destructive} />
+                <AppText style={[styles.errorText, { color: colors.destructive }]}>{autoError}</AppText>
+              </View>
+            ) : null}
+            <AppButton
+              title={autoPhase === 'pending' ? 'Waiting for approval…' : `Pay ${formatRwf(ridePackage.priceRwf)}`}
+              accessibilityLabel="Pay with Mobile Money"
+              onPress={() => void handlePayWithMoMo()}
+              loading={autoPhase === 'initiating' || autoPhase === 'pending'}
+              fullWidth
+              size="lg"
+            />
+
+          </View>
+
+          {/* Already paid to the merchant code directly? Submit proof for admin review. */}
+          <View style={styles.sectionHeading}>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Already paid manually?</AppText>
+            <AppText style={[styles.sectionDescription, { color: colors.mutedForeground }]}>
+              If you paid our merchant code directly, submit proof and an admin will confirm it.
+            </AppText>
+          </View>
           <ManualPackagePaymentInstructions
             offer={ridePackage}
             vehicleLabel={vehicleLabel}
@@ -363,6 +595,7 @@ export default function DriverPackagePaymentScreen() {
             )}
           </View>
         </View>
+        )
       ) : (
         <View style={styles.paymentContent}>
           <View style={styles.summaryPanel}>
@@ -424,6 +657,27 @@ function Notice({ colors, icon, text, tone }: {
       <Feather name={icon} size={17} color={accent} />
     </View>
     <AppText style={[styles.noticeText, { color: colors.mutedForeground }]}>{text}</AppText>
+  </View>;
+}
+
+function AutoReceiptCard({ offer, colors }: {
+  offer: DriverPackageOfferSnapshot; colors: ReturnType<typeof useColors>;
+}) {
+  return <View style={[styles.paymentContent, styles.receiptCard]}>
+    <View style={[styles.receiptIconHalo, { backgroundColor: colors.successHex + '18' }]}>
+      <View style={[styles.receiptIcon, { backgroundColor: colors.success }]}>
+        <Feather name="check" size={30} color="#fff" />
+      </View>
+    </View>
+    <AppText style={[styles.receiptTitle, { color: colors.foreground }]}>Payment Successful</AppText>
+    <AppText style={[styles.receiptText, { color: colors.mutedForeground }]}>
+      Your MoMo payment went through and your rides have been added.
+    </AppText>
+    <AppText style={[styles.receiptCredits, { color: colors.foreground }]}>Rides Added: {offer.ridesGranted}</AppText>
+    <AppText style={[styles.receiptCredits, { color: colors.foreground }]}>Bonus Rides Added: {offer.bonusRidesGranted}</AppText>
+    <View style={styles.receiptAction}>
+      <AppButton title="Go to Dashboard" onPress={() => navigateToDriverHomeAfterCompletion(router)} fullWidth size="lg" />
+    </View>
   </View>;
 }
 
