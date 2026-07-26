@@ -9,6 +9,8 @@ export interface ManualPaymentClaimReadModel {
   displayClaimId: string;
   status: ManualPaymentClaimStatus;
   version: number;
+  /** Locked-offer id — needed to reopen the checkout screen for an in-flight claim. */
+  offerId: string;
   packageId: string;
   packageVersion: string;
   packageName: string;
@@ -64,6 +66,7 @@ export function toManualPaymentClaimReadModel(
     displayClaimId,
     status: claim.status,
     version: claim.version,
+    offerId: claim.offerId,
     packageId: claim.packageId,
     packageVersion: claim.packageVersion,
     packageName: claim.packageName,

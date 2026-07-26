@@ -32,14 +32,12 @@ import {
   addDriverOffer,
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
-import { addTrackingNoise, markRideArrived, startRideJourney } from './rideTracking';
+import { markRideArrived, startRideJourney } from './rideTracking';
 import { createRideTimerManager } from './rideTimerManager';
 import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   CONFIRMED_RIDE_START_DELAY_MS,
-  JOURNEY_TRACKING_INTERVAL_MS,
-  JOURNEY_TRACKING_NOISE,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
@@ -54,7 +52,8 @@ import {
   shadowWireStartRideCommand,
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
-import { createRide as createBackendRide, cancelRide as cancelBackendRide } from '@/services/rides';
+import { createRide as createBackendRide, cancelRide as cancelBackendRide, getActiveRide } from '@/services/rides';
+import { AppState } from 'react-native';
 import { estimateFare } from '@/services/fare';
 import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare } from '@/services/negotiation';
 import {
@@ -695,10 +694,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         reportOperationalFailure('ride.driver.start', error, { rideId: backendRideIdForStart }),
       );
     }
+    // No simulated jitter — the driver marker moves ONLY from real
+    // driver_location WS events. Just clear any stale interval from a prior ride.
     timers.clearInterval(driverIntervalRef.current);
-    driverIntervalRef.current = timers.scheduleInterval(() => {
-      setDriverLocation(prev => addTrackingNoise(prev, JOURNEY_TRACKING_NOISE));
-    }, JOURNEY_TRACKING_INTERVAL_MS);
+    driverIntervalRef.current = null;
     if (!currentRideSnapshot) return;
     const actorRole = auth?.user?.mode === 'driver' && rideCommandCapabilitySnapshot.state.isApprovedDriver
       ? 'driver'
@@ -1079,12 +1078,65 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // The customer accepting the fare confirms the ride on the backend, which
+      // pushes ride_confirmed to the driver socket. Without handling it here the
+      // driver stayed stuck on the negotiation screen ("typing…") while the
+      // customer had already advanced. Apply it so status → 'confirmed' and the
+      // driver flow navigation moves them to the navigate/pickup screen.
+      if (type === 'ride_confirmed') {
+        backendDrivingRef.current = true;
+        setCurrentRide(prev => (prev ? applyLifecycleEvent(prev, 'ride_confirmed', payload) : prev));
+        return;
+      }
+
       if (type === 'negotiation_message' || type === 'negotiation_declined' || type === 'negotiation_text') {
         setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'driver') : prev));
       }
     },
     [auth?.driverProfile, driverEntitlement?.entitlement, timers],
   );
+
+  // Reconcile a possibly-missed match. The customer advances out of "searching"
+  // ONLY on the `driver_matched` WS frame — but that frame can be emitted to the
+  // ride room BEFORE this device has joined it (the room is joined only after
+  // POST /customer/rides resolves + the socket connects), and WS frames aren't
+  // buffered, so a fast accept drops the event and the customer sits on
+  // "searching" forever while the driver is already negotiating. This pulls the
+  // authoritative ride state and advances if the backend already moved ahead.
+  // Self-guarded: only acts while still in an early local state, and never
+  // regresses. Runs on socket (re)connect and on app-foreground.
+  const resyncActiveRide = useCallback(async () => {
+    const snapshot = currentRideRef.current;
+    if (!snapshot?.backendRideId) return;
+    if (snapshot.status !== 'searching' && snapshot.status !== 'driver_assigned') return;
+    try {
+      const active = await getActiveRide();
+      if (!active) return;
+      const local = localStatusFromBackend(active.status);
+      if (!local || local === 'searching') return; // nothing new
+      setCurrentRide(prev => {
+        if (!prev) return prev;
+        if (prev.status !== 'searching' && prev.status !== 'driver_assigned') return prev;
+        backendDrivingRef.current = true;
+        clearSearchTimers();
+        // Reuse the driver-identity merge from the matched path.
+        const merged = applyDriverMatched(prev, {
+          driver_id: active.driverId ?? undefined,
+          driver_name: active.driverName ?? undefined,
+          driver_phone: active.driverPhone ?? undefined,
+          vehicle_plate: active.driverPlate ?? undefined,
+          driver_rating: active.driverRating ?? undefined,
+        });
+        // MATCHED/NEGOTIATING → the customer negotiates; anything further along
+        // (confirmed/en-route/…) is honored as-is so we don't rewind the flow.
+        const target: RideStatus =
+          local === 'driver_assigned' || local === 'negotiating' ? 'negotiating' : local;
+        return { ...merged, status: target };
+      });
+    } catch {
+      // Best-effort — the live socket will still deliver events if this fails.
+    }
+  }, [clearSearchTimers]);
 
   const trackedRideId = currentRide?.backendRideId ?? null;
   const isCustomerTrackingActive =
@@ -1096,6 +1148,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     if (!isCustomerTrackingActive || !trackedRideId) return;
     const socket = openCustomerTrackingSocket(trackedRideId, {
       onEvent: handleCustomerTrackingEvent,
+      // On (re)connect, reconcile any match that fired before we joined the room.
+      onOpen: () => { void resyncActiveRide(); },
       onError: error => reportOperationalFailure('ride.ws.customer', error, { rideId: trackedRideId }),
     });
     customerSocketRef.current = socket;
@@ -1103,7 +1157,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       socket.close();
       customerSocketRef.current = null;
     };
-  }, [handleCustomerTrackingEvent, isCustomerTrackingActive, trackedRideId]);
+  }, [handleCustomerTrackingEvent, isCustomerTrackingActive, trackedRideId, resyncActiveRide]);
+
+  // Also reconcile when the app returns to the foreground while still searching
+  // (a match that landed while backgrounded, or a socket that never delivered).
+  React.useEffect(() => {
+    if (auth?.user?.mode === 'driver') return;
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') void resyncActiveRide();
+    });
+    return () => sub.remove();
+  }, [resyncActiveRide, auth?.user?.mode]);
 
   const isDriverSocketActive =
     auth?.user?.mode === 'driver' && auth?.driverProfile?.isOnline === true;

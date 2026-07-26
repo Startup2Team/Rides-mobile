@@ -148,10 +148,6 @@ export default function ReferralShareScreen() {
     await openExternalUrl('https://rides.rw/faq');
   };
 
-  const handleScanPress = () => {
-    showToast('Scan feature coming soon', 'info');
-  };
-
   if (!user?.id) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -175,19 +171,9 @@ export default function ReferralShareScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <GlassHeader
-        title="QR code"
-        right={
-          <TouchableOpacity
-            onPress={handleScanPress}
-            style={styles.headerRight}
-            accessibilityRole="button"
-            accessibilityLabel="Scan"
-          >
-            <Text style={[styles.headerRightText, { color: colors.foreground }]}>Scan</Text>
-          </TouchableOpacity>
-        }
-      />
+      {/* No "Scan" action yet — the header button was a no-op ("coming soon"
+          toast), so it's hidden until an in-app scanner actually ships. */}
+      <GlassHeader title="QR code" />
       <View style={[styles.container, { paddingTop: headerMetrics.contentTop, paddingBottom: Math.max(insets.bottom, 16) + 56 }]}>
         <View style={styles.cardContainer}>
           <View style={[styles.card, { backgroundColor: colors.card }]}>

@@ -88,13 +88,15 @@ export function useUpdateProfileMutation() {
       const current = await authRepository.getCurrentUser();
       if (!current) return null;
       const next = { ...current, ...updates };
-      // Push the backend-owned display fields first (PUT /customer/profile).
-      // Phone changes go through the dedicated OTP flow, not here.
-      if (updates.name !== undefined || updates.email !== undefined) {
-        await updateProfile({
-          ...(updates.name !== undefined ? { fullName: updates.name } : {}),
-          ...(updates.email !== undefined ? { email: updates.email ?? null } : {}),
-        });
+      // Push the backend-owned fields first (PUT /customer/profile). Phone
+      // changes go through the dedicated OTP flow, not here.
+      const backendPatch: Parameters<typeof updateProfile>[0] = {};
+      if (updates.name !== undefined) backendPatch.fullName = updates.name;
+      if (updates.email !== undefined) backendPatch.email = updates.email ?? null;
+      if (updates.emergencyContactName !== undefined) backendPatch.emergencyContactName = updates.emergencyContactName ?? null;
+      if (updates.emergencyContactPhone !== undefined) backendPatch.emergencyContactPhone = updates.emergencyContactPhone ?? null;
+      if (Object.keys(backendPatch).length > 0) {
+        await updateProfile(backendPatch);
       }
       await authRepository.saveCurrentUser(next);
       return next;

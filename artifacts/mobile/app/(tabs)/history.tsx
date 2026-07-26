@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -131,7 +133,7 @@ export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { data: rideHistory = [], refetch: refetchRideHistory } = useRideHistoryQuery();
+  const { data: rideHistory = [], refetch: refetchRideHistory, isLoading, isError } = useRideHistoryQuery();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
@@ -179,7 +181,30 @@ export default function HistoryScreen() {
         refreshing={isRefreshing}
         refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
-        {rideHistory.length === 0 ? (
+        {isLoading && rideHistory.length === 0 ? (
+          <View style={styles.empty}>
+            <ActivityIndicator color={colors.primary} />
+            <AppText variant="bodySmall" style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
+              Loading your trips…
+            </AppText>
+          </View>
+        ) : isError && rideHistory.length === 0 ? (
+          <View style={styles.empty}>
+            <Feather name="wifi-off" size={icons.size.hero} color={colors.mutedForeground} />
+            <AppText variant="h2" style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn&apos;t load trips</AppText>
+            <AppText variant="bodySmall" style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
+              Check your connection and try again.
+            </AppText>
+            <TouchableOpacity
+              onPress={() => refetchRideHistory()}
+              style={[styles.retryBtn, { borderColor: colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+            >
+              <AppText variant="label" style={{ color: colors.primary }}>Try again</AppText>
+            </TouchableOpacity>
+          </View>
+        ) : rideHistory.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="map" size={icons.size.hero} color={colors.mutedForeground} />
             <AppText variant="h2" style={[styles.emptyTitle, { color: colors.foreground }]}>No trips yet</AppText>
@@ -207,6 +232,13 @@ const styles = StyleSheet.create({
   },
   cardList: {
     gap: CARD_GAP,
+  },
+  retryBtn: {
+    marginTop: spacing[4],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: radius.pill,
+    borderWidth: 1,
   },
   card: {
     position: 'relative',

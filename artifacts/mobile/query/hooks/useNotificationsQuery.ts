@@ -4,6 +4,8 @@ import { notificationRepository, listNotifications, getUnreadNotificationCount }
 import {
   markNotificationRead as apiMarkNotificationRead,
   markAllNotificationsRead as apiMarkAllNotificationsRead,
+  markNotificationUnread as apiMarkNotificationUnread,
+  deleteNotification as apiDeleteNotification,
 } from '@/services/notifications';
 import { notificationKeys } from '../keys';
 import { queryPolicies } from '../policies';
@@ -90,6 +92,16 @@ export function useMarkNotificationUnreadMutation() {
   return useMutation({
     mutationFn: async (notificationId: string) => {
       await notificationRepository.markUnread(notificationId);
+      // Sync to the server for backend-sourced items (locally-derived items
+      // have no server row, so skip them).
+      const cached = queryClient.getQueryData<NotificationItem[]>(notificationKeys.list(userId)) ?? [];
+      if (cached.find(item => item.id === notificationId)?.source === 'backend') {
+        try {
+          await apiMarkNotificationUnread(notificationId);
+        } catch {
+          // Offline / unreachable — local overlay keeps the optimistic state.
+        }
+      }
       return notificationId;
     },
     onMutate: async notificationId => {
@@ -136,6 +148,43 @@ export function useMarkAllNotificationsReadMutation() {
       return { previous };
     },
     onError: (_error, _unused, context) => {
+      if (!context) return;
+      queryClient.setQueryData(notificationKeys.list(userId), context.previous);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: notificationKeys.list(userId) });
+      await queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount(userId) });
+    },
+  });
+}
+
+export function useDeleteNotificationMutation() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id ?? 'anonymous';
+
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const cached = queryClient.getQueryData<NotificationItem[]>(notificationKeys.list(userId)) ?? [];
+      // Backend-sourced items are soft-deleted server-side (DELETE …/{id} →
+      // deleted_at); they stay recoverable and won't return in the feed. Local-
+      // derived items have no server row — the optimistic cache removal suffices.
+      if (cached.find(item => item.id === notificationId)?.source === 'backend') {
+        try {
+          await apiDeleteNotification(notificationId);
+        } catch {
+          // Offline / unreachable — optimistic removal holds until next refetch.
+        }
+      }
+      return notificationId;
+    },
+    onMutate: async notificationId => {
+      const key = notificationKeys.list(userId);
+      const previous = queryClient.getQueryData<NotificationItem[]>(key) ?? [];
+      queryClient.setQueryData(key, previous.filter(item => item.id !== notificationId));
+      return { previous };
+    },
+    onError: (_error, _notificationId, context) => {
       if (!context) return;
       queryClient.setQueryData(notificationKeys.list(userId), context.previous);
     },

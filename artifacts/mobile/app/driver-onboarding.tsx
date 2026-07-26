@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -160,10 +161,11 @@ export default function DriverOnboarding() {
       selfieUri,
       submittedAt: new Date().toISOString(),
     });
-    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
-
     // Real backend: create the driver application + upload KYC documents.
-    // Best-effort so a network failure doesn't lose the local submission.
+    // Failures are reported, never swallowed — an application whose documents
+    // did not upload is invisible to the admin reviewers, so the driver has to
+    // know it needs retrying rather than being sent to the success screen.
+    let submissionError: string | null = null;
     try {
       const documents: DriverApplicationDocument[] = [];
       if (docs.license?.[0]) documents.push({ documentType: 'LICENCE_FRONT', uri: docs.license[0] });
@@ -174,7 +176,7 @@ export default function DriverOnboarding() {
       if (docs.authorization?.[0]) documents.push({ documentType: 'VEHICLE_AUTHORIZATION', uri: docs.authorization[0] });
       if (selfieUri) documents.push({ documentType: 'SELFIE', uri: selfieUri });
 
-      await submitDriverApplicationWithDocuments(
+      const result = await submitDriverApplicationWithDocuments(
         {
           vehicleType: form.vehicleType,
           vehiclePlate: form.plateNumber,
@@ -197,8 +199,35 @@ export default function DriverOnboarding() {
         },
         documents,
       );
-    } catch {
-      // Local submission still recorded; the backend application can be retried.
+
+      if (result.applicationError) {
+        submissionError = `We couldn't submit your application: ${result.applicationError.message}`;
+      } else if (result.failed.length > 0) {
+        console.error(
+          'Driver document uploads failed:',
+          result.failed.map(f => `${f.documentType}: ${f.error.message}`).join(' | '),
+        );
+        submissionError =
+          `${result.failed.length} of ${result.failed.length + result.uploaded.length} documents ` +
+          `didn't upload. Your details were saved — please reopen this form and submit again.`;
+      } else if (documents.length > 0 && result.uploaded.length === 0) {
+        submissionError = "Your documents didn't upload. Your details were saved — please submit again.";
+      }
+    } catch (error) {
+      console.error('Driver application submission failed:', error);
+      submissionError = `We couldn't submit your application: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
+    }
+
+    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
+
+    if (submissionError) {
+      // Keep the draft so the driver can retry without re-entering everything,
+      // and do NOT advance to the confirmation screen.
+      setLoading(false);
+      Alert.alert('Submission incomplete', submissionError, [{ text: 'OK' }]);
+      return;
     }
 
     await removeStoredDriverOnboardingDraft();

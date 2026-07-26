@@ -17,6 +17,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
+import { refreshAccessToken } from '@/services/tokenRefresh';
 import { fetchProfile } from '@/services/profile';
 import { switchUserMode } from '@/services/userMode';
 import { setDriverAvailability } from '@/services/driverAvailability';
@@ -147,7 +148,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void syncProfileFromBackend();
           void registerPushToken();
         } else {
-          await clearAuthTokens();
+          // No usable access token — but before bouncing a returning user to the
+          // OTP screen (friction + a paid SMS), try a SILENT re-auth with the
+          // stored refresh token. refreshAccessToken() no-ops to false when no
+          // refresh token exists (e.g. after logout, which wipes it), so this
+          // only rescues genuine sessions whose access token expired/was lost.
+          const refreshed = await refreshAccessToken();
+          if (refreshed) {
+            setUser(storedUser.data);
+            void syncProfileFromBackend();
+            void registerPushToken();
+          } else {
+            await clearAuthTokens();
+          }
         }
       }
       if (storedDriverProfile.data) {
@@ -178,6 +191,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           name: profile.fullName || prev.name,
           email: profile.email ?? prev.email,
+          emergencyContactName: profile.emergencyContactName ?? prev.emergencyContactName,
+          emergencyContactPhone: profile.emergencyContactPhone ?? prev.emergencyContactPhone,
+          // Restore the driver's chosen VIEW (customer/driver). Only for drivers —
+          // a non-driver is always a customer regardless of any stale value.
+          mode: prev.isDriver && profile.preferredMode ? profile.preferredMode : prev.mode,
         };
         void saveStoredUser(updated);
         return updated;

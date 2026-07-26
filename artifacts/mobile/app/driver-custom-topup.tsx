@@ -52,7 +52,6 @@ export default function DriverCustomTopUpScreen() {
   const { configuration } = usePackagePaymentConfigQuery();
   const mode = configuration?.mode ?? 'automatic';
   const providers = configuration?.manual?.providers ?? [];
-  const transactionReferenceRequired = configuration?.manual?.transactionReferenceRequired ?? true;
   const pricePerRideMap = configuration?.pricePerRideRwf;
 
   const activeVehicle = getEntitlementVehicleForProfile(driverProfile);
@@ -67,8 +66,7 @@ export default function DriverCustomTopUpScreen() {
     (driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn') as ManualPaymentProvider,
   );
   const [amountText, setAmountText] = useState('');
-  const [payerPhone, setPayerPhone] = useState(driverProfile?.momoCode ?? '');
-  const [transactionReference, setTransactionReference] = useState('');
+  const [payerPhone, setPayerPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittedClaim, setSubmittedClaim] = useState<ManualPaymentClaimReadModel | null>(null);
@@ -97,12 +95,7 @@ export default function DriverCustomTopUpScreen() {
     }
     const normalizedPhone = normalizeRwandaPhoneNumber(payerPhone);
     if (!normalizedPhone) {
-      setError('Enter a valid Rwanda phone number (+250 7xxxxxxxx).');
-      return;
-    }
-    const ref = transactionReference.trim();
-    if (transactionReferenceRequired && !ref) {
-      setError('A transaction reference is required.');
+      setError('Enter the number you paid from (+250 7xxxxxxxx).');
       return;
     }
 
@@ -131,7 +124,6 @@ export default function DriverCustomTopUpScreen() {
         driverId: user?.id ?? '',
         provider,
         payerPhoneNumber: normalizedPhone,
-        transactionReference: ref || undefined,
       });
       if (created.failure || !created.data) {
         setError(created.failure?.message ?? 'Could not submit your top-up.');
@@ -256,23 +248,17 @@ export default function DriverCustomTopUpScreen() {
             ) : null}
 
             <AppInput
-              label="Payer phone number"
-              accessibilityLabel="Payer phone number"
+              label="Number you paid from"
+              accessibilityLabel="Number you paid from"
               placeholder="+250 7xxxxxxxx"
               value={payerPhone}
               onChangeText={setPayerPhone}
               keyboardType="phone-pad"
               leftIcon="smartphone"
             />
-            <AppInput
-              label={`Transaction reference${transactionReferenceRequired ? ' *' : ''}`}
-              accessibilityLabel="Transaction reference"
-              placeholder={transactionReferenceRequired ? 'Enter the payment reference' : 'Optional payment reference'}
-              value={transactionReference}
-              onChangeText={setTransactionReference}
-              autoCapitalize="characters"
-              leftIcon="hash"
-            />
+            <AppText style={[styles.helperText, { color: colors.mutedForeground }]}>
+              Just share the number you sent the money from — we match it to the payment on our side. No transaction ID needed.
+            </AppText>
 
             {error ? (
               <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
@@ -326,6 +312,7 @@ const styles = StyleSheet.create({
   intro: { gap: spacing[4] },
   introTitle: { ...typography.h2, letterSpacing: -0.3 },
   introText: { ...typography.caption, lineHeight: 18 },
+  helperText: { ...typography.caption, lineHeight: 17, marginTop: -spacing[6] },
   previewCard: {
     flexDirection: 'row', alignItems: 'center', gap: spacing[10],
     borderRadius: radius.card, borderWidth: 1, paddingHorizontal: semanticSpacing.cardPadding, paddingVertical: spacing[14],

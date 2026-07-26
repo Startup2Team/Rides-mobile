@@ -5,10 +5,11 @@ import type { useColors } from '@/hooks/useColors';
 import { typography } from '@/constants/typography';
 
 export function RideActionsSection({
-  colors, isArrived, isArriving, isInProgress, onCall, onCancelArrived, onCancelArriving,
+  colors, isConfirmed = false, isArrived, isArriving, isInProgress, onCall, onCancelArrived, onCancelArriving,
   onEmergency, onSOS,
 }: {
   colors: ReturnType<typeof useColors>;
+  isConfirmed?: boolean;
   isArrived: boolean;
   isArriving: boolean;
   isInProgress: boolean;
@@ -20,7 +21,10 @@ export function RideActionsSection({
 }) {
   return (
     <View style={styles.actions}>
-      {isArriving && <>
+      {/* From the moment the ride is confirmed (driver assigned & on the way)
+          the rider can already call the driver — e.g. if the driver is slow to
+          reach the pickup — not only once the driver marks "en route". */}
+      {(isConfirmed || isArriving) && <>
         <AppButton title="Cancel" icon="x" variant="dangerPlain" size="sm" iconOnly onPress={onCancelArriving} accessibilityLabel="Cancel ride" />
         <AppButton title="Call driver" icon="phone" variant="call" size="sm" onPress={onCall} style={styles.wide} />
       </>}

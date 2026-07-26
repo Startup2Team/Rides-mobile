@@ -109,6 +109,15 @@ export function NegotiationHeader({
             <Text style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>ETA</Text>
             <Text style={[styles.tripStatValue, { color: colors.foreground }]}>~{ride.duration} min</Text>
           </View>
+          {ride.suggestedFare != null && ride.suggestedFare > 0 ? (
+            <View style={styles.tripStatInline}>
+              <Feather name="dollar-sign" size={12} color={colors.primary} />
+              <Text style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>Suggested</Text>
+              <Text style={[styles.tripStatValue, { color: colors.primary }]}>
+                {`${ride.suggestedFare.toLocaleString('en-RW')} RWF`}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
 

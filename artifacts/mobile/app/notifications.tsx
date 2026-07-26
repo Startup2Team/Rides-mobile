@@ -28,18 +28,22 @@ import { typography } from '@/constants/typography';
 import {
   getNotificationAccentColor,
   getNotificationDayBucket,
+  notificationCalendarDaysAgo,
   useNotifications,
   type NotificationItem,
 } from '@/domains/notifications';
 
 function timeAgo(iso: string): string {
+  // Days come from the same calendar-day helper the section headings use, so a
+  // row can never say "1d ago" while sitting under Previous.
+  const days = notificationCalendarDaysAgo(iso);
+  if (days >= 1) return `${days}d ago`;
+
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  return `${Math.floor(mins / 60)}h ago`;
 }
 
 function EmptyState({ color, driverMode, mutedColor }: { color: string; driverMode: boolean; mutedColor: string }) {
@@ -72,7 +76,7 @@ export default function NotificationsScreen() {
   const { user } = useAuth();
   const { loadHistory } = useRide();
   const { showToast } = useToast();
-  const { notifications, unreadCount, refreshNotifications, markNotificationRead, markNotificationUnread, markAllNotificationsRead } = useNotifications();
+  const { notifications, unreadCount, refreshNotifications, markNotificationRead, markNotificationUnread, markAllNotificationsRead, deleteNotification: deleteNotificationRemote } = useNotifications();
   const driverMode = user?.mode === 'driver';
   const screenWidth = Dimensions.get('window').width;
 
@@ -147,13 +151,19 @@ export default function NotificationsScreen() {
 
   const deleteNotification = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Hide immediately, then soft-delete on the backend (kept recoverable). The
+    // local dismiss also covers locally-derived items that have no server row.
     setDismissedIds(prev => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
-    showToast('Notification deleted', 'error');
-  }, [showToast]);
+    void deleteNotificationRemote(id).catch(() => {
+      // Offline / unreachable — it stays hidden locally and the backend soft
+      // delete will be retried on the next explicit delete.
+    });
+    showToast('Notification deleted');
+  }, [deleteNotificationRemote, showToast]);
 
   const confirmDeleteNotification = useCallback((id: string) => {
     Alert.alert(

@@ -170,8 +170,8 @@ jest.mock('@/hooks/useRoute', () => ({
   }),
 }));
 
-jest.mock('@/hooks/useDriverTracking', () => ({
-  useDriverTracking: () => null,
+jest.mock('@/hooks/useDeviceLocation', () => ({
+  useDeviceLocation: () => null,
 }));
 
 jest.mock('@/context/ToastContext', () => ({

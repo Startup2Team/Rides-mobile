@@ -150,9 +150,48 @@ export async function submitPaymentProof(purchaseId: string, proof: PaymentProof
   await getAppBackendClient().post(`/v1/driver/packages/purchases/${purchaseId}/proof`, { body });
 }
 
-export async function getPurchaseHistory(): Promise<unknown[]> {
-  const response = await getAppBackendClient().get<Envelope<unknown[] | null>>(
-    '/v1/driver/packages/history',
-  );
-  return response.data.data ?? [];
+// An automatic (or admin-created) package purchase — the /driver/packages/purchase
+// lifecycle, distinct from the manual proof-based claims.
+export interface PackagePurchase {
+  id: string;
+  status: string; // PENDING | PAID | FAILED
+  packageName: string;
+  pricePaidRwf: number;
+  ridesGranted: number;
+  bonusRidesGranted: number;
+  provider: string | null; // mtn | airtel | null
+  createdAt: string;
+}
+
+interface PackagePurchaseDto {
+  id: string;
+  status: string;
+  package_name: string;
+  price_paid_rwf: number;
+  rides_granted: number;
+  bonus_rides_granted: number;
+  payment_provider?: string | null;
+  created_at: string;
+}
+
+export async function getPurchaseHistory(): Promise<PackagePurchase[]> {
+  // The endpoint responds { data: { purchases: [...] } }. Reading data as a bare
+  // array made `.map` throw, the query fail, and every automatic MoMo purchase
+  // vanish from Payment Status. Accept both shapes so a contract tweak can't
+  // silently empty the list again (same defensive read as listNotifications).
+  const response = await getAppBackendClient().get<
+    Envelope<{ purchases?: PackagePurchaseDto[] | null } | PackagePurchaseDto[] | null>
+  >('/v1/driver/packages/history');
+  const payload = response.data.data;
+  const list = Array.isArray(payload) ? payload : payload?.purchases ?? [];
+  return list.map(p => ({
+    id: p.id,
+    status: p.status,
+    packageName: p.package_name,
+    pricePaidRwf: p.price_paid_rwf,
+    ridesGranted: p.rides_granted,
+    bonusRidesGranted: p.bonus_rides_granted,
+    provider: p.payment_provider ?? null,
+    createdAt: p.created_at,
+  }));
 }

@@ -24,14 +24,48 @@ function mapStatus(status: string): RideStatus {
   return STATUS_MAP[status] ?? 'idle';
 }
 
+// Real trip duration from the backend timestamps when the ride actually ran;
+// otherwise a distance-based ESTIMATE (used pre-/mid-trip as an ETA). Previously
+// this was ALWAYS the estimate (distance*3+5), so ride-detail showed an invented
+// "Duration" for completed trips even though started_at/completed_at were known.
+function resolveDuration(r: CustomerRide): number {
+  if (r.startedAt && r.completedAt) {
+    const start = Date.parse(r.startedAt);
+    const end = Date.parse(r.completedAt);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return Math.max(1, Math.round((end - start) / 60000));
+    }
+  }
+  return Math.round((r.estimatedDistanceKm ?? 0) * 3 + 5);
+}
+
 function toMobileRide(r: CustomerRide): Ride {
   const distance = r.estimatedDistanceKm ?? 0;
+  const vehicleType = (r.vehicleType ?? 'moto') as VehicleType;
+  // Build the nested driver object the detail screen renders. The backend
+  // returns driver name/phone/rating/plate on the ride; previously only the flat
+  // driverId/driverName were mapped, so the whole driver card was dead code.
+  // location/eta aren't meaningful for a past trip — use the dropoff as a stable
+  // placeholder Coords so the (required) fields are satisfied.
+  const driver: Ride['driver'] = r.driverId
+    ? {
+        id: r.driverId,
+        name: r.driverName ?? 'Driver',
+        phone: r.driverPhone ?? '',
+        vehicleType,
+        plateNumber: r.driverPlate ?? '',
+        rating: r.driverRating ?? 0,
+        location: { latitude: r.destination.lat, longitude: r.destination.lng },
+        eta: 0,
+      }
+    : undefined;
   return {
     id: r.id,
     customerId: '',
     driverId: r.driverId ?? undefined,
     driverName: r.driverName ?? undefined,
-    vehicleType: (r.vehicleType ?? 'moto') as VehicleType,
+    driver,
+    vehicleType,
     pickup: { latitude: r.pickup.lat, longitude: r.pickup.lng, address: r.pickup.address },
     destination: {
       latitude: r.destination.lat,
@@ -40,9 +74,11 @@ function toMobileRide(r: CustomerRide): Ride {
     },
     status: mapStatus(r.status),
     distance,
-    duration: Math.round(distance * 3 + 5),
+    duration: resolveDuration(r),
     suggestedFare: r.estimatedFareRwf ?? r.agreedFare ?? r.finalFareRwf ?? 0,
-    agreedFare: r.agreedFare ?? r.finalFareRwf ?? undefined,
+    // Prefer the actually-charged final fare (includes surcharges/waiting/etc.)
+    // over the negotiated agreed_fare for a completed trip.
+    agreedFare: r.finalFareRwf ?? r.agreedFare ?? undefined,
     negotiation: [],
     createdAt: r.createdAt,
     completedAt: r.completedAt ?? undefined,

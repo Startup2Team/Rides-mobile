@@ -214,9 +214,14 @@ export function buildDriverRequestFromPayload(
     locationType: 'precise' as const,
   };
 
+  // Treat a 0 / missing backend distance as absent and fall back to a computed
+  // straight-line estimate — otherwise `num(0)` short-circuits and the driver
+  // sees "Distance unavailable" / "0.0 km".
+  const backendDistance = num(payload.estimated_distance_km ?? payload.distance_km);
   const distance =
-    num(payload.estimated_distance_km ?? payload.distance_km) ??
-    parseFloat(calcDistance(pickup, destination).toFixed(2));
+    backendDistance && backendDistance > 0
+      ? backendDistance
+      : parseFloat(calcDistance(pickup, destination).toFixed(2));
   const suggestedFare =
     num(payload.suggested_fare ?? payload.customer_initial_fare ?? payload.estimated_fare_rwf) ??
     calcFare(requestedVehicleType, distance);

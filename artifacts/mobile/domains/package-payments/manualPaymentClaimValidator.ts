@@ -71,36 +71,33 @@ function asManualPackageConfiguration(
   const proofImageEnabled = config.proofImageEnabled;
   const proofImageRequired = config.proofImageRequired;
 
+  // Skip any malformed / codeless provider rather than rejecting the whole
+  // configuration — one bad provider must never blank the pay screen. We only
+  // fail if NO usable provider survives.
   const providers: ManualPaymentProviderConfiguration[] = [];
   for (const item of config.providers) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      return fail('invalid_payment_configuration', 'Manual payment provider configuration is invalid.');
-    }
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const provider = item as Partial<ManualPaymentProviderConfiguration>;
-    if (provider.provider !== 'mtn' && provider.provider !== 'airtel') {
-      return fail('invalid_payment_configuration', 'Manual payment provider is invalid.');
-    }
-    if (!isNonEmptyString(provider.merchantCode)) {
-      return fail('invalid_payment_configuration', 'Manual payment provider merchant code is required.');
-    }
-    if (!isNonEmptyString(provider.ussdTemplate)) {
-      return fail('invalid_payment_configuration', 'Manual payment provider USSD template is required.');
-    }
-    if (typeof provider.enabled !== 'boolean') {
-      return fail('invalid_payment_configuration', 'Manual payment provider enabled flag is required.');
-    }
-    const merchantCode = (provider.merchantCode as string).trim();
-    const ussdTemplate = (provider.ussdTemplate as string).trim();
+    if (provider.provider !== 'mtn' && provider.provider !== 'airtel') continue;
+    if (!isNonEmptyString(provider.merchantCode)) continue;
+    if (!isNonEmptyString(provider.ussdTemplate)) continue;
+    if (typeof provider.enabled !== 'boolean') continue;
     providers.push({
       provider: provider.provider,
       displayName: typeof provider.displayName === 'string' && provider.displayName.trim().length > 0
         ? provider.displayName.trim()
         : undefined,
-      merchantCode,
-      ussdTemplate,
+      merchantCode: (provider.merchantCode as string).trim(),
+      ussdTemplate: (provider.ussdTemplate as string).trim(),
       enabled: provider.enabled,
     });
   }
+  if (providers.length === 0) {
+    return fail('invalid_payment_configuration', 'At least one usable manual payment provider is required.');
+  }
+
+  const recipientName = isNonEmptyString(config.recipientName) ? (config.recipientName as string).trim() : undefined;
+  const recipientPhone = isNonEmptyString(config.recipientPhone) ? (config.recipientPhone as string).trim() : undefined;
 
   return success({
     providers,
@@ -108,6 +105,8 @@ function asManualPackageConfiguration(
     transactionReferenceRequired,
     proofImageEnabled,
     proofImageRequired,
+    recipientName,
+    recipientPhone,
   });
 }
 

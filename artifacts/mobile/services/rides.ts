@@ -129,8 +129,15 @@ export async function createRide(input: CreateRideInput): Promise<{ rideId: stri
 
 export async function listRides(): Promise<CustomerRide[]> {
   const client = getAppBackendClient();
-  const response = await client.get<Envelope<RideResponseDto[] | null>>('/v1/customer/rides');
-  return (response.data.data ?? []).map(toDomain);
+  // The backend wraps the list: { data: { rides: [...], limit, offset } }.
+  // (Reading response.data.data as a bare array silently yielded an empty
+  // history — completed rides never showed in "My Trips".)
+  // Request the backend max (100). Without an explicit limit it defaults to 20,
+  // so older trips were unreachable. TODO: infinite scroll for >100 trips.
+  const response = await client.get<Envelope<{ rides: RideResponseDto[] } | null>>(
+    '/v1/customer/rides?limit=100',
+  );
+  return (response.data.data?.rides ?? []).map(toDomain);
 }
 
 export async function getRide(rideId: string): Promise<CustomerRide> {

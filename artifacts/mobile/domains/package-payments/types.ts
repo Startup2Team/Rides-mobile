@@ -19,6 +19,10 @@ export interface ManualPackagePaymentConfiguration {
   transactionReferenceRequired: boolean;
   proofImageEnabled: boolean;
   proofImageRequired?: boolean;
+  /** Business account name to pay to (shown on the manual-payment screen). */
+  recipientName?: string;
+  /** Business MoMo phone to pay to, as an alternative to the merchant code. */
+  recipientPhone?: string;
 }
 
 export interface PackagePaymentConfiguration {
