@@ -66,6 +66,20 @@ export async function requestUploadTarget(
   return { uploadUrl: response.data.data.upload_url, fileUrl: response.data.data.file_url };
 }
 
+// Thrown when the bytes could not be stored. Carries the HTTP status so callers
+// can tell a genuine offline device from a storage misconfiguration — a 401/403
+// from R2 is a dead bucket credential, not a missing network.
+export class UploadFailedError extends Error {
+  readonly status?: number;
+  readonly responseBody?: string;
+  constructor(message: string, status?: number, responseBody?: string) {
+    super(message);
+    this.name = 'UploadFailedError';
+    this.status = status;
+    this.responseBody = responseBody;
+  }
+}
+
 // Step 2: stream the local file's bytes to the upload target. In proxy mode the
 // object key is the credential (no bearer needed); we still send it when present
 // so authenticated proxy setups also work.
@@ -83,7 +97,15 @@ export async function uploadFileBytes(
   }
   const put = await fetch(uploadUrl, { method: 'PUT', body: blob, headers });
   if (!put.ok) {
-    throw new Error(`upload failed with status ${put.status}`);
+    // The storage backend explains itself in the body (R2/S3 return an XML
+    // <Error><Code>…). Capture it — without this, every storage failure looks
+    // identical from the client and reads as "no internet".
+    const body = await put.text().catch(() => '');
+    throw new UploadFailedError(
+      `upload failed with status ${put.status}${body ? `: ${body.slice(0, 300)}` : ''}`,
+      put.status,
+      body || undefined,
+    );
   }
 }
 

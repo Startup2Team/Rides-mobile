@@ -10,6 +10,27 @@ import type { DriverProfile, ProfileIdentity, ProfilePhoto, UserProfile } from '
 import type { User } from '@/types';
 import { useProfilePhotoQuery, useProfileQuery, useUpdateProfileMutation } from '@/query/hooks/useProfileQuery';
 
+// "Check your connection" is only true when the device actually failed to
+// reach anything. A status code means the server DID answer and rejected us —
+// reporting that as an offline error is how a dead storage credential went
+// unnoticed while every upload silently failed.
+function profilePhotoErrorMessage(error: unknown): string {
+  const status = (error as { status?: number } | null)?.status;
+  if (status === undefined) {
+    return "Couldn't upload your photo. Check your connection and try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "Couldn't save your photo — our storage rejected the upload. Please report this to support.";
+  }
+  if (status === 413) {
+    return 'That photo is too large. Please pick a smaller image.';
+  }
+  if (status >= 500) {
+    return "Couldn't save your photo — our server had a problem. Please try again shortly.";
+  }
+  return `Couldn't save your photo (error ${status}). Please try again.`;
+}
+
 function buildIdentity(user: User | null, profilePhoto: ProfilePhoto | null): ProfileIdentity | null {
   if (!user) return null;
   return {
@@ -178,7 +199,7 @@ export function useProfilePhoto(fallbackImage?: string | null) {
             console.error('Failed to upload profile photo:', uploadError);
             // Revert the optimistic preview to the last persisted image.
             await refreshProfileImage();
-            showToast("Couldn't upload your photo. Check your connection and try again.", 'error');
+            showToast(profilePhotoErrorMessage(uploadError), 'error');
             return null;
           }
         }

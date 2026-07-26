@@ -3,7 +3,15 @@ import type { ProfilePhoto, ProfilePreferences, UserProfile } from '@/domains/pr
 import type { User } from '@/types';
 import { observability } from '@/observability/context/observabilityContext';
 import { BackendClient } from '../client/backendClient';
-import { createBackendUnavailableError, BackendError } from '../contracts/backendErrors';
+import {
+  createBackendUnavailableError,
+  BackendError,
+  BackendUnavailableError,
+  ForbiddenError,
+  ServerError,
+  UnauthorizedError,
+  ValidationError,
+} from '../contracts/backendErrors';
 import type { StagingShadowHealthEvent } from '../staging/health';
 import type {
   ChangePhoneRequestDto,
@@ -19,8 +27,8 @@ import {
   changePhoneRequestToDto,
   dtoToDomainProfile,
   domainToDtoProfile,
-  domainToProfilePhotoDto,
 } from '../mappers/profileMapper';
+import { uploadFileBytes } from '@/services/driverDocuments';
 
 export interface RemoteProfileRepositoryOptions {
   client?: BackendClient;
@@ -162,6 +170,26 @@ function classifyProfileMismatch(local: UserProfile | null | undefined, remote: 
 
 function toRepositoryFailure(method: string, error: unknown): BackendError {
   if (error instanceof BackendError) return error;
+  // The object-storage PUT is a raw fetch, so its failures never pass through
+  // the typed transport. Keep the status rather than collapsing it into
+  // "backend unavailable" — that collapse is what let a rejected storage
+  // credential read as a network outage all the way up to the user.
+  const status = (error as { status?: number } | null)?.status;
+  if (typeof status === 'number') {
+    const details = {
+      repository: 'profile',
+      method,
+      transport: 'remote',
+      status,
+      cause: error,
+      retryable: status === 429 || status >= 500,
+    };
+    if (status === 401) return new UnauthorizedError(details);
+    if (status === 403) return new ForbiddenError(details);
+    if (status === 400 || status === 413 || status === 422) return new ValidationError(details);
+    if (status >= 500) return new ServerError(details);
+    return new BackendUnavailableError(details);
+  }
   return createBackendUnavailableError('profile', method, 'remote');
 }
 
@@ -269,6 +297,12 @@ export class RemoteProfileRepository implements ProfileRepository {
     return profile?.profilePhoto ?? null;
   }
 
+  // There is no single "upload a photo" endpoint on the backend. The real flow
+  // is presign → PUT the bytes to object storage → persist the resulting public
+  // URL on the customer profile, which is what `services/profile.ts` does. This
+  // previously POSTed to `/v1/profile/me/photo`, a route the Go API does not
+  // register — it would 404 the moment PROFILE_REPOSITORY_MODE=SHADOW_REMOTE
+  // was switched on.
   async uploadProfilePhoto(
     uri: string,
     metadata: UploadProfilePhotoRequestDto,
@@ -276,19 +310,28 @@ export class RemoteProfileRepository implements ProfileRepository {
   ): Promise<ProfilePhoto | null> {
     return this.shadow('uploadProfilePhoto', async () => {
       if (!this.client) throw createBackendUnavailableError('profile', 'uploadProfilePhoto', 'remote');
-      const photoDto = domainToProfilePhotoDto(uri, metadata);
-      const response = await this.client.post<UploadProfilePhotoResponseDto>('/v1/profile/me/photo', {
-        body: photoDto,
+      const contentType = metadata.mimeType || 'image/jpeg';
+
+      const presign = await this.client.post<{ data: { upload_url: string; file_url: string } }>(
+        '/v1/uploads/presigned-url',
+        {
+          body: { content_type: contentType, purpose: 'profile_image' },
+          headers: { 'X-Correlation-Id': metadata.correlationId },
+        },
+      );
+      const { upload_url: uploadUrl, file_url: fileUrl } = presign.data.data;
+
+      await uploadFileBytes(uploadUrl, uri, contentType);
+
+      await this.client.put('/v1/customer/profile', {
+        body: { profile_image_url: fileUrl },
         headers: {
           'X-Correlation-Id': metadata.correlationId,
           'X-Idempotency-Key': metadata.idempotencyKey,
         },
       });
-      const profile = current ?? null;
-      if (response.data?.data?.photoUrl) {
-        return { uri: response.data.data.photoUrl } satisfies ProfilePhoto;
-      }
-      return profile?.profilePhoto ?? null;
+
+      return { uri: fileUrl } satisfies ProfilePhoto;
     });
   }
 

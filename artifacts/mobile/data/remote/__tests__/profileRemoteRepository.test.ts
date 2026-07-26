@@ -8,6 +8,13 @@ import { dtoToDomainProfile, profileIdentityToDto } from '../mappers/profileMapp
 import type { ProfileDto } from '../contracts/api';
 import type { ProfileIdentity, UserProfile } from '@/domains/profile';
 import type { ProfileRepository } from '@/data/repositories/interfaces';
+import { uploadFileBytes } from '@/services/driverDocuments';
+
+// The byte transfer itself is a raw fetch to object storage; stub it so these
+// tests cover the repository's request sequence, not the network.
+jest.mock('@/services/driverDocuments', () => ({
+  uploadFileBytes: jest.fn().mockResolvedValue(undefined),
+}));
 
 const currentProfile: UserProfile = {
   userId: 'user-1',
@@ -138,20 +145,26 @@ describe('RemoteProfileRepository', () => {
     });
   });
 
-  test('profile photo upload maps through the photo dto', async () => {
+  test('profile photo upload presigns, stores the bytes, then persists the URL', async () => {
     const transportFixture = createFakeBackendTransport([
       {
         method: 'POST',
-        path: '/v1/profile/me/photo',
+        path: '/v1/uploads/presigned-url',
         response: {
           status: 200,
           data: {
             data: {
-              photoUrl: 'file://new-profile.jpg',
+              upload_url: 'https://storage.example/avatars/abc.jpg?sig=x',
+              file_url: 'https://cdn.example/avatars/abc.jpg',
             },
             version: 'v1',
           },
         },
+      },
+      {
+        method: 'PUT',
+        path: '/v1/customer/profile',
+        response: { status: 204, data: { data: null, version: 'v1' } },
       },
     ]);
     const repo = new RemoteProfileRepository({
@@ -159,18 +172,61 @@ describe('RemoteProfileRepository', () => {
       transportLabel: 'shadow_remote',
     });
 
+    // The stored photo is the public URL from storage, never the local file://
+    // path — that distinction is exactly what used to be lost.
     await expect(
       repo.uploadProfilePhoto('file://new-profile.jpg', createMetadata(), currentProfile),
-    ).resolves.toEqual({ uri: 'file://new-profile.jpg' });
+    ).resolves.toEqual({ uri: 'https://cdn.example/avatars/abc.jpg' });
+
+    expect(uploadFileBytes).toHaveBeenCalledWith(
+      'https://storage.example/avatars/abc.jpg?sig=x',
+      'file://new-profile.jpg',
+      'image/jpeg',
+    );
     expect(transportFixture.calls[0]).toMatchObject({
       method: 'POST',
-      path: '/v1/profile/me/photo',
-      body: expect.objectContaining({
-        fileName: 'profile.jpg',
-        mimeType: 'image/jpeg',
-        fileSize: 1024,
-      }),
+      path: '/v1/uploads/presigned-url',
+      body: expect.objectContaining({ content_type: 'image/jpeg', purpose: 'profile_image' }),
     });
+    expect(transportFixture.calls[1]).toMatchObject({
+      method: 'PUT',
+      path: '/v1/customer/profile',
+      body: expect.objectContaining({ profile_image_url: 'https://cdn.example/avatars/abc.jpg' }),
+    });
+  });
+
+  test('a rejected upload propagates instead of resolving to a photo', async () => {
+    const transportFixture = createFakeBackendTransport([
+      {
+        method: 'POST',
+        path: '/v1/uploads/presigned-url',
+        response: {
+          status: 200,
+          data: {
+            data: {
+              upload_url: 'https://storage.example/avatars/abc.jpg?sig=x',
+              file_url: 'https://cdn.example/avatars/abc.jpg',
+            },
+            version: 'v1',
+          },
+        },
+      },
+    ]);
+    // A dead storage credential answers 401 — the repository must surface it,
+    // not report a saved photo.
+    (uploadFileBytes as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('upload failed with status 401'), { status: 401 }),
+    );
+    const repo = new RemoteProfileRepository({
+      client: new BackendClient({ transport: transportFixture.transport }),
+      transportLabel: 'shadow_remote',
+    });
+
+    // The 401 must survive as an authorization failure. Previously any raw
+    // upload error became BackendUnavailableError, i.e. "you're offline".
+    await expect(
+      repo.uploadProfilePhoto('file://new-profile.jpg', createMetadata(), currentProfile),
+    ).rejects.toMatchObject({ name: 'UnauthorizedError', status: 401 });
   });
 
   test('phone update maps dto correctly', async () => {
@@ -216,7 +272,7 @@ describe('RemoteProfileRepository', () => {
       { method: 'GET', path: '/v1/profile/me', error: new TimeoutError({ repository: 'profile', method: 'getCurrentProfile', transport: 'remote' }) },
     ]);
     const offlineTransport = createFakeBackendTransport([
-      { method: 'POST', path: '/v1/profile/me/photo', error: new OfflineError({ repository: 'profile', method: 'uploadProfilePhoto', transport: 'remote' }) },
+      { method: 'POST', path: '/v1/uploads/presigned-url', error: new OfflineError({ repository: 'profile', method: 'uploadProfilePhoto', transport: 'remote' }) },
     ]);
     const serverTransport = createFakeBackendTransport([
       { method: 'PATCH', path: '/v1/profile/me/phone', error: new ServerError({ repository: 'profile', method: 'updatePhoneNumber', transport: 'remote' }) },
