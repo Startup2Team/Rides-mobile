@@ -127,6 +127,14 @@ jest.mock('@/domains/notifications', () => {
   return {
     getNotificationAccentColor: () => '#0057ff',
     getNotificationDayBucket: () => 'today',
+    // Mirrors the real calendar-day helper rather than stubbing a constant, so
+    // the rendered "Nd ago" label stays meaningful in these tests.
+    notificationCalendarDaysAgo: (time: string, now: Date = new Date()) => {
+      const d = new Date(time);
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const startOfThatDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      return Math.round((startOfToday - startOfThatDay) / 86400000);
+    },
     useNotifications: () => ({
       notifications,
       unreadCount: 1,

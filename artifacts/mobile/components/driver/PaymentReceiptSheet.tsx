@@ -160,24 +160,6 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
     }
   }, [busy, receipt]);
 
-  const handlePrint = React.useCallback(async () => {
-    if (!receipt || busy) return;
-    setBusy(true);
-    setNote(null);
-    try {
-      const Print = await loadPrint();
-      if (!Print) {
-        setNote(PRINT_UNAVAILABLE_NOTE);
-        return;
-      }
-      await Print.printAsync({ html: renderReceiptHtml(receipt) });
-    } catch {
-      setNote("Couldn't open the printer sheet.");
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, receipt]);
-
   const handleCopyReference = React.useCallback(async () => {
     if (!receipt) return;
     await Clipboard.setStringAsync(receipt.reference);
@@ -332,16 +314,9 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
             <Feather name="copy" size={16} color={colors.foreground} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.iconButton, { borderColor: colors.border }]}
-            onPress={handlePrint}
-            accessibilityRole="button"
-            accessibilityLabel="Print receipt"
-            activeOpacity={0.78}
-          >
-            <Feather name="printer" size={16} color={colors.foreground} />
-          </TouchableOpacity>
-
+          {/* No separate print action: the share sheet Download opens already
+              offers Print alongside Save to Files, AirDrop and everything else
+              the OS supports. A dedicated button duplicated one of its entries. */}
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: busy ? 0.7 : 1 }]}
             onPress={handleDownload}

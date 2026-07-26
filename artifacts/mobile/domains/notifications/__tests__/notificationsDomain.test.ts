@@ -1,7 +1,7 @@
 import type { NotificationFeedContext, NotificationReadState } from '../types';
 import fs from 'fs';
 import path from 'path';
-import { getNotificationDayBucket } from '../hooks';
+import { getNotificationDayBucket, notificationCalendarDaysAgo } from '../hooks';
 import { getUnreadNotificationCount, listNotifications, notificationRepository } from '../repository';
 
 const mockGetReadState = jest.fn();
@@ -96,5 +96,33 @@ describe('notifications domain boundary', () => {
       const source = fs.readFileSync(screenPath, 'utf8');
       expect(source).not.toContain('notificationPersistence');
     });
+  });
+});
+
+describe('calendar-day bucketing', () => {
+  const now = new Date(2026, 6, 26, 11, 3); // Sun 26 Jul 2026, 11:03 local
+
+  test('counts calendar days, not elapsed 24h windows', () => {
+    // 45 hours earlier, but two calendar days back. Computing this as
+    // floor(hours / 24) gave 1, so the row read "1d ago" while the section
+    // headings put it under Previous and Yesterday showed "No notifications" —
+    // which looked like the feed had failed to load.
+    const twoCalendarDaysAgo = new Date(2026, 6, 24, 13, 36).toISOString();
+    expect(notificationCalendarDaysAgo(twoCalendarDaysAgo, now)).toBe(2);
+    expect(getNotificationDayBucket(twoCalendarDaysAgo)).toBe('previous');
+  });
+
+  test('late last night is one day ago, not zero', () => {
+    // Two hours elapsed, but a different calendar day.
+    const lastNight = new Date(2026, 6, 25, 23, 30).toISOString();
+    expect(notificationCalendarDaysAgo(lastNight, new Date(2026, 6, 26, 1, 30))).toBe(1);
+  });
+
+  test('earlier the same day is zero days ago', () => {
+    expect(notificationCalendarDaysAgo(new Date(2026, 6, 26, 0, 5).toISOString(), now)).toBe(0);
+  });
+
+  test('an unparseable timestamp falls back to previous rather than throwing', () => {
+    expect(getNotificationDayBucket('not-a-date')).toBe('previous');
   });
 });
