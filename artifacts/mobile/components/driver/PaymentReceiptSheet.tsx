@@ -11,7 +11,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import { SheetBackdrop } from '@/components/SheetBackdrop';
@@ -28,6 +27,24 @@ import {
 } from '@/domains/package-payments';
 
 const ENTRANCE_TRANSLATE_Y = 24;
+
+const PRINT_UNAVAILABLE_NOTE = 'PDF receipts need a newer version of the app.';
+
+/**
+ * expo-print is a native module, and expo-modules-core throws the moment its JS
+ * module is evaluated on a binary that was built without it. Importing it at
+ * module scope therefore took down this whole route — and, through the import
+ * chain, the driver-package-payment-status screen — on any build predating the
+ * dependency. Loading it on demand keeps that failure inside the two actions
+ * that actually need a printer, where it degrades to a readable note.
+ */
+async function loadPrint(): Promise<typeof import('expo-print') | null> {
+  try {
+    return await import('expo-print');
+  } catch {
+    return null;
+  }
+}
 
 /** Torn-stub divider: the one flourish that makes it read as a receipt. */
 function Perforation({ color }: { color: string }) {
@@ -104,6 +121,11 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
     setBusy(true);
     setNote(null);
     try {
+      const Print = await loadPrint();
+      if (!Print) {
+        setNote(PRINT_UNAVAILABLE_NOTE);
+        return;
+      }
       const { uri: tempUri } = await Print.printToFileAsync({
         html: renderReceiptHtml(receipt),
         base64: false,
@@ -143,6 +165,11 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
     setBusy(true);
     setNote(null);
     try {
+      const Print = await loadPrint();
+      if (!Print) {
+        setNote(PRINT_UNAVAILABLE_NOTE);
+        return;
+      }
       await Print.printAsync({ html: renderReceiptHtml(receipt) });
     } catch {
       setNote("Couldn't open the printer sheet.");
@@ -234,7 +261,14 @@ export function PaymentReceiptSheet({ receipt, onClose }: Props) {
 
             {/* Hero: what was paid, and that it landed. */}
             <View style={styles.hero}>
-              <AppText style={[styles.amount, { color: colors.foreground }]}>
+              {/* Shrink rather than wrap: a seven-figure amount must still read
+                  as one line on the narrowest supported phone. */}
+              <AppText
+                style={[styles.amount, { color: colors.foreground }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              >
                 {formatReceiptAmount(receipt.amountRwf)}
               </AppText>
               <AppText style={[styles.heroPackage, { color: colors.mutedForeground }]} numberOfLines={2}>
@@ -366,7 +400,10 @@ const styles = StyleSheet.create({
   wordmark: { fontSize: 17, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
   receiptNo: { fontSize: 11, fontFamily: 'Inter_500Medium', letterSpacing: 0.3 },
   hero: { alignItems: 'center', paddingTop: 18, paddingBottom: 4, gap: 6 },
-  amount: { fontSize: 34, fontFamily: 'Inter_700Bold', letterSpacing: -1.2 },
+  // lineHeight is REQUIRED here: AppText defaults to the `body` variant, which
+  // sets lineHeight 22. Overriding only fontSize leaves a 34px glyph in a 22px
+  // line box, which clips the ascenders clean off the top of the amount.
+  amount: { fontSize: 34, lineHeight: 42, fontFamily: 'Inter_700Bold', letterSpacing: -1.2 },
   heroPackage: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   paidPill: {
     flexDirection: 'row',
