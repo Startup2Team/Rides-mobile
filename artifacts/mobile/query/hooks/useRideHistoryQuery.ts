@@ -17,6 +17,20 @@ export function useRideHistoryQuery(userId?: string | null) {
   });
 }
 
+// DRIVER ride history. Deliberately separate from useRideHistoryQuery (which
+// returns the signed-in user's PASSENGER rides). The backend has no driver
+// ride-LIST endpoint yet, so this resolves to an empty list rather than the
+// wrong dataset; driver aggregates come from /driver/stats + /driver/earnings/*.
+// NEEDS-BACKEND: a paginated GET /v1/driver/rides list endpoint.
+export function useDriverRideHistoryQuery(driverId?: string | null) {
+  const resolvedDriverId = driverId ?? 'current';
+
+  return usePolicyQuery(queryPolicies.rideHistory, {
+    queryKey: [...rideKeys.history(resolvedDriverId), 'driver'] as const,
+    queryFn: () => rideHistoryRepository.listDriverRideHistory({ userId: resolvedDriverId }),
+  });
+}
+
 export function useRideDetailQuery(rideId: string | null | undefined) {
   return usePolicyQuery(queryPolicies.rideHistory, {
     queryKey: rideKeys.detail(rideId ?? 'unknown'),

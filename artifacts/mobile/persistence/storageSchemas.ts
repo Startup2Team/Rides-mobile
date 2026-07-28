@@ -399,6 +399,7 @@ export const driverOnboardingDraftSchema = z.object({
     sector: z.string(),
     cell: z.string(),
     village: z.string(),
+    gender: z.enum(['male', 'female', 'other', '']),
     momoProvider: z.enum(['mtn', 'airtel']),
     momoCode: z.string(),
     merchantCode: z.string(),

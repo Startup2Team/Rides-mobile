@@ -324,22 +324,17 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     });
   });
 
-  test('displays and purchases the locked offer without resolving current campaign values', async () => {
+  test('displays the locked offer values and routes to the manual claim flow', async () => {
     render(<DriverPackagePaymentScreen />);
 
     expect(await screen.findByText('Locked Growth')).toBeTruthy();
-    expect(screen.getByText('Locked Campaign')).toBeTruthy();
-    expect(screen.getByText('44')).toBeTruthy();
-    expect(screen.getByText('+6')).toBeTruthy();
+    // The locked amount (from the stored offer) drives the manual instructions.
     expect(screen.getByText('1,250 RWF')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('Send Payment Prompt'));
-
-    expect(mockCreatePackagePurchase).toHaveBeenCalledWith({
-      offer: lockedOffer,
-      provider: 'mtn',
-      phoneNumber: '+250788000000',
-    });
+    // Paid packages always route through the manual (proof-based) claim flow —
+    // there is no fake auto-purchase / simulated MoMo success anymore.
+    expect(screen.getByLabelText('I have paid')).toBeTruthy();
+    expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
   });
 
   test('expired offer blocks confirmation and returns to packages', async () => {
@@ -365,7 +360,7 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
   });
 
-  test('ignores tampered route values and purchases the stored offer', async () => {
+  test('ignores tampered route values and shows the stored offer in the manual flow', async () => {
     mockParams = {
       offerId: lockedOffer.offerId,
       priceRwf: '1',
@@ -374,13 +369,13 @@ describe('DriverPackagePaymentScreen offer lock', () => {
 
     render(<DriverPackagePaymentScreen />);
     await screen.findByText('Locked Growth');
-    fireEvent.press(screen.getByText('Send Payment Prompt'));
 
-    await waitFor(() => expect(mockCreatePackagePurchase).toHaveBeenCalledWith({
-      offer: lockedOffer,
-      provider: 'mtn',
-      phoneNumber: '+250788000000',
-    }));
+    // The stored (locked) amount is shown, not the tampered route value, and the
+    // paid package routes through the manual claim flow with no fake purchase.
+    expect(screen.getByText('1,250 RWF')).toBeTruthy();
+    expect(screen.queryByText('1 RWF')).toBeNull();
+    expect(screen.getByLabelText('I have paid')).toBeTruthy();
+    expect(mockCreatePackagePurchase).not.toHaveBeenCalled();
   });
 
   test('renders manual instructions and copies generated USSD without creating a purchase', async () => {
@@ -473,8 +468,8 @@ describe('DriverPackagePaymentScreen offer lock', () => {
     await waitFor(() => expect(mockCreateManualPaymentClaim).toHaveBeenCalled());
     await waitFor(() => expect(mockSubmitManualPaymentClaim).toHaveBeenCalled());
 
-    expect(await screen.findByText('PAYMENT CONFIRMATION SUBMITTED')).toBeTruthy();
-    expect(screen.getByText('Your payment claim is waiting for review.')).toBeTruthy();
+    expect(await screen.findByText('WAITING FOR APPROVAL')).toBeTruthy();
+    expect(screen.getByText(/updates on its own/)).toBeTruthy();
     expect(mockActivatePackage).not.toHaveBeenCalled();
     expect(mockUpdatePackagePurchaseStatus).not.toHaveBeenCalled();
     expect(mockCreatePackagePurchase).not.toHaveBeenCalled();

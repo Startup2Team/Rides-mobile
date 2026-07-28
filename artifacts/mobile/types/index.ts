@@ -335,10 +335,21 @@ export interface MockDriver {
   location: Coords;
   rating: number;
   eta: number;
+  /**
+   * Live distance (km) from the driver's real position to the current target
+   * (pickup before the trip, destination during it). Updated on every
+   * `driver_location` event so customer tracking cards read a real, moving
+   * value instead of the static estimate. Undefined until the first fix.
+   */
+  distanceKm?: number;
 }
 
 export interface Ride {
   id: string;
+  // Server-assigned ride id once the booking is created on the backend
+  // (POST /customer/rides). Distinct from the local `id` while the ride flow
+  // is transitioning off the local simulation onto the real backend + WS.
+  backendRideId?: string;
   customerId: string;
   customerName?: string;
   customerPhone?: string;

@@ -19,14 +19,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useRide } from '@/context/RideContext';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
-import { useDriverTracking } from '@/hooks/useDriverTracking';
+import { useDeviceLocation } from '@/hooks/useDeviceLocation';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
 import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { KIGALI_CENTER, VehicleType } from '@/types';
-import { getArrivalVerification } from './driverNavigateArrival';
+import { getArrivalVerification } from '@/domain/driverNavigateArrival';
 import { elevation } from '@/constants/elevation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
@@ -162,12 +162,9 @@ export default function DriverNavigateScreen() {
     fittedMapPhaseRef.current = null;
   }, [currentRide?.id, phase, target?.latitude, target?.longitude]);
 
-  const routeCoordinates = route?.coordinates ?? [];
-  const liveDriverPos = useDriverTracking({
-    enabled: phase === 'pickup' || phase === 'inprogress',
-    routeCoordinates,
-    stepCount: phase === 'pickup' ? 10 : 24,
-  });
+  // Driver's own marker = their REAL device GPS (not a simulated walk along the
+  // route). Falls back to the last context location, then Kigali centre.
+  const liveDriverPos = useDeviceLocation(phase === 'pickup' || phase === 'inprogress');
   const driverPos = liveDriverPos ?? driverLocation ?? KIGALI_CENTER;
 
   // Wait clock

@@ -38,6 +38,31 @@ export const queryPolicies = {
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
+  driverStats: policy({
+    // All-time counters shift slowly; refetch on focus keeps them current
+    // after a completed ride without hammering the endpoint.
+    staleTime: 2 * minute,
+    gcTime: 20 * minute,
+    refetchOnMount: 'always',
+  }),
+  driverEarnings: policy({
+    // Earnings change the moment a trip completes — keep them fresh.
+    staleTime: 60 * 1000,
+    gcTime: 20 * minute,
+    refetchOnMount: 'always',
+  }),
+  driverRatings: policy({
+    staleTime: 2 * minute,
+    gcTime: 30 * minute,
+  }),
+  driverCredits: policy({
+    // Ride credits change when a package is activated or an admin approves a
+    // manual payment claim (granting rides). Refetch on focus/mount so a grant
+    // that happened while the app was backgrounded shows up promptly.
+    staleTime: 30 * 1000,
+    gcTime: 20 * minute,
+    refetchOnMount: 'always',
+  }),
   driverVehicles: policy({
     staleTime: 5 * minute,
     gcTime: 30 * minute,
@@ -85,6 +110,12 @@ export const queryPolicies = {
   }),
   reverseGeocode: policy({
     staleTime: 0,
+    gcTime: 10 * minute,
+    retry: 1,
+  }),
+  demandHeatmap: policy({
+    // Demand shifts continuously; keep it fresh but cheap to poll.
+    staleTime: 60 * 1000,
     gcTime: 10 * minute,
     retry: 1,
   }),

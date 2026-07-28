@@ -28,7 +28,7 @@ export function RideHeader({
       <View style={styles.bar}>
         <View style={styles.slot}><StatusChip status={ride.status} variant="rideHeader" /></View>
         <View style={[styles.slot, styles.end]}>
-          {ride.driver && <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>{etaText}</Text>}
+          {ride.driver && etaText ? <Text style={[styles.eta, { color: colors.primary }]} numberOfLines={1}>{etaText}</Text> : null}
         </View>
         <View style={styles.titleOverlay} pointerEvents="none">
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>

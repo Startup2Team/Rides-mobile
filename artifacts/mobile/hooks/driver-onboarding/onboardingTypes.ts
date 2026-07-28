@@ -22,6 +22,7 @@ export interface DriverOnboardingForm {
   sector: string;
   cell: string;
   village: string;
+  gender: 'male' | 'female' | 'other' | '';
   momoProvider: 'mtn' | 'airtel';
   momoCode: string;
   merchantCode: string;
@@ -46,6 +47,7 @@ export const INITIAL_DRIVER_ONBOARDING_FORM: DriverOnboardingForm = {
   sector: '',
   cell: '',
   village: '',
+  gender: '',
   momoProvider: 'mtn',
   momoCode: '',
   merchantCode: '',

@@ -35,6 +35,7 @@ import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardin
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { profileRepository } from '@/domains/profile/repository';
+import { submitDriverApplicationWithDocuments, type DriverApplicationDocument } from '@/services/driverApplication';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -160,6 +161,46 @@ export default function DriverOnboarding() {
       submittedAt: new Date().toISOString(),
     });
     if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
+
+    // Real backend: create the driver application + upload KYC documents.
+    // Best-effort so a network failure doesn't lose the local submission.
+    try {
+      const documents: DriverApplicationDocument[] = [];
+      if (docs.license?.[0]) documents.push({ documentType: 'LICENCE_FRONT', uri: docs.license[0] });
+      if (docs.license?.[1]) documents.push({ documentType: 'LICENCE_BACK', uri: docs.license[1] });
+      if (docs.nationalId?.[0]) documents.push({ documentType: 'NATIONAL_ID_FRONT', uri: docs.nationalId[0] });
+      if (docs.nationalId?.[1]) documents.push({ documentType: 'NATIONAL_ID_BACK', uri: docs.nationalId[1] });
+      if (docs.insurance?.[0]) documents.push({ documentType: 'VEHICLE_INSURANCE', uri: docs.insurance[0] });
+      if (docs.authorization?.[0]) documents.push({ documentType: 'VEHICLE_AUTHORIZATION', uri: docs.authorization[0] });
+      if (selfieUri) documents.push({ documentType: 'SELFIE', uri: selfieUri });
+
+      await submitDriverApplicationWithDocuments(
+        {
+          vehicleType: form.vehicleType,
+          vehiclePlate: form.plateNumber,
+          licenseNumber: form.licenseNumber,
+          dateOfBirth: form.dob,
+          city: form.district || form.province,
+          momoPayCode: form.momoCode,
+          momoProvider: form.momoProvider,
+          province: form.province,
+          district: form.district,
+          sector: form.sector,
+          cell: form.cell,
+          village: form.village,
+          gender: form.gender || undefined,
+          passengerSeats: form.passengerSeats ? Number(form.passengerSeats) : undefined,
+          loadCapacityKg: form.loadCapacityKg ? Number(form.loadCapacityKg) : undefined,
+          licenseExpiryDate: form.licenseExpiryDate || undefined,
+          insuranceExpiryDate: form.insuranceExpiryDate || undefined,
+          authorizationExpiryDate: form.authorizationExpiryDate || undefined,
+        },
+        documents,
+      );
+    } catch {
+      // Local submission still recorded; the backend application can be retried.
+    }
+
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
     setLoading(false);

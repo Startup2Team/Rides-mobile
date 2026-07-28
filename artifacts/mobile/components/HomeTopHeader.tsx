@@ -60,7 +60,7 @@ const CTA_LABEL_SLOT_WIDTH =
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const FADE_HALF_MS = DRIVER_CTA_FADE_MS / 2;
 const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
-  require("../assets/images/verified badge.png"),
+  require("../assets/images/verified-badge.png"),
   require("../assets/ads/dashboard/airtel.jpg"),
   require("../assets/ads/dashboard/jibu.jpg"),
   require("../assets/ads/bralirwa.png"),

@@ -37,12 +37,22 @@ export function formatSubscriberDigits(digits: string): string {
 }
 
 export function formatRwandaPlateInput(value: string): string {
-  const upper = value.toUpperCase().trim();
-  const compact = upper.replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  // Uppercase and keep letters, digits AND spaces so the plate can be typed
+  // naturally — Rwandan plates are spaced (e.g. "RAD 123 A"). Collapse repeated
+  // spaces and drop a leading one, but KEEP a trailing space the user is typing
+  // (the old `.trim()` deleted it every keystroke, so spaces "didn't work").
+  const cleaned = value
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^\s+/, '');
+  // Auto-format the standard private/commercial pattern (RAD000A → RAD 000 A).
+  const compact = cleaned.replace(/\s/g, '');
   if (/^R[A-Z]{2}\d{3}[A-Z]$/.test(compact)) {
     return `${compact.slice(0, 3)} ${compact.slice(3, 6)} ${compact.slice(6, 7)}`;
   }
-  return upper.replace(/\s+/g, ' ').trim();
+  // Otherwise keep exactly what the user typed (with their spaces) — never strip.
+  return cleaned;
 }
 
 export const normalizeRwandaPlateNumber = (value: string) =>

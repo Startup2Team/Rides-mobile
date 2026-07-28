@@ -4,21 +4,21 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { RideProvider, useRide } from '../RideProvider';
 import {
-  ARRIVING_TRACKING_INTERVAL_MS,
-  ARRIVING_TRACKING_STEPS,
   CANCELLED_RIDE_CLEAR_DELAY_MS,
-  CONFIRMED_RIDE_START_DELAY_MS,
-  DRIVER_MATCH_MIN_DELAY_MS,
-  DRIVER_OFFER_DELAY_MS,
   JOURNEY_TRACKING_INTERVAL_MS,
-  NEGOTIATION_RESPONSE_DELAY_MS,
 } from '../rideConstants';
 import { loadRideHistory } from '../ridePersistence';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import type { RideLocation } from '@/types';
 
 let mockAuthDriverProfile: any = null;
+let mockAuthUser: any = null;
 let mockDriverEntitlement: any = null;
+// Handlers captured from the (mocked) customer tracking socket so tests can
+// drive real backend events — matching + negotiation are now socket-driven.
+let mockCapturedCustomerHandlers: any = null;
+const mockCreateBackendRide = jest.fn(async (..._args: unknown[]) => ({ rideId: 'backend-ride-1' }));
+const mockCancelBackendRide = jest.fn(async (..._args: unknown[]) => undefined);
 const mockShadowWireRequestRideCommand = jest.fn();
 const mockShadowWireCancelRideCommand = jest.fn();
 const mockShadowWireAcceptRideCommand = jest.fn();
@@ -31,13 +31,53 @@ jest.mock('@/utils/driverProfileImage', () => ({
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useOptionalAuth: () => mockAuthDriverProfile ? {
-    user: {
-      id: 'driver-1',
-      mode: 'driver',
-    },
-    driverProfile: mockAuthDriverProfile,
-  } : null,
+  useOptionalAuth: () => {
+    if (mockAuthDriverProfile) {
+      return {
+        user: { id: 'driver-1', mode: 'driver' },
+        driverProfile: mockAuthDriverProfile,
+      };
+    }
+    if (mockAuthUser) {
+      return { user: mockAuthUser, driverProfile: null };
+    }
+    return null;
+  },
+}));
+
+// Backend + socket services are stubbed so the real POST /customer/rides + the
+// live tracking socket are deterministic. `driver_matched` and negotiation now
+// arrive through the socket, so tests push them via the captured handlers.
+jest.mock('@/services/rides', () => ({
+  createRide: (...args: unknown[]) => mockCreateBackendRide(...args),
+  cancelRide: (...args: unknown[]) => mockCancelBackendRide(...args),
+}));
+jest.mock('@/services/negotiation', () => ({
+  proposeFare: jest.fn(async () => undefined),
+  acceptFare: jest.fn(async () => undefined),
+}));
+jest.mock('@/services/driverRides', () => ({
+  acceptRide: jest.fn(async () => undefined),
+  declineRide: jest.fn(async () => undefined),
+  driverCancelRide: jest.fn(async () => undefined),
+  markEnRoute: jest.fn(async () => undefined),
+  markArrived: jest.fn(async () => undefined),
+  startTrip: jest.fn(async () => undefined),
+  completeTrip: jest.fn(async () => undefined),
+}));
+jest.mock('@/services/driverNegotiation', () => ({
+  proposeFare: jest.fn(async () => undefined),
+  acceptFare: jest.fn(async () => undefined),
+  lockManualFare: jest.fn(async () => undefined),
+}));
+jest.mock('@/services/customerTrackingSocket', () => ({
+  openCustomerTrackingSocket: (_rideId: string, handlers: any) => {
+    mockCapturedCustomerHandlers = handlers;
+    return { close: jest.fn() };
+  },
+}));
+jest.mock('@/services/driverTrackingSocket', () => ({
+  openDriverSocket: () => ({ close: jest.fn() }),
 }));
 
 jest.mock('@/context/DriverEntitlementContext', () => ({
@@ -86,15 +126,27 @@ async function flushPromises() {
   });
 }
 
+async function emitCustomer(type: string, payload: Record<string, unknown> = {}) {
+  await waitFor(() => expect(mockCapturedCustomerHandlers).not.toBeNull());
+  await act(async () => {
+    mockCapturedCustomerHandlers.onEvent({ type, payload });
+  });
+}
+
 async function createAndMatchRide(result: ReturnType<typeof renderRideProvider>['result']) {
   await act(async () => {
     await result.current.createRide(pickup, destination, 'moto', destination.address);
   });
   expect(result.current.currentRide?.status).toBe('searching');
 
-  await act(async () => {
-    jest.advanceTimersByTime(DRIVER_MATCH_MIN_DELAY_MS);
-    await Promise.resolve();
+  // The backend matches a driver and pushes `driver_matched` over the socket.
+  await emitCustomer('driver_matched', {
+    driver_id: 'backend-driver-1',
+    driver_name: 'Backend Driver',
+    driver_rating: 5,
+    eta: 4,
+    lat: pickup.latitude,
+    lng: pickup.longitude,
   });
   expect(result.current.currentRide?.status).toBe('negotiating');
   expect(result.current.currentRide?.driver?.vehicleType).toBe('moto');
@@ -109,7 +161,11 @@ describe('RideProvider lifecycle orchestration', () => {
     jest.useFakeTimers();
     jest.spyOn(Math, 'random').mockReturnValue(0);
     mockAuthDriverProfile = null;
+    mockAuthUser = null;
     mockDriverEntitlement = null;
+    mockCapturedCustomerHandlers = null;
+    mockCreateBackendRide.mockClear();
+    mockCancelBackendRide.mockClear();
     mockShadowWireRequestRideCommand.mockReset();
     mockShadowWireCancelRideCommand.mockReset();
     mockShadowWireAcceptRideCommand.mockReset();
@@ -131,7 +187,8 @@ describe('RideProvider lifecycle orchestration', () => {
     jest.restoreAllMocks();
   });
 
-  test('orchestrates creation, matching, negotiation, acceptance, arrival, journey, completion, and history persistence', async () => {
+  test('orchestrates creation, backend matching, negotiation, acceptance, arrival, journey, completion, and history persistence', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
     const { result, unmount } = renderRideProvider();
 
     await act(async () => {
@@ -155,26 +212,30 @@ describe('RideProvider lifecycle orchestration', () => {
       destText: destination.address,
     }));
 
-    await act(async () => {
-      jest.advanceTimersByTime(DRIVER_MATCH_MIN_DELAY_MS);
-      await Promise.resolve();
+    // The backend POST resolves, the tracking socket opens, and the server
+    // pushes `driver_matched` — the only source of match state now.
+    await emitCustomer('driver_matched', {
+      driver_id: 'backend-driver-1',
+      driver_name: 'Backend Driver',
+      driver_rating: 5,
+      eta: 4,
+      lat: pickup.latitude,
+      lng: pickup.longitude,
     });
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       id: createdRideId,
       status: 'negotiating',
-      driverId: expect.any(String),
+      driverId: 'backend-driver-1',
     }));
     expect(result.current.driverLocation).toEqual(result.current.currentRide?.driver?.location);
-    expect(result.current.cancelledSearchDraft).toBeNull();
 
-    await act(async () => {
-      jest.advanceTimersByTime(DRIVER_OFFER_DELAY_MS);
-    });
+    // The driver's fare offer arrives as a negotiation_message over the socket.
+    await emitCustomer('negotiation_message', { actor_role: 'DRIVER', amount: 3000 });
     const driverOffer = result.current.currentRide?.negotiation.at(-1);
     expect(driverOffer).toEqual(expect.objectContaining({
       sender: 'driver',
       type: 'offer',
-      amount: expect.any(Number),
+      amount: 3000,
     }));
 
     act(() => result.current.acceptDriverOffer());
@@ -184,14 +245,9 @@ describe('RideProvider lifecycle orchestration', () => {
       agreedFare: driverOffer?.amount,
     }));
 
-    act(() => {
-      jest.advanceTimersByTime(CONFIRMED_RIDE_START_DELAY_MS);
-    });
+    // Arrival is driven by the backend `driver_en_route` lifecycle event.
+    await emitCustomer('driver_en_route', {});
     expect(result.current.currentRide?.status).toBe('arriving');
-
-    act(() => {
-      jest.advanceTimersByTime(ARRIVING_TRACKING_INTERVAL_MS * ARRIVING_TRACKING_STEPS);
-    });
 
     act(() => result.current.markArrived());
 
@@ -229,7 +285,8 @@ describe('RideProvider lifecycle orchestration', () => {
     act(() => unmount());
   });
 
-  test('applies negotiation responses through the provider timer', async () => {
+  test('applies a customer counter-offer and confirms on the backend accept event', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
     const { result } = renderRideProvider();
     await createAndMatchRide(result);
 
@@ -240,9 +297,8 @@ describe('RideProvider lifecycle orchestration', () => {
       amount: offer,
     }));
 
-    act(() => {
-      jest.advanceTimersByTime(NEGOTIATION_RESPONSE_DELAY_MS);
-    });
+    // The backend accepts the counter-offer and confirms the ride over the socket.
+    await emitCustomer('ride_confirmed', { agreed_fare: offer });
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       status: 'confirmed',
       agreedFare: offer,
@@ -430,6 +486,7 @@ describe('RideProvider lifecycle orchestration', () => {
   });
 
   test('guarded invalid transitions do not replace or advance active ride state', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
     const { result } = renderRideProvider();
     await createAndMatchRide(result);
     const activeRide = result.current.currentRide;
@@ -451,6 +508,7 @@ describe('RideProvider lifecycle orchestration', () => {
   });
 
   test('loads persisted completed history through the provider API', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
     const firstProvider = renderRideProvider();
     await createAndMatchRide(firstProvider.result);
 

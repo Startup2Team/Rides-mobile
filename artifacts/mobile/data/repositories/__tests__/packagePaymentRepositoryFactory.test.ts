@@ -57,7 +57,7 @@ describe('packagePaymentRepositoryFactory', () => {
   });
 
   test('returns the configured payment configuration and keeps admin authority unavailable', async () => {
-    const repository = createPackagePaymentRepository({ configuration });
+    const repository = createPackagePaymentRepository({ configuration, mode: 'local' });
     const repositoryRecord = repository as unknown as Record<string, unknown>;
 
     const config = await repository.getPaymentConfiguration();
@@ -69,7 +69,7 @@ describe('packagePaymentRepositoryFactory', () => {
   });
 
   test('creates and submits a manual claim without activating a package', async () => {
-    const repository = createPackagePaymentRepository({ configuration });
+    const repository = createPackagePaymentRepository({ configuration, mode: 'local' });
 
     const created = await repository.createManualPaymentClaim({
       claimId: 'RDP-2026-ABC12',
@@ -113,7 +113,7 @@ describe('packagePaymentRepositoryFactory', () => {
 
     mockLoadStoredManualPaymentClaims.mockImplementationOnce(async () => ({ data: [existing], source: 'current' }));
 
-    const repository = createPackagePaymentRepository({ configuration });
+    const repository = createPackagePaymentRepository({ configuration, mode: 'local' });
     const duplicate = await repository.createManualPaymentClaim({
       claimId: 'RDP-2026-ABC12',
       driverId: 'driver-1',
@@ -128,7 +128,7 @@ describe('packagePaymentRepositoryFactory', () => {
   });
 
   test('rejects invalid phones before persistence', async () => {
-    const repository = createPackagePaymentRepository({ configuration });
+    const repository = createPackagePaymentRepository({ configuration, mode: 'local' });
     const result = await repository.createManualPaymentClaim({
       claimId: 'RDP-2026-ABC12',
       driverId: 'driver-1',

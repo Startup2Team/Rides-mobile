@@ -9,7 +9,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
@@ -52,7 +52,7 @@ export default function DriverSubmissionConfirmation() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const { driverProfile, switchMode, saveDriverProfile, user } = useAuth();
+  const { driverProfile, switchMode, saveDriverProfile, user, refreshDriverProfile } = useAuth();
   const [rejectionSummary, setRejectionSummary] = React.useState<DriverApplicationRejectionSummary | null>(null);
 
   const pageBackground = isDark ? '#000000' : '#F2F2F7';
@@ -99,6 +99,21 @@ export default function DriverSubmissionConfirmation() {
       setRejectionSummary(summary);
     })();
   }, [isRejected, user?.id]);
+
+  // Pull the real approval status whenever this screen is focused, and poll while
+  // still pending so an approval (admin action or dev auto-approve) flips the UI
+  // to "approved" live — no cold app restart required.
+  const isPending = !isApproved && !isRejected;
+  useFocusEffect(
+    React.useCallback(() => {
+      void refreshDriverProfile();
+      if (!isPending) return;
+      const intervalId = setInterval(() => {
+        void refreshDriverProfile();
+      }, 12000);
+      return () => clearInterval(intervalId);
+    }, [refreshDriverProfile, isPending]),
+  );
 
   const handlePrimaryAction = async () => {
     if (isApproved) {

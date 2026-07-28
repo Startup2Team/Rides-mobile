@@ -3,6 +3,7 @@ import { authRepository as localAuthRepository } from '@/data/repositories';
 import type { DriverProfile, User } from '@/types';
 import { observability } from '@/observability/context/observabilityContext';
 import { BackendClient } from '../client/backendClient';
+import { getDeviceMetadata } from '../client/deviceMetadata';
 import type {
   CurrentSessionResponseDto,
   LogoutResponseDto,
@@ -197,40 +198,32 @@ export class RemoteAuthRepository implements AuthSessionRepository {
   }
 
   async requestOtp(input: AuthOtpRequestInput): Promise<AuthOtpRequestResult> {
-    if (this.otpRequestMode !== 'dry_run') {
-      recordTelemetry('auth remote shadow skipped unsafe otp delivery', {
-        method: 'requestOtp',
-        latencyMs: 0,
-        responseShape: 'skipped',
-        transport: this.transportLabel,
-        phoneMasked: maskPhone(input.phoneNumber),
-      });
-      throw createNotImplementedError('auth', 'requestOtp', this.transportLabel);
-    }
-
     return this.shadow('requestOtp', async () => {
       const client = resolveClient('requestOtp', this.client);
-      const response = await client.post<ApiEnvelope<RequestOtpResponseDto>>('/v1/auth/otp/request-dry-run', {
-        body: domainToRequestOtpDto(input, true),
+      const device = await getDeviceMetadata();
+      // Real backend: POST /api/v1/auth/register sends the OTP.
+      const response = await client.post<ApiEnvelope<RequestOtpResponseDto>>('/v1/auth/register', {
+        body: domainToRequestOtpDto(input, device),
       });
-      return dtoToDomainOtpRequest(response.data.data);
+      return dtoToDomainOtpRequest(response.data.data, input.phoneNumber);
     }, input.phoneNumber);
   }
 
   async verifyOtp(input: AuthVerifyOtpInput): Promise<AuthSessionDomain> {
     return this.shadow('verifyOtp', async () => {
       const client = resolveClient('verifyOtp', this.client);
-      const response = await client.post<ApiEnvelope<VerifyOtpResponseDto>>('/v1/auth/otp/verify', {
-        body: domainToVerifyOtpDto(input, metadata('verify-otp', maskPhone(input.phoneNumber) ?? 'unknown')),
+      const device = await getDeviceMetadata();
+      const response = await client.post<ApiEnvelope<VerifyOtpResponseDto>>('/v1/auth/verify-otp', {
+        body: domainToVerifyOtpDto(input, device),
       });
-      return dtoToDomainAuthSession(response.data.data);
+      return dtoToDomainAuthSession(response.data.data, input.phoneNumber);
     }, input.phoneNumber);
   }
 
   async refreshSession(refreshToken: string): Promise<AuthSessionDomain> {
     return this.shadow('refreshSession', async () => {
       const client = resolveClient('refreshSession', this.client);
-      const response = await client.post<ApiEnvelope<RefreshSessionResponseDto>>('/v1/auth/session/refresh', {
+      const response = await client.post<ApiEnvelope<RefreshSessionResponseDto>>('/v1/auth/refresh', {
         body: domainToRefreshSessionDto(refreshToken),
       });
       return dtoToDomainAuthSession(response.data.data);
@@ -244,7 +237,7 @@ export class RemoteAuthRepository implements AuthSessionRepository {
     await this.shadow('logout', async () => {
       const client = resolveClient('logout', this.client);
       await client.post<ApiEnvelope<LogoutResponseDto>>('/v1/auth/logout', {
-        body: domainToLogoutDto(refreshToken, metadata('logout', 'current-session')),
+        body: domainToLogoutDto(refreshToken),
       });
     });
   }

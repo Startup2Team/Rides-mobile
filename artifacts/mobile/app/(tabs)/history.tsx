@@ -5,7 +5,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
@@ -149,6 +149,17 @@ export default function HistoryScreen() {
       setIsRefreshing(false);
     }
   }, [refetchRideHistory]);
+
+  // Refetch whenever the Trips tab regains focus so a ride the user just
+  // completed appears immediately. React Query's refetchOnWindowFocus reacts to
+  // app foregrounding, NOT in-app tab switches, so without this the tab serves a
+  // stale cached list (staleTime 5m) that omits the just-finished ride — which is
+  // exactly why a completed ride looked "missing" from Trips.
+  useFocusEffect(
+    useCallback(() => {
+      void refetchRideHistory();
+    }, [refetchRideHistory]),
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

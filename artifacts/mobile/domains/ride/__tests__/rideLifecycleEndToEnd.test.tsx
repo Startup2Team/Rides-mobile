@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { RideProvider, useRide } from '@/context/ride/RideProvider';
-import { ARRIVING_TRACKING_INTERVAL_MS, ARRIVING_TRACKING_STEPS, CONFIRMED_RIDE_START_DELAY_MS, DRIVER_MATCH_MIN_DELAY_MS, DRIVER_OFFER_DELAY_MS } from '@/context/ride/rideConstants';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
 import { observability, resetObservabilityForTests } from '@/observability/context/observabilityContext';
 import { rideCommandPipeline } from '@/domains/ride/commandPipeline/rideCommandPipeline';
@@ -35,6 +34,19 @@ jest.mock('@/context/ride/ridePersistence', () => ({
 
 jest.mock('@/observability/monitoring', () => ({
   reportOperationalFailure: (...args: unknown[]) => mockReportOperationalFailure(...args),
+}));
+
+// Backend + live-socket services are stubbed so the real POST /customer/rides
+// and the tracking sockets are deterministic (matching is now backend-driven).
+jest.mock('@/services/rides', () => ({
+  createRide: jest.fn(async () => ({ rideId: 'backend-ride-1' })),
+  cancelRide: jest.fn(async () => undefined),
+}));
+jest.mock('@/services/customerTrackingSocket', () => ({
+  openCustomerTrackingSocket: () => ({ close: jest.fn() }),
+}));
+jest.mock('@/services/driverTrackingSocket', () => ({
+  openDriverSocket: () => ({ close: jest.fn() }),
 }));
 
 jest.mock('../commandPipeline/rideCommandPipeline', () => {
@@ -131,40 +143,22 @@ function setApprovedDriverSession() {
   };
 }
 
-async function createAndMatchRide(result: ReturnType<typeof renderRideProvider>['result']) {
+// Drives an approved-driver session through a real driver-side assignment
+// (incoming request → accept → confirm fare → arrive). Matching is now
+// backend-driven, so drivers reach `negotiating` via acceptRideRequest rather
+// than the removed local mock-match timer.
+async function advanceToArrived(result: ReturnType<typeof renderRideProvider>['result']) {
   await act(async () => {
-    await result.current.createRide(pickup, destination, 'moto', destination.address);
+    result.current.simulateIncomingRideRequest();
   });
-  expect(result.current.currentRide?.status).toBe('searching');
+  await waitFor(() => expect(result.current.pendingRequest).not.toBeNull());
 
-  await act(async () => {
-    jest.advanceTimersByTime(DRIVER_MATCH_MIN_DELAY_MS);
-    await Promise.resolve();
-  });
+  act(() => result.current.acceptRideRequest());
   expect(result.current.currentRide?.status).toBe('negotiating');
 
-  await act(async () => {
-    jest.advanceTimersByTime(DRIVER_OFFER_DELAY_MS);
-  });
-  expect(result.current.currentRide?.negotiation.at(-1)).toEqual(expect.objectContaining({
-    sender: 'driver',
-    type: 'offer',
-  }));
-}
-
-async function advanceToArrived(result: ReturnType<typeof renderRideProvider>['result']) {
-  await createAndMatchRide(result);
-  act(() => result.current.acceptDriverOffer());
+  act(() => result.current.riderAcceptWithFare(3000));
   expect(result.current.currentRide?.status).toBe('confirmed');
 
-  act(() => {
-    jest.advanceTimersByTime(CONFIRMED_RIDE_START_DELAY_MS);
-  });
-  expect(result.current.currentRide?.status).toBe('arriving');
-
-  act(() => {
-    jest.advanceTimersByTime(ARRIVING_TRACKING_INTERVAL_MS * ARRIVING_TRACKING_STEPS);
-  });
   act(() => result.current.markArrived());
   expect(result.current.currentRide?.status).toBe('arrived');
 }

@@ -22,6 +22,7 @@ import { AppInput } from '@/components/AppInput';
 import { ProfilePhotoEditSheet } from '@/components/ProfilePhotoEditSheet';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useAuth } from '@/context/AuthContext';
+import { updateProfile } from '@/services/profile';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useProfileActions } from '@/domains/profile';
@@ -87,16 +88,27 @@ export default function EditProfileScreen() {
       return;
     }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 500));
-    await updateUser({
-      name: name.trim(),
-      email: email.trim() || undefined,
-      emergencyContactName: emergencyContactName.trim() || undefined,
-      emergencyContactPhone: emergencyContactPhone.trim() ? (normalizeRwandaPhoneNumber(emergencyContactPhone) || undefined) : undefined,
-    });
-    setSaving(false);
-    showToast('Profile updated', 'info');
-    router.back();
+    try {
+      // Real backend: PUT /customer/profile persists full_name + email. The
+      // emergency-contact fields have no backend equivalent, so they stay local.
+      await updateProfile({
+        fullName: name.trim(),
+        email: email.trim() || null,
+      });
+      await updateUser({
+        name: name.trim(),
+        email: email.trim() || undefined,
+        emergencyContactName: emergencyContactName.trim() || undefined,
+        emergencyContactPhone: emergencyContactPhone.trim() ? (normalizeRwandaPhoneNumber(emergencyContactPhone) || undefined) : undefined,
+      });
+      showToast('Profile updated', 'info');
+      router.back();
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast("Couldn't save your profile. Try again.", 'info');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const initials = name

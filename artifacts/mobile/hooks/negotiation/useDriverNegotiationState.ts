@@ -9,6 +9,7 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [actionPanelHeight, setActionPanelHeight] = useState(0);
   const [showCustomerTyping, setShowCustomerTyping] = useState(false);
+  const [fareError, setFareError] = useState<string | null>(null);
 
   const negotiation = currentRide?.negotiation ?? [];
   const driverOffers = negotiation.filter(m => m.sender === 'driver' && m.type === 'offer');
@@ -18,6 +19,10 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
   const lastMessage = negotiation[negotiation.length - 1];
   const driverLimitReached = driverOffers.length >= MAX_OFFERS;
   const canSendOffer = !driverLimitReached;
+  // Symmetric to the customer gate: the driver may only accept the customer's
+  // LATEST offer. After the driver sends a counter, their own offer is the
+  // latest message, so Accept is gated off until the customer responds.
+  const canAccept = Boolean(lastCustomerOffer) && lastMessage?.sender === 'customer';
   const messagesUsed = Math.min(driverOffers.length, MAX_OFFERS);
   const offersRemaining = Math.max(0, MAX_OFFERS - messagesUsed);
   const actionPanelOffset = actionPanelHeight > 0 ? actionPanelHeight : 108;
@@ -91,9 +96,11 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
 
   return {
     actionPanelOffset,
+    canAccept,
     canSendOffer,
     chatStatus,
     driverLimitReached,
+    fareError,
     lastCustomerOffer,
     lastDriverOffer,
     messagesUsed,
@@ -103,6 +110,7 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
     offersRemaining,
     scrollRef,
     setActionPanelHeight,
+    setFareError,
     setOfferText,
     setShowAcceptModal,
     showAcceptModal,

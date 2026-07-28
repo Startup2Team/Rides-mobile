@@ -68,6 +68,14 @@ export function useManualPaymentClaimsQuery(
     retry: packagePaymentClaimsQueryPolicy.retry,
     refetchOnWindowFocus: packagePaymentClaimsQueryPolicy.refetchOnWindowFocus,
     refetchOnReconnect: packagePaymentClaimsQueryPolicy.refetchOnReconnect,
+    // Auto-poll while a claim is pending review so an admin approval/rejection
+    // flips the screen on its own (no manual refresh). Terminal statuses return
+    // false, so polling stops once the claim resolves.
+    refetchInterval: currentQuery => {
+      const items = currentQuery.state.data?.data ?? [];
+      if (items.length === 0) return false;
+      return getManualPaymentClaimRefreshPolicy(items[0].status).refetchInterval;
+    },
   });
 
   const failure = query.data?.failure ?? null;

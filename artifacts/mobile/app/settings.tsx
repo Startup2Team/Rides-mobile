@@ -9,25 +9,25 @@ import {
   TouchableOpacity,
   useColorScheme,
   View,
-  Image,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { GlassHeader, useGlassHeaderMetrics } from "@/components/GlassHeader";
-import { GlassScrollView } from "@/components/GlassScrollView";
-import { LanguageSelector } from "@/components/LanguageSelector";
-import { APP_NAME, WEBSITE_URL } from "@/constants/branding";
-import { FORM_BOTTOM_PADDING } from "@/constants/tabBar";
-import { useAuth } from "@/context/AuthContext";
-import { useSavedLocations } from "@/context/SavedLocationsContext";
-import { useColors } from "@/hooks/useColors";
-import { AppText } from "@/components/AppText";
-import { icons } from "@/constants/icons";
-import { radius } from "@/constants/radius";
-import { sizes } from "@/constants/sizes";
-import { spacing, semanticSpacing } from "@/constants/spacing";
-import { typography } from "@/constants/typography";
-import { replaceAuthBoundary } from "@/navigation/navigationPolicy";
-import { usePressGuard } from "@/hooks/usePressGuard";
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
+import { GlassScrollView } from '@/components/GlassScrollView';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { APP_NAME, WEBSITE_URL } from '@/constants/branding';
+import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { useAuth } from '@/context/AuthContext';
+import { useSavedLocations } from '@/context/SavedLocationsContext';
+import { useColors } from '@/hooks/useColors';
+import { AppText } from '@/components/AppText';
+import { icons } from '@/constants/icons';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { typography } from '@/constants/typography';
+import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { submitSupportTicket } from '@/services/support';
+import { usePressGuard } from '@/hooks/usePressGuard';
 import { DailyGoalIcon } from "@/components/DailyGoalIcon";
 import { PrivacySecurityIcon } from "@/components/PrivacySecurityIcon";
 import { HelpSupportIcon } from "@/components/HelpSupportIcon";
@@ -68,6 +68,25 @@ export default function SettingsScreen() {
       "Delete Account",
       "This will permanently delete your account and all ride history. This cannot be undone.",
       [
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: async () => {
+            // No self-serve deletion endpoint exists yet — file a deletion
+            // request for the team to action, then sign the user out locally.
+            try {
+              await submitSupportTicket({
+                subject: 'Account deletion request',
+                type: 'account_deletion',
+              });
+            } catch {
+              // Proceed with local sign-out even if the request fails to send.
+            }
+            await logout();
+            replaceAuthBoundary(router, '/(auth)/welcome');
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
         { text: "Delete Forever", style: "destructive", onPress: () => {} },
         { text: "Cancel", style: "cancel" },
       ],

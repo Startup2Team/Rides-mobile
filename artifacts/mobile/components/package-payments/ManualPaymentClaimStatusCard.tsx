@@ -6,14 +6,15 @@ import { AppInput } from '@/components/AppInput';
 import { useColors } from '@/hooks/useColors';
 import { getManualPaymentClaimPresentation, getPackagePaymentFailurePresentation, type ManualPaymentClaimReadModel } from '@/domains/package-payments';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
-import { normalizeManualPaymentTransactionReference } from '@/domains/package-payments/manualPaymentDuplicatePolicy';
 
 export interface ManualPaymentClaimStatusCardProps {
   claim: ManualPaymentClaimReadModel;
   onRefetch: () => void;
   isRefetching?: boolean;
   onCancel: (claimId: string, version: number) => Promise<any>;
-  onResubmit: (claimId: string, version: number, updates: { provider: 'mtn' | 'airtel'; phone: string; reference?: string }) => Promise<any>;
+  onResubmit: (claimId: string, version: number, updates: { provider: 'mtn' | 'airtel'; phone: string }) => Promise<any>;
+  /** Called from the success CTA once the payment is approved (e.g. go to dashboard). */
+  onDone?: () => void;
 }
 
 function formatRwf(amount: number) {
@@ -30,6 +31,7 @@ export function ManualPaymentClaimStatusCard({
   isRefetching = false,
   onCancel,
   onResubmit,
+  onDone,
 }: ManualPaymentClaimStatusCardProps) {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
@@ -38,7 +40,6 @@ export function ManualPaymentClaimStatusCard({
   const [isEditing, setIsEditing] = useState(false);
   const [provider, setProvider] = useState<'mtn' | 'airtel'>(claim.provider);
   const [phone, setPhone] = useState(claim.maskedPayerPhone ?? '');
-  const [reference, setReference] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -92,12 +93,7 @@ export function ManualPaymentClaimStatusCard({
     setErrorMessage(null);
     const normalizedPhone = normalizeRwandaPhoneNumber(phone);
     if (!normalizedPhone) {
-      setErrorMessage('Please enter a valid Rwanda phone number (+250 7xxxxxxxx).');
-      return;
-    }
-    const normalizedRef = normalizeManualPaymentTransactionReference(reference);
-    if (!normalizedRef) {
-      setErrorMessage('Transaction reference is required.');
+      setErrorMessage('Please enter the number you paid from (+250 7xxxxxxxx).');
       return;
     }
 
@@ -106,7 +102,6 @@ export function ManualPaymentClaimStatusCard({
       const res = await onResubmit(claim.id, claim.version, {
         provider,
         phone: normalizedPhone,
-        reference: normalizedRef,
       });
       if (res.failure) {
         const failurePres = getPackagePaymentFailurePresentation(res.failure);
@@ -117,7 +112,6 @@ export function ManualPaymentClaimStatusCard({
         }
       } else {
         setIsEditing(false);
-        setReference('');
       }
     } catch (err) {
       setErrorMessage('An unexpected error occurred while resubmitting.');
@@ -128,7 +122,6 @@ export function ManualPaymentClaimStatusCard({
 
   const startEditing = () => {
     setPhone('');
-    setReference('');
     setProvider(claim.provider);
     setIsEditing(true);
   };
@@ -171,6 +164,15 @@ export function ManualPaymentClaimStatusCard({
         </View>
       ) : null}
 
+      {claim.status === 'rejected' && (claim.rejectionMessage || claim.rejectionReasonCode) ? (
+        <View style={[styles.clarificationBox, { backgroundColor: colors.destructiveHex + '0A', borderColor: colors.destructive }]}>
+          <Text style={[styles.clarificationLabel, { color: colors.destructive }]}>WHY IT WASN’T CONFIRMED</Text>
+          <Text style={[styles.clarificationText, { color: colors.foreground }]}>
+            {claim.rejectionMessage || claim.rejectionReasonCode}
+          </Text>
+        </View>
+      ) : null}
+
       {isEditing ? (
         <View style={styles.form}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Update details</Text>
@@ -202,21 +204,12 @@ export function ManualPaymentClaimStatusCard({
           </View>
 
           <AppInput
-            label="Payer phone number"
+            label="Number you paid from"
             placeholder="+250 7xxxxxxxx"
             value={phone}
             onChangeText={(val) => setPhone(formatRwandaPhoneInput(val))}
             keyboardType="phone-pad"
             leftIcon="smartphone"
-          />
-
-          <AppInput
-            label="Transaction reference *"
-            placeholder="Enter payment reference"
-            value={reference}
-            onChangeText={(val) => setReference(val.trimStart())}
-            autoCapitalize="characters"
-            leftIcon="hash"
           />
         </View>
       ) : (
@@ -235,14 +228,8 @@ export function ManualPaymentClaimStatusCard({
           </View>
           {claim.maskedPayerPhone ? (
             <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Payer phone</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Paid from</Text>
               <Text style={[styles.detailValue, { color: colors.foreground }]}>{claim.maskedPayerPhone}</Text>
-            </View>
-          ) : null}
-          {claim.transactionReferencePresent && claim.maskedTransactionReference ? (
-            <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Reference</Text>
-              <Text style={[styles.detailValue, { color: colors.foreground }]}>{claim.maskedTransactionReference}</Text>
             </View>
           ) : null}
           <View style={styles.detailRow}>
@@ -275,13 +262,20 @@ export function ManualPaymentClaimStatusCard({
               title="Resubmit payment"
               onPress={handleResubmitPress}
               loading={actionLoading}
-              disabled={!phone.trim() || !reference.trim()}
+              disabled={!phone.trim()}
               style={styles.btn}
             />
           </>
         ) : (
           <>
-            {claim.status === 'needs_clarification' && (
+            {onDone && (
+              <AppButton
+                title={claim.status === 'approved' ? 'Go to Dashboard' : 'Continue using Rides'}
+                onPress={onDone}
+                style={styles.btn}
+              />
+            )}
+            {presentation.canResubmit && (
               <AppButton
                 title="Edit & Resubmit"
                 onPress={startEditing}

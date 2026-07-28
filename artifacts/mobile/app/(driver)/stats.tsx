@@ -19,10 +19,6 @@ import { typography } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useDriverEntitlement } from "@/context/DriverEntitlementContext";
 import { formatRwf } from "@/domain/driverActivitySummary";
-import {
-  getDriverRatingSummary,
-  type DriverRatingSummary,
-} from "@/domain/driverWallet";
 import { loadStoredDriverDailyGoals } from "@/persistence/driverDailyGoalPersistence";
 import {
   createDriverStatisticsViewModel,
@@ -35,13 +31,14 @@ import {
   toLocalDateString,
 } from "@/domains/driver-statistics";
 import { useColors } from "@/hooks/useColors";
-import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
-import { useRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
-
-const EMPTY_RATING_SUMMARY: DriverRatingSummary = {
-  averageRating: null,
-  ratingCount: 0,
-};
+import { useDriverRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
+import { useDriverStatsQuery } from "@/query/hooks/useDriverStatsQuery";
+import {
+  useDriverDailyEarningsQuery,
+  useDriverWeeklyEarningsQuery,
+} from "@/query/hooks/useDriverEarningsQuery";
+import { useDriverRatingsQuery } from "@/query/hooks/useDriverRatingsQuery";
+import type { DriverStatisticsBackendInput } from "@/domains/driver-statistics";
 
 export default function DriverStats() {
   const colors = useColors();
@@ -50,13 +47,17 @@ export default function DriverStats() {
   const statsContentTop = Math.max(0, headerMetrics.contentTop - spacing[20]);
   const { user, driverProfile } = useAuth();
   const { entitlement } = useDriverEntitlement();
-  const {
-    data: rideHistory = [],
-    isLoading: isRideHistoryLoading,
-    refetch: refetchRideHistory,
-  } = useRideHistoryQuery(user?.id);
-  const [ratingSummary, setRatingSummary] =
-    React.useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  // Driver ride history has no backend list endpoint yet, so this is empty;
+  // headline metrics come from the real /driver/stats + /driver/earnings/*.
+  const { data: rideHistory = [], refetch: refetchRideHistory } =
+    useDriverRideHistoryQuery(user?.id);
+  const { data: driverStats, refetch: refetchStats } = useDriverStatsQuery();
+  const { data: dailyEarnings, refetch: refetchDaily } =
+    useDriverDailyEarningsQuery();
+  const { data: weeklyEarnings, refetch: refetchWeekly } =
+    useDriverWeeklyEarningsQuery();
+  const { data: ratingSummary = { averageRating: null, ratingCount: 0 }, refetch: refetchRatings } =
+    useDriverRatingsQuery();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [selectedPeriod, setSelectedPeriod] =
     React.useState<DriverStatisticsPeriod>("today");
@@ -66,12 +67,13 @@ export default function DriverStats() {
     setIsRefreshing(true);
     const start = Date.now();
     try {
-      await refetchRideHistory();
-      const storedRatings = await loadStoredDriverRatings();
-      const summary = user?.id
-        ? getDriverRatingSummary(storedRatings.data ?? [], user.id)
-        : EMPTY_RATING_SUMMARY;
-      setRatingSummary(summary);
+      await Promise.all([
+        refetchRideHistory(),
+        refetchStats(),
+        refetchDaily(),
+        refetchWeekly(),
+        refetchRatings(),
+      ]);
     } finally {
       const elapsed = Date.now() - start;
       const minDuration = process.env.NODE_ENV === "test" ? 0 : 800;
@@ -81,22 +83,26 @@ export default function DriverStats() {
       }
       setIsRefreshing(false);
     }
-  }, [refetchRideHistory, user?.id]);
+  }, [refetchDaily, refetchRatings, refetchRideHistory, refetchStats, refetchWeekly]);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    async function loadRatingSummary() {
-      const stored = await loadStoredDriverRatings();
-      const summary = user?.id
-        ? getDriverRatingSummary(stored.data ?? [], user.id)
-        : EMPTY_RATING_SUMMARY;
-      if (!cancelled) setRatingSummary(summary);
-    }
-    void loadRatingSummary();
-    return () => {
-      cancelled = true;
+  // Backend-authoritative values passed into the statistics view model. Period
+  // earnings/trips are only available for today (daily) and week (weekly); the
+  // month window has no aggregate endpoint yet.
+  const backendInput = React.useMemo<DriverStatisticsBackendInput>(() => {
+    const base: DriverStatisticsBackendInput = {
+      allTimeCompletedTrips: driverStats?.totalRides ?? null,
+      acceptanceRate: driverStats?.acceptanceRate ?? null,
+      completionRate: driverStats?.completionRate ?? null,
+      priorityTier: driverStats?.priorityTier ?? null,
     };
-  }, [user?.id]);
+    if (selectedPeriod === "today") {
+      base.periodEarningsRwf = dailyEarnings?.totalRwf ?? null;
+      base.periodCompletedTrips = dailyEarnings?.rides ?? null;
+    } else if (selectedPeriod === "week") {
+      base.periodEarningsRwf = weeklyEarnings?.totalRwf ?? null;
+    }
+    return base;
+  }, [driverStats, dailyEarnings, weeklyEarnings, selectedPeriod]);
 
   const [dailyGoal, setDailyGoal] = React.useState(DEFAULT_DAILY_GOAL_RWF);
 
@@ -131,8 +137,10 @@ export default function DriverStats() {
         now,
         rideHistory,
         selectedPeriod,
+        backend: backendInput,
       }),
     [
+      backendInput,
       driverProfile,
       entitlement,
       now,
@@ -143,13 +151,14 @@ export default function DriverStats() {
     ],
   );
 
-  const isStatsLoading = isRideHistoryLoading && rideHistory.length === 0;
+  const isStatsLoading = !driverStats && !dailyEarnings;
   const completedTrips = statistics.metrics.completedTrips.value;
   const periodEarnings = statistics.metrics.periodEarningsRwf.value;
   const earningsPerTrip = statistics.metrics.earningsPerTripRwf.value;
   const rating = statistics.metrics.driverRating.value;
   const acceptanceRate = statistics.metrics.acceptanceRate.value;
-  const priorityRisk = statistics.metrics.priorityRisk.value;
+  const completionRate = statistics.metrics.completionRate.value;
+  const priorityTier = statistics.metrics.priorityTier.value;
   const tripSeries = getCompletedTripsSeries(statistics.buckets);
   const earningsPerTripSeries = getEarningsPerTripSeries(statistics.buckets);
   const sparseLabels = getDriverStatisticsSparseLabels(
@@ -167,42 +176,30 @@ export default function DriverStats() {
       ? (rating.averageRating?.toFixed(1) ?? "No rating yet")
       : "No rating yet";
   const acceptanceLabel =
-    acceptanceRate === null ? "No data yet" : `${acceptanceRate}%`;
-  const priorityLabel = priorityRisk.isReduced
-    ? "Lower Priority"
-    : "High Priority";
-  const priorityNote = priorityRisk.isReduced
-    ? `Reduced after ${priorityRisk.threshold} local declines.`
-    : `${priorityRisk.declinesUntilReduced} declines before priority is reduced.`;
+    acceptanceRate === null ? "No data yet" : `${Math.round(acceptanceRate)}%`;
   const supportingRows = React.useMemo<DriverStatisticsSupportingRow[]>(
     () => [
       {
         label: "All-time Trips",
         value: String(statistics.metrics.allTimeCompletedTrips.value),
-        note: "Local profile total",
+        note: "All completed rides",
       },
       {
-        label: "All-time Ride Revenue",
-        value: formatRwf(statistics.metrics.allTimeRideRevenueRwf.value),
-        note: "Local profile total",
+        label: "Completion Rate",
+        value:
+          completionRate === null ? "No data yet" : `${Math.round(completionRate)}%`,
+        note: "Rides completed vs. accepted",
       },
       {
-        label: "Daily Declines",
-        value: String(statistics.metrics.dailyDeclines.value),
-        note: "Local priority policy",
-      },
-      {
-        label: "Priority Status",
-        value: priorityLabel,
-        note: priorityNote,
+        label: "Priority Tier",
+        value: priorityTier === null ? "No data yet" : `Tier ${priorityTier}`,
+        note: "Higher tiers receive requests first",
       },
     ],
     [
-      priorityLabel,
-      priorityNote,
+      completionRate,
+      priorityTier,
       statistics.metrics.allTimeCompletedTrips.value,
-      statistics.metrics.allTimeRideRevenueRwf.value,
-      statistics.metrics.dailyDeclines.value,
     ],
   );
 
@@ -311,8 +308,8 @@ export default function DriverStats() {
             icon="percent"
             note={
               acceptanceRate === null
-                ? "No local profile activity yet"
-                : "Local profile estimate"
+                ? "No requests yet"
+                : "Requests accepted"
             }
             color="#8CE62A"
             onPress={() => {

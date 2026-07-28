@@ -10,7 +10,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
-import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { useColors } from '@/hooks/useColors';
 import { useRoute } from '@/hooks/useRoute';
 import { useRideActions } from '@/hooks/ride/useRideActions';
@@ -27,13 +26,12 @@ import {
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-import { formatDistance, formatDuration, haversineKm, routePolylineThroughPinTips } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { Coords, KIGALI_CENTER, VehicleType } from '@/types';
 import { useActiveRideReadModel } from '@/domains/ride/dualRead/rideDualReadAdapter';
 
-const ARRIVING_AVERAGE_SPEED_MPS = 8.3;
 const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
@@ -45,13 +43,6 @@ const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
   hilux: 90,
   fuso: 90,
 };
-
-function formatAwayEta(seconds: number) {
-  if (seconds <= 0) return '0 secs away';
-  if (seconds < 60) return `${seconds} ${seconds === 1 ? 'sec' : 'secs'} away`;
-  const minutes = Math.ceil(seconds / 60);
-  return `${minutes} ${minutes === 1 ? 'min' : 'mins'} away`;
-}
 
 function getRemainingRouteCoordinates(routeCoordinates: Array<{ latitude: number; longitude: number }>, driverPosition: { latitude: number; longitude: number }) {
   if (routeCoordinates.length < 2) return routeCoordinates;
@@ -107,6 +98,9 @@ export default function RideScreen() {
 
   const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
     useRideStatus(currentRide);
+  // The ride is confirmed (driver assigned, before they mark "en route"). The
+  // rider should already have map controls + a Call-driver button in this state.
+  const isConfirmed = currentRide?.status === 'confirmed';
   const {
     handleCallDriver,
     handleCancelArrived,
@@ -119,17 +113,9 @@ export default function RideScreen() {
     isArriving ? arrivingRouteOrigin : null,
     isArriving && currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
   );
-  const driverNavigationRoute = isArriving
-    ? driverToPickupRoute?.coordinates ?? []
-    : rideRoute?.coordinates ?? [];
-
-  const liveDriverCoords = useDriverTracking({
-    enabled: currentRide?.status === 'arriving' || currentRide?.status === 'in_progress',
-    routeCoordinates: driverNavigationRoute,
-    stepCount: isArriving ? 10 : 24,
-  });
-
-  const activeDriverLocation = liveDriverCoords ?? driverLocation;
+  // The driver marker comes ONLY from the driver's real position pushed over the
+  // WS (context driverLocation) — no simulated walk along the route polyline.
+  const activeDriverLocation = driverLocation;
 
   useEffect(() => {
     const status = currentRide?.status ?? null;
@@ -140,12 +126,12 @@ export default function RideScreen() {
     }
 
     if (status === 'arrived' && previousStatus === 'arriving' && currentRide) {
-      const lockAt = liveDriverCoords ?? driverLocation ?? currentRide.pickup;
+      const lockAt = driverLocation ?? currentRide.pickup;
       setArrivedDriverCoords(lockAt);
     }
 
     previousRideStatusRef.current = status;
-  }, [currentRide, currentRide?.status, driverLocation, liveDriverCoords]);
+  }, [currentRide, currentRide?.status, driverLocation]);
 
   useEffect(() => {
     if (isArriving && activeDriverLocation) {
@@ -275,7 +261,7 @@ export default function RideScreen() {
     }
   }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
 
-  const showMapControls = isArriving || isArrived || isInProgress;
+  const showMapControls = isConfirmed || isArriving || isArrived || isInProgress;
 
   const cycleMapType = useCallback(() => {
     setMapType(prev => MAP_TYPES[(MAP_TYPES.indexOf(prev) + 1) % MAP_TYPES.length]);
@@ -286,7 +272,7 @@ export default function RideScreen() {
 
     const driverCoord = isArrived
       ? arrivedDriverCoords ?? driverLocation ?? currentRide.pickup
-      : liveDriverCoords ?? driverLocation;
+      : driverLocation;
 
     if (currentRide.status === 'arriving' && driverCoord) {
       mapRef.current.fitToCoordinates(
@@ -325,25 +311,40 @@ export default function RideScreen() {
     currentRide,
     driverLocation,
     isArrived,
-    liveDriverCoords,
     mapFitEdgePadding,
     rideRoute,
   ]);
 
   if (!currentRide) return null;
 
-  const pickupEtaSeconds = isArriving && activeDriverLocation
-    ? Math.max(0, Math.ceil((haversineKm(activeDriverLocation, currentRide.pickup) * 1000) / ARRIVING_AVERAGE_SPEED_MPS))
-    : null;
-  const pickupEtaText = pickupEtaSeconds !== null
-    ? formatAwayEta(pickupEtaSeconds)
-    : isArriving && currentRide.driver
-      ? `${currentRide.driver.eta} min away`
-      : null;
-  const displayEta = pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`);
-  const pickupDistanceText = isArriving && activeDriverLocation
-    ? formatDistance(haversineKm(activeDriverLocation, currentRide.pickup) * 1000)
-    : null;
+  // Live, real distance + ETA to the driver's current target (pickup while
+  // arriving, destination in progress). RideProvider recomputes these on every
+  // real `driver_location` event — the SAME source the driver screen uses — so
+  // the customer sees a moving value, not the frozen estimate or a "secs away"
+  // placeholder. Fall back to the route/estimate only until the first fix.
+  const liveDistanceKm = currentRide.driver?.distanceKm ?? null;
+  const liveEtaMinutes = currentRide.driver?.eta ?? null;
+  const distanceText = liveDistanceKm != null
+    ? formatDistance(liveDistanceKm * 1000)
+    : rideRoute
+      ? formatDistance(rideRoute.distanceMeters)
+      : formatDistance(currentRide.distance * 1000);
+  const liveEtaText = liveEtaMinutes != null ? `${liveEtaMinutes} min` : null;
+  const displayEta = liveEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`);
+  // When the driver has arrived / is waiting, there is no meaningful countdown —
+  // the header shows the arrived status, not a stale ETA.
+  const headerEtaText = isArrived ? null : displayEta;
+
+  // Always hand the map a valid, defined center (driver → last-known → pickup)
+  // so it renders real tiles immediately instead of a blank background while we
+  // wait for the first driver fix. Mirrors the driver screen's initial region.
+  const mapCenter = activeDriverLocation ?? mapDriverLocation ?? currentRide.pickup;
+  const mapInitialRegion = {
+    latitude: mapCenter.latitude,
+    longitude: mapCenter.longitude,
+    latitudeDelta: 0.02,
+    longitudeDelta: 0.02,
+  };
 
   const mapControlsBottomInset =
     driverCardHeight + insets.bottom + (Platform.OS === 'web' ? 24 : 12) + 16;
@@ -357,11 +358,7 @@ export default function RideScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        initialRegion={
-          driverLocation
-            ? { ...driverLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }
-            : { ...currentRide.pickup, latitudeDelta: 0.02, longitudeDelta: 0.02 }
-        }
+        initialRegion={mapInitialRegion}
         mapType={mapType}
         customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
@@ -445,7 +442,7 @@ export default function RideScreen() {
 
       <RideHeader
         colors={colors}
-        etaText={pickupEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : currentRide.driver ? `${currentRide.driver.eta} min` : null)}
+        etaText={headerEtaText}
         isElevated={isArriving || isArrived || isInProgress}
         ride={currentRide}
         safeAreaTop={insets.top}
@@ -470,13 +467,14 @@ export default function RideScreen() {
       >
         <DriverInfoCard
           colors={colors}
-          distanceText={pickupDistanceText ?? (rideRoute ? formatDistance(rideRoute.distanceMeters) : `${currentRide.distance} km`)}
+          distanceText={distanceText}
           driverPhotoUri={driverPhotoUri}
           etaText={displayEta}
           ride={currentRide}
         />
         <RideActionsSection
           colors={colors}
+          isConfirmed={isConfirmed}
           isArrived={isArrived}
           isArriving={isArriving}
           isInProgress={isInProgress}

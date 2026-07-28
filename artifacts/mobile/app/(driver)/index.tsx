@@ -6,6 +6,7 @@ import * as Location from "expo-location";
 import {
   Animated,
   Modal,
+  Text,
   Image,
   Linking,
   PanResponder,
@@ -19,72 +20,58 @@ import {
   TouchableOpacity,
   useColorScheme,
   View,
-  Text,
-} from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { AppButton } from "@/components/AppButton";
-import { ProfileAvatarCircle } from "@/components/ProfileAvatarCircle";
-import { useAuth } from "@/context/AuthContext";
-import { useColors } from "@/hooks/useColors";
+} from 'react-native';
+import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useDemandHeatmapQuery } from '@/query/hooks/useDemandHeatmapQuery';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { AppButton } from '@/components/AppButton';
+import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
+import { useAuth } from '@/context/AuthContext';
+import { updateDriverLocation, setDriverAvailability } from '@/services/driverAvailability';
+import type { DriverEarnings } from '@/services/driverEarnings';
+import { useColors } from '@/hooks/useColors';
+import { useRide } from '@/context/RideContext';
+import { VehicleMapMarker } from '@/components/VehicleMapMarker';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
+import { KIGALI_CENTER, VEHICLE_LABELS, type DriverVehicleProfile, type VehicleType } from '@/types';
+import { canDriverGoOnline } from '@/utils/driverVerification';
+import { showDeclineRideAlert } from '@/utils/declineRideAlert';
+import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
+import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
+import { canDriverGoOnlineWithCredits, getActiveBonusRides, getActiveRideCredits, getEntitlementVehicleForProfile, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
+import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
+import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
+import { elevation } from '@/constants/elevation';
+import { icons } from '@/constants/icons';
+import { duration, spring } from '@/constants/motion';
+import { radius } from '@/constants/radius';
+import { sizes } from '@/constants/sizes';
+import { spacing, semanticSpacing } from '@/constants/spacing';
+import { zIndex } from '@/constants/zIndex';
+import { navigateToDriverPackages } from '@/navigation/driverPackagesNavigation';
+import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { getDailyEarnings } from '@/services/driverEarnings';
+import { useDriverRatingsQuery } from '@/query/hooks/useDriverRatingsQuery';
+import { useDriverBackendEntitlementsQuery } from '@/query/hooks/useDriverBackendEntitlementsQuery';
+import { toBackendTransportType } from '@/constants/vehicles';
+import { useProfilePhotoActions } from '@/hooks/useProfilePhotoActions';
+import { useToast } from '@/context/ToastContext';
+import { useVehicles } from '@/domains/vehicle';
+import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
+import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
+import { useDriverRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
 import { NotificationsIcon } from "@/components/NotificationsIcon";
 import { fonts } from "@/constants/fonts";
-import { useRide } from "@/context/RideContext";
-import { VehicleMapMarker } from "@/components/VehicleMapMarker";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { useScreenTimerManager } from "@/hooks/useScreenTimerManager";
-import {
-  KIGALI_CENTER,
-  VEHICLE_LABELS,
-  type DriverVehicleProfile,
-  type VehicleType,
-} from "@/types";
-import { canDriverGoOnline } from "@/utils/driverVerification";
-import { showDeclineRideAlert } from "@/utils/declineRideAlert";
-import { HOME_TAB_BAR_HEIGHT } from "@/components/home/homeUtils";
-import { useDriverEntitlement } from "@/context/DriverEntitlementContext";
-import {
-  canDriverGoOnlineWithCredits,
-  getActiveBonusRides,
-  getActiveRideCredits,
-  getEntitlementVehicleForProfile,
-  getRideBalance,
-  getVehicleEntitlement,
-} from "@/domain/driverRidePackages";
-import {
-  formatRwf,
-  getDriverActivitySummary,
-} from "@/domain/driverActivitySummary";
-import {
-  getDriverRatingSummary,
-  type DriverRatingSummary,
-} from "@/domain/driverWallet";
-import { buttonCornerRadius, BUTTON_HEIGHT } from "@/constants/buttons";
-import { DRIVER_CTA_PILL_WIDTH } from "@/constants/homeDriverCta";
-import { elevation } from "@/constants/elevation";
-import { icons } from "@/constants/icons";
-import { duration, spring } from "@/constants/motion";
-import { radius } from "@/constants/radius";
-import { sizes } from "@/constants/sizes";
-import { spacing, semanticSpacing } from "@/constants/spacing";
-import { zIndex } from "@/constants/zIndex";
-import { navigateToDriverPackages } from "@/navigation/driverPackagesNavigation";
-import { navigateToCustomerHomeAfterCompletion } from "@/navigation/navigationPolicy";
-import { loadStoredDriverRatings } from "@/persistence/driverRatingPersistence";
-import { useProfilePhotoActions } from "@/hooks/useProfilePhotoActions";
-import { useVehicles } from "@/domains/vehicle";
-import { getLicenseComplianceStatus } from "@/domain/vehicleCompliance";
-import { useUnreadNotificationCountQuery } from "@/query/hooks/useNotificationsQuery";
-import { useRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
 import {
   formatDistanceToPickup,
   formatRequestLocation,
   formatTripDistance,
   formatTripDuration,
-} from "../driverRequestCard";
-
+} from "@/domain/driverRequestCard";
 const MAP_TYPES = ["standard", "satellite", "hybrid"] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
 const CTA_AVATAR_SIZE = 34;
@@ -94,10 +81,6 @@ const CTA_PILL_PADDING_RIGHT = 6;
 const CTA_LABEL_SLOT_WIDTH =
   DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
-const EMPTY_RATING_SUMMARY: DriverRatingSummary = {
-  averageRating: null,
-  ratingCount: 0,
-};
 const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
 
 function visibleDriverRegion(location: typeof KIGALI_CENTER) {
@@ -138,7 +121,7 @@ const LOOPED_DASHBOARD_ADS = [
   DASHBOARD_ADS[0],
 ];
 const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
-  require("../../assets/images/verified badge.png"),
+  require("../../assets/images/verified-badge.png"),
   ...DASHBOARD_ADS.map((ad) => ad.image),
 ];
 
@@ -167,20 +150,32 @@ export default function DriverDashboard() {
     useDriverEntitlement();
   const {
     pendingRequest,
-    simulateIncomingRideRequest,
     acceptRideRequest,
     declineRideRequest,
   } = useRide();
-  const { data: rideHistory = [] } = useRideHistoryQuery(user?.id);
+  const { data: rideHistory = [] } = useDriverRideHistoryQuery(user?.id);
 
   const [countdown, setCountdown] = useState(15);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>("standard");
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  // Authoritative daily earnings + trip count from the backend
+  // (GET /driver/earnings/daily); falls back to the locally computed summary
+  // when the backend is unreachable.
+  const [backendDailyEarnings, setBackendDailyEarnings] = useState<DriverEarnings | null>(null);
   const { profileImage } = useProfilePhotoActions(
     driverProfile?.profileImage ?? null,
   );
-  const [ratingSummary, setRatingSummary] =
-    useState<DriverRatingSummary>(EMPTY_RATING_SUMMARY);
+  // Real driver rating from GET /v1/users/me/ratings.
+  const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
+    useDriverRatingsQuery();
+  // Authoritative per-vehicle-type ride entitlements from
+  // GET /v1/driver/entitlements — reflects package activations AND admin-approved
+  // manual payment claims (rides posted to the ledger), which the locally-persisted
+  // entitlement would not show. rides_remaining and bonus_remaining are kept
+  // SEPARATE (do not sum) so each tile is driven by the right figure.
+  const { data: backendEntitlements } = useDriverBackendEntitlementsQuery({ enabled: !!user?.id });
+  const { showToast } = useToast();
   const [adCarouselWidth, setAdCarouselWidth] = useState(0);
   const [dashboardCardHeight, setDashboardCardHeight] = useState(0);
   const [vehicleSelectorVisible, setVehicleSelectorVisible] = useState(false);
@@ -197,7 +192,6 @@ export default function DriverDashboard() {
   const adLoopResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adCarouselPositionedRef = useRef(false);
   const requestSessionRef = useRef(timers.currentSession());
-  const requestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownValueRef = useRef(15);
   const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
@@ -207,6 +201,15 @@ export default function DriverDashboard() {
   const mapRef = useRef<MapView | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const { vehicles } = useVehicles();
+
+  // Demand heatmap around the driver — only fetched when the layer is toggled on.
+  const { data: heatmap } = useDemandHeatmapQuery({
+    latitude: driverLocation.latitude,
+    longitude: driverLocation.longitude,
+    radiusKm: 5,
+    enabled: showHeatmap,
+  });
+  const maxDemand = heatmap?.cells.reduce((max, cell) => Math.max(max, cell.count), 0) ?? 0;
 
   const clearAdLoopReset = useCallback(() => {
     if (adLoopResetRef.current) {
@@ -261,27 +264,22 @@ export default function DriverDashboard() {
     (vehicle) => vehicle.status === "approved",
   );
 
+  // The backend entitlement ledger is keyed per vehicle TYPE (not per vehicle),
+  // so we match on the backend transport-type code. Returns null when the query
+  // has no data (offline) or has no row for that type, letting callers fall back
+  // to the locally-persisted entitlement.
+  const backendEntitlementForVehicleType = useCallback(
+    (vehicleType: VehicleType | null | undefined) => {
+      if (!backendEntitlements || !vehicleType) return null;
+      const code = toBackendTransportType(vehicleType);
+      return backendEntitlements.find((item) => item.vehicleTypeCode === code) ?? null;
+    },
+    [backendEntitlements],
+  );
+
   useEffect(() => {
     DRIVER_DASHBOARD_IMAGE_SOURCES.forEach(prefetchImageSource);
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      void loadStoredDriverRatings().then((stored) => {
-        if (active) {
-          setRatingSummary(
-            user?.id
-              ? getDriverRatingSummary(stored.data ?? [], user.id)
-              : EMPTY_RATING_SUMMARY,
-          );
-        }
-      });
-      return () => {
-        active = false;
-      };
-    }, [user?.id]),
-  );
 
   // Location
   useEffect(() => {
@@ -322,6 +320,54 @@ export default function DriverDashboard() {
     };
   }, []);
 
+  // Report location to the backend while online so the matching engine can find
+  // this driver. Fires immediately + every 10s (backend rate-limits to ~20/min).
+  useEffect(() => {
+    if (!isOnline || Platform.OS === 'web') return;
+    let cancelled = false;
+    const report = async () => {
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (cancelled) return;
+        // expo-location reports speed in metres/second; the backend field is
+        // speed_kmh, so convert (m/s → km/h) before sending.
+        const speedMps = loc.coords.speed;
+        await updateDriverLocation({
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          heading: loc.coords.heading ?? undefined,
+          speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
+        });
+      } catch {
+        // ignore — retry on the next tick
+      }
+    };
+    void report();
+    const interval = setInterval(() => void report(), 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isOnline]);
+
+  // Pull the backend's authoritative daily earnings whenever the dashboard
+  // regains focus (e.g. after completing a ride).
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void getDailyEarnings()
+        .then(earnings => {
+          if (active) setBackendDailyEarnings(earnings);
+        })
+        .catch(() => {
+          // Backend unreachable — keep the locally computed figure.
+        });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
   useEffect(() => {
     positionAdCarouselAtStart();
   }, [positionAdCarouselAtStart]);
@@ -353,63 +399,52 @@ export default function DriverDashboard() {
     mapRef.current?.animateToRegion(visibleDriverRegion(driverLocation), 350);
   }, [driverLocation]);
 
-  // Ride request simulation
+  // Reset the request sheet + decline any stale request when going offline.
+  // Incoming requests now arrive over the real driver WebSocket (RideProvider),
+  // so there is no local simulation timer here anymore.
   useEffect(() => {
-    const clearRequestTimers = () => {
-      timers.clearTimeout(requestTimeoutRef.current);
-      timers.clearInterval(countdownRef.current);
-      requestTimeoutRef.current = null;
-      countdownRef.current = null;
-    };
-    clearRequestTimers();
-    requestSessionRef.current = timers.startSession();
-    if (!driverProfile) {
-      return clearRequestTimers;
-    }
+    if (!driverProfile) return;
     if (!isOnline) {
+      timers.clearInterval(countdownRef.current);
+      countdownRef.current = null;
       slideAnim.setValue(300);
       setCountdown(15);
       declineRideRequest();
-      return;
     }
-    const session = requestSessionRef.current;
-    requestTimeoutRef.current = timers.scheduleTimeout(
+  }, [declineRideRequest, driverProfile, isOnline, slideAnim, timers]);
+
+  // Animate the request sheet in + run the accept/decline countdown whenever a
+  // real incoming ride request lands.
+  useEffect(() => {
+    if (!pendingRequest) return;
+    const session = timers.startSession();
+    requestSessionRef.current = session;
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+    countdownValueRef.current = 15;
+    setCountdown(15);
+    countdownRef.current = timers.scheduleInterval(
       () => {
-        requestTimeoutRef.current = null;
-        simulateIncomingRideRequest();
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-        countdownValueRef.current = 15;
-        setCountdown(15);
-        countdownRef.current = timers.scheduleInterval(
-          () => {
-            const nextCountdown = Math.max(0, countdownValueRef.current - 1);
-            countdownValueRef.current = nextCountdown;
-            setCountdown(nextCountdown);
-            if (nextCountdown <= 0) {
-              timers.clearInterval(countdownRef.current);
-              countdownRef.current = null;
-              confirmDecline();
-            }
-          },
-          1000,
-          session,
-        );
+        const nextCountdown = Math.max(0, countdownValueRef.current - 1);
+        countdownValueRef.current = nextCountdown;
+        setCountdown(nextCountdown);
+        if (nextCountdown <= 0) {
+          timers.clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          confirmDecline();
+        }
       },
-      5000,
+      1000,
       session,
     );
-    return clearRequestTimers;
-  }, [
-    declineRideRequest,
-    driverProfile,
-    isOnline,
-    simulateIncomingRideRequest,
-    slideAnim,
-    timers,
-  ]);
+    return () => {
+      timers.clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRequest?.id, slideAnim, timers]);
 
   const confirmDecline = () => {
     timers.clearInterval(countdownRef.current);
@@ -474,7 +509,18 @@ export default function DriverDashboard() {
         return;
       }
 
-      if (getActiveRideCredits(vehicleEntitlementForSelection) <= 0) {
+      // Backend entitlement for THIS vehicle's type is authoritative when present;
+      // fall back to the local entitlement when the backend has no row for it.
+      const selectionBackendEntitlement = backendEntitlementForVehicleType(
+        vehicle.vehicleType,
+      );
+      const selectionHasCredits = selectionBackendEntitlement
+        ? selectionBackendEntitlement.ridesRemaining +
+            selectionBackendEntitlement.bonusRemaining >
+          0
+        : getActiveRideCredits(vehicleEntitlementForSelection) > 0;
+      if (!selectionHasCredits) {
+        showToast("You have no ride credits. Buy a package to go online.", "info");
         navigateToDriverPackages(router);
         return;
       }
@@ -501,14 +547,37 @@ export default function DriverDashboard() {
           startedAt,
         },
       });
+      // Mark online on the backend so customers' nearby-driver search (WHERE
+      // is_online = TRUE) finds this driver. The location poller (keyed on
+      // isOnline) fires an immediate GPS fix once we're online, giving the
+      // nearby query a row to match against. Best-effort — local state is set.
+      try {
+        await setDriverAvailability(true);
+      } catch {
+        // keep local online state; the availability call retries on next toggle
+      }
     },
-    [driverProfile, entitlement, onlineScale, saveDriverProfile],
+    [
+      backendEntitlementForVehicleType,
+      driverProfile,
+      entitlement,
+      onlineScale,
+      saveDriverProfile,
+      showToast,
+    ],
   );
 
   const toggleOnline = () => {
     const next = !isOnline;
-    if (next && isEntitlementLoading) return;
+    if (next && isEntitlementLoading) {
+      showToast("Checking your ride credits — try again in a moment.", "info");
+      return;
+    }
     if (next && !canDriverGoOnline(driverProfile)) {
+      showToast(
+        "Your driver account isn't approved to go online yet.",
+        "error",
+      );
       return;
     }
     if (next) {
@@ -520,7 +589,16 @@ export default function DriverDashboard() {
         void handleVehicleSessionStart(approvedVehicles[0]);
         return;
       }
-      if (!canDriverGoOnlineWithCredits(driverProfile, entitlement)) {
+      // Verification/eligibility already gated above via canDriverGoOnline. The
+      // remaining gate is ride credits: trust the backend entitlement for the
+      // active vehicle type when present, otherwise the local entitlement.
+      const hasCredits = activeBackendEntitlement
+        ? activeBackendEntitlement.ridesRemaining +
+            activeBackendEntitlement.bonusRemaining >
+          0
+        : canDriverGoOnlineWithCredits(driverProfile, entitlement);
+      if (!hasCredits) {
+        showToast("You have no ride credits. Buy a package to go online.", "info");
         navigateToDriverPackages(router);
         return;
       }
@@ -596,21 +674,34 @@ export default function DriverDashboard() {
     entitlement,
     rideHistory,
   });
-  const remainingCreditsText = isEntitlementLoading
-    ? "-"
-    : String(getRideBalance(activeVehicleEntitlement));
-  const bonusRidesText = isEntitlementLoading
-    ? "-"
-    : String(getActiveBonusRides(activeVehicleEntitlement));
+  // Backend entitlement for the active vehicle's TYPE — authoritative when present.
+  const activeBackendEntitlement = backendEntitlementForVehicleType(activeVehicleType);
+  // "Rides" tile ← backend rides_remaining; "Bonus Rides" tile ← backend
+  // bonus_remaining (kept separate — never summed). Fall back to the local
+  // entitlement when the backend has no row for this type (offline).
+  const remainingCreditsText = activeBackendEntitlement
+    ? String(activeBackendEntitlement.ridesRemaining)
+    : isEntitlementLoading
+      ? "-"
+      : String(getRideBalance(activeVehicleEntitlement));
+  const bonusRidesText = activeBackendEntitlement
+    ? String(activeBackendEntitlement.bonusRemaining)
+    : isEntitlementLoading
+      ? "-"
+      : String(getActiveBonusRides(activeVehicleEntitlement));
   const statusLabel = isOnline ? "Online" : "Offline";
   const isVerified = driverProfile?.isVerified === true;
   const ratingLabel =
     ratingSummary.ratingCount > 0 && ratingSummary.averageRating !== null
       ? ratingSummary.averageRating.toFixed(1)
       : "0.0";
-  const showNoCreditsWarning =
-    !isEntitlementLoading &&
-    getActiveRideCredits(activeVehicleEntitlement) === 0;
+  // Backend-authoritative "no rides" gate for the active vehicle type. When the
+  // backend has a row for this type, trust rides_remaining + bonus_remaining;
+  // otherwise fall back to the local entitlement.
+  const showNoCreditsWarning = activeBackendEntitlement
+    ? activeBackendEntitlement.ridesRemaining + activeBackendEntitlement.bonusRemaining === 0
+    : !isEntitlementLoading &&
+      getActiveRideCredits(activeVehicleEntitlement) === 0;
   const request = pendingRequest;
   const requestPickupLabel = formatRequestLocation(
     request?.pickup,
@@ -777,6 +868,22 @@ export default function DriverDashboard() {
         showsUserLocation={false}
         showsMyLocationButton={false}
       >
+        {showHeatmap &&
+          heatmap?.cells.map(cell => {
+            // Opacity scales with relative demand so hotspots read darker.
+            const intensity = maxDemand > 0 ? cell.count / maxDemand : 0;
+            const fillOpacity = 0.18 + intensity * 0.42;
+            return (
+              <Circle
+                key={`demand-${cell.latitude}-${cell.longitude}`}
+                center={{ latitude: cell.latitude, longitude: cell.longitude }}
+                radius={140}
+                strokeWidth={0}
+                strokeColor="transparent"
+                fillColor={`rgba(255,59,48,${fillOpacity.toFixed(2)})`}
+              />
+            );
+          })}
         <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
             <VehicleMapMarker
@@ -1009,7 +1116,7 @@ export default function DriverDashboard() {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {formatRwf(activitySummary.todayEarningsRwf)}
+                {formatRwf(backendDailyEarnings?.totalRwf ?? activitySummary.todayEarningsRwf)}
               </AppText>
               <AppText
                 style={[
@@ -1032,7 +1139,7 @@ export default function DriverDashboard() {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {activitySummary.completedRidesToday}
+                {backendDailyEarnings?.rides ?? activitySummary.completedRidesToday}
               </AppText>
               <AppText
                 style={[
@@ -1230,6 +1337,20 @@ export default function DriverDashboard() {
             color={colors.primary}
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mapBtn, { backgroundColor: dashboardPageBackground }]}
+          onPress={() => setShowHeatmap(prev => !prev)}
+          activeOpacity={0.8}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: showHeatmap }}
+          accessibilityLabel="Toggle demand heatmap"
+        >
+          <MaterialCommunityIcons
+            name={showHeatmap ? "fire" : "fire-off"}
+            size={22}
+            color={showHeatmap ? colors.destructive : colors.primary}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* ── Go Online / Offline button above tab bar ── */}
@@ -1375,6 +1496,17 @@ export default function DriverDashboard() {
               </View>
             </View>
           </View>
+          {request?.suggestedFare != null && request.suggestedFare > 0 ? (
+            <View style={[styles.suggestedFareRow, { backgroundColor: colors.primaryHex + '12' }]}>
+              <MaterialCommunityIcons name="cash-multiple" size={18} color={colors.primary} />
+              <AppText style={[styles.suggestedFareLabel, { color: colors.mutedForeground }]}>
+                Suggested fare
+              </AppText>
+              <AppText style={[styles.suggestedFareValue, { color: colors.primary }]}>
+                {`${request.suggestedFare.toLocaleString('en-RW')} RWF`}
+              </AppText>
+            </View>
+          ) : null}
           <View style={styles.metaRow}>
             <View
               style={[styles.metaInfoCard, { backgroundColor: colors.muted }]}
@@ -2023,6 +2155,17 @@ const styles = StyleSheet.create({
   routeInlineLabel: { ...typography.tiny, textTransform: "uppercase" },
   routeValue: { ...typography.bodySmall },
   routeText: { ...typography.label, flex: 1 },
+  suggestedFareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  suggestedFareLabel: { ...typography.caption, flex: 1 },
+  suggestedFareValue: { ...typography.bodySmall, fontFamily: "Inter_700Bold" },
   metaRow: { flexDirection: "row", gap: 5 },
   metaInfoCard: {
     flex: 1,

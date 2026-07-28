@@ -23,6 +23,7 @@ export default function NegotiationScreen() {
     declineDriverOffer,
     offerText: state.offerText,
     setCounterLoading: state.setCounterLoading,
+    setFareError: state.setFareError,
     setOfferText: state.setOfferText,
     setPendingOfferAmount: state.setPendingOfferAmount,
     setShowDriverTyping: state.setShowDriverTyping,
@@ -60,9 +61,11 @@ export default function NegotiationScreen() {
       <NegotiationInputDock
         acceptDriverOffer={acceptDriverOffer}
         actionPanelOffset={state.actionPanelOffset}
+        canAccept={state.canAccept}
         canCounter={state.canCounter}
         counterLoading={state.counterLoading}
         customerLimitReached={state.customerLimitReached}
+        fareError={state.fareError}
         footerBottomInset={footerBottomInset}
         handleCall={actions.handleCall}
         handleDecline={actions.handleDecline}
@@ -72,6 +75,7 @@ export default function NegotiationScreen() {
         offerText={state.offerText}
         ride={currentRide}
         setActionPanelHeight={state.setActionPanelHeight}
+        setFareError={state.setFareError}
         setOfferText={state.setOfferText}
         setShowAcceptModal={state.setShowAcceptModal}
         showAcceptModal={state.showAcceptModal}

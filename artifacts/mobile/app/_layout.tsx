@@ -58,6 +58,7 @@ import { ToastProvider } from '@/context/ToastContext';
 import { TabBarGlassProvider } from '@/components/navigation/TabBarGlassContext';
 import { useRideFlowNavigation } from '@/navigation/useRideFlowNavigation';
 import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
+import { usePushNotifications } from '@/services/usePushNotifications';
 import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
 import { useAuth } from '@/context/AuthContext';
@@ -75,6 +76,7 @@ function RootLayoutNav() {
   const { driverProfile } = useAuth();
   useRideFlowNavigation();
   useDriverFlowNavigation();
+  usePushNotifications();
 
   useEffect(() => {
     if (isProtectedDriverPath(pathname) && !canAccessDriverMode(driverProfile)) {

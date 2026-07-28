@@ -25,28 +25,28 @@ const PRESENTATIONS: Record<ManualPaymentClaimStatus, ManualPaymentClaimPresenta
     refreshIntervalMs: false,
   },
   submitted: {
-    title: 'Payment confirmation submitted',
-    message: 'Your payment claim is waiting for review.',
+    title: 'Waiting for approval',
+    message: "We've received your payment. An admin usually confirms it within about 2 minutes — this screen updates on its own. Only cancel if you didn't actually pay.",
     tone: 'info',
     terminal: false,
     canResubmit: false,
     canCancel: true,
     expectActivation: false,
-    refreshIntervalMs: 45_000,
+    refreshIntervalMs: 15_000,
   },
   pending_review: {
-    title: 'Payment under review',
-    message: 'Support is verifying your payment claim.',
+    title: 'Waiting for approval',
+    message: 'An admin is confirming your payment now. This screen updates automatically once it goes through.',
     tone: 'info',
     terminal: false,
     canResubmit: false,
     canCancel: true,
     expectActivation: false,
-    refreshIntervalMs: 45_000,
+    refreshIntervalMs: 15_000,
   },
   needs_clarification: {
     title: 'More information needed',
-    message: 'Support needs more information before the payment can be approved.',
+    message: 'We need a little more detail to confirm your payment. Update the details below and resubmit.',
     tone: 'warning',
     terminal: false,
     canResubmit: true,
@@ -55,8 +55,8 @@ const PRESENTATIONS: Record<ManualPaymentClaimStatus, ManualPaymentClaimPresenta
     refreshIntervalMs: false,
   },
   approved: {
-    title: 'Payment approved',
-    message: 'Your package is active.',
+    title: 'Payment confirmed',
+    message: 'Your payment was approved and your rides have been added to your balance. You’re ready to drive.',
     tone: 'success',
     terminal: true,
     canResubmit: false,
@@ -65,11 +65,11 @@ const PRESENTATIONS: Record<ManualPaymentClaimStatus, ManualPaymentClaimPresenta
     refreshIntervalMs: false,
   },
   rejected: {
-    title: 'Payment could not be verified',
-    message: 'This payment claim was rejected by support.',
+    title: 'Payment not confirmed',
+    message: "We couldn't confirm this payment. Check the amount and transaction ID, then try again — or contact support if you already paid.",
     tone: 'danger',
     terminal: true,
-    canResubmit: false,
+    canResubmit: true,
     canCancel: false,
     expectActivation: false,
     refreshIntervalMs: false,
@@ -97,7 +97,10 @@ const PRESENTATIONS: Record<ManualPaymentClaimStatus, ManualPaymentClaimPresenta
 };
 
 export function getManualPaymentClaimPresentation(status: ManualPaymentClaimStatus): ManualPaymentClaimPresentation {
-  return PRESENTATIONS[status];
+  // Defensive: a missing/unknown status (e.g. a null or a value the backend adds
+  // later) must never crash the screen — fall back to a neutral non-terminal
+  // 'submitted' presentation instead of returning undefined.
+  return PRESENTATIONS[status] ?? PRESENTATIONS.submitted;
 }
 
 export function getManualPaymentClaimRefreshPolicy(status: ManualPaymentClaimStatus) {

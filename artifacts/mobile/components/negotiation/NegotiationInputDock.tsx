@@ -12,9 +12,11 @@ import { styles } from './negotiationStyles';
 export function NegotiationInputDock({
   acceptDriverOffer,
   actionPanelOffset,
+  canAccept,
   canCounter,
   counterLoading,
   customerLimitReached,
+  fareError,
   footerBottomInset,
   handleCall,
   handleDecline,
@@ -24,15 +26,18 @@ export function NegotiationInputDock({
   offerText,
   ride,
   setActionPanelHeight,
+  setFareError,
   setOfferText,
   setShowAcceptModal,
   showAcceptModal,
 }: {
   acceptDriverOffer: () => void;
   actionPanelOffset: number;
+  canAccept: boolean;
   canCounter: boolean;
   counterLoading: boolean;
   customerLimitReached: boolean;
+  fareError: string | null;
   footerBottomInset: number;
   handleCall: () => void;
   handleDecline: () => void;
@@ -42,6 +47,7 @@ export function NegotiationInputDock({
   offerText: string;
   ride: Ride;
   setActionPanelHeight: (height: number) => void;
+  setFareError: (message: string | null) => void;
   setOfferText: (text: string) => void;
   setShowAcceptModal: (show: boolean) => void;
   showAcceptModal: boolean;
@@ -63,13 +69,21 @@ export function NegotiationInputDock({
                 style={[
                   styles.offerInput,
                   !offerText && styles.offerInputPlaceholder,
-                  { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
+                  {
+                    color: colors.foreground,
+                    borderColor: fareError ? colors.destructive : colors.border,
+                    backgroundColor: colors.card,
+                  },
                 ]}
                 value={offerText}
-                onChangeText={text => setOfferText(text.replace(/\D/g, ''))}
+                onChangeText={text => {
+                  setOfferText(text.replace(/\D/g, ''));
+                  if (fareError) setFareError(null);
+                }}
                 placeholder={offerPlaceholder}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="number-pad"
+                accessibilityLabel="Your fare offer in RWF"
               />
               <TouchableOpacity
                 style={[styles.sendBtn, { backgroundColor: offerText ? colors.primary : colors.muted }]}
@@ -85,6 +99,14 @@ export function NegotiationInputDock({
                 )}
               </TouchableOpacity>
             </View>
+            {fareError ? (
+              <Text
+                style={[styles.fareErrorText, { color: colors.destructive }]}
+                accessibilityRole="alert"
+              >
+                {fareError}
+              </Text>
+            ) : null}
           </KeyboardStickyView>
         )}
 
@@ -112,13 +134,13 @@ export function NegotiationInputDock({
               style={customerLimitReached ? styles.actionFlexWide : styles.actionFlexNarrow}
             />
             <AppButton
-              title={lastDriverOffer ? 'Accept fare' : 'Waiting'}
+              title={canAccept ? 'Accept fare' : 'Waiting'}
               icon="check"
               variant="primary"
               size="sm"
               compact
               onPress={() => setShowAcceptModal(true)}
-              disabled={!lastDriverOffer}
+              disabled={!canAccept}
               style={styles.actionFlexPrimary}
             />
           </View>

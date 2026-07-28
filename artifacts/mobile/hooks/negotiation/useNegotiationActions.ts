@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Alert, Linking } from 'react-native';
 import type { Ride } from '@/types';
+import { validateFareAmount } from '@/context/ride/rideConstants';
 
 export function useNegotiationActions({
   canCounter,
@@ -9,6 +10,7 @@ export function useNegotiationActions({
   declineDriverOffer,
   offerText,
   setCounterLoading,
+  setFareError,
   setOfferText,
   setPendingOfferAmount,
   setShowDriverTyping,
@@ -19,12 +21,21 @@ export function useNegotiationActions({
   declineDriverOffer: () => void;
   offerText: string;
   setCounterLoading: (loading: boolean) => void;
+  setFareError: (message: string | null) => void;
   setOfferText: (text: string) => void;
   setPendingOfferAmount: (amount: number | null) => void;
   setShowDriverTyping: (show: boolean) => void;
 }) {
   const sendCounter = useCallback((amount: number) => {
-    if (!amount || amount < 100 || !canCounter) return;
+    if (!amount || !canCounter) return;
+    // Mirror the backend's per-vehicle fare bounds so an exploitative amount is
+    // blocked with an inline message before it round-trips to the 400.
+    const boundsError = validateFareAmount(currentRide?.vehicleType, amount);
+    if (boundsError) {
+      setFareError(boundsError);
+      return;
+    }
+    setFareError(null);
     setShowDriverTyping(false);
     setPendingOfferAmount(amount);
     setOfferText('');
@@ -33,7 +44,9 @@ export function useNegotiationActions({
   }, [
     canCounter,
     counterOffer,
+    currentRide?.vehicleType,
     setCounterLoading,
+    setFareError,
     setOfferText,
     setPendingOfferAmount,
     setShowDriverTyping,

@@ -33,6 +33,7 @@ export default function DriverNegotiationScreen() {
     cancelRide,
     currentRide,
     offerText: state.offerText,
+    setFareError: state.setFareError,
     setOfferText: state.setOfferText,
   });
 
@@ -128,6 +129,13 @@ export default function DriverNegotiationScreen() {
                 <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>ETA</AppText>
                 <AppText style={[styles.tripStatValue, { color: colors.foreground }]}>~{currentRide.duration} min</AppText>
               </View>
+              {currentRide.suggestedFare != null && currentRide.suggestedFare > 0 ? (
+                <View style={styles.tripStatInline}>
+                  <Feather name="dollar-sign" size={icons.size.xxs} color={colors.primary} />
+                  <AppText style={[styles.tripStatLabel, { color: colors.mutedForeground }]}>Suggested</AppText>
+                  <AppText style={[styles.tripStatValue, { color: colors.primary }]}>{formatFare(currentRide.suggestedFare)}</AppText>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -166,13 +174,21 @@ export default function DriverNegotiationScreen() {
                 style={[
                   styles.offerInput,
                   !state.offerText && styles.offerInputPlaceholder,
-                  { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
+                  {
+                    color: colors.foreground,
+                    borderColor: state.fareError ? colors.destructive : colors.border,
+                    backgroundColor: colors.card,
+                  },
                 ]}
                 value={state.offerText}
-                onChangeText={text => state.setOfferText(text.replace(/\D/g, ''))}
+                onChangeText={text => {
+                  state.setOfferText(text.replace(/\D/g, ''));
+                  if (state.fareError) state.setFareError(null);
+                }}
                 placeholder={state.offerPlaceholder}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="number-pad"
+                accessibilityLabel="Your fare offer in RWF"
               />
               <TouchableOpacity
                 style={[styles.sendBtn, { backgroundColor: state.offerText ? colors.primary : colors.muted }]}
@@ -184,6 +200,14 @@ export default function DriverNegotiationScreen() {
                 <Feather name="send" size={icons.semantic.row} color={state.offerText ? colors.primaryForeground : colors.mutedForeground} />
               </TouchableOpacity>
             </View>
+            {state.fareError ? (
+              <AppText
+                style={[styles.fareErrorText, { color: colors.destructive }]}
+                accessibilityRole="alert"
+              >
+                {state.fareError}
+              </AppText>
+            ) : null}
           </KeyboardStickyView>
         )}
 
@@ -203,13 +227,13 @@ export default function DriverNegotiationScreen() {
             <AppButton title="Decline" icon="x" variant="decline" size="sm" compact onPress={actions.handleDecline} style={styles.actionFlexNarrow} />
             <AppButton title="Call" icon="phone" variant="call" size="sm" compact onPress={actions.handleCall} style={state.driverLimitReached ? styles.actionFlexWide : styles.actionFlexNarrow} />
             <AppButton
-              title={state.lastCustomerOffer ? 'Accept fare' : 'Waiting'}
+              title={state.canAccept ? 'Accept fare' : 'Waiting'}
               icon="check"
               variant="primary"
               size="sm"
               compact
               onPress={() => state.setShowAcceptModal(true)}
-              disabled={!state.lastCustomerOffer}
+              disabled={!state.canAccept}
               style={styles.actionFlexPrimary}
             />
           </View>

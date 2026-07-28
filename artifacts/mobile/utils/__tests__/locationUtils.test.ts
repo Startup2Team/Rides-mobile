@@ -1,4 +1,5 @@
 import {
+  arePickupAndDropoffSame,
   formatHomeHeaderLocation,
   formatReverseGeocodeAddress,
   hasUsablePickup,
@@ -65,5 +66,29 @@ describe('pickup eligibility', () => {
       address: 'Selected Pickup',
       locationType: 'precise',
     })).toBe(true);
+  });
+});
+
+describe('same pickup/dropoff detection', () => {
+  it('flags two points within 30m as the same location', () => {
+    expect(arePickupAndDropoffSame(
+      { latitude: -1.9536, longitude: 30.0606, address: 'KG 17 Ave', locationType: 'precise' },
+      { latitude: -1.95361, longitude: 30.06061, address: 'KG 17 Ave', locationType: 'precise' },
+    )).toBe(true);
+  });
+
+  it('does NOT flag distinct precise drop-offs that merely share a street name', () => {
+    // Both reverse-geocode to "KG 17 Ave" but are ~450m apart — a real, distinct trip.
+    expect(arePickupAndDropoffSame(
+      { latitude: -1.9536, longitude: 30.0606, address: 'KG 17 Ave', locationType: 'precise' },
+      { latitude: -1.9576, longitude: 30.0606, address: 'KG 17 Ave', locationType: 'precise' },
+    )).toBe(false);
+  });
+
+  it('still flags identical free-typed (generic) addresses with placeholder coords', () => {
+    expect(arePickupAndDropoffSame(
+      { latitude: -1.9536, longitude: 30.0606, address: 'Kacyiru', locationType: 'generic' },
+      { latitude: -1.9336, longitude: 30.0806, address: 'Kacyiru', locationType: 'generic' },
+    )).toBe(true);
   });
 });

@@ -1,46 +1,58 @@
-import type { ApiEnvelope, ApiErrorDto, ApiIdempotencyMetadata } from './shared';
+import type { ApiEnvelope, ApiErrorDto } from './shared';
 
+// Wire shapes match the real backend (POST /api/v1/auth/*). snake_case, since the
+// bodies are sent as-is and the backend validates snake_case fields.
+
+// POST /auth/register — sends the OTP.
 export interface RequestOtpRequestDto {
-  phoneNumber: string;
-  channel?: 'sms' | 'whatsapp' | 'voice';
-  dryRun?: boolean;
+  phone_number: string;
+  full_name?: string;
+  email?: string;
+  device_id: string;
+  platform: 'ios' | 'android';
 }
 
+// Register returns { dev_otp } in non-prod, or 204 (empty) in prod.
 export interface RequestOtpResponseDto {
-  requestId: string;
-  maskedPhoneNumber: string;
-  expiresAt: string;
+  dev_otp?: string;
 }
 
-export interface VerifyOtpRequestDto extends ApiIdempotencyMetadata {
-  phoneNumber: string;
+// POST /auth/verify-otp
+export interface VerifyOtpRequestDto {
+  phone_number: string;
   otp: string;
+  device_id: string;
+  platform?: 'ios' | 'android';
+  app_version?: string;
 }
 
+// Verify returns a flat token payload — NO nested user; hydrate via /customer/profile.
 export interface VerifyOtpResponseDto {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: string;
-  user?: AuthUserDto | null;
+  access_token: string;
+  refresh_token: string;
+  role_state: string;
+  user_id: string;
 }
 
+// POST /auth/refresh
 export interface RefreshSessionRequestDto {
-  refreshToken: string;
+  refresh_token: string;
 }
 
 export interface RefreshSessionResponseDto {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: string;
-  user?: AuthUserDto | null;
+  access_token: string;
+  refresh_token: string;
+  role_state?: string;
+  user_id?: string;
 }
 
-export interface LogoutRequestDto extends ApiIdempotencyMetadata {
-  refreshToken: string;
+// POST /auth/logout — { refresh_token } → 204 (empty).
+export interface LogoutRequestDto {
+  refresh_token: string;
 }
 
 export interface LogoutResponseDto {
-  success: true;
+  success?: boolean;
 }
 
 export interface AuthUserDto {
