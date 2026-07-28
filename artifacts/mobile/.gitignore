@@ -34,6 +34,13 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Env backups. `.env` and `.env*.local` were ignored but `.env.production.bak`
+# was not, so real credentials sat untracked-but-committable — one `git add .`
+# from being published.
+.env*.bak
+.env.*.bak
+*.env.bak
+
 # typescript
 *.tsbuildinfo
 .vercel
