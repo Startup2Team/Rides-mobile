@@ -150,6 +150,8 @@ overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
+  '@firebase/util': true
   '@sentry/cli': true
   esbuild: true
+  protobufjs: true
   unrs-resolver: true

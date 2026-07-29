@@ -244,11 +244,13 @@ export default function RideDetailScreen() {
                 <View style={{ flex: 1 }}>
                   <AppText variant="body" style={[styles.driverName, { color: colors.foreground }]}>{ride.driver.name}</AppText>
                   <AppText variant="caption" style={[styles.driverSub, { color: colors.mutedForeground }]}>
-                    {VEHICLE_LABELS[ride.driver.vehicleType]} - {ride.driver.plateNumber}
+                    {[VEHICLE_LABELS[ride.driver.vehicleType], ride.driver.plateNumber].filter(Boolean).join(' · ')}
                   </AppText>
                 </View>
                 <View style={styles.ratingBadge}>
-                  <AppText variant="label" style={[styles.ratingText, { color: colors.star }]}>★ {ride.driver.rating?.toFixed(1)}</AppText>
+                  <AppText variant="label" style={[styles.ratingText, { color: colors.star }]}>
+                    {ride.driver.rating > 0 ? `★ ${ride.driver.rating.toFixed(1)}` : 'New'}
+                  </AppText>
                 </View>
               </View>
             </View>

@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Feather,
+  FontAwesome,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,6 +22,7 @@ import { useColors } from "@/hooks/useColors";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { APP_NAME } from "@/constants/branding";
 import { getShareRouteForMode } from "@/navigation/shareNavigation";
+import { getRatingInformationRoute } from "@/navigation/ratingNavigation";
 import {
   canAccessDriverMode,
   getDriverApplicationAction,
@@ -38,7 +40,8 @@ import { useProfile } from "@/domains/profile";
 import { useProfilePhotoActions } from "@/hooks/useProfilePhotoActions";
 import { ProfilePhotoEditSheet } from "@/components/ProfilePhotoEditSheet";
 import { AppText } from "@/components/AppText";
-import { CustomerLevelCard } from "@/components/profile/CustomerLevelCard";
+import { CustomerRideBadge } from "@/components/profile/CustomerRideBadge";
+import { prefetchRatingInformationImages } from "@/constants/ratingInformationImages";
 import { elevation } from "@/constants/elevation";
 import { icons } from "@/constants/icons";
 import { radius } from "@/constants/radius";
@@ -47,6 +50,7 @@ import { spacing, semanticSpacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
 import { navigateToDriverHomeAfterCompletion } from "@/navigation/navigationPolicy";
 import { usePressGuard } from "@/hooks/usePressGuard";
+import { useCustomerRatingsQuery } from "@/query/hooks/useCustomerRatingsQuery";
 
 function MenuItem({
   iconFamily = "feather",
@@ -144,6 +148,8 @@ export default function ProfileScreen() {
   const isDark = scheme === "dark";
   const insets = useSafeAreaInsets();
   const { user, driverProfile, switchMode, profile } = useProfile();
+  const { data: ratingSummary = { averageRating: null, ratingCount: 0 } } =
+    useCustomerRatingsQuery();
   const { profileImage, handleImagePick, handleDeletePhoto } =
     useProfilePhotoActions();
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
@@ -168,6 +174,10 @@ export default function ProfileScreen() {
   const lastName = nameParts.slice(1).join(" ").toUpperCase();
   const driverAction = getDriverApplicationAction(driverProfile);
   const handleEditProfile = usePressGuard(() => router.push("/edit-profile"));
+  const handleRatingInfo = usePressGuard(() => {
+    prefetchRatingInformationImages();
+    router.push(getRatingInformationRoute(user?.mode) as never);
+  });
   const handleSwitchToDriver = usePressGuard(() => {
     if (canAccessDriverMode(driverProfile)) {
       Alert.alert("Switch to Driver Mode", "Switch to driver dashboard?", [
@@ -203,26 +213,53 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Edit profile details"
             >
-              <AppText
-                variant="displayXL"
-                style={[styles.nameFirst, { color: colors.foreground }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.5}
-              >
-                {firstName}
-              </AppText>
-              {lastName ? (
+              <View style={styles.nameInlineRow}>
                 <AppText
                   variant="displayXL"
-                  style={[styles.nameLast, { color: colors.foreground }]}
+                  style={[styles.nameFirst, { color: colors.foreground }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.5}
                 >
-                  {lastName}
+                  {firstName}
                 </AppText>
+                {!lastName ? <CustomerRideBadge /> : null}
+              </View>
+              {lastName ? (
+                <View style={styles.nameInlineRow}>
+                  <AppText
+                    variant="displayXL"
+                    style={[styles.nameLast, { color: colors.foreground }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.5}
+                  >
+                    {lastName}
+                  </AppText>
+                  <CustomerRideBadge />
+                </View>
               ) : null}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.ratingBadge}
+              onPress={handleRatingInfo}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open rating information"
+              accessibilityHint="Explains how your rating works"
+              hitSlop={8}
+            >
+              <FontAwesome
+                name="star"
+                size={icons.size.xxs}
+                color={colors.primary}
+              />
+              <AppText
+                variant="label"
+                style={[styles.ratingText, { color: colors.foreground }]}
+              >
+                {ratingSummary.averageRating?.toFixed(1) ?? "0.0"}
+              </AppText>
             </TouchableOpacity>
           </View>
 
@@ -269,7 +306,6 @@ export default function ProfileScreen() {
             insets.bottom + TAB_BAR_SCREEN_BOTTOM_PADDING + spacing[16],
         }}
       >
-        <CustomerLevelCard />
         {!canAccessDriverMode(driverProfile) && (
           <TouchableOpacity
             style={[styles.driverBanner, { backgroundColor: cardFill }]}
@@ -549,6 +585,12 @@ const styles = StyleSheet.create({
   nameContainer: {
     gap: spacing[0],
   },
+  nameInlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[4],
+    minWidth: 0,
+  },
   nameFirst: {
     ...typography.displayXL,
     lineHeight: 38,
@@ -560,6 +602,16 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     letterSpacing: -0.8,
     flexShrink: 1,
+  },
+  ratingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing[4],
+  },
+  ratingText: {
+    ...typography.label,
+    fontFamily: typography.title.fontFamily,
   },
   contactDetails: {
     marginTop: spacing[4],

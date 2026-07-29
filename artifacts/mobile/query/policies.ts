@@ -55,6 +55,10 @@ export const queryPolicies = {
     staleTime: 2 * minute,
     gcTime: 30 * minute,
   }),
+  customerRatings: policy({
+    staleTime: 2 * minute,
+    gcTime: 30 * minute,
+  }),
   driverCredits: policy({
     // Ride credits change when a package is activated or an admin approves a
     // manual payment claim (granting rides). Refetch on focus/mount so a grant

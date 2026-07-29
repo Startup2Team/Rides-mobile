@@ -65,20 +65,24 @@ function RoutePreviewComponent({
       )}
       {showPickup && (
         <Marker
+          identifier="booking-pickup"
           coordinate={pickup}
           anchor={LOCATION_MAP_PIN_ANCHOR}
           centerOffset={getLocationMapPinCenterOffset()}
-          tracksViewChanges={false}
+          tracksViewChanges
+          zIndex={3}
         >
           <LocationMapPin variant="pickup" mapType={mapType} />
         </Marker>
       )}
       {showDestination && destination && (
         <Marker
+          identifier="booking-destination"
           coordinate={destination}
           anchor={LOCATION_MAP_PIN_ANCHOR}
           centerOffset={getLocationMapPinCenterOffset()}
-          tracksViewChanges={false}
+          tracksViewChanges
+          zIndex={4}
         >
           <LocationMapPin variant="destination" mapType={mapType} />
         </Marker>

@@ -199,7 +199,7 @@ export default function DriverProfileScreen() {
                   <AppText
                     style={[styles.statHeaderVal, { color: colors.foreground }]}
                   >
-                    {ratingSummary.averageRating?.toFixed(1) ?? "—"}
+                    {ratingSummary.averageRating?.toFixed(1) ?? "0.0"}
                   </AppText>
                 </View>
                 <AppText

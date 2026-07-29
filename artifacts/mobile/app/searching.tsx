@@ -149,20 +149,6 @@ export default function SearchingScreen() {
                 {destinationLabel}
               </Text>
             </View>
-            {(currentRide.distance > 0 || (currentRide.suggestedFare ?? 0) > 0) ? (
-              <View style={[styles.searchStatsRow, { borderTopColor: colors.border }]}>
-                {currentRide.distance > 0 ? (
-                  <Text style={[styles.searchStat, { color: colors.mutedForeground }]}>
-                    {currentRide.distance.toFixed(1)} km
-                  </Text>
-                ) : null}
-                {(currentRide.suggestedFare ?? 0) > 0 ? (
-                  <Text style={[styles.searchStat, { color: colors.primary }]}>
-                    {`~${currentRide.suggestedFare.toLocaleString('en-RW')} RWF`}
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
           </View>
         )}
       </View>
@@ -254,15 +240,6 @@ const styles = StyleSheet.create({
     flex: 1,
     ...typography.bodySmall,
   },
-  searchStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  searchStat: { ...typography.bodySmall, fontFamily: 'Inter_700Bold' },
   footer: {
     width: '100%',
     paddingHorizontal: 24,

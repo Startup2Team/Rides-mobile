@@ -26,11 +26,25 @@ function mapStatus(status: string): RideStatus {
 
 function toMobileRide(r: CustomerRide): Ride {
   const distance = r.estimatedDistanceKm ?? 0;
+  const driver = r.driverId || r.driverName
+    ? {
+        id: r.driverId ?? 'unknown-driver',
+        name: r.driverName?.trim() || 'Driver',
+        phone: r.driverPhone ?? '',
+        vehicleType: (r.vehicleType ?? 'moto') as VehicleType,
+        plateNumber: r.driverPlate ?? '',
+        location: { latitude: r.pickup.lat, longitude: r.pickup.lng },
+        rating: r.driverRating ?? 0,
+        eta: 0,
+      }
+    : undefined;
+
   return {
     id: r.id,
     customerId: '',
     driverId: r.driverId ?? undefined,
     driverName: r.driverName ?? undefined,
+    driver,
     vehicleType: (r.vehicleType ?? 'moto') as VehicleType,
     pickup: { latitude: r.pickup.lat, longitude: r.pickup.lng, address: r.pickup.address },
     destination: {
