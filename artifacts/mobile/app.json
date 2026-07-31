@@ -59,6 +59,7 @@
           }
         }
       ],
+      "./plugins/withNonModularHeaders",
       [
         "expo-router",
         {
