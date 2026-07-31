@@ -4,6 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
 import {
+  Alert,
   Animated,
   Modal,
   Text,
@@ -538,7 +539,7 @@ export default function DriverDashboard() {
           bounciness: 12,
         }),
       ]).start();
-      await saveDriverProfile({
+      const onlineProfile = {
         ...nextProfile,
         isOnline: true,
         onlineVehicleSession: {
@@ -546,15 +547,27 @@ export default function DriverDashboard() {
           vehicleType: vehicle.vehicleType,
           startedAt,
         },
-      });
+      };
+      await saveDriverProfile(onlineProfile);
       // Mark online on the backend so customers' nearby-driver search (WHERE
       // is_online = TRUE) finds this driver. The location poller (keyed on
       // isOnline) fires an immediate GPS fix once we're online, giving the
-      // nearby query a row to match against. Best-effort — local state is set.
+      // nearby query a row to match against.
+      //
+      // On failure we MUST roll the local state back. Keeping it was the worst
+      // kind of lie: the header showed green "Online" and the button read "Go
+      // Offline", while customers filter on is_online = TRUE server-side — so no
+      // ride request could ever arrive and the driver had no way to know. The
+      // old comment claimed "retries on next toggle", but the next toggle is the
+      // driver going OFFLINE, so it never retried.
+      //
+      // AuthContext.setDriverOnline already does exactly this; only this
+      // multi-vehicle session path was missing it.
       try {
         await setDriverAvailability(true);
       } catch {
-        // keep local online state; the availability call retries on next toggle
+        await saveDriverProfile({ ...onlineProfile, isOnline: false, onlineVehicleSession: null });
+        showToast('Could not go online. Check your connection and try again.', 'error');
       }
     },
     [
@@ -775,8 +788,15 @@ export default function DriverDashboard() {
       useNativeDriver: true,
     }).start(() => {
       void (async () => {
-        await switchMode("customer");
-        navigateToCustomerHomeAfterCompletion(router);
+        const result = await switchMode("customer");
+        if (result.ok) {
+          navigateToCustomerHomeAfterCompletion(router);
+        } else if (result.reason === "active-ride") {
+          Alert.alert(
+            "Ride in progress",
+            "Finish or cancel your current ride before switching to customer mode.",
+          );
+        }
         switchModeAvatarSlide.setValue(0);
         setIsSwitchingMode(false);
       })();
