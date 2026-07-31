@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Alert } from 'react-native';
 import {
   BookingFormDraft,
   Coords,
@@ -38,8 +39,10 @@ import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   CONFIRMED_RIDE_START_DELAY_MS,
+  CUSTOMER_SEARCH_TIMEOUT_MS,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
+import { resetRideActivity, setRideActivity } from '@/state/rideActivityStore';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { useOptionalAuth } from '@/context/AuthContext';
 import { getEligibleOnlineSessionVehicle } from './rideSession';
@@ -138,10 +141,21 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const driverSocketRef = useRef<DriverSocket | null>(null);
   const backendDrivingRef = useRef(false);
   const driverEnRouteFiredRef = useRef<string | null>(null);
+  // True once THIS user cancelled the ride — the backend echoes ride_cancelled
+  // over the socket, and that echo must not read as "no drivers found".
+  const localCancelInitiatedRef = useRef(false);
   const timerManagerRef = useRef(createRideTimerManager());
   const timers = timerManagerRef.current;
   currentRideRef.current = currentRide;
   pendingRequestRef.current = pendingRequest;
+  // Socket handlers read these through refs so their useCallback identity does
+  // NOT change when the profile/entitlement objects are rebuilt (which happens
+  // on every app foreground) — otherwise the driver WebSocket is torn down and
+  // re-handshaked each time, for no state change at all.
+  const authDriverProfileRef = useRef(auth?.driverProfile ?? null);
+  const driverEntitlementRef = useRef(driverEntitlement?.entitlement ?? null);
+  authDriverProfileRef.current = auth?.driverProfile ?? null;
+  driverEntitlementRef.current = driverEntitlement?.entitlement ?? null;
   const rideCommandCapabilitySnapshot = useMemo<CapabilitySnapshot>(() => ({
     ...resolveCapabilities({
       user: auth?.user ?? null,
@@ -541,11 +555,38 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
+    localCancelInitiatedRef.current = false;
     timers.startSession();
     clearSearchTimers();
     setCurrentRide(ride);
     // Status stays `searching`; the real backend `driver_matched` event
     // (delivered over the customer tracking socket) transitions to `negotiating`.
+
+    // Safety net: the backend ends every search (~60s budget) with a
+    // ride_cancelled event, but if the socket died mid-search nothing else
+    // stops the spinner. Cleared by driver_matched / any lifecycle event via
+    // clearSearchTimers.
+    matchDriverTimeoutRef.current = timers.scheduleTimeout(() => {
+      matchDriverTimeoutRef.current = null;
+      const active = currentRideRef.current;
+      if (!active || active.id !== ride.id || active.status !== 'searching') return;
+      const staleBackendRideId = backendRideIdRef.current;
+      if (staleBackendRideId) {
+        void cancelBackendRide(staleBackendRideId).catch(error =>
+          reportOperationalFailure('ride.search.timeoutCancel', error, { rideId: staleBackendRideId }),
+        );
+      }
+      setCurrentRide(prev =>
+        prev && prev.id === ride.id && prev.status === 'searching'
+          ? { ...prev, status: 'cancelled' }
+          : prev,
+      );
+      timers.scheduleTimeout(() => {
+        setCurrentRide(prev => (prev?.status === 'cancelled' ? null : prev));
+        setDriverLocation(null);
+      }, CANCELLED_RIDE_CLEAR_DELAY_MS);
+      Alert.alert('No drivers found', 'No drivers are available nearby right now. Please try again.');
+    }, CUSTOMER_SEARCH_TIMEOUT_MS);
 
     // Create the ride on the real backend (best-effort). On success we stash the
     // server ride id so cancel + negotiation hit the same ride, and the customer
@@ -571,6 +612,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   const cancelRide = useCallback(() => {
     const session = timers.endSession();
+    localCancelInitiatedRef.current = true;
     isMatchingPausedRef.current = false;
     setIsMatchingPaused(false);
     clearSearchTimers();
@@ -992,9 +1034,21 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         clearSearchTimers();
         timers.clearInterval(driverIntervalRef.current);
         driverIntervalRef.current = null;
+        const statusBeforeEvent = currentRideRef.current?.status ?? null;
         const coords = parseDriverCoords(payload);
         if (coords) setDriverLocation(coords);
         setCurrentRide(prev => (prev ? applyLifecycleEvent(prev, type, payload) : prev));
+
+        // The dispatcher's give-up cancels the ride while we're still
+        // 'searching'. Without this the spinner just vanishes and the customer
+        // lands back on booking with no explanation (the backend's reason was
+        // dropped on the floor; only the FCM push ever said why).
+        if (type === 'ride_cancelled' && statusBeforeEvent === 'searching' && !localCancelInitiatedRef.current) {
+          const reason = typeof payload.reason === 'string' && payload.reason.trim()
+            ? payload.reason.trim()
+            : 'No drivers are available nearby right now. Please try again.';
+          Alert.alert('No drivers found', reason);
+        }
 
         if (type === 'ride_completed') {
           const session = timers.endSession();
@@ -1048,8 +1102,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (isDriverRequestEvent(type)) {
         if (pendingRequestRef.current || currentRideRef.current) return;
         const sessionVehicle = getEligibleOnlineSessionVehicle(
-          auth?.driverProfile,
-          driverEntitlement?.entitlement,
+          authDriverProfileRef.current,
+          driverEntitlementRef.current,
         );
         const request = buildDriverRequestFromPayload(
           payload,
@@ -1092,7 +1146,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         setCurrentRide(prev => (prev ? appendNegotiationEvent(prev, payload, 'driver') : prev));
       }
     },
-    [auth?.driverProfile, driverEntitlement?.entitlement, timers],
+    [timers],
   );
 
   const trackedRideId = currentRide?.backendRideId ?? null;
@@ -1160,6 +1214,14 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => () => {
     timers.endSession();
   }, [timers]);
+
+  // Publish ride activity so AuthContext.switchMode can refuse a mid-ride role
+  // switch (the source of the customer/driver navigator duel) without needing
+  // to consume RideContext.
+  React.useEffect(() => {
+    setRideActivity(currentRide?.status ?? null, Boolean(pendingRequest));
+  }, [currentRide?.status, pendingRequest]);
+  React.useEffect(() => () => resetRideActivity(), []);
 
   // Once a ride COMPLETES, drop the saved booking draft so returning Home lands on
   // a clean home screen — not the pickup/booking form (the draft-restore is only

@@ -46,6 +46,15 @@ export const userSchema = z.object({
   createdAt: z.string(),
 }).passthrough();
 
+// Pending backend role reconciliation (services/roleSwitchSync.ts) — survives
+// restarts so a switch made offline still lands on the backend.
+export const roleSyncTargetSchema = z.object({
+  mode: z.enum(['customer', 'driver']),
+  driverOffline: z.boolean(),
+  driverOfflineDone: z.boolean(),
+  seq: z.number(),
+});
+
 export const paymentMethodsSchema = z.array(z.object({
   id: z.string(),
   provider: z.enum(['mtn', 'airtel', 'cash']),
