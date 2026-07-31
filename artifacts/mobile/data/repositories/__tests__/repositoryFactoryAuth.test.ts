@@ -6,9 +6,14 @@
  * surfacing to the user as "Failed to upload profile photo: UnauthorizedError"
  * because the presign call went out anonymous.
  *
- * These tests pin the default: build a repository the way the app does (no
- * options) and assert a real bearer token reaches the wire.
+ * These tests pin the default: build a repository the way the app does (no token
+ * provider) and assert a real bearer token reaches the wire.
+ *
+ * REMOTE_ENV forces SHADOW_REMOTE. Without it both factories resolve to LOCAL
+ * mode, no HTTP request is made at all, and any assertion about headers would
+ * pass while proving nothing.
  */
+import type { BackendTransportEnvironment } from '@/data/remote/transport/httpBackendTransportTypes';
 import { createProfileRepository, resetProfileRepositoryForTests } from '../profileRepositoryFactory';
 import {
   createSavedLocationsRepository,
@@ -21,25 +26,31 @@ jest.mock('@/persistence/authTokens', () => ({
   getAccessToken: jest.fn().mockResolvedValue(STORED_TOKEN),
 }));
 
+const REMOTE_ENV: BackendTransportEnvironment = {
+  backendEnv: 'staging',
+  backendBaseUrl: 'https://stg-api.rides.rw/api',
+  nodeEnv: 'test',
+  profileRepositoryMode: 'SHADOW_REMOTE',
+  profileShadowWritesEnabled: 'true',
+  savedLocationsRepositoryMode: 'SHADOW_REMOTE',
+  savedLocationsShadowWritesEnabled: 'true',
+};
+
 /** Captures the headers of every outbound request. */
 function recordingFetch() {
   const calls: Array<{ url: string; headers: Record<string, string> }> = [];
-  const fetchImpl = jest.fn(async (url: unknown, init?: unknown) => {
+  const impl = jest.fn(async (url: unknown, init?: unknown) => {
     const { headers } = (init ?? {}) as { headers?: Record<string, string> };
     calls.push({ url: String(url), headers: headers ?? {} });
     return {
       ok: true,
       status: 200,
-      headers: new Map([['content-type', 'application/json']]),
-      json: async () => ({ data: {} }),
-      text: async () => '{"data":{}}',
-    };
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ data: null }),
+      text: async () => '{"data":null}',
+    } as unknown as Response;
   });
-  return { calls, fetchImpl: fetchImpl as unknown as typeof fetch };
-}
-
-function authHeadersFrom(calls: Array<{ headers: Record<string, string> }>) {
-  return calls.map(c => c.headers.Authorization).filter(Boolean);
+  return { calls, fetchImpl: impl as unknown as typeof fetch };
 }
 
 describe('repository factories default their token provider', () => {
@@ -49,45 +60,38 @@ describe('repository factories default their token provider', () => {
     jest.clearAllMocks();
   });
 
-  it('attaches the stored bearer token when the profile repository is built with no options', async () => {
+  it('sends the stored bearer token when the profile repository is built with no token provider', async () => {
     const { calls, fetchImpl } = recordingFetch();
-    const repo = createProfileRepository({ fetchImpl });
+    const repo = createProfileRepository({ env: REMOTE_ENV, fetchImpl });
 
-    // Any remote-capable read is enough; we assert on the request, not the result.
-    await Promise.resolve(repo.getProfile?.()).catch(() => undefined);
+    await repo.getProfileImage().catch(() => undefined);
 
-    const auth = authHeadersFrom(calls);
-    if (calls.length > 0) {
-      expect(auth).not.toHaveLength(0);
-      expect(auth[0]).toBe(`Bearer ${STORED_TOKEN}`);
-    }
+    // Non-vacuous: a request must actually have gone out.
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0].headers.Authorization).toBe(`Bearer ${STORED_TOKEN}`);
   });
 
-  it('attaches the stored bearer token for saved locations too', async () => {
+  it('sends the stored bearer token for saved locations too', async () => {
     const { calls, fetchImpl } = recordingFetch();
-    const repo = createSavedLocationsRepository({ fetchImpl });
+    const repo = createSavedLocationsRepository({ env: REMOTE_ENV, fetchImpl });
 
-    await Promise.resolve(repo.listSavedLocations?.()).catch(() => undefined);
+    await repo.listSavedLocations().catch(() => undefined);
 
-    const auth = authHeadersFrom(calls);
-    if (calls.length > 0) {
-      expect(auth).not.toHaveLength(0);
-      expect(auth[0]).toBe(`Bearer ${STORED_TOKEN}`);
-    }
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0].headers.Authorization).toBe(`Bearer ${STORED_TOKEN}`);
   });
 
   it('still honours an explicitly injected provider', async () => {
     const { calls, fetchImpl } = recordingFetch();
     const repo = createProfileRepository({
+      env: REMOTE_ENV,
       fetchImpl,
       tokenProvider: () => 'explicit-token',
     });
 
-    await Promise.resolve(repo.getProfile?.()).catch(() => undefined);
+    await repo.getProfileImage().catch(() => undefined);
 
-    const auth = authHeadersFrom(calls);
-    if (calls.length > 0) {
-      expect(auth[0]).toBe('Bearer explicit-token');
-    }
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0].headers.Authorization).toBe('Bearer explicit-token');
   });
 });
