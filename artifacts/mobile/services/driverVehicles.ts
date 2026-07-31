@@ -12,6 +12,11 @@ export interface BackendDriverVehicle {
   vehicleType: VehicleType | null;
   plateNumber: string;
   isActive: boolean;
+  brand: string | null;
+  model: string | null;
+  manufactureYear: number | null;
+  passengerSeats: number | null;
+  loadCapacityKg: number | null;
 }
 
 interface VehicleDto {
@@ -19,6 +24,11 @@ interface VehicleDto {
   vehicle_type_code: string;
   plate_number: string;
   is_active: boolean;
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  passenger_seats?: number | null;
+  load_capacity_kg?: number | null;
 }
 
 interface Envelope<T> {
@@ -32,6 +42,11 @@ function toDomain(dto: VehicleDto): BackendDriverVehicle {
     vehicleType: fromBackendTransportType(dto.vehicle_type_code),
     plateNumber: dto.plate_number,
     isActive: dto.is_active,
+    brand: dto.make ?? null,
+    model: dto.model ?? null,
+    manufactureYear: dto.year ?? null,
+    passengerSeats: dto.passenger_seats ?? null,
+    loadCapacityKg: dto.load_capacity_kg ?? null,
   };
 }
 
@@ -51,6 +66,9 @@ export async function activateBackendVehicle(vehicleId: string): Promise<void> {
 export interface CreateBackendVehicleInput {
   vehicleType: VehicleType;
   plateNumber: string;
+  brand?: string | null;
+  model?: string | null;
+  manufactureYear?: number | null;
 }
 
 // POST /driver/vehicles — register a vehicle on the backend. Idempotent by plate:
@@ -61,8 +79,20 @@ export async function createBackendVehicle(input: CreateBackendVehicleInput): Pr
   const existing = (await listBackendVehicles()).find(vehicle => normalizePlate(vehicle.plateNumber) === target);
   if (existing) return existing;
   const code = toBackendTransportType(input.vehicleType);
+  const body: Record<string, unknown> = {
+    transport_type: code,
+    vehicle_type_code: code,
+    plate_number: input.plateNumber,
+  };
+  // The backend stores make/model/year — send them so vehicles added on this
+  // device don't come back stripped ("Year pending") on other devices.
+  if (input.brand?.trim()) body.make = input.brand.trim();
+  if (input.model?.trim()) body.model = input.model.trim();
+  if (typeof input.manufactureYear === 'number' && Number.isFinite(input.manufactureYear)) {
+    body.year = input.manufactureYear;
+  }
   const response = await getAppBackendClient().post<Envelope<VehicleDto>>('/v1/driver/vehicles', {
-    body: { transport_type: code, vehicle_type_code: code, plate_number: input.plateNumber },
+    body,
   });
   return toDomain(response.data.data);
 }

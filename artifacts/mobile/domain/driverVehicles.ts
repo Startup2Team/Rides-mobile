@@ -23,7 +23,16 @@ type LegacyDriverDocuments = Partial<Record<keyof DriverVehicleDocumentSet, Driv
 // approved the driver, and surfaces vehicles that only exist on the backend.
 export function reconcileDriverVehicles(
   local: DriverVehicleProfile[],
-  backend: { id: string; vehicleType: VehicleType | null; plateNumber: string }[],
+  backend: {
+    id: string;
+    vehicleType: VehicleType | null;
+    plateNumber: string;
+    brand?: string | null;
+    model?: string | null;
+    manufactureYear?: number | null;
+    passengerSeats?: number | null;
+    loadCapacityKg?: number | null;
+  }[],
   verificationStatus: DriverVerificationStatus | null | undefined,
 ): DriverVehicleProfile[] {
   const plate = (p: string) => normalizeRwandaPlateNumber(p ?? '');
@@ -38,7 +47,18 @@ export function reconcileDriverVehicles(
   const merged: DriverVehicleProfile[] = local.map(v => {
     const b = backendByPlate.get(plate(v.plateNumber));
     if (!b) return v; // local draft not yet pushed to the backend — keep as-is
-    return { ...v, id: b.id, status: statusFor(v.status) };
+    // KEEP the local id. Everything on-device — details lookup, the per-vehicle
+    // entitlement ledger, activeVehicle matching — is keyed by the app-generated
+    // stable id, and every backend call already reconciles by plate. Swapping in
+    // the backend UUID here is what broke "View details" (Vehicle not found)
+    // and zeroed the "rides left" line on the vehicles screen.
+    return {
+      ...v,
+      status: statusFor(v.status),
+      brand: v.brand ?? b.brand ?? undefined,
+      model: v.model ?? b.model ?? undefined,
+      manufactureYear: v.manufactureYear ?? b.manufactureYear ?? undefined,
+    };
   });
 
   const localPlates = new Set(local.map(v => plate(v.plateNumber)));
@@ -52,6 +72,9 @@ export function reconcileDriverVehicles(
       status: statusFor('approved'),
       plateNumber: b.plateNumber,
       licenseNumber: '',
+      brand: b.brand ?? undefined,
+      model: b.model ?? undefined,
+      manufactureYear: b.manufactureYear ?? undefined,
     });
   }
   return merged;

@@ -60,6 +60,12 @@ jest.mock('@/context/DriverEntitlementContext', () => ({
   }),
 }));
 
+// No backend entitlement row in these tests — cards exercise the local
+// entitlement fallback path (and no QueryClientProvider is mounted here).
+jest.mock('@/query/hooks/useDriverBackendEntitlementsQuery', () => ({
+  useDriverBackendEntitlementsQuery: () => ({ data: null }),
+}));
+
 jest.mock('@/components/GlassHeader', () => ({
   GlassHeader: () => null,
   useGlassHeaderMetrics: () => ({ contentTop: 0, indicatorTop: 0 }),
