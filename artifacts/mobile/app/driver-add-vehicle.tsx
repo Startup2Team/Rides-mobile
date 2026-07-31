@@ -234,6 +234,9 @@ export default function DriverAddVehicleScreen() {
     void ensureBackendVehicle({
       vehicleType: applicationInput.vehicleType,
       plateNumber: applicationInput.plateNumber,
+      brand: applicationInput.brand,
+      model: applicationInput.model,
+      manufactureYear: applicationInput.manufactureYear,
     });
     await submitVehicleApplication({
       userId: user?.id ?? 'unknown-user',

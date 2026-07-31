@@ -170,7 +170,10 @@ export class LocalDriverRepository implements DriverRepository {
 export class LocalVehicleRepository implements VehicleRepository {
   async getVehicles() {
     const profile = currentDriverProfile ?? (await this.getDriverProfile());
-    return profile?.vehicles;
+    // getDriverVehicles falls back to a synthesized row for legacy single-vehicle
+    // profiles — raw profile.vehicles would be empty there, so reconciliation
+    // would duplicate the vehicle as a stripped backend-only row.
+    return getDriverVehicles(profile);
   }
 
   async setActiveVehicle(vehicleId: string | null) {
@@ -180,6 +183,12 @@ export class LocalVehicleRepository implements VehicleRepository {
   async setPrimaryVehicle(vehicleId: string | null) {
     const profile = currentDriverProfile ?? (await this.getDriverProfile());
     if (!profile) return;
+    // Never persist an active-vehicle id the profile doesn't own — a foreign id
+    // (e.g. a backend UUID) corrupts storage and pins "Selected" to a card that
+    // no local subsystem can resolve.
+    if (vehicleId !== null && !getDriverVehicles(profile).some(vehicle => vehicle.id === vehicleId)) {
+      return;
+    }
     currentDriverProfile = setDriverActiveVehicle(profile, vehicleId);
     await localAuthDataSource.saveStoredDriverProfile(currentDriverProfile);
   }

@@ -120,8 +120,14 @@ export default function DriverSubmissionConfirmation() {
       if (driverProfile && !driverProfile.driverApprovalAcknowledgedAt) {
         await saveDriverProfile({ ...driverProfile, driverApprovalAcknowledgedAt: new Date().toISOString() });
       }
-      await switchMode('driver');
-      navigateToDriverHomeAfterCompletion(router);
+      const result = await switchMode('driver');
+      if (result.ok) {
+        navigateToDriverHomeAfterCompletion(router);
+      } else {
+        // Approval flipped under us (e.g. suspended while this screen was open) —
+        // re-pull the real status so the UI stops claiming "approved".
+        void refreshDriverProfile();
+      }
       return;
     }
     router.push('/driver-onboarding');
@@ -130,8 +136,8 @@ export default function DriverSubmissionConfirmation() {
   const handleDevApprove = async () => {
     if (!driverProfile) return;
     await saveDriverProfile({ ...driverProfile, verificationStatus: 'approved', isVerified: true, driverApprovalAcknowledgedAt: new Date().toISOString() });
-    await switchMode('driver');
-    navigateToDriverHomeAfterCompletion(router);
+    const result = await switchMode('driver');
+    if (result.ok) navigateToDriverHomeAfterCompletion(router);
   };
 
   return (

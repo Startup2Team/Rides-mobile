@@ -185,8 +185,19 @@ export default function ProfileScreen() {
         {
           text: "Switch",
           onPress: async () => {
-            await switchMode("driver");
-            navigateToDriverHomeAfterCompletion(router);
+            const result = await switchMode("driver");
+            if (result.ok) {
+              navigateToDriverHomeAfterCompletion(router);
+              return;
+            }
+            if (result.reason === "active-ride") {
+              Alert.alert(
+                "Ride in progress",
+                "Finish or cancel your current ride before switching to driver mode.",
+              );
+            } else if (result.reason === "not-verified") {
+              router.push(driverAction.route);
+            }
           },
         },
       ]);

@@ -6,7 +6,40 @@ import { SENSITIVE_STORAGE_KEYS, STORAGE_KEYS } from '@/constants/storage';
 import { loadStoredDriverProfile } from '@/persistence/authPersistence';
 import { getSecureStorageKey, saveSecureStorage } from '@/persistence/secureStorage';
 import { AuthProvider, useAuth } from '../AuthContext';
-import type { DriverProfile } from '@/types';
+import type { RoleSwitchResult } from '../AuthContext';
+import { saveAuthTokens } from '@/persistence/authTokens';
+import { queueRoleSync } from '@/services/roleSwitchSync';
+import { resetAppModeStore } from '@/state/appModeStore';
+import { resetRideActivity, setRideActivity } from '@/state/rideActivityStore';
+import type { DriverProfile, User } from '@/types';
+
+// Minimal react-native surface for this suite: the real AppState/Alert reach
+// into native modules, which don't exist under node.
+jest.mock('react-native', () => ({
+  Alert: { alert: jest.fn() },
+  AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
+  Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios ?? options.default },
+}));
+
+jest.mock('@/services/roleSwitchSync', () => ({
+  initRoleSync: jest.fn(async () => {}),
+  queueRoleSync: jest.fn(),
+  clearRoleSync: jest.fn(async () => {}),
+  subscribeRoleSync: jest.fn(() => () => {}),
+}));
+
+// Unit tests exercise the LOCAL state logic; the backend availability call is
+// transport-level and would always fail (and roll the state back) under node.
+jest.mock('@/services/driverAvailability', () => ({
+  setDriverAvailability: jest.fn(async () => {}),
+  updateDriverLocation: jest.fn(async () => {}),
+}));
+
+jest.mock('@/services/pushRegistration', () => ({
+  configurePushNotifications: jest.fn(),
+  registerPushToken: jest.fn(async () => {}),
+  resetPushRegistration: jest.fn(),
+}));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>{children}</AuthProvider>
@@ -243,5 +276,136 @@ describe('recordCompletedRide', () => {
     });
 
     expect(hook.result.current.driverProfile).toBeNull();
+  });
+});
+
+describe('switchMode', () => {
+  const baseUser: User = {
+    id: 'u1',
+    name: 'Test User',
+    phone: '0780000000',
+    mode: 'customer',
+    isDriver: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    (SecureStore as typeof SecureStore & { __clear: () => void }).__clear();
+    jest.clearAllMocks();
+    resetAppModeStore();
+    resetRideActivity();
+  });
+
+  async function seedAuthedUser(mode: User['mode'] = 'customer') {
+    await saveSecureStorage(STORAGE_KEYS.user, { ...baseUser, mode });
+    await saveAuthTokens('access-token', 'refresh-token');
+  }
+
+  async function mountAuth() {
+    const hook = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    return hook;
+  }
+
+  test('returns not-authenticated when no user is logged in', async () => {
+    const { result } = await mountAuth();
+
+    let outcome: RoleSwitchResult | undefined;
+    await act(async () => {
+      outcome = await result.current.switchMode('driver');
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: 'not-authenticated' });
+    expect(queueRoleSync).not.toHaveBeenCalled();
+  });
+
+  test('refuses driver mode for an unverified profile — no silent bail', async () => {
+    await seedAuthedUser('customer');
+    const { result } = await mountAuth();
+
+    let outcome: RoleSwitchResult | undefined;
+    await act(async () => {
+      outcome = await result.current.switchMode('driver');
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: 'not-verified' });
+    expect(result.current.user?.mode).toBe('customer');
+    expect(queueRoleSync).not.toHaveBeenCalled();
+  });
+
+  test('switching to the current mode is an idempotent success', async () => {
+    await seedAuthedUser('customer');
+    const { result } = await mountAuth();
+
+    let outcome: RoleSwitchResult | undefined;
+    await act(async () => {
+      outcome = await result.current.switchMode('customer');
+    });
+
+    expect(outcome).toEqual({ ok: true, mode: 'customer', changed: false });
+    expect(queueRoleSync).not.toHaveBeenCalled();
+  });
+
+  test('switches to driver instantly and queues the backend sync', async () => {
+    await seedAuthedUser('customer');
+    const { result } = await mountAuth();
+    await act(async () => {
+      await result.current.saveDriverProfile(baseProfile);
+    });
+
+    let outcome: RoleSwitchResult | undefined;
+    await act(async () => {
+      outcome = await result.current.switchMode('driver');
+    });
+
+    expect(outcome).toEqual({ ok: true, mode: 'driver', changed: true });
+    expect(result.current.user?.mode).toBe('driver');
+    expect(queueRoleSync).toHaveBeenCalledWith({ mode: 'driver', driverOffline: false });
+  });
+
+  test('leaving driver mode forces the driver offline locally and in the sync', async () => {
+    await seedAuthedUser('driver');
+    const { result } = await mountAuth();
+    await act(async () => {
+      await result.current.saveDriverProfile({
+        ...baseProfile,
+        isOnline: true,
+        onlineVehicleSession: {
+          vehicleId: 'primary',
+          vehicleType: 'moto',
+          startedAt: '2026-01-01T00:00:00.000Z',
+        },
+      });
+    });
+
+    let outcome: RoleSwitchResult | undefined;
+    await act(async () => {
+      outcome = await result.current.switchMode('customer');
+    });
+
+    expect(outcome).toEqual({ ok: true, mode: 'customer', changed: true });
+    expect(result.current.user?.mode).toBe('customer');
+    expect(result.current.driverProfile?.isOnline).toBe(false);
+    expect(result.current.driverProfile?.onlineVehicleSession).toBeNull();
+    expect(queueRoleSync).toHaveBeenCalledWith({ mode: 'customer', driverOffline: true });
+  });
+
+  test('an active ride blocks the switch in both directions', async () => {
+    await seedAuthedUser('driver');
+    const { result } = await mountAuth();
+    await act(async () => {
+      await result.current.saveDriverProfile(baseProfile);
+    });
+    setRideActivity('confirmed', false);
+
+    let outcome: RoleSwitchResult | undefined;
+    await act(async () => {
+      outcome = await result.current.switchMode('customer');
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: 'active-ride' });
+    expect(result.current.user?.mode).toBe('driver');
+    expect(queueRoleSync).not.toHaveBeenCalled();
   });
 });

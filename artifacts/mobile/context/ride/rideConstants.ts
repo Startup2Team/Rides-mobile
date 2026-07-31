@@ -1,5 +1,14 @@
 import type { VehicleType } from '@/types';
 
+// Last-resort reaper for the customer search. Ordering matters — three layers:
+// 1. Backend give-up (MATCH_GIVE_UP_SECONDS, 60s) → ride_cancelled event.
+// 2. The searching screen's in-place terminal state + Retry at ~65s
+//    (SEARCH_DEADLINE in app/searching.tsx) when that event never arrives.
+// 3. This reaper, well behind both: frees the backend active_ride pointer and
+//    ends rides abandoned off-screen. It must NOT fire while the user could
+//    still be reading the screen's Retry state — keep it comfortably above
+//    the screen deadline.
+export const CUSTOMER_SEARCH_TIMEOUT_MS = 120_000;
 export const DRIVER_OFFER_DELAY_MS = 2500;
 export const DRIVER_MATCH_MIN_DELAY_MS = 4000;
 export const DRIVER_MATCH_RANDOM_DELAY_MS = 2000;

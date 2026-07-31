@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   packageCampaignCache: '@rides_package_campaign_cache',
   packageOfferSourceCache: '@rides_package_offer_source_cache',
   lockedPackageOffers: '@rides_locked_package_offers',
+  roleSync: '@rides_role_sync',
 } as const;
 
 /**
@@ -43,7 +44,7 @@ export const STORAGE_CLASSIFICATION = {
     STORAGE_KEYS.savedLocations,
     STORAGE_KEYS.lockedPackageOffers,
   ],
-  internal: [STORAGE_KEYS.referralEvents],
+  internal: [STORAGE_KEYS.referralEvents, STORAGE_KEYS.roleSync],
   cacheable: [
     STORAGE_KEYS.packageCatalogCache,
     STORAGE_KEYS.packageCampaignCache,

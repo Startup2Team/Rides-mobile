@@ -3,6 +3,7 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
+  Alert,
   Animated as RNAnimated,
   Image,
   PanResponder,
@@ -316,12 +317,20 @@ export function HomeTopHeader({
       useNativeDriver: true,
     }).start(() => {
       void (async () => {
-        try {
-          await switchMode("driver");
+        const result = await switchMode("driver");
+        if (result.ok) {
           navigateToDriverHomeAfterCompletion(router);
-        } catch {
-          switchModeAvatarSlide.setValue(0);
-          setIsSwitchingMode(false);
+          return;
+        }
+        switchModeAvatarSlide.setValue(0);
+        setIsSwitchingMode(false);
+        if (result.reason === "active-ride") {
+          Alert.alert(
+            "Ride in progress",
+            "Finish or cancel your current ride before switching to driver mode.",
+          );
+        } else if (result.reason === "not-verified") {
+          router.push("/driver-submission-confirmation");
         }
       })();
     });

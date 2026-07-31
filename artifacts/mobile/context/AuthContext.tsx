@@ -13,19 +13,46 @@ import {
   saveStoredDriverProfile,
   saveStoredUser,
 } from '@/persistence/authPersistence';
-import { AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
 import { fetchProfile } from '@/services/profile';
-import { switchUserMode } from '@/services/userMode';
 import { setDriverAvailability } from '@/services/driverAvailability';
+import {
+  clearRoleSync,
+  initRoleSync,
+  queueRoleSync,
+  subscribeRoleSync,
+  type RoleSyncEvent,
+} from '@/services/roleSwitchSync';
+import {
+  cancelModeSwitch,
+  completeModeSwitch,
+  getAppModeState,
+  requestModeSwitch,
+  resetAppModeForLogout,
+} from '@/state/appModeStore';
+import { isRideSwitchBlocking } from '@/state/rideActivityStore';
+import { reportOperationalFailure } from '@/observability/monitoring';
 import { getDriverProfile } from '@/services/driverProfile';
 import { configurePushNotifications, registerPushToken, resetPushRegistration } from '@/services/pushRegistration';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
 import { activateVehicleByPlate } from '@/services/driverVehicles';
+
+// Every way a role switch can be refused. Callers get a typed answer instead
+// of a silent no-op, so the UI can always tell the user what happened.
+export type RoleSwitchFailureReason =
+  | 'not-authenticated'
+  | 'not-verified'
+  | 'active-ride'
+  | 'switch-in-progress';
+
+export type RoleSwitchResult =
+  | { ok: true; mode: AppMode; changed: boolean }
+  | { ok: false; reason: RoleSwitchFailureReason };
 
 interface AuthContextType {
   user: User | null;
@@ -37,7 +64,7 @@ interface AuthContextType {
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
   setActiveVehicle: (vehicleId: string | null) => Promise<void>;
   setDriverOnline: (isOnline: boolean) => Promise<void>;
-  switchMode: (mode: AppMode) => Promise<void>;
+  switchMode: (mode: AppMode) => Promise<RoleSwitchResult>;
   recordCompletedRide: (agreedFare?: number | null) => Promise<void>;
   // Re-pull the driver's real approval status + online state from the backend.
   // Screens that show approval state (e.g. submission confirmation) call this on
@@ -128,6 +155,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     configurePushNotifications();
     loadStoredData();
+  }, []);
+
+  // Backend refused a role switch outright (4xx the sync engine can't retry
+  // away): the local mode is a lie — driver endpoints and the driver socket
+  // would be rejected forever. Roll back to what the backend accepts and say
+  // so, instead of leaving the app half-switched.
+  useEffect(() => {
+    void initRoleSync();
+    return subscribeRoleSync((event: RoleSyncEvent) => {
+      if (event.type !== 'failed') return;
+      const current = userRef.current;
+      if (!current || current.mode !== event.mode) return;
+      const revertTo: AppMode = event.mode === 'driver' ? 'customer' : 'driver';
+      const reverted = { ...current, mode: revertTo };
+      setUser(reverted);
+      void saveStoredUser(reverted).catch(() => {});
+      completeModeSwitch(revertTo);
+      Alert.alert(
+        'Mode switch failed',
+        event.mode === 'driver'
+          ? "We couldn't switch you to driver mode. Please try again."
+          : "We couldn't switch you to customer mode. Please try again.",
+      );
+    });
   }, []);
 
   const loadStoredData = async () => {
@@ -273,6 +324,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     setUser(null);
     setDriverProfile(null);
+    // A pending role sync belongs to the session being revoked.
+    resetAppModeForLogout();
+    await clearRoleSync();
     // Revoke the backend session + drop tokens, then wipe local sensitive data.
     resetPushRegistration();
     await endSession();
@@ -355,18 +409,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveStoredDriverProfile(updated);
   }, []);
 
-  const switchMode = useCallback(async (mode: AppMode) => {
-    if (!userRef.current) return;
-    if (mode === 'driver' && !canAccessDriverMode(driverProfileRef.current)) return;
-    const updated = { ...userRef.current, mode };
-    setUser(updated);
-    await saveStoredUser(updated);
-    // Real backend: PATCH /users/mode updates role_state. Best-effort — the
-    // local UX already reflects the switch; a failure is retried next switch.
+  // The role switch is optimistic and instant: commit locally, navigate, and
+  // let roleSwitchSync guarantee the backend converges (with retry across
+  // restarts). Nothing here touches the network, so the slider never freezes
+  // on a slow connection. Refusals are typed — never a silent no-op.
+  const switchMode = useCallback(async (mode: AppMode): Promise<RoleSwitchResult> => {
+    const current = userRef.current;
+    if (!current) return { ok: false, reason: 'not-authenticated' };
+    if (current.mode === mode) return { ok: true, mode, changed: false };
+    if (mode === 'driver' && !canAccessDriverMode(driverProfileRef.current)) {
+      return { ok: false, reason: 'not-verified' };
+    }
+    // Switching mid-ride is what made the customer and driver flow navigators
+    // fight over the router — finish or cancel the ride first.
+    if (isRideSwitchBlocking()) return { ok: false, reason: 'active-ride' };
+    if (getAppModeState().switching) return { ok: false, reason: 'switch-in-progress' };
+    requestModeSwitch(mode);
     try {
-      await switchUserMode(mode === 'driver' ? 'driver' : 'customer');
-    } catch {
-      // ignore — keep the local mode
+      // Leaving driver mode always pushes is_online = FALSE to the backend —
+      // otherwise the dispatcher keeps assigning rides to a driver whose
+      // socket is gone and every request expires against their stats.
+      const profile = driverProfileRef.current;
+      const driverOffline = mode === 'customer' && profile !== null;
+      if (driverOffline && profile.isOnline) {
+        const offlineProfile: DriverProfile = { ...profile, isOnline: false, onlineVehicleSession: null };
+        setDriverProfile(offlineProfile);
+        void saveStoredDriverProfile(offlineProfile).catch(error =>
+          reportOperationalFailure('auth.roleSwitch.profilePersist', error),
+        );
+      }
+      const updated = { ...current, mode };
+      setUser(updated);
+      void saveStoredUser(updated).catch(error =>
+        reportOperationalFailure('auth.roleSwitch.userPersist', error),
+      );
+      queueRoleSync({ mode: mode === 'driver' ? 'driver' : 'customer', driverOffline });
+      completeModeSwitch(mode);
+      return { ok: true, mode, changed: true };
+    } catch (error) {
+      cancelModeSwitch();
+      reportOperationalFailure('auth.roleSwitch.commit', error, { mode });
+      throw error;
     }
   }, []);
 

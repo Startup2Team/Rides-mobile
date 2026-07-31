@@ -14,7 +14,9 @@ import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { getActiveBonusRides, getActivePackageActivation, getActiveRideCredits, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
 import { useVehicles } from '@/domains/vehicle';
 import { useColors } from '@/hooks/useColors';
-import { VEHICLE_LABELS } from '@/types';
+import { useDriverBackendEntitlementsQuery } from '@/query/hooks/useDriverBackendEntitlementsQuery';
+import { toBackendTransportType } from '@/constants/vehicles';
+import { VEHICLE_LABELS, type VehicleType } from '@/types';
 import { radius } from '@/constants/radius';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 
@@ -27,10 +29,24 @@ export default function DriverVehiclesScreen() {
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { driverProfile } = useAuth();
+  const { driverProfile, user } = useAuth();
   const { entitlement, isLoading } = useDriverEntitlement();
   const { vehicles, setPrimaryVehicle, refreshVehicles, isRefreshing } = useVehicles();
   const params = useLocalSearchParams<{ sourceVehicleId?: string }>();
+  // The backend ledger is authoritative for ride balances — it's where an
+  // admin-approved manual payment lands. The local per-vehicle entitlement is
+  // only credited by on-device activations (free packages), so without this the
+  // cards read "0 rides left / No active package" for every paid package. Keyed
+  // per vehicle TYPE, matching the driver dashboard (app/(driver)/index.tsx).
+  const { data: backendEntitlements } = useDriverBackendEntitlementsQuery({ enabled: !!user?.id });
+  const backendEntitlementForVehicleType = React.useCallback(
+    (vehicleType: VehicleType | null | undefined) => {
+      if (!backendEntitlements || !vehicleType) return null;
+      const code = toBackendTransportType(vehicleType);
+      return backendEntitlements.find(item => item.vehicleTypeCode === code) ?? null;
+    },
+    [backendEntitlements],
+  );
 
   const statusCounts = React.useMemo(() => ({
     approved: vehicles.filter(vehicle => vehicle.status === 'approved').length,
@@ -100,10 +116,23 @@ export default function DriverVehiclesScreen() {
         <View style={styles.list}>
           {vehicles.map(vehicle => {
             const vehicleEntitlement = getVehicleEntitlement(entitlement, vehicle);
-            const ridesLeft = getRideBalance(vehicleEntitlement);
-            const totalRides = getActiveRideCredits(vehicleEntitlement);
-            const bonusRidesLeft = getActiveBonusRides(vehicleEntitlement);
+            const backendEnt = backendEntitlementForVehicleType(vehicle.vehicleType);
+            const ridesLeft = backendEnt ? backendEnt.ridesRemaining : getRideBalance(vehicleEntitlement);
+            const bonusRidesLeft = backendEnt ? backendEnt.bonusRemaining : getActiveBonusRides(vehicleEntitlement);
+            const totalRides = backendEnt
+              ? backendEnt.ridesRemaining + backendEnt.bonusRemaining
+              : getActiveRideCredits(vehicleEntitlement);
             const activePackage = getActivePackageActivation(vehicleEntitlement);
+            const hasBackendPackage = Boolean(
+              backendEnt && (backendEnt.ridesRemaining > 0 || backendEnt.bonusRemaining > 0 || backendEnt.unlimitedUntil),
+            );
+            const packageLine = activePackage
+              ? `${activePackage.packageName ?? activePackage.packageId} - ${totalRides} total rides available`
+              : hasBackendPackage
+                ? backendEnt?.unlimitedUntil
+                  ? 'Unlimited package active'
+                  : `Package active - ${totalRides} total rides available`
+                : 'No active package';
             const isApproved = vehicle.status === 'approved';
             const isCurrent = driverProfile?.activeVehicle?.vehicleId === vehicle.id;
 
@@ -133,7 +162,7 @@ export default function DriverVehiclesScreen() {
                       {bonusRidesLeft > 0 ? ` - ${bonusRidesLeft} bonus rides` : ''}
                     </AppText>
                     <AppText style={[styles.vehicleMeta, { color: colors.mutedForeground }]}>
-                      {activePackage ? `${activePackage.packageName ?? activePackage.packageId} - ${totalRides} total rides available` : 'No active package'}
+                      {packageLine}
                     </AppText>
                     {vehicle.status === 'rejected' && vehicle.rejectionReason ? (
                       <AppText style={[styles.rejectionReason, { color: colors.destructive }]}>Rejected: {vehicle.rejectionReason}</AppText>
@@ -147,14 +176,17 @@ export default function DriverVehiclesScreen() {
                     <AppText style={[styles.detailLink, { color: colors.primary }]}>View details</AppText>
                   </TouchableOpacity>
                   <View style={styles.actionStack}>
-                    {isApproved ? (
+                    {isApproved && isCurrent ? (
+                      // The "Selected" chip in the title row already carries this
+                      // state — a disabled twin button here just duplicated it.
+                      <AppText style={[styles.subtleNote, { color: colors.mutedForeground }]}>Active vehicle</AppText>
+                    ) : isApproved ? (
                       <AppButton
-                        title={isCurrent ? 'Selected' : 'Use for session'}
+                        title="Use for session"
                         onPress={() => void handleSelectVehicle(vehicle.id)}
                         size="sm"
                         compact
-                        disabled={online || isCurrent}
-                        variant={isCurrent ? 'secondary' : 'primary'}
+                        disabled={online}
                       />
                     ) : (
                       <AppButton

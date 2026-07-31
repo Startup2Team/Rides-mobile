@@ -57,8 +57,21 @@ export function useDriverVehicleQuery(vehicleId: string | null | undefined, user
   return usePolicyQuery(queryPolicies.driverVehicles, {
     queryKey: vehicleId ? driverKeys.vehicle(vehicleId) : buildVehicleQueryKey(resolvedUserId),
     enabled: Boolean(resolvedUserId && vehicleId),
+    // Resolve against the SAME reconciled list the vehicles screen renders,
+    // otherwise ids that only exist after reconciliation (backend-only
+    // vehicles) dead-end on "Vehicle not found".
     queryFn: async () => {
-      const vehicles = (await vehicleRepository.getVehicles()) ?? [];
+      const local = (await vehicleRepository.getVehicles()) ?? [];
+      let vehicles = local;
+      try {
+        vehicles = reconcileDriverVehicles(
+          local,
+          await listBackendVehicles(),
+          auth?.driverProfile?.verificationStatus ?? null,
+        );
+      } catch {
+        // Offline — resolve against local rows.
+      }
       return vehicles.find(vehicle => vehicle.id === vehicleId) ?? null;
     },
   });
@@ -76,7 +89,13 @@ export function useAddVehicleMutation() {
       if (nextProfile) await saveDriverProfile(nextProfile);
       // Mirror the registration to the backend (POST /v1/driver/vehicles),
       // matched/deduped by plate. Best-effort: never blocks the local add.
-      void ensureBackendVehicle({ vehicleType: vehicle.vehicleType, plateNumber: vehicle.plateNumber });
+      void ensureBackendVehicle({
+        vehicleType: vehicle.vehicleType,
+        plateNumber: vehicle.plateNumber,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        manufactureYear: vehicle.manufactureYear,
+      });
       return vehicle;
     },
     onMutate: async vehicle => {

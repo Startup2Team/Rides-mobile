@@ -18,10 +18,12 @@ import {
 import { VEHICLE_LABELS } from '@/types';
 import { typography } from '@/constants/typography';
 
-// Mirrors MATCH_GIVE_UP_SECONDS on the API (default 90s). The grace window keeps
+// Mirrors MATCH_GIVE_UP_SECONDS on the API (default 60s). The grace window keeps
 // the server authoritative: we only show a terminal state if its own give-up
-// notification failed to arrive, rather than racing it.
-const SEARCH_DEADLINE_SECONDS = 90;
+// notification failed to arrive, rather than racing it. RideProvider holds a
+// last-resort reaper well behind this (CUSTOMER_SEARCH_TIMEOUT_MS) for searches
+// abandoned off-screen — it must never fire before this in-place state does.
+const SEARCH_DEADLINE_SECONDS = 60;
 const SEARCH_DEADLINE_GRACE_SECONDS = 5;
 
 export default function SearchingScreen() {

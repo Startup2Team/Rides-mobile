@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme, type ColorValue } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -7,7 +7,12 @@ import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
 import { useColors } from '@/hooks/useColors';
 import { useManualPaymentClaimsQuery } from '@/query/hooks/useManualPaymentClaimsQuery';
-import { getManualPaymentClaimPresentation } from '@/domains/package-payments';
+import {
+  getManualPaymentClaimPresentation,
+  isManualPaymentClaimExpired,
+  type ManualPaymentClaimReadModel,
+  type ManualPaymentClaimStatus,
+} from '@/domains/package-payments';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
@@ -24,17 +29,22 @@ export default function DriverPackagePaymentStatusScreen() {
   const isDark = useColorScheme() === 'dark';
   const { claims, isLoading } = useManualPaymentClaimsQuery();
 
-  const handleClaimPress = (claim: any) => {
+  // Claim details render from the claim itself. Routing through
+  // /driver-package-payment is wrong here: that screen resolves the 15-minute
+  // locked OFFER (already gone for anything on a history list), and the read
+  // model doesn't even carry offerId — every tap dead-ended on
+  // "Package offer unavailable".
+  const handleClaimPress = (claim: ManualPaymentClaimReadModel) => {
     router.push({
-      pathname: '/driver-package-payment',
-      params: { offerId: claim.offerId, claimId: claim.id },
+      pathname: '/driver-package-claim',
+      params: { claimId: claim.id },
     });
   };
 
-  const renderStatusBadge = (status: any) => {
+  const renderStatusBadge = (status: ManualPaymentClaimStatus) => {
     const presentation = getManualPaymentClaimPresentation(status);
-    let bg: any = colors.muted;
-    let text: any = colors.mutedForeground;
+    let bg: ColorValue = colors.muted;
+    let text: ColorValue = colors.mutedForeground;
 
     if (presentation.tone === 'success') {
       bg = colors.successHex + '18';
@@ -97,7 +107,13 @@ export default function DriverPackagePaymentStatusScreen() {
                     <Text style={[styles.packageName, { color: colors.foreground }]}>{claim.packageName}</Text>
                     <Text style={[styles.claimId, { color: colors.mutedForeground }]}>ID: {claim.displayClaimId}</Text>
                   </View>
-                  {renderStatusBadge(claim.status)}
+                  {/* Expiry is applied lazily on read elsewhere; mirror it so a
+                      claim that lapsed since storage shows the right chip. */}
+                  {renderStatusBadge(
+                    isManualPaymentClaimExpired({ status: claim.status, expiresAt: claim.expiresAt })
+                      ? 'expired'
+                      : claim.status,
+                  )}
                 </View>
 
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
