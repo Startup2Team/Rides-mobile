@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '@/components/AppButton';
@@ -18,11 +18,19 @@ import {
 import { VEHICLE_LABELS } from '@/types';
 import { typography } from '@/constants/typography';
 
+// Mirrors MATCH_GIVE_UP_SECONDS on the API (default 90s). The grace window keeps
+// the server authoritative: we only show a terminal state if its own give-up
+// notification failed to arrive, rather than racing it.
+const SEARCH_DEADLINE_SECONDS = 90;
+const SEARCH_DEADLINE_GRACE_SECONDS = 5;
+
 export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching } = useRide();
   const { showToast } = useToast();
+
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const pulseA = useRef(new Animated.Value(0)).current;
   const pulseB = useRef(new Animated.Value(0)).current;
@@ -52,6 +60,34 @@ export default function SearchingScreen() {
     startPulse(pulseC, 1000);
   }, [pulseA, pulseB, pulseC]);
 
+  // Elapsed seconds, driving both the staged copy and the client deadline.
+  //
+  // This screen had no timeout of any kind: no elapsed indication, no stages, no
+  // terminal state. If the backend never answered — and it frequently didn't,
+  // because matching used to give up in milliseconds and publish `ride_cancelled`
+  // before this screen's socket existed, so the message was dropped — the
+  // customer sat on a pulsing animation indefinitely with Cancel as the only exit.
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Give the server SEARCH_DEADLINE_SECONDS plus a grace window before declaring
+  // failure ourselves, so the backend stays authoritative and we only surface a
+  // terminal state when its own give-up genuinely failed to reach us.
+  const timedOut = elapsedSeconds >= SEARCH_DEADLINE_SECONDS + SEARCH_DEADLINE_GRACE_SECONDS;
+
+  const searchStage = timedOut
+    ? 'No drivers available right now'
+    : elapsedSeconds < 20
+      ? 'Finding your driver'
+      : elapsedSeconds < 45
+        ? 'Looking a bit wider…'
+        : 'Still searching — drivers nearby may be busy';
+
   const finishCancelSearch = () => {
     cancelRide();
     showToast('Search cancelled', 'info');
@@ -60,6 +96,14 @@ export default function SearchingScreen() {
     } else {
       navigateToCustomerHomeAfterCompletion(router);
     }
+  };
+
+  // Retry means: release this dead ride, then return home so the customer can
+  // book again. Without cancelling first, the server-side active_ride pointer
+  // would still be set and CreateRide would reject the next attempt.
+  const handleRetry = () => {
+    cancelRide();
+    navigateToCustomerHomeAfterCompletion(router);
   };
 
   const handleCancel = () => {
@@ -129,9 +173,11 @@ export default function SearchingScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Finding your driver</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>{searchStage}</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Connecting you with nearby {VEHICLE_LABELS[vehicleType].toLowerCase()} riders
+          {timedOut
+            ? 'No one accepted this time. You can try again — it often works on a second attempt.'
+            : `Connecting you with nearby ${VEHICLE_LABELS[vehicleType].toLowerCase()} riders · ${elapsedSeconds}s`}
         </Text>
 
         {currentRide && (
@@ -154,8 +200,16 @@ export default function SearchingScreen() {
       </View>
 
       <View style={styles.footer}>
+        {timedOut ? (
+          <AppButton
+            title="Try again"
+            onPress={handleRetry}
+            fullWidth
+            size="lg"
+          />
+        ) : null}
         <AppButton
-          title="Cancel Search"
+          title={timedOut ? 'Back to home' : 'Cancel Search'}
           onPress={handleCancel}
           variant="outline"
           fullWidth
