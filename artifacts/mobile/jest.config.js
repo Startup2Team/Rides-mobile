@@ -6,6 +6,8 @@ module.exports = {
   setupFiles: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
     '\\.(gif|jpe?g|png|webp)$': '<rootDir>/mocks/asset.js',
+    '^expo-constants$': '<rootDir>/mocks/expo-constants.js',
+    '^expo-notifications$': '<rootDir>/mocks/expo-notifications.js',
     '^@/(.*)$': '<rootDir>/$1',
   },
   modulePaths: [path.join(__dirname, 'node_modules')],
