@@ -67,6 +67,12 @@ export const queryPolicies = {
     gcTime: 20 * minute,
     refetchOnMount: 'always',
   }),
+  // KYC documents change rarely and the screen is entered deliberately, so a
+  // longer stale window is fine; refetchOnMount still picks up a review result.
+  driverDocuments: policy({
+    staleTime: 5 * minute,
+    gcTime: 30 * minute,
+  }),
   driverVehicles: policy({
     staleTime: 5 * minute,
     gcTime: 30 * minute,

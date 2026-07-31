@@ -298,8 +298,21 @@ export function useHomeLocation({
           );
         } else {
           const resolved = await resolveLocation();
-          await requestNotificationPermission();
           if (mounted && !resolved) setLocationStatus('unavailable');
+          // Fire-and-forget, and AFTER the location status is settled.
+          //
+          // This was awaited before the status was set, which serialized two
+          // unrelated OS permission dialogs on the critical path: if the user
+          // denied location, the home screen's loader stayed up until they had
+          // also answered the notification prompt. Nothing here depends on the
+          // result, so nothing should wait for it.
+          //
+          // It is also requested again by services/pushRegistration.ts on sign-in,
+          // so the prompt is not lost by not awaiting it here. Per the project's
+          // own guidance ("always prompt after a positive moment, never on cold
+          // launch") this call would be better removed from the home path
+          // entirely and moved after a first completed ride.
+          void requestNotificationPermission();
         }
       } catch (error) {
         if (mounted) {

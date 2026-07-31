@@ -1,7 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   TouchableOpacity,
@@ -368,16 +367,22 @@ export default function CustomerHome() {
     return () => setHasGlassContent(false);
   }, [setHasGlassContent]);
 
-  if (locLoading) {
-    return (
-      <View style={[styles.loaderContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <AppText variant="title" style={[styles.loaderText, { color: colors.foreground }]}>
-          Finding your pickup point
-        </AppText>
-      </View>
-    );
-  }
+  // Deliberately NO full-screen loader while the GPS fix resolves.
+  //
+  // This used to withhold the entire screen behind "Finding your pickup point"
+  // until location resolved — 1 to 15 seconds on every cold start, because
+  // acquisition makes three sequential getCurrentPositionAsync attempts with a
+  // 5s timeout each, looping until accuracy is within 40m. Worse, the same
+  // effect awaited the notification-permission dialog, so denying location kept
+  // the spinner up until the user answered a second, unrelated OS prompt.
+  //
+  // The driver dashboard already does the right thing: it seeds the map with
+  // KIGALI_CENTER and refines in the background, so the map is interactive
+  // immediately. `userLocation` here defaults to exactly the same constant, and
+  // homeInitialRegion above is already derived from it — the default was
+  // computed and then thrown away. Render it, and let the existing watcher
+  // refine the pin; `locLoading` now only drives the small inline indicator on
+  // the pickup field rather than gating the whole screen.
 
   return (
     <View style={styles.container}>

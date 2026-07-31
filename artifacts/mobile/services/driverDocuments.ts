@@ -21,10 +21,23 @@ export interface DriverDocument {
   id: string;
   documentType: string;
   fileUrl: string;
-  // The backend (GET /v1/driver/documents) does NOT emit a review status on this
-  // list, so `status` stays optional and is left undefined here.
   status?: string;
   createdAt?: string;
+  /**
+   * Per-document review state: PENDING | APPROVED | REJECTED.
+   *
+   * Optional because it only exists once the append-only documents change is
+   * deployed. Older servers omit it, and this must keep working against both.
+   */
+  reviewStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  /**
+   * Whether the API would accept a replacement. An APPROVED document is
+   * view-only unless an admin opened a re-upload window, so the app can render
+   * the correct affordance rather than offering a button that 409s.
+   */
+  editable?: boolean;
+  /** SHA-256 of the stored bytes, when the server records one. */
+  sha256?: string;
 }
 
 // Backend shape: GET /v1/driver/documents → { data: { documents: [ ... ] } }
@@ -34,14 +47,35 @@ interface DriverDocumentDto {
   document_type: string;
   file_url: string;
   uploaded_at: string;
+  review_status?: string;
+  editable?: boolean;
+  sha256?: string | null;
+}
+
+function normalizeReviewStatus(v: string | undefined): DriverDocument['reviewStatus'] {
+  switch (v) {
+    case 'PENDING':
+    case 'APPROVED':
+    case 'REJECTED':
+      return v;
+    default:
+      return undefined;
+  }
 }
 
 function toDriverDocument(dto: DriverDocumentDto): DriverDocument {
+  const reviewStatus = normalizeReviewStatus(dto.review_status);
   return {
     id: dto.id,
     documentType: dto.document_type,
     fileUrl: dto.file_url,
     createdAt: dto.uploaded_at,
+    reviewStatus,
+    // Trust the server's own computation when present. Only fall back to a
+    // guess when the field is absent (older server), and be permissive there
+    // rather than disabling an action the API would have allowed.
+    editable: dto.editable ?? (reviewStatus ? reviewStatus !== 'APPROVED' : undefined),
+    sha256: dto.sha256 ?? undefined,
   };
 }
 

@@ -28,6 +28,7 @@ import {
 } from '@/domain/vehicleCompliance';
 import { submitVehicleDocumentUpdate as submitVerificationVehicleDocumentUpdate } from '@/domain/verificationSubmissions';
 import { useQueryClient } from '@tanstack/react-query';
+import { useDriverDocumentsQuery } from '@/query/hooks';
 import { driverKeys } from '@/query/keys';
 import { useColors } from '@/hooks/useColors';
 import { useVehicle } from '@/domains/vehicle';
@@ -44,6 +45,13 @@ type UpdateTarget =
   | { kind: 'photo'; key: 'outside' | 'inside'; label: string };
 type ExpiryDocumentKey = 'license' | 'insurance' | 'authorization';
 
+/** LICENCE_FRONT -> "Licence front". The API uses SCREAMING_SNAKE document types. */
+function formatDocumentType(raw: string): string {
+  const words = raw.toLowerCase().split('_').filter(Boolean);
+  if (words.length === 0) return raw;
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? ' ' + words.slice(1).join(' ') : '');
+}
+
 export default function DriverVehicleDetailsScreen() {
   const colors = useColors();
   const isDark = useColorScheme() === 'dark';
@@ -51,6 +59,9 @@ export default function DriverVehicleDetailsScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const { driverProfile, user, saveDriverProfile } = useAuth();
   const queryClient = useQueryClient();
+  // Server-held KYC documents. See the "Verification documents" section below.
+  const serverDocumentsQuery = useDriverDocumentsQuery();
+  const serverDocuments = serverDocumentsQuery.data ?? [];
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const handleRefresh = React.useCallback(async () => {
@@ -357,6 +368,47 @@ export default function DriverVehicleDetailsScreen() {
                 : undefined}
             />
           ))}
+        </View>
+
+        {/*
+          Documents as the SERVER holds them.
+          The block above renders `vehicle.documents`, which comes from
+          AsyncStorage only — so on a new handset, or after a reinstall, it is
+          empty even when the backend has the driver's KYC on file, and there was
+          no way to tell that apart from having uploaded nothing. This section
+          reads GET /v1/driver/documents (previously dead code: the only
+          reference to listDriverDocuments was its own definition) and shows the
+          review decision per document.
+        */}
+        <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Verification documents</AppText>
+          {serverDocumentsQuery.isPending ? (
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              Loading your submitted documents…
+            </AppText>
+          ) : serverDocumentsQuery.isError ? (
+            // Never render "none on file" for a failed fetch — that is the false
+            // state this whole section exists to remove.
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              Couldn&apos;t load your submitted documents. Pull to refresh.
+            </AppText>
+          ) : serverDocuments.length === 0 ? (
+            <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
+              No documents on file yet. Anything you upload during verification appears here.
+            </AppText>
+          ) : (
+            serverDocuments.map(doc => (
+              <View key={doc.id} style={styles.serverDocRow}>
+                <AppText style={[styles.serverDocType, { color: colors.foreground }]}>
+                  {formatDocumentType(doc.documentType)}
+                </AppText>
+                <AppText style={[styles.serverDocMeta, { color: colors.mutedForeground }]}>
+                  {doc.reviewStatus ?? 'Submitted'}
+                  {doc.editable === false ? ' · view-only' : ''}
+                </AppText>
+              </View>
+            ))
+          )}
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
@@ -828,6 +880,9 @@ const styles = StyleSheet.create({
   sectionCard: { borderRadius: 18, padding: spacing[14], gap: semanticSpacing.rowGap },
   sectionTitle: { ...typography.title,  },
   sectionSubtitle: { ...typography.caption, lineHeight: 17 },
+  serverDocRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing[8] },
+  serverDocType: { ...typography.label },
+  serverDocMeta: { ...typography.tiny },
   complianceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[10] },
   complianceLabel: { ...typography.label,  },
   complianceMessage: { ...typography.tiny, lineHeight: 15, marginTop: spacing[2] },

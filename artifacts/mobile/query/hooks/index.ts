@@ -1,4 +1,5 @@
 export { useDriverProfileQuery } from './useDriverProfileQuery';
+export { useDriverDocumentsQuery } from './useDriverDocumentsQuery';
 export {
   useAddVehicleMutation,
   useDeleteVehicleMutation,

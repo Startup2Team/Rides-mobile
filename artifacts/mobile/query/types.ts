@@ -24,6 +24,7 @@ export type QueryPolicyName =
   | 'driverRatings'
   | 'customerRatings'
   | 'driverCredits'
+  | 'driverDocuments'
   | 'driverVehicles'
   | 'driverVehicle'
   | 'packages'

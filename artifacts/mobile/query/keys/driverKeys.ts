@@ -8,6 +8,7 @@ export const driverKeys = {
     (userId: string | null | undefined): readonly ['driver', string, 'vehicles'];
   },
   vehicle: ((vehicleId: string) => ['driver', 'vehicle', vehicleId] as const) as (vehicleId: string) => readonly ['driver', 'vehicle', string],
+  documents: () => ['driver', 'documents'] as const,
   packages: () => ['driver', 'packages'] as const,
   dashboard: () => ['driver', 'dashboard'] as const,
   stats: () => ['driver', 'stats'] as const,
