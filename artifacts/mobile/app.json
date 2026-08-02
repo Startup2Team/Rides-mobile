@@ -64,6 +64,7 @@
       "./plugins/withNonModularHeaders",
       "./plugins/withPodDeploymentTarget",
       "./plugins/withRNFirebaseStaticFramework",
+      "./plugins/withNoExplicitModules",
       [
         "expo-router",
         {
