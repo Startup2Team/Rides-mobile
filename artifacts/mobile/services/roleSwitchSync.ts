@@ -5,6 +5,7 @@ import { reportOperationalFailure } from '@/observability/monitoring';
 import { loadSecureStorage, removeSecureStorage, saveSecureStorage } from '@/persistence/secureStorage';
 import { roleSyncTargetSchema } from '@/persistence/storageSchemas';
 import { setDriverAvailability } from '@/services/driverAvailability';
+import { acceptDriverPolicy } from '@/services/driverProfile';
 import { switchUserMode, type AppUserMode } from '@/services/userMode';
 
 // Background reconciliation engine for role switches. The UI commits a mode
@@ -136,7 +137,18 @@ async function run() {
           pending = { ...snapshot, driverOfflineDone: true };
           persistPending();
         }
-        await switchUserMode(snapshot.mode);
+        try {
+          await switchUserMode(snapshot.mode);
+        } catch (error) {
+          // Self-heal drivers whose policy acceptance never reached the backend
+          // (it was recorded locally at onboarding but never POSTed, so
+          // policy_accepted stayed FALSE and driver mode was permanently
+          // refused). Accept once, then retry the switch — exactly once, so a
+          // genuine refusal still surfaces.
+          if (readRoleSyncRejection(error).code !== 'POLICY_NOT_ACCEPTED') throw error;
+          await acceptDriverPolicy();
+          await switchUserMode(snapshot.mode);
+        }
         if (pending?.seq !== snapshot.seq) continue; // superseded — sync the newer target
         pending = null;
         retryCount = 0;
