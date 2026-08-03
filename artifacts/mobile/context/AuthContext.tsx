@@ -28,6 +28,7 @@ import {
   type RoleSyncEvent,
 } from '@/services/roleSwitchSync';
 import { navigateToModeHome } from '@/navigation/navigationPolicy';
+import { cancelRide, getActiveRide } from '@/services/rides';
 import {
   cancelModeSwitch,
   completeModeSwitch,
@@ -211,7 +212,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // The refused mode was rolled back — say WHY, using the backend's own
       // reason (policy not accepted, active ride, …) rather than a dead end.
       const { code, message } = readRoleSyncRejection(event.error);
-      Alert.alert(getRoleSwitchFailureTitle(code), getRoleSwitchFailureMessage(event.mode, code, message));
+      const title = getRoleSwitchFailureTitle(code);
+      const body = getRoleSwitchFailureMessage(event.mode, code, message);
+      if (code === 'ACTIVE_RIDE') {
+        // A ride the user never finished — often one abandoned mid-search —
+        // blocks every future switch with no in-app way out. Offer to release
+        // it. Destructive, so it is explicitly confirmed, never automatic.
+        Alert.alert(title, `${body}\n\nIf you're not actually on a ride, you can release it now.`, [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Release ride',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                try {
+                  const active = await getActiveRide();
+                  if (!active?.id) {
+                    Alert.alert('Nothing to release', 'We found no active ride on your account. Try switching again.');
+                    return;
+                  }
+                  await cancelRide(active.id);
+                  Alert.alert('Ride released', 'You can switch modes now.');
+                } catch (error) {
+                  reportOperationalFailure('auth.roleSwitch.releaseRide', error);
+                  Alert.alert('Could not release the ride', 'Please try again, or contact support if it keeps failing.');
+                }
+              })();
+            },
+          },
+        ]);
+        return;
+      }
+      Alert.alert(title, body);
     });
   }, []);
 

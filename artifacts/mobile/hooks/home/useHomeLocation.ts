@@ -209,22 +209,32 @@ export function useHomeLocation({
       });
     };
 
-    const resolveLocation = async () => {
+    // Tri-state, not boolean: a request that was SUPERSEDED must not be
+    // reported as failure. The slow first GPS fix (up to 3×5s) routinely
+    // outlives a retry that already succeeded, and collapsing "cancelled" into
+    // "failed" let the loser overwrite the winner's status — the map and
+    // address were correct while the card claimed "Unable to determine your
+    // location".
+    const resolveLocation = async (): Promise<'ok' | 'failed' | 'cancelled'> => {
       const requestId = ++locationRequestRef.current;
       const granted = await requestHomeLocationPermission({
         getPermission: Location.getForegroundPermissionsAsync,
         requestPermission: Location.requestForegroundPermissionsAsync,
       });
-      if (!granted) return false;
+      if (!granted) return 'failed';
 
       const loc = await acquireLocation(requestId);
-      if (!loc) return false;
+      if (!loc) {
+        return isLatestLocationRequest(requestId, locationRequestRef.current) ? 'failed' : 'cancelled';
+      }
       const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      if (!mounted || !isLatestLocationRequest(requestId, locationRequestRef.current)) return true;
+      if (!mounted || !isLatestLocationRequest(requestId, locationRequestRef.current)) return 'cancelled';
       applyCoords(coords);
 
       const [geo] = await Location.reverseGeocodeAsync(loc.coords).catch(() => [null]);
-      if (!mounted || !isLatestLocationRequest(requestId, locationRequestRef.current)) return true;
+      // Coordinates already applied above — this request succeeded regardless
+      // of whether a newer one has since taken over the address lookup.
+      if (!mounted || !isLatestLocationRequest(requestId, locationRequestRef.current)) return 'ok';
 
       const selectedAddress = selectCurrentLocationAddress(
         geo,
@@ -234,7 +244,7 @@ export function useHomeLocation({
       logLocationSession(loc.coords, geo, selectedAddress);
       applyHereFromCoords(coords, loc.coords.accuracy, geo);
       updateInitialPickup(coords, loc.coords.accuracy, geo);
-      return true;
+      return 'ok';
     };
 
     const requestNotificationPermission = async () => {
@@ -297,8 +307,13 @@ export function useHomeLocation({
             },
           );
         } else {
-          const resolved = await resolveLocation();
-          if (mounted && !resolved) setLocationStatus('unavailable');
+          const outcome = await resolveLocation();
+          // Only a genuine failure with NO coordinates in hand may mark the
+          // screen unavailable. A superseded request, or one that lost the race
+          // to a retry that already has a fix, must stay quiet.
+          if (mounted && outcome === 'failed' && !gpsLocationRef.current) {
+            setLocationStatus('unavailable');
+          }
           // Fire-and-forget, and AFTER the location status is settled.
           //
           // This was awaited before the status was set, which serialized two
@@ -317,7 +332,9 @@ export function useHomeLocation({
       } catch (error) {
         if (mounted) {
           setLocationError(error);
-          setLocationStatus('unavailable');
+          // Same guard: a late throw (e.g. the 3×5s acquisition giving up)
+          // must not erase a fix a newer request already delivered.
+          if (!gpsLocationRef.current) setLocationStatus('unavailable');
         }
       }
     })();
