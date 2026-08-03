@@ -65,6 +65,7 @@
       "./plugins/withPodDeploymentTarget",
       "./plugins/withRNFirebaseStaticFramework",
       "./plugins/withNoExplicitModules",
+      "./plugins/withFirebaseNotificationManifestFix",
       [
         "expo-router",
         {

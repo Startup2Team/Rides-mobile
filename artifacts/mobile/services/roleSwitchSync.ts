@@ -65,6 +65,26 @@ export function subscribeRoleSync(listener: RoleSyncListener) {
   };
 }
 
+// The API answers a refusal with { error: { code, message } } — e.g.
+// POLICY_NOT_ACCEPTED, ACTIVE_RIDE, DRIVER_NOT_ACTIVE, NO_DRIVER_PROFILE.
+// The transport parks that body on `cause`. Surfacing it is the difference
+// between "we couldn't switch you" and a reason the driver can act on.
+export interface RoleSyncRejection {
+  code: string | null;
+  message: string | null;
+}
+
+export function readRoleSyncRejection(error: unknown): RoleSyncRejection {
+  const cause = error instanceof BackendError ? error.cause : null;
+  const body = cause && typeof cause === 'object' ? (cause as Record<string, unknown>).error : null;
+  if (!body || typeof body !== 'object') return { code: null, message: null };
+  const record = body as Record<string, unknown>;
+  const code = typeof record.code === 'string' && record.code.trim() ? record.code.trim() : null;
+  const message =
+    typeof record.message === 'string' && record.message.trim() ? record.message.trim() : null;
+  return { code, message };
+}
+
 // Retrying cannot fix a request the backend actively refused. Anything else
 // (offline, timeout, 5xx, rate limit, auth blip) is worth another attempt.
 function isFatal(error: unknown) {

@@ -23,9 +23,11 @@ import {
   clearRoleSync,
   initRoleSync,
   queueRoleSync,
+  readRoleSyncRejection,
   subscribeRoleSync,
   type RoleSyncEvent,
 } from '@/services/roleSwitchSync';
+import { navigateToModeHome } from '@/navigation/navigationPolicy';
 import {
   cancelModeSwitch,
   completeModeSwitch,
@@ -141,6 +143,35 @@ function buildLocalDriverProfile(b: BackendDriverProfile): DriverProfile {
   };
 }
 
+// Backend refusal codes from PATCH /v1/users/mode (internal/location/service.go
+// SwitchMode). Each one is actionable, so each gets its own copy — a generic
+// "please try again" sends the driver in circles on a state they must fix.
+function getRoleSwitchFailureTitle(code: string | null) {
+  if (code === 'ACTIVE_RIDE') return 'Finish your ride first';
+  if (code === 'POLICY_NOT_ACCEPTED') return 'Accept the driver policies';
+  if (code === 'DRIVER_NOT_ACTIVE' || code === 'NO_DRIVER_PROFILE') return 'Driver account not active';
+  return 'Mode switch failed';
+}
+
+function getRoleSwitchFailureMessage(mode: AppMode, code: string | null, message: string | null) {
+  switch (code) {
+    case 'ACTIVE_RIDE':
+      return 'You still have a ride in progress. Complete or cancel it, then switch modes.';
+    case 'POLICY_NOT_ACCEPTED':
+      return 'You need to accept the driver policies before driving. Open your driver profile to review them.';
+    case 'DRIVER_NOT_ACTIVE':
+      return 'Your driver account is not approved for driving right now. Check your application status.';
+    case 'NO_DRIVER_PROFILE':
+      return "We couldn't find your driver profile on this account. Apply as a driver to continue.";
+    default:
+      break;
+  }
+  if (message) return message;
+  return mode === 'driver'
+    ? "We couldn't switch you to driver mode. Please try again."
+    : "We couldn't switch you to customer mode. Please try again.";
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -172,12 +203,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(reverted);
       void saveStoredUser(reverted).catch(() => {});
       completeModeSwitch(revertTo);
-      Alert.alert(
-        'Mode switch failed',
-        event.mode === 'driver'
-          ? "We couldn't switch you to driver mode. Please try again."
-          : "We couldn't switch you to customer mode. Please try again.",
-      );
+      // The reverted mode is meaningless while the screen for the REFUSED mode
+      // is still on top — the driver dashboard stayed up under the alert,
+      // showing driver UI backed by customer state. Send them where the
+      // rollback actually put them.
+      navigateToModeHome(revertTo);
+      // The refused mode was rolled back — say WHY, using the backend's own
+      // reason (policy not accepted, active ride, …) rather than a dead end.
+      const { code, message } = readRoleSyncRejection(event.error);
+      Alert.alert(getRoleSwitchFailureTitle(code), getRoleSwitchFailureMessage(event.mode, code, message));
     });
   }, []);
 

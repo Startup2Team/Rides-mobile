@@ -17,7 +17,7 @@
     "plan:hybrid-rollout": "node scripts/plan-hybrid-rollout.js",
     "check:staging-connection": "node scripts/check-staging-connection.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest --runInBand",
+    "test": "NODE_ENV=test jest --runInBand",
     "check:typography": "node scripts/check-typography.js",
     "check:design-tokens": "node scripts/check-design-tokens.js",
     "release:validate-env": "node scripts/validate-release-env.js",
