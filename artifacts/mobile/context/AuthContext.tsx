@@ -17,6 +17,7 @@ import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
+import { refreshAccessToken } from '@/services/tokenRefresh';
 import { fetchProfile } from '@/services/profile';
 import { setDriverAvailability } from '@/services/driverAvailability';
 import {
@@ -264,7 +265,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void syncProfileFromBackend();
           void registerPushToken();
         } else {
-          await clearAuthTokens();
+          // No usable access token — but before bouncing a returning user to
+          // the login screen, try a SILENT re-auth with the stored refresh
+          // token (valid 30 days). refreshAccessToken() no-ops to false when
+          // there is no refresh token (e.g. after logout, which wipes it), so
+          // this only rescues genuine sessions whose access token expired.
+          // Without it, a 15-minute access-token expiry logged people out.
+          const refreshed = await refreshAccessToken();
+          if (refreshed) {
+            setUser(storedUser.data);
+            void syncProfileFromBackend();
+            void registerPushToken();
+          } else {
+            await clearAuthTokens();
+          }
         }
       }
       if (storedDriverProfile.data) {
