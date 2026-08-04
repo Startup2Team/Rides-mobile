@@ -195,8 +195,12 @@ export function createHttpBackendTransport(
         // Resolve paths RELATIVE to the full base (which includes /api), so a
         // leading-slash path like "/v1/auth/register" doesn't reset to the host
         // root and drop the "/api" segment. Strip the leading slash first.
-        const relativePath = path.replace(/^\/+/, '');
-        const url = new URL(relativePath, `${config.baseUrl.replace(/\/+$/, '')}/`);
+        let relativePath = path.replace(/^\/+/, '');
+        const cleanBase = config.baseUrl.replace(/\/+$/, '');
+        if (cleanBase.endsWith('/v1') && relativePath.startsWith('v1/')) {
+          relativePath = relativePath.slice(3);
+        }
+        const url = new URL(relativePath, `${cleanBase}/`);
         appendQuery(url, options.query);
         const authHeader = await resolveAuthHeader(config.tokenProvider);
         const headers: Record<string, string> = {
