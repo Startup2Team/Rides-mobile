@@ -15,6 +15,8 @@ import {
 } from '@/utils/locationUtils';
 
 const CURRENT_LOCATION_FALLBACK = 'Current location';
+// A cached fix older than this is too stale to seed the map with.
+const LAST_KNOWN_LOCATION_MAX_AGE_MS = 120_000;
 export type HomeLocationStatus = 'loading' | 'available' | 'unavailable';
 
 function logLocationSession(
@@ -222,6 +224,20 @@ export function useHomeLocation({
         requestPermission: Location.requestForegroundPermissionsAsync,
       });
       if (!granted) return 'failed';
+
+      // Seed from the OS's cached fix: it returns in milliseconds, so the card
+      // and map settle immediately instead of waiting out a cold high-accuracy
+      // fix (up to 3×5s). The precise fix below then refines it.
+      try {
+        const cached = await Location.getLastKnownPositionAsync({
+          maxAge: LAST_KNOWN_LOCATION_MAX_AGE_MS,
+        });
+        if (cached && mounted && isLatestLocationRequest(requestId, locationRequestRef.current)) {
+          applyCoords({ latitude: cached.coords.latitude, longitude: cached.coords.longitude });
+        }
+      } catch {
+        // No cached fix — the live acquisition below is the only path.
+      }
 
       const loc = await acquireLocation(requestId);
       if (!loc) {
