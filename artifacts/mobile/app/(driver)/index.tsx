@@ -75,6 +75,8 @@ import {
 } from "@/domain/driverRequestCard";
 const MAP_TYPES = ["standard", "satellite", "hybrid"] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
+// A cached fix older than this is too stale to seed the map with.
+const LAST_KNOWN_LOCATION_MAX_AGE_MS = 120_000;
 const CTA_AVATAR_SIZE = 34;
 const CTA_AVATAR_INSET = 5;
 const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
@@ -295,8 +297,25 @@ export default function DriverDashboard() {
         ? permission
         : await Location.requestForegroundPermissionsAsync();
       if (!finalPermission.granted) return;
+      // Seed from the OS's cached fix first — it returns in milliseconds, so
+      // the map lands on the driver instead of sitting on the Kigali default
+      // for the ~10s a cold high-accuracy fix takes. The precise fix below
+      // then refines it.
+      try {
+        const cached = await Location.getLastKnownPositionAsync({
+          maxAge: LAST_KNOWN_LOCATION_MAX_AGE_MS,
+        });
+        if (cached) {
+          setCoords({
+            latitude: cached.coords.latitude,
+            longitude: cached.coords.longitude,
+          });
+        }
+      } catch {
+        // No cached fix — fall through to the live one.
+      }
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
       });
       setCoords({
         latitude: loc.coords.latitude,

@@ -84,9 +84,12 @@ export default function SearchingScreen() {
 
   const searchStage = timedOut
     ? 'No drivers available right now'
-    : elapsedSeconds < 20
+    // Thresholds track the API's wave cadence (MATCH_WAVE_INTERVAL_SECONDS=12,
+    // 2km first ring widening to 10km) so the copy changes when the search
+    // actually widens, rather than on numbers left over from the old 90s budget.
+    : elapsedSeconds < 12
       ? 'Finding your driver'
-      : elapsedSeconds < 45
+      : elapsedSeconds < 36
         ? 'Looking a bit wider…'
         : 'Still searching — drivers nearby may be busy';
 

@@ -21,8 +21,10 @@ import { AppButton } from '@/components/AppButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
-import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
-import { requestOtp } from '@/services/authSession';
+import { useAuth } from '@/context/AuthContext';
+import { navigateToCustomerHomeAfterCompletion, replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { loginWithPhone } from '@/services/authSession';
+import type { User } from '@/types';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: 'ðŸ‡·ðŸ‡¼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -45,6 +47,7 @@ function getCountryFlag(code: string) {
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { login } = useAuth();
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
@@ -61,15 +64,27 @@ export default function LoginScreen() {
     setSubmitting(true);
     const phoneNumber = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
     try {
-      // Actually request the OTP from the backend before showing the code screen.
-      // Previously login only navigated, so no OTP was ever sent (nothing in logs).
-      await requestOtp({ phoneNumber });
-      router.push({
-        pathname: '/(auth)/otp',
-        params: { phone: phoneNumber, mode: 'login' },
-      });
+      // Phone-only login (no OTP). The number was verified once at registration,
+      // so a returning user signs in on any device with just the number. The
+      // backend resolves the existing account and returns a session; tokens are
+      // persisted inside loginWithPhone().
+      const session = await loginWithPhone(phoneNumber);
+      const sessionUser = session.user;
+      const user: User = {
+        id: sessionUser?.id ?? phoneNumber,
+        name: sessionUser?.name || 'User',
+        phone: sessionUser?.phone || phoneNumber,
+        email: sessionUser?.email,
+        mode: sessionUser?.mode ?? 'customer',
+        isDriver: sessionUser?.isDriver ?? false,
+        createdAt: sessionUser?.createdAt || new Date().toISOString(),
+      };
+      await login(user);
+      navigateToCustomerHomeAfterCompletion(router);
     } catch {
-      setError("Couldn't send the code. Check the number and try again.");
+      // Wrong/unregistered number, or backend unreachable. Keep it actionable —
+      // a brand-new user needs to Register (link below) to verify their number.
+      setError("We couldn't sign you in with this number. Check it's correct — or tap Register below if you're new.");
     } finally {
       setSubmitting(false);
     }
@@ -152,7 +167,7 @@ export default function LoginScreen() {
           </View>
 
           <AppButton
-            title="Send OTP Code"
+            title="Log in"
             onPress={handleContinue}
             loading={submitting}
             fullWidth

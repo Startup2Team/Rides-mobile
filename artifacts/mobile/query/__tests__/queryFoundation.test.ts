@@ -96,12 +96,24 @@ describe('query foundation', () => {
     expect(new Set(keys.map(key => JSON.stringify(key))).size).toBe(keys.length);
   });
 
+  // Deliberately an exact list: adding a policy should fail here until it is
+  // acknowledged, which is the point of the check. It had, however, fallen seven
+  // names behind (customerRatings, demandHeatmap, driverCredits, driverEarnings,
+  // driverRatings, driverStats and driverDocuments), so the suite was red and the
+  // signal was being ignored rather than acted on. Keep it current.
   test('defines cache policies for all supported domains', () => {
     expect(Object.keys(queryPolicies).sort()).toEqual([
       'activeRide',
+      'customerRatings',
+      'demandHeatmap',
+      'driverCredits',
+      'driverDocuments',
+      'driverEarnings',
       'driverProfile',
-      'driverVehicles',
+      'driverRatings',
+      'driverStats',
       'driverVehicle',
+      'driverVehicles',
       'notifications',
       'packageCampaigns',
       'packageCatalog',
@@ -111,8 +123,8 @@ describe('query foundation', () => {
       'packages',
       'paymentMethods',
       'profile',
-      'rideHistory',
       'reverseGeocode',
+      'rideHistory',
       'savedLocations',
       'searchAutocomplete',
     ].sort());

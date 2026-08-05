@@ -41,6 +41,27 @@ export async function verifyOtp(input: AuthVerifyOtpInput): Promise<AuthSessionD
   return session;
 }
 
+// POST /api/v1/auth/login — phone-only login (no OTP): the number was verified
+// at registration, so signing in on any device needs only the number. Persists
+// the returned tokens exactly like verifyOtp. Throws if the number has no
+// account (the login screen surfaces that as "register instead").
+export async function loginWithPhone(phoneNumber: string): Promise<AuthSessionDomain> {
+  const session = await getRepository().login(phoneNumber);
+  if (session.accessToken && session.refreshToken) {
+    await saveAuthTokens(session.accessToken, session.refreshToken);
+  }
+  return session;
+}
+
+// DELETE /api/v1/auth/account — permanently anonymizes the account server-side
+// and revokes every session. Must run while still authenticated (it uses the
+// access token). Throws on failure so the caller can surface it instead of
+// pretending the account was deleted. Local cleanup (tokens/sensitive storage)
+// is the caller's job (via logout) once this resolves.
+export async function deleteAccount(): Promise<void> {
+  await getAppBackendClient().delete('/v1/auth/account');
+}
+
 // Best-effort backend logout, then always drop the local tokens.
 export async function endSession(): Promise<void> {
   try {

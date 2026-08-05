@@ -55,6 +55,7 @@ function createLocalRepository(overrides: Partial<AuthSessionRepository> = {}): 
       expiresAt: '2026-07-03T08:05:00.000Z',
     })),
     verifyOtp: jest.fn(async () => localSession),
+    login: jest.fn(async () => localSession),
     refreshSession: jest.fn(async () => localSession),
     logout: jest.fn(async () => undefined),
     getCurrentSession: jest.fn(async () => ({ user: userDomain, expiresAt: localSession.expiresAt })),

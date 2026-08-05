@@ -17,15 +17,19 @@ import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
+import { refreshAccessToken } from '@/services/tokenRefresh';
 import { fetchProfile } from '@/services/profile';
 import { setDriverAvailability } from '@/services/driverAvailability';
 import {
   clearRoleSync,
   initRoleSync,
   queueRoleSync,
+  readRoleSyncRejection,
   subscribeRoleSync,
   type RoleSyncEvent,
 } from '@/services/roleSwitchSync';
+import { navigateToModeHome } from '@/navigation/navigationPolicy';
+import { cancelRide, getActiveRide } from '@/services/rides';
 import {
   cancelModeSwitch,
   completeModeSwitch,
@@ -141,6 +145,35 @@ function buildLocalDriverProfile(b: BackendDriverProfile): DriverProfile {
   };
 }
 
+// Backend refusal codes from PATCH /v1/users/mode (internal/location/service.go
+// SwitchMode). Each one is actionable, so each gets its own copy — a generic
+// "please try again" sends the driver in circles on a state they must fix.
+function getRoleSwitchFailureTitle(code: string | null) {
+  if (code === 'ACTIVE_RIDE') return 'Finish your ride first';
+  if (code === 'POLICY_NOT_ACCEPTED') return 'Accept the driver policies';
+  if (code === 'DRIVER_NOT_ACTIVE' || code === 'NO_DRIVER_PROFILE') return 'Driver account not active';
+  return 'Mode switch failed';
+}
+
+function getRoleSwitchFailureMessage(mode: AppMode, code: string | null, message: string | null) {
+  switch (code) {
+    case 'ACTIVE_RIDE':
+      return 'You still have a ride in progress. Complete or cancel it, then switch modes.';
+    case 'POLICY_NOT_ACCEPTED':
+      return 'You need to accept the driver policies before driving. Open your driver profile to review them.';
+    case 'DRIVER_NOT_ACTIVE':
+      return 'Your driver account is not approved for driving right now. Check your application status.';
+    case 'NO_DRIVER_PROFILE':
+      return "We couldn't find your driver profile on this account. Apply as a driver to continue.";
+    default:
+      break;
+  }
+  if (message) return message;
+  return mode === 'driver'
+    ? "We couldn't switch you to driver mode. Please try again."
+    : "We couldn't switch you to customer mode. Please try again.";
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -172,12 +205,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(reverted);
       void saveStoredUser(reverted).catch(() => {});
       completeModeSwitch(revertTo);
-      Alert.alert(
-        'Mode switch failed',
-        event.mode === 'driver'
-          ? "We couldn't switch you to driver mode. Please try again."
-          : "We couldn't switch you to customer mode. Please try again.",
-      );
+      // The reverted mode is meaningless while the screen for the REFUSED mode
+      // is still on top — the driver dashboard stayed up under the alert,
+      // showing driver UI backed by customer state. Send them where the
+      // rollback actually put them.
+      navigateToModeHome(revertTo);
+      // The refused mode was rolled back — say WHY, using the backend's own
+      // reason (policy not accepted, active ride, …) rather than a dead end.
+      const { code, message } = readRoleSyncRejection(event.error);
+      const title = getRoleSwitchFailureTitle(code);
+      const body = getRoleSwitchFailureMessage(event.mode, code, message);
+      if (code === 'ACTIVE_RIDE') {
+        // A ride the user never finished — often one abandoned mid-search —
+        // blocks every future switch with no in-app way out. Offer to release
+        // it. Destructive, so it is explicitly confirmed, never automatic.
+        Alert.alert(title, `${body}\n\nIf you're not actually on a ride, you can release it now.`, [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Release ride',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                try {
+                  const active = await getActiveRide();
+                  if (!active?.id) {
+                    Alert.alert('Nothing to release', 'We found no active ride on your account. Try switching again.');
+                    return;
+                  }
+                  await cancelRide(active.id);
+                  Alert.alert('Ride released', 'You can switch modes now.');
+                } catch (error) {
+                  reportOperationalFailure('auth.roleSwitch.releaseRide', error);
+                  Alert.alert('Could not release the ride', 'Please try again, or contact support if it keeps failing.');
+                }
+              })();
+            },
+          },
+        ]);
+        return;
+      }
+      Alert.alert(title, body);
     });
   }, []);
 
@@ -198,7 +265,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void syncProfileFromBackend();
           void registerPushToken();
         } else {
-          await clearAuthTokens();
+          // No usable access token — but before bouncing a returning user to
+          // the login screen, try a SILENT re-auth with the stored refresh
+          // token (valid 30 days). refreshAccessToken() no-ops to false when
+          // there is no refresh token (e.g. after logout, which wipes it), so
+          // this only rescues genuine sessions whose access token expired.
+          // Without it, a 15-minute access-token expiry logged people out.
+          const refreshed = await refreshAccessToken();
+          if (refreshed) {
+            setUser(storedUser.data);
+            void syncProfileFromBackend();
+            void registerPushToken();
+          } else {
+            await clearAuthTokens();
+          }
         }
       }
       if (storedDriverProfile.data) {
