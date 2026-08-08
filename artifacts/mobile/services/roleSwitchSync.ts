@@ -1,6 +1,7 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import { STORAGE_KEYS } from '@/constants/storage';
 import { BackendError } from '@/data/remote/contracts/backendErrors';
+import { readBackendError, type BackendErrorBody } from '@/utils/backendErrorMessage';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { loadSecureStorage, removeSecureStorage, saveSecureStorage } from '@/persistence/secureStorage';
 import { roleSyncTargetSchema } from '@/persistence/storageSchemas';
@@ -66,25 +67,11 @@ export function subscribeRoleSync(listener: RoleSyncListener) {
   };
 }
 
-// The API answers a refusal with { error: { code, message } } — e.g.
-// POLICY_NOT_ACCEPTED, ACTIVE_RIDE, DRIVER_NOT_ACTIVE, NO_DRIVER_PROFILE.
-// The transport parks that body on `cause`. Surfacing it is the difference
-// between "we couldn't switch you" and a reason the driver can act on.
-export interface RoleSyncRejection {
-  code: string | null;
-  message: string | null;
-}
-
-export function readRoleSyncRejection(error: unknown): RoleSyncRejection {
-  const cause = error instanceof BackendError ? error.cause : null;
-  const body = cause && typeof cause === 'object' ? (cause as Record<string, unknown>).error : null;
-  if (!body || typeof body !== 'object') return { code: null, message: null };
-  const record = body as Record<string, unknown>;
-  const code = typeof record.code === 'string' && record.code.trim() ? record.code.trim() : null;
-  const message =
-    typeof record.message === 'string' && record.message.trim() ? record.message.trim() : null;
-  return { code, message };
-}
+// Refusal codes here are POLICY_NOT_ACCEPTED, ACTIVE_RIDE, DRIVER_NOT_ACTIVE,
+// NO_DRIVER_PROFILE. Re-exported so callers of this module don't have to know
+// the shared helper's name.
+export const readRoleSyncRejection = readBackendError;
+export type RoleSyncRejection = BackendErrorBody;
 
 // Retrying cannot fix a request the backend actively refused. Anything else
 // (offline, timeout, 5xx, rate limit, auth blip) is worth another attempt.
