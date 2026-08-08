@@ -2,6 +2,7 @@ export { customerLevelKeys } from './customerLevelKeys';
 export { customerRatingKeys } from './customerRatingKeys';
 export { demandHeatmapKeys } from './demandHeatmapKeys';
 export { driverKeys } from './driverKeys';
+export { locationKeys } from './locationKeys';
 export { notificationKeys } from './notificationKeys';
 export { packageKeys } from './packageKeys';
 export { paymentKeys } from './paymentKeys';

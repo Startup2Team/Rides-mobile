@@ -143,11 +143,13 @@ export default function DriverNavigateScreen() {
   const { route, loading: routeLoading } = useRoute(
     currentRide ? navigationOrigin : null,
     target ? { latitude: target.latitude, longitude: target.longitude } : null,
+    { vehicleType: currentRide?.vehicleType ?? null },
   );
 
   const { route: rideRoute } = useRoute(
     phase === 'waiting' && currentRide ? currentRide.pickup : null,
     phase === 'waiting' && currentRide ? currentRide.destination : null,
+    { vehicleType: currentRide?.vehicleType ?? null },
   );
 
   const fullRideRouteThroughPins = useMemo(() => {

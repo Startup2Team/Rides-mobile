@@ -16,7 +16,7 @@ import type { useColors } from '@/hooks/useColors';
 import type { LocationListTab, LocationSearchTarget } from '@/hooks/home/useLocationSearch';
 import type { GeocodeSuggestion } from '@/services/geocoding';
 import type { RideLocation, SavedLocation } from '@/types';
-import { SavedLocationsSection } from './SavedLocationsSection';
+import { SavedLocationsSection, type RecentPlace } from './SavedLocationsSection';
 import { styles } from './homeStyles';
 
 export function LocationSearchOverlay({
@@ -32,11 +32,13 @@ export function LocationSearchOverlay({
   onChooseMap,
   onClear,
   onClose,
+  onForgetRecent,
   onSaveCandidate,
   onSetListTab,
   onShowSavedLocationActions,
   onTextChange,
   recentLocations,
+  resultsHeader,
   savedLocations,
   suggestions,
   target,
@@ -56,11 +58,14 @@ export function LocationSearchOverlay({
   onChooseMap: () => void;
   onClear: () => void;
   onClose: () => void;
+  onForgetRecent?: (location: RecentPlace) => void;
   onSaveCandidate: (location: RideLocation) => void;
   onSetListTab: (tab: LocationListTab) => void;
   onShowSavedLocationActions: (location: SavedLocation) => void;
   onTextChange: (text: string) => void;
-  recentLocations: RideLocation[];
+  recentLocations: RecentPlace[];
+  /** Slot above the results — used for the backend-backed area chips. */
+  resultsHeader?: ReactNode;
   savedLocations: SavedLocation[];
   suggestions: GeocodeSuggestion[];
   target: LocationSearchTarget;
@@ -191,6 +196,8 @@ export function LocationSearchOverlay({
             { paddingHorizontal: semanticSpacing.screenPadding, paddingBottom: bottomInset + spacing[20] },
           ]}
         >
+          {resultsHeader}
+
           {hasSearchResults && (
             <>
               <AppText variant="tiny" style={[styles.locationSectionTitle, { color: colors.mutedForeground }]}>Search results</AppText>
@@ -255,6 +262,7 @@ export function LocationSearchOverlay({
             onSelect={location => onApplyLocation(target, location)}
             onShowActions={onShowSavedLocationActions}
             onAddSavedLocation={onAddSavedLocation}
+            onForgetRecent={onForgetRecent}
           />
         </GlassScrollView>
       </View>

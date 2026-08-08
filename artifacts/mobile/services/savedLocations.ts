@@ -13,7 +13,7 @@ export interface SavedLocation {
   updatedAt: string;
 }
 
-interface SavedLocationDto {
+export interface SavedLocationDto {
   id: string;
   label: string;
   address: string;
@@ -27,7 +27,9 @@ interface Envelope<T> {
   data: T;
 }
 
-function toDomain(dto: SavedLocationDto): SavedLocation {
+// Exported because /locations/suggestions embeds the very same rows — one
+// mapping for both endpoints keeps them from drifting apart.
+export function toSavedLocationDomain(dto: SavedLocationDto): SavedLocation {
   return {
     id: dto.id,
     label: dto.label,
@@ -54,7 +56,7 @@ export async function listSavedLocations(): Promise<SavedLocation[]> {
   >('/v1/users/me/saved-locations');
   const payload = response.data.data;
   expectField(payload, 'saved_locations', 'savedLocations.list');
-  return (payload?.saved_locations ?? []).map(toDomain);
+  return (payload?.saved_locations ?? []).map(toSavedLocationDomain);
 }
 
 export async function createSavedLocation(input: SavedLocationInput): Promise<SavedLocation> {
@@ -62,7 +64,7 @@ export async function createSavedLocation(input: SavedLocationInput): Promise<Sa
     '/v1/users/me/saved-locations',
     { body: input },
   );
-  return toDomain(response.data.data);
+  return toSavedLocationDomain(response.data.data);
 }
 
 export async function updateSavedLocation(
