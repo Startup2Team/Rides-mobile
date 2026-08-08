@@ -39,6 +39,28 @@ function setProfileCache(queryClient: QueryClient, snapshot: SharedProfileSnapsh
   queryClient.setQueryData(profileKeys.photo(), snapshot.profilePhoto?.uri ?? null);
 }
 
+/**
+ * The avatar URI to render.
+ *
+ * Local storage is only a cache of the account's `profile_image_url`; on a fresh
+ * install or a second handset it is empty, which is why the photo did not follow
+ * the user. Fall back to the backend and mirror what it returns so subsequent
+ * reads stay local (and keep working offline).
+ */
+export async function loadProfilePhotoUri(): Promise<string | null> {
+  const local = await profileRepository.getProfileImage();
+  if (local) return local;
+  try {
+    const remote = await fetchProfile();
+    if (!remote.profileImageUrl) return null;
+    await profileRepository.saveProfileImage(remote.profileImageUrl);
+    return remote.profileImageUrl;
+  } catch {
+    // Offline / unauthenticated — no photo to show, same as before.
+    return null;
+  }
+}
+
 export function useProfileQuery() {
   return usePolicyQuery(queryPolicies.profile, {
     queryKey: profileKeys.current(),
@@ -48,10 +70,11 @@ export function useProfileQuery() {
         profileRepository.getProfileImage(),
       ]);
       // Backend is authoritative for the display fields (GET /customer/profile).
-      // Merge name + email onto the stored user (which owns mode/isDriver/etc.),
-      // persist so the cache stays consistent, and fall back to the stored user
-      // when offline or unauthenticated so the screen never goes blank.
+      // Merge them onto the stored user (which owns mode/isDriver/etc.), persist
+      // so the cache stays consistent, and fall back to the stored user when
+      // offline or unauthenticated so the screen never goes blank.
       let user = storedUser;
+      let photoUri = profileImage;
       if (storedUser) {
         try {
           const remote = await fetchProfile();
@@ -59,15 +82,25 @@ export function useProfileQuery() {
             ...storedUser,
             name: remote.fullName || storedUser.name,
             email: remote.email ?? storedUser.email,
+            emergencyContactName: remote.emergencyContactName ?? storedUser.emergencyContactName,
+            emergencyContactPhone: remote.emergencyContactPhone ?? storedUser.emergencyContactPhone,
           };
           await authRepository.saveCurrentUser(user);
+          // The account's avatar wins over whatever this install happens to hold:
+          // on a fresh install there IS no local URI, and an old local `file://`
+          // from a previous device would never load. Mirror it into local storage
+          // so the offline path below has something renderable next time.
+          if (remote.profileImageUrl && remote.profileImageUrl !== photoUri) {
+            photoUri = remote.profileImageUrl;
+            await profileRepository.saveProfileImage(remote.profileImageUrl);
+          }
         } catch {
           // Offline / unreachable — keep the locally stored profile.
         }
       }
       return {
         user,
-        profilePhoto: toProfilePhoto(profileImage),
+        profilePhoto: toProfilePhoto(photoUri),
       } satisfies SharedProfileSnapshot;
     },
   });
@@ -76,7 +109,7 @@ export function useProfileQuery() {
 export function useProfilePhotoQuery() {
   return usePolicyQuery(queryPolicies.profile, {
     queryKey: profileKeys.photo(),
-    queryFn: async () => profileRepository.getProfileImage(),
+    queryFn: async () => loadProfilePhotoUri(),
   });
 }
 

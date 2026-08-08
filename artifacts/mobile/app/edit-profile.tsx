@@ -89,17 +89,24 @@ export default function EditProfileScreen() {
     }
     setSaving(true);
     try {
-      // Real backend: PUT /customer/profile persists full_name + email. The
-      // emergency-contact fields have no backend equivalent, so they stay local.
+      const normalizedEmergencyPhone = emergencyContactPhone.trim()
+        ? normalizeRwandaPhoneNumber(emergencyContactPhone) || ''
+        : '';
+      // Real backend: PUT /customer/profile persists all of these on `users`.
+      // Emergency contacts used to stay device-local even though the columns
+      // exist (migration 069), so they were lost on any reinstall. Empty string
+      // is how the API clears a column — see the note on updateProfile.
       await updateProfile({
         fullName: name.trim(),
-        email: email.trim() || null,
+        email: email.trim(),
+        emergencyContactName: emergencyContactName.trim(),
+        emergencyContactPhone: normalizedEmergencyPhone,
       });
       await updateUser({
         name: name.trim(),
         email: email.trim() || undefined,
         emergencyContactName: emergencyContactName.trim() || undefined,
-        emergencyContactPhone: emergencyContactPhone.trim() ? (normalizeRwandaPhoneNumber(emergencyContactPhone) || undefined) : undefined,
+        emergencyContactPhone: normalizedEmergencyPhone || undefined,
       });
       showToast('Profile updated', 'info');
       router.back();
