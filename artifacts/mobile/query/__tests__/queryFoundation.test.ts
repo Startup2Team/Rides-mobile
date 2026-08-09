@@ -104,8 +104,12 @@ describe('query foundation', () => {
   test('defines cache policies for all supported domains', () => {
     expect(Object.keys(queryPolicies).sort()).toEqual([
       'activeRide',
+      'adminUnitSearch',
+      'adminUnits',
       'customerRatings',
       'demandHeatmap',
+      'landmarks',
+      'locationSuggestions',
       'driverCredits',
       'driverDocuments',
       'driverEarnings',
@@ -123,6 +127,7 @@ describe('query foundation', () => {
       'packages',
       'paymentMethods',
       'profile',
+      'recentLocations',
       'reverseGeocode',
       'rideHistory',
       'savedLocations',

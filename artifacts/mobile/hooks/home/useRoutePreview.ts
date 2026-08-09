@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react
 import { InteractionManager, Platform } from 'react-native';
 import MapView from 'react-native-maps';
 import { getRouteKey, useRoute } from '@/hooks/useRoute';
-import type { Coords, RideLocation } from '@/types';
+import type { Coords, RideLocation, VehicleType } from '@/types';
 import { homeRoutePolyline, sampleRouteCoordsForFit } from '@/utils/mapUtils';
 import {
   BOOKING_MAP_TOP_OVERLAY,
@@ -22,6 +22,7 @@ export function useRoutePreview({
   topInset,
   bottomInset,
   routeRecenterRequest,
+  vehicleType,
 }: {
   pickup: RideLocation;
   destination: RideLocation | null;
@@ -32,6 +33,8 @@ export function useRoutePreview({
   topInset: number;
   bottomInset: number;
   routeRecenterRequest: number;
+  /** Selected vehicle — lets the shared backend route cache answer first. */
+  vehicleType?: VehicleType | null;
 }) {
   const hasPreciseRouteLocations =
     showBooking &&
@@ -51,6 +54,7 @@ export function useRoutePreview({
   const { route, routeKey, loading: routeLoading } = useRoute(
     hasPreciseRouteLocations ? pickupCoords : null,
     hasPreciseRouteLocations ? destinationCoords : null,
+    { vehicleType },
   );
   const routeRequestKey = hasPreciseRouteLocations && destinationCoords
     ? getRouteKey(pickupCoords, destinationCoords)

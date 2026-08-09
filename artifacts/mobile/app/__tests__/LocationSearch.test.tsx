@@ -196,6 +196,38 @@ jest.mock('@/context/MapPickerContext', () => ({
   }),
 }));
 
+// Backend location endpoints (/locations/*). Stubbed at the query-hook barrel so
+// the screen renders without a QueryClient or AuthProvider.
+const mockRecordRecent = jest.fn();
+const mockForgetRecent = jest.fn();
+let mockServerRecents: Array<{
+  id: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  useCount: number;
+  lastUsedAt: string;
+}> = [];
+let mockLandmarks: Array<{
+  id: string;
+  name: string;
+  category: string;
+  latitude: number;
+  longitude: number;
+  geohash6: string;
+}> = [];
+let mockAdminUnits: Array<{ id: string; parentId: string | null; level: string; name: string; path: string }> = [];
+
+jest.mock('@/query/hooks', () => ({
+  useLocationSuggestionsQuery: () => ({ data: undefined }),
+  useLandmarksQuery: () => ({ data: mockLandmarks }),
+  useRecentLocationsQuery: () => ({ data: mockServerRecents }),
+  useRecordRecentLocationMutation: () => ({ mutate: mockRecordRecent }),
+  useDeleteRecentLocationMutation: () => ({ mutate: mockForgetRecent }),
+  useAdminUnitSearchQuery: () => ({ data: mockAdminUnits }),
+  useAdminUnitsQuery: () => ({ data: [] }),
+}));
+
 // Mock geocoding service
 jest.mock('@/services/geocoding', () => ({
   geocodeAddress: jest.fn(() => Promise.resolve([
@@ -213,6 +245,9 @@ describe('LocationSearchScreen Route-Based Tests', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockSelection = null;
+    mockServerRecents = [];
+    mockLandmarks = [];
+    mockAdminUnits = [];
     mockLocalParams = {
       target: 'pickup',
       userLatitude: '-1.9441',
@@ -341,6 +376,78 @@ describe('LocationSearchScreen Route-Based Tests', () => {
       pathname: '/saved-place-selector',
       params: { mode: 'edit', savedPlaceId: 'place-1' },
     });
+  });
+
+  test('curated backend landmarks rank above the geocoder hits', async () => {
+    mockLandmarks = [
+      {
+        id: 'lm-1',
+        name: 'Kigali Convention Centre',
+        category: 'landmark',
+        latitude: -1.953,
+        longitude: 30.093,
+        geohash6: 'kxxxxx',
+      },
+    ];
+    render(<LocationSearchScreen />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('Address, hotel, or 1 KG 185 ST'), 'Kigali');
+    act(() => {
+      jest.advanceTimersByTime(350);
+    });
+
+    await waitFor(() => expect(screen.getByText('Kigali Convention Centre')).toBeTruthy());
+    fireEvent.press(screen.getByText('Kigali Convention Centre'));
+
+    expect(mockSetPickup).toHaveBeenCalledWith(expect.objectContaining({
+      address: 'Kigali Convention Centre',
+      latitude: -1.953,
+      longitude: 30.093,
+    }));
+  });
+
+  test('picking a drop-off records it as a server-side recent destination', async () => {
+    mockLocalParams = { ...mockLocalParams, target: 'dropoff' };
+    render(<LocationSearchScreen />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('Address, hotel, or 1 KG 185 ST'), 'Kigali');
+    act(() => {
+      jest.advanceTimersByTime(350);
+    });
+
+    await waitFor(() => expect(screen.getByText('Kigali Center')).toBeTruthy());
+    fireEvent.press(screen.getByText('Kigali Center'));
+
+    expect(mockRecordRecent).toHaveBeenCalledWith({
+      address: 'Kigali Center, Rwanda',
+      latitude: -1.94,
+      longitude: 30.06,
+    });
+  });
+
+  test('server recents lead the previous-rides list and can be forgotten', () => {
+    mockServerRecents = [
+      {
+        id: 'recent-1',
+        address: 'Kimironko Market',
+        latitude: -1.95,
+        longitude: 30.12,
+        useCount: 3,
+        lastUsedAt: '2026-08-01T10:00:00Z',
+      },
+    ];
+    render(<LocationSearchScreen />);
+    fireEvent.press(screen.getByText('Previous rides'));
+
+    expect(screen.getByText('Kimironko Market')).toBeTruthy();
+    // The device-only history stays below the server list as the offline fallback.
+    expect(screen.getByText('Recent 1')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Remove Kimironko Market from recents'));
+    const confirm = mockAlert.mock.calls[0][2].find((btn: any) => btn.text === 'Remove');
+    confirm.onPress();
+
+    expect(mockForgetRecent).toHaveBeenCalledWith('recent-1', expect.any(Object));
   });
 
   test('saved locations actions alert Delete trigger', async () => {

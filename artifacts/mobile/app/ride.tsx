@@ -94,6 +94,7 @@ export default function RideScreen() {
   const { route: rideRoute } = useRoute(
     currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
     currentRide ? { latitude: currentRide.destination.latitude, longitude: currentRide.destination.longitude } : null,
+    { vehicleType: currentRide?.vehicleType ?? null },
   );
 
   const { arrivedBannerMessage, isArrived, isArriving, isInProgress, isPickupLate, statusMessage } =
@@ -112,6 +113,7 @@ export default function RideScreen() {
   const { route: driverToPickupRoute } = useRoute(
     isArriving ? arrivingRouteOrigin : null,
     isArriving && currentRide ? { latitude: currentRide.pickup.latitude, longitude: currentRide.pickup.longitude } : null,
+    { vehicleType: currentRide?.vehicleType ?? null },
   );
   // The driver marker comes ONLY from the driver's real position pushed over the
   // WS (context driverLocation) — no simulated walk along the route polyline.

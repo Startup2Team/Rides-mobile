@@ -294,6 +294,7 @@ export default function CustomerHome() {
     topInset: insets.top,
     bottomInset: insets.bottom,
     routeRecenterRequest,
+    vehicleType: selectedVehicle,
   });
 
   const shouldShowYouAreHere =

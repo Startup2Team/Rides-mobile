@@ -37,7 +37,12 @@ export type QueryPolicyName =
   | 'paymentMethods'
   | 'searchAutocomplete'
   | 'reverseGeocode'
-  | 'demandHeatmap';
+  | 'demandHeatmap'
+  | 'landmarks'
+  | 'adminUnits'
+  | 'adminUnitSearch'
+  | 'locationSuggestions'
+  | 'recentLocations';
 
 export type QueryPolicyMap = Record<QueryPolicyName, QueryPolicy>;
 

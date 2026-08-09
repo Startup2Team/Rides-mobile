@@ -8,6 +8,17 @@ export {
   usePrimaryVehicleMutation,
   useUpdateVehicleMutation,
 } from './useDriverVehiclesQuery';
+export {
+  useAdminUnitSearchQuery,
+  useAdminUnitsQuery,
+  useLandmarksQuery,
+} from './useLocationCatalogQueries';
+export { useLocationSuggestionsQuery } from './useLocationSuggestionsQuery';
+export {
+  useDeleteRecentLocationMutation,
+  useRecentLocationsQuery,
+  useRecordRecentLocationMutation,
+} from './useRecentLocationsQuery';
 export { useNotificationsQuery } from './useNotificationsQuery';
 export {
   useClearNotificationsMutation,
