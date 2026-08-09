@@ -303,6 +303,12 @@ export interface DriverProfile {
   completedRides: number;
   dailyRides: number;
   dailyDeclines: number;
+  /**
+   * Local calendar date (YYYY-MM-DD) the daily counters above belong to. When it
+   * is not today, they are stale and get zeroed — see domain/driverDailyCounters.
+   * Optional because profiles stored before this field existed have no stamp.
+   */
+  dailyCountersDate?: string;
   policyAccepted: boolean;
   policyAcceptedAt?: string;
   earningsTotal: number;

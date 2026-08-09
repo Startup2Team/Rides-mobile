@@ -43,6 +43,7 @@ import { getDriverProfile } from '@/services/driverProfile';
 import { configurePushNotifications, registerPushToken, resetPushRegistration } from '@/services/pushRegistration';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
+import { withDailyCountersForToday } from '@/domain/driverDailyCounters';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
 import { activateVehicleByPlate } from '@/services/driverVehicles';
 
@@ -282,7 +283,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       if (storedDriverProfile.data) {
-        setDriverProfile(storedDriverProfile.data);
+        // Roll the daily counters over before anything renders, so a driver
+        // opening the app on a new day sees today's numbers rather than
+        // yesterday's carried forward.
+        const rolled = withDailyCountersForToday(storedDriverProfile.data);
+        setDriverProfile(rolled);
+        if (rolled !== storedDriverProfile.data) void saveStoredDriverProfile(rolled);
       }
       // Always reconcile driver identity from the backend when authed (the call
       // self-guards on the token). A driver may have NO local profile after a
@@ -534,8 +540,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const recordCompletedRide = useCallback(async (agreedFare?: number | null) => {
-    const prev = driverProfileRef.current;
-    if (!prev) return;
+    const stored = driverProfileRef.current;
+    if (!stored) return;
+    // A ride finishing after midnight is the first of the new day, not the
+    // eleventh of yesterday — roll over before counting it.
+    const prev = withDailyCountersForToday(stored);
     const completedRides = (prev.completedRides ?? 0) + 1;
     const dailyRides = (prev.dailyRides ?? 0) + 1;
     const completedFare = typeof agreedFare === 'number' && Number.isFinite(agreedFare)

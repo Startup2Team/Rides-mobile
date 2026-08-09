@@ -365,6 +365,7 @@ const driverProfileShapeSchema = z.object({
   completedRides: z.number(),
   dailyRides: z.number(),
   dailyDeclines: z.number(),
+  dailyCountersDate: z.string().optional(),
   policyAccepted: z.boolean(),
   policyAcceptedAt: z.string().optional(),
   earningsTotal: z.number(),

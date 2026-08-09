@@ -44,6 +44,7 @@ import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits, getActiveBonusRides, getActiveRideCredits, getEntitlementVehicleForProfile, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { withDailyCountersForToday } from '@/domain/driverDailyCounters';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
 import { elevation } from '@/constants/elevation';
@@ -477,11 +478,15 @@ export default function DriverDashboard() {
     }).start(() => {
       setCountdown(15);
     });
-    if (driverProfile)
+    if (driverProfile) {
+      // Roll over first: a decline after midnight starts the new day's count
+      // rather than adding to yesterday's.
+      const rolled = withDailyCountersForToday(driverProfile);
       saveDriverProfile({
-        ...driverProfile,
-        dailyDeclines: (driverProfile.dailyDeclines ?? 0) + 1,
+        ...rolled,
+        dailyDeclines: (rolled.dailyDeclines ?? 0) + 1,
       });
+    }
   };
 
   const handleDecline = () => {
