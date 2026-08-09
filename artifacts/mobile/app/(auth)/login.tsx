@@ -22,7 +22,7 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { navigateToCustomerHomeAfterCompletion, replaceAuthBoundary } from '@/navigation/navigationPolicy';
+import { navigateToCustomerHomeAfterCompletion, navigateToDriverHomeAfterCompletion, replaceAuthBoundary } from '@/navigation/navigationPolicy';
 import { loginWithPhone } from '@/services/authSession';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import type { User } from '@/types';
@@ -80,8 +80,14 @@ export default function LoginScreen() {
         isDriver: sessionUser?.isDriver ?? false,
         createdAt: sessionUser?.createdAt || new Date().toISOString(),
       };
-      await login(user);
-      navigateToCustomerHomeAfterCompletion(router);
+      // Land where the account actually is: an approved driver who logged out
+      // in driver mode comes back to the driver home, not the customer one.
+      const landing = await login(user);
+      if (landing === 'driver') {
+        navigateToDriverHomeAfterCompletion(router);
+      } else {
+        navigateToCustomerHomeAfterCompletion(router);
+      }
     } catch (err) {
       // Surface the backend's own reason where it has one. A suspended account
       // (403 ACCOUNT_SUSPENDED — the penalty engine bans for excessive

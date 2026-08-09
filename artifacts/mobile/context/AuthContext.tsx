@@ -63,7 +63,9 @@ interface AuthContextType {
   user: User | null;
   driverProfile: DriverProfile | null;
   isLoading: boolean;
-  login: (user: User) => Promise<void>;
+  // Resolves to the home the caller should navigate to ('driver' only when the
+  // backend confirms an approved driver — see the login implementation).
+  login: (user: User) => Promise<AppMode>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
@@ -74,7 +76,8 @@ interface AuthContextType {
   // Re-pull the driver's real approval status + online state from the backend.
   // Screens that show approval state (e.g. submission confirmation) call this on
   // focus so a PENDING → APPROVED transition appears without a cold restart.
-  refreshDriverProfile: () => Promise<void>;
+  // Resolves true when the backend confirms an approved driver.
+  refreshDriverProfile: () => Promise<boolean>;
 }
 
 // Backend approval_status → mobile status. The backend uses PENDING_REVIEW for a
@@ -336,10 +339,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // no local profile, so if the backend says this user is a driver we BUILD one —
   // otherwise a real driver would come back as a customer with a "Join as rider"
   // prompt. Non-driver users 404 here (caught) and stay customers.
-  const syncDriverProfileFromBackend = useCallback(async () => {
+  // Returns whether the backend says this user is an APPROVED driver, so login
+  // can decide the landing screen without waiting on React state (the ref only
+  // updates on the next render, after this promise has already resolved).
+  const syncDriverProfileFromBackend = useCallback(async (): Promise<boolean> => {
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token) return false;
       const backend = await getDriverProfile();
       const status = mapApprovalStatus(backend.approvalStatus);
       setDriverProfile(prev => {
@@ -385,8 +391,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void saveStoredDriverProfile(updated);
         return updated;
       });
+      return status === 'approved';
     } catch {
       // Not a driver yet, or backend unreachable — keep the local profile.
+      return false;
     }
   }, []);
 
@@ -403,14 +411,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [syncProfileFromBackend, syncDriverProfileFromBackend]);
 
-  const login = useCallback(async (newUser: User) => {
+  // Resolves to the mode the login screen should land on. A driver who logged
+  // out in driver mode comes back with role_state DRIVER_ACTIVE, and used to be
+  // seated on the customer home anyway because the post-login navigation was
+  // hardcoded — the backend remembered them, the screen didn't.
+  const login = useCallback(async (newUser: User): Promise<AppMode> => {
     setUser(newUser);
     await saveStoredUser(newUser);
     void syncProfileFromBackend();
+    void registerPushToken();
+    if (newUser.mode === 'driver') {
+      // Await the driver profile: the (driver) layout redirects to the
+      // submission screen when no profile is loaded, so landing there before
+      // the sync finishes would bounce an approved driver. One extra round
+      // trip, only on driver logins; falls back to customer on any failure.
+      const approved = await syncDriverProfileFromBackend();
+      return approved ? 'driver' : 'customer';
+    }
     // Recognise a returning driver: pull their real driver profile from the
     // backend (identity survives logout, which clears local storage).
     void syncDriverProfileFromBackend();
-    void registerPushToken();
+    return 'customer';
   }, [syncProfileFromBackend, syncDriverProfileFromBackend]);
 
   const logout = useCallback(async () => {

@@ -28,9 +28,13 @@ export async function submitDriverApplicationWithDocuments(
   } catch (error) {
     reportOperationalFailure('driver.policy.accept', error);
   }
-  // Best-effort per document — a failed upload can be retried later without
-  // losing the (already created) application.
-  for (const doc of documents) {
+  // All documents upload CONCURRENTLY. They used to go one at a time — seven
+  // documents × three round trips each (presign → PUT → record) meant ~21
+  // sequential network calls behind the submit spinner, which is why pressing
+  // Submit hung for so long on a mobile connection. Each upload stays
+  // best-effort: one failure doesn't block the others, and the (already
+  // created) application is never lost.
+  await Promise.all(documents.map(async doc => {
     try {
       const fileUrl = await uploadDriverDocument(doc.uri, doc.documentType, doc.contentType);
       // The selfie IS the driver's account photo. POST /v1/driver/documents
@@ -46,8 +50,10 @@ export async function submitDriverApplicationWithDocuments(
           reportOperationalFailure('driver.selfie.promoteToAccountPhoto', error);
         }
       }
-    } catch {
-      // continue with the remaining documents
+    } catch (error) {
+      // Continue with the remaining documents; record which one failed so a
+      // silent gap in the admin's document list is traceable.
+      reportOperationalFailure('driver.documents.upload', error, { documentType: doc.documentType });
     }
-  }
+  }));
 }
