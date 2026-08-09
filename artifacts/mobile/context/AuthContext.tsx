@@ -311,10 +311,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await fetchProfile();
       setUser(prev => {
         if (!prev) return prev;
+        // Emergency contacts must come along. Edit Profile seeds its form from
+        // this user object and now sends '' to clear a field, so a form opened
+        // before these landed showed them blank and Save ERASED them on the
+        // server — losing the very data the sync was added to preserve.
         const updated: User = {
           ...prev,
           name: profile.fullName || prev.name,
           email: profile.email ?? prev.email,
+          emergencyContactName: profile.emergencyContactName ?? prev.emergencyContactName,
+          emergencyContactPhone: profile.emergencyContactPhone ?? prev.emergencyContactPhone,
         };
         void saveStoredUser(updated);
         return updated;

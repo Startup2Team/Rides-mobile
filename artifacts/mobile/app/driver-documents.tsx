@@ -10,21 +10,28 @@ import { DatePickerField } from '@/components/DatePickerField';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
 import { FORM_BOTTOM_PADDING } from '@/constants/tabBar';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { ConflictError } from '@/data/remote/contracts/backendErrors';
 import {
   DOCUMENTS_REQUIRING_BACK,
+  DRIVER_DOCUMENT_API_TYPES,
   DRIVER_DOCUMENT_LABELS,
   buildDriverDocumentsFromProfile,
   getDriverDocumentDisplayStatus,
+  mergeServerDriverDocuments,
   reconcileDriverDocumentsWithProfile,
   type DriverDocumentDisplayStatus,
   type DriverDocuments,
 } from '@/domain/driverDocuments';
 import { useColors } from '@/hooks/useColors';
 import { useDriverDocumentUpload } from '@/hooks/driver-onboarding/useDriverDocumentUpload';
-import type { DocumentKey } from '@/hooks/driver-onboarding/onboardingTypes';
+import type { DocFaces, DocumentKey } from '@/hooks/driver-onboarding/onboardingTypes';
 import { isFutureExpiryDate, isValidDriverLicenceNumber } from '@/hooks/driver-onboarding/useDriverOnboardingValidation';
 import { loadStoredDriverDocuments, saveStoredDriverDocuments } from '@/persistence/driverDocumentsPersistence';
+import { useDriverDocumentsQuery } from '@/query/hooks';
+import { driverKeys } from '@/query/keys';
+import { uploadDriverDocument } from '@/services/driverDocuments';
 import { isValidDocumentImageUri } from '@/utils/documentValidation';
 import { isValidRwandaNationalId } from '@/utils/rwandaValidation';
 import { elevation } from '@/constants/elevation';
@@ -42,22 +49,39 @@ export default function DriverDocumentsScreen() {
   const headerMetrics = useGlassHeaderMetrics();
   const isDark = useColorScheme() === 'dark';
   const { driverProfile } = useAuth();
-  const [documents, setDocuments] = React.useState<DriverDocuments | null>(null);
+  const queryClient = useQueryClient();
+  // The backend holds the live document set (GET /v1/driver/documents); local
+  // storage only ever knew about uploads made on this handset. Reading both is
+  // what makes the screen correct after a reinstall or on a second device.
+  const serverDocumentsQuery = useDriverDocumentsQuery();
+  const [localDocuments, setLocalDocuments] = React.useState<DriverDocuments | null>(null);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeKey, setActiveKey] = React.useState<DocumentKey | null>(null);
+
+  // Server files and review state win; the document number and expiry date have
+  // no API equivalent, so they keep coming from the locally held record.
+  const documents = React.useMemo(() => {
+    if (!localDocuments) return null;
+    const server = serverDocumentsQuery.data;
+    return server && server.length > 0 ? mergeServerDriverDocuments(localDocuments, server) : localDocuments;
+  }, [localDocuments, serverDocumentsQuery.data]);
+
+  const hydrateFromStorage = React.useCallback(async () => {
+    const stored = await loadStoredDriverDocuments();
+    if (stored.data) {
+      const reconciled = driverProfile ? reconcileDriverDocumentsWithProfile(stored.data, driverProfile) : stored.data;
+      setLocalDocuments(reconciled);
+      if (reconciled !== stored.data) await saveStoredDriverDocuments(reconciled);
+    } else if (driverProfile) {
+      setLocalDocuments(buildDriverDocumentsFromProfile(driverProfile));
+    }
+  }, [driverProfile]);
 
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
     const start = Date.now();
     try {
-      const stored = await loadStoredDriverDocuments();
-      if (stored.data) {
-        const reconciled = driverProfile ? reconcileDriverDocumentsWithProfile(stored.data, driverProfile) : stored.data;
-        setDocuments(reconciled);
-        if (reconciled !== stored.data) await saveStoredDriverDocuments(reconciled);
-      } else if (driverProfile) {
-        setDocuments(buildDriverDocumentsFromProfile(driverProfile));
-      }
+      await Promise.all([hydrateFromStorage(), serverDocumentsQuery.refetch()]);
     } finally {
       const elapsed = Date.now() - start;
       const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
@@ -67,7 +91,7 @@ export default function DriverDocumentsScreen() {
       }
       setIsRefreshing(false);
     }
-  }, [driverProfile]);
+  }, [hydrateFromStorage, serverDocumentsQuery]);
   const [documentNumber, setDocumentNumber] = React.useState('');
   const [expiryDate, setExpiryDate] = React.useState('');
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -76,16 +100,8 @@ export default function DriverDocumentsScreen() {
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
 
   React.useEffect(() => {
-    void loadStoredDriverDocuments().then(stored => {
-      if (stored.data) {
-        const reconciled = driverProfile ? reconcileDriverDocumentsWithProfile(stored.data, driverProfile) : stored.data;
-        setDocuments(reconciled);
-        if (reconciled !== stored.data) void saveStoredDriverDocuments(reconciled);
-      } else if (driverProfile) {
-        setDocuments(buildDriverDocumentsFromProfile(driverProfile));
-      }
-    });
-  }, [driverProfile]);
+    void hydrateFromStorage();
+  }, [hydrateFromStorage]);
 
   const beginReplacement = (key: DocumentKey) => {
     if (!documents) return;
@@ -119,26 +135,58 @@ export default function DriverDocumentsScreen() {
       return;
     }
 
-    const now = new Date().toISOString();
-    const updated: DriverDocuments = {
-      ...documents,
-      [activeKey]: {
-        ...documents[activeKey],
-        faces,
-        documentNumber: activeKey === 'license' || activeKey === 'nationalId' ? documentNumber : undefined,
-        expiryDate: EXPIRY_DOCUMENTS.includes(activeKey) ? expiryDate : undefined,
-        reviewStatus: 'pending_review',
-        submissionKind: 'replacement',
-        submittedAt: now,
-        updatedAt: now,
-      },
-    };
     setSaving(true);
-    await saveStoredDriverDocuments(updated);
-    setDocuments(updated);
-    setActiveKey(null);
-    setSaving(false);
-    Alert.alert('Submitted for review', `${DRIVER_DOCUMENT_LABELS[activeKey]} replacement was submitted. Your current verified details remain active during review.`);
+    try {
+      // Send the replacement to the backend first. Uploads are append-only: each
+      // one supersedes the previous live version and starts PENDING again, so the
+      // approved file is never lost. Writing only to local storage — which is all
+      // this screen used to do — meant a "submitted" replacement never reached
+      // review and vanished with the app.
+      const [frontType, backType] = DRIVER_DOCUMENT_API_TYPES[activeKey];
+      const current = documents[activeKey];
+      const stored: DocFaces = [current.faces[0], current.faces[1]];
+      if (faces[0] && faces[0] !== current.faces[0]) {
+        stored[0] = await uploadDriverDocument(faces[0], frontType);
+      }
+      if (backType && faces[1] && faces[1] !== current.faces[1]) {
+        stored[1] = await uploadDriverDocument(faces[1], backType);
+      }
+
+      const now = new Date().toISOString();
+      const updated: DriverDocuments = {
+        ...documents,
+        [activeKey]: {
+          ...current,
+          // Keep the stored URLs, not the picker URIs — those mean nothing on any
+          // other device, and this record outlives the picker session.
+          faces: stored,
+          documentNumber: activeKey === 'license' || activeKey === 'nationalId' ? documentNumber : undefined,
+          expiryDate: EXPIRY_DOCUMENTS.includes(activeKey) ? expiryDate : undefined,
+          reviewStatus: 'pending_review',
+          submissionKind: 'replacement',
+          submittedAt: now,
+          updatedAt: now,
+        },
+      };
+      await saveStoredDriverDocuments(updated);
+      setLocalDocuments(updated);
+      await queryClient.invalidateQueries({ queryKey: driverKeys.documents() });
+      setActiveKey(null);
+      Alert.alert('Submitted for review', `${DRIVER_DOCUMENT_LABELS[activeKey]} replacement was submitted. Your current verified details remain active during review.`);
+    } catch (error) {
+      // 409 means the document is approved and view-only — a real rule, not a
+      // bad input, so say what unblocks it instead of "try again".
+      if (error instanceof ConflictError) {
+        Alert.alert(
+          'Already approved',
+          `${DRIVER_DOCUMENT_LABELS[activeKey]} is approved and can't be replaced. Contact support to request a re-upload.`,
+        );
+      } else {
+        Alert.alert('Upload failed', `Couldn't submit ${DRIVER_DOCUMENT_LABELS[activeKey]}. Check your connection and try again.`);
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -157,6 +205,17 @@ export default function DriverDocumentsScreen() {
             Replacements are reviewed before becoming your verified driver documents.
           </AppText>
         </View>
+
+        {serverDocumentsQuery.isError ? (
+          // Never let a failed fetch read as "you have nothing on file" — that is
+          // the confusion this screen exists to remove.
+          <View style={[styles.notice, { backgroundColor: colors.destructiveHex + '10' }]}>
+            <Feather name="wifi-off" size={icons.semantic.row} color={colors.destructive} />
+            <AppText style={[styles.noticeText, { color: colors.mutedForeground }]}>
+              Couldn&apos;t load your submitted documents. Pull down to try again.
+            </AppText>
+          </View>
+        ) : null}
 
         {documents ? DOCUMENT_ORDER.map(key => {
           const record = documents[key];
@@ -216,6 +275,9 @@ function DocumentCard({ cardFill, children, colors, onReplace, record, status }:
       ? 'Expiring Soon'
       : status.charAt(0).toUpperCase() + status.slice(1);
   const imageCount = record.faces.filter(Boolean).length;
+  // The API computes this and enforces it with a 409; only hide the button when
+  // it has actually said no, so an older server never disables a valid action.
+  const canReplace = record.editable !== false;
 
   return (
     <View style={[styles.card, styles.cardShadow, { backgroundColor: cardFill }]}>
@@ -237,9 +299,20 @@ function DocumentCard({ cardFill, children, colors, onReplace, record, status }:
             <Feather name="image" size={icons.semantic.button} color={colors.mutedForeground} />
           </View>
         ))}
-        <TouchableOpacity style={[styles.replaceButton, { backgroundColor: colors.primary }]} onPress={onReplace}>
-          <AppText style={[styles.replaceText, { color: colors.primaryForeground }]}>Update Document</AppText>
-        </TouchableOpacity>
+        {canReplace ? (
+          <TouchableOpacity
+            style={[styles.replaceButton, { backgroundColor: colors.primary }]}
+            onPress={onReplace}
+            accessibilityRole="button"
+            accessibilityLabel={`Update ${DRIVER_DOCUMENT_LABELS[record.key]}`}
+          >
+            <AppText style={[styles.replaceText, { color: colors.primaryForeground }]}>Update Document</AppText>
+          </TouchableOpacity>
+        ) : (
+          <AppText style={[styles.viewOnlyText, { color: colors.mutedForeground }]}>
+            Approved — contact support to replace
+          </AppText>
+        )}
       </View>
       {children}
     </View>
@@ -378,6 +451,7 @@ const styles = StyleSheet.create({
   emptyPreview: { alignItems: 'center', justifyContent: 'center' },
   replaceButton: { marginLeft: 'auto', paddingHorizontal: semanticSpacing.rowGap, paddingVertical: 9, borderRadius: radius.pill },
   replaceText: { ...typography.button },
+  viewOnlyText: { marginLeft: 'auto', flexShrink: 1, textAlign: 'right', ...typography.tiny },
   editor: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: semanticSpacing.cardPadding, gap: semanticSpacing.cardPadding },
   editorHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: semanticSpacing.rowGap },
   editorTitle: { ...typography.title,  },
