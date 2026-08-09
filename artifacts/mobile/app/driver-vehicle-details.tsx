@@ -16,6 +16,7 @@ import {
   type GalleryImage,
 } from '@/components/ImageGalleryPreview';
 import { useAuth } from '@/context/AuthContext';
+import { resolveVehicleDocuments } from '@/domain/driverVehicleDocuments';
 import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
 import {
   getAuthorizationComplianceMessage,
@@ -91,7 +92,11 @@ export default function DriverVehicleDetailsScreen() {
 
   React.useEffect(() => {
     if (!vehicle) return;
-    setDraftDocuments(vehicle.pendingDocumentUpdate?.documents ?? vehicle.documents ?? null);
+    // null means "no local edits yet" — the cards render baseDocuments, which
+    // already layers the server's documents over whatever this handset holds.
+    // Seeding the draft from the local set instead would pin the cards to the
+    // local copy and hide the server's images again.
+    setDraftDocuments(null);
     setDraftPhotos(
       {
         outside: vehicle.pendingDocumentUpdate?.photos?.outside ?? vehicle.photos?.outside ?? null,
@@ -111,6 +116,23 @@ export default function DriverVehicleDetailsScreen() {
     setUpdateTarget({ kind: 'document', key: 'license', face: 0, label: 'Driver License' });
   }, [requestedUpdateDocument, vehicle]);
 
+  // What the document cards fall back to before the driver edits anything.
+  //
+  // Two things are going on. First, the local document set is only ever what
+  // THIS handset uploaded — a driver on a second phone, or after a reinstall,
+  // has none, which is why every card read "Missing" while the Verification
+  // documents list right below it showed the same papers APPROVED. Overlaying
+  // the server's documents is what reconciles the two.
+  //
+  // Second, the fallback is an empty set rather than null. updateDraftDocumentFace
+  // can only write into a set that already exists, so a null draft silently
+  // swallowed every photo the driver took — the picker returned, nothing
+  // appeared, and no error was shown.
+  const baseDocuments = React.useMemo(
+    () => resolveVehicleDocuments(vehicle, serverDocuments),
+    [vehicle, serverDocuments],
+  );
+
   if (!vehicle) {
     return (
       <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
@@ -124,8 +146,10 @@ export default function DriverVehicleDetailsScreen() {
   }
 
   const updateDraftDocumentFace = (key: keyof DriverVehicleDocumentSet, face: 0 | 1, uri: string) => {
-    setDraftDocuments(current => {
-      if (!current) return current;
+    setDraftDocuments(currentDraft => {
+      // The first replacement on a vehicle with no local documents materialises
+      // the draft from the displayed base, so the photo has somewhere to land.
+      const current = currentDraft ?? baseDocuments;
       const next: DriverVehicleDocumentSet = {
         ...current,
         [key]: {
@@ -143,13 +167,16 @@ export default function DriverVehicleDetailsScreen() {
   };
 
   const updateDraftDocumentExpiry = (key: ExpiryDocumentKey, expiryDate?: string) => {
-    setDraftDocuments(current => current ? {
-      ...current,
-      [key]: {
-        ...current[key],
-        expiryDate,
-      },
-    } : current);
+    setDraftDocuments(currentDraft => {
+      const current = currentDraft ?? baseDocuments;
+      return {
+        ...current,
+        [key]: {
+          ...current[key],
+          expiryDate,
+        },
+      };
+    });
   };
 
   const requiresExpiryDate = (key: keyof DriverVehicleDocumentSet): key is ExpiryDocumentKey =>
@@ -208,9 +235,10 @@ export default function DriverVehicleDetailsScreen() {
   };
 
   const submitVehicleDocumentUpdate = async () => {
-    if (!vehicle || !driverProfile || !draftDocuments || !draftPhotos) return;
+    if (!vehicle || !driverProfile || !draftPhotos) return;
+    const documents = draftDocuments ?? baseDocuments;
     const missingExpiry = (['license', 'insurance', 'authorization'] as const).find(key => {
-      const expiry = parseDateDdMmYyyy(draftDocuments[key].expiryDate ?? '');
+      const expiry = parseDateDdMmYyyy(documents[key].expiryDate ?? '');
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       return !expiry || expiry <= today;
@@ -221,7 +249,7 @@ export default function DriverVehicleDetailsScreen() {
     }
     setSavingUpdate(true);
     const updatedVehicle = submitDriverVehicleDocumentUpdate(vehicle, {
-      documents: draftDocuments,
+      documents,
       photos: draftPhotos,
       submittedAt: new Date().toISOString(),
     });
@@ -252,10 +280,10 @@ export default function DriverVehicleDetailsScreen() {
   const insuranceComplianceMessage = getInsuranceComplianceMessage(vehicle.insuranceExpiryDate);
   const authorizationComplianceMessage = getAuthorizationComplianceMessage(vehicle.authorizationExpiryDate);
   const documentCards = [
-    { key: 'license', label: 'Driver License', record: draftDocuments?.license ?? vehicle.documents?.license, faces: 2, galleryStartIndex: 0 },
-    { key: 'nationalId', label: 'National ID', record: draftDocuments?.nationalId ?? vehicle.documents?.nationalId, faces: 2, galleryStartIndex: 2 },
-    { key: 'insurance', label: 'Insurance', record: draftDocuments?.insurance ?? vehicle.documents?.insurance, faces: 1, galleryStartIndex: 4 },
-    { key: 'authorization', label: 'Authorization Certificate', record: draftDocuments?.authorization ?? vehicle.documents?.authorization, faces: 1, galleryStartIndex: 5 },
+    { key: 'license', label: 'Driver License', record: draftDocuments?.license ?? baseDocuments.license, faces: 2, galleryStartIndex: 0 },
+    { key: 'nationalId', label: 'National ID', record: draftDocuments?.nationalId ?? baseDocuments.nationalId, faces: 2, galleryStartIndex: 2 },
+    { key: 'insurance', label: 'Insurance', record: draftDocuments?.insurance ?? baseDocuments.insurance, faces: 1, galleryStartIndex: 4 },
+    { key: 'authorization', label: 'Authorization Certificate', record: draftDocuments?.authorization ?? baseDocuments.authorization, faces: 1, galleryStartIndex: 5 },
   ] as const;
 
   const photoCards = [
@@ -443,7 +471,7 @@ export default function DriverVehicleDetailsScreen() {
               size="md"
               fullWidth
               loading={savingUpdate}
-              disabled={!draftDocuments || !draftPhotos || Boolean(expiryTarget)}
+              disabled={!draftPhotos || Boolean(expiryTarget)}
             />
           </View>
         ) : null}
@@ -596,10 +624,14 @@ function DocumentBlock({
   warningText?: string | null;
   record?: DriverVehicleDocumentRecord;
 }) {
-  const statusLabel = record ? formatDocumentStatus(record.reviewStatus) : 'Missing';
-  const statusColor = record ? getStatusColor(colors, record.reviewStatus) : colors.mutedForeground;
   const images = record?.faces ?? [null, null];
   const visibleFaces = faces === 2 ? images.slice(0, 2) : images.slice(0, 1);
+  // A record always exists now (see emptyVehicleDocumentSet), so the review
+  // status alone would claim "Pending Review" for a document nobody ever
+  // uploaded. The presence of an actual image is what separates the two.
+  const hasImage = visibleFaces.some(Boolean);
+  const statusLabel = record && hasImage ? formatDocumentStatus(record.reviewStatus) : 'Missing';
+  const statusColor = record && hasImage ? getStatusColor(colors, record.reviewStatus) : colors.mutedForeground;
 
   return (
     <View style={styles.block}>
