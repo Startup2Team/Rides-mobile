@@ -6,7 +6,10 @@ function policy(overrides: Partial<QueryPolicy>): QueryPolicy {
   return {
     staleTime: 5 * minute,
     gcTime: 30 * minute,
-    refetchOnWindowFocus: false,
+    // The app-foreground moment is when a user checks whether something changed
+    // (an approval, a payment, a new offer). Stale queries refetch then;
+    // staleTime still protects anything fetched moments ago.
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     refetchOnMount: true,
     retry: 2,
@@ -35,6 +38,8 @@ export const queryPolicies = {
     refetchOnMount: 'always',
   }),
   driverProfile: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
@@ -70,6 +75,8 @@ export const queryPolicies = {
   // KYC documents change rarely and the screen is entered deliberately, so a
   // longer stale window is fine; refetchOnMount still picks up a review result.
   driverDocuments: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
@@ -94,6 +101,8 @@ export const queryPolicies = {
     gcTime: 45 * minute,
   }),
   packageEntitlements: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 2 * minute,
     gcTime: 20 * minute,
   }),
@@ -106,6 +115,8 @@ export const queryPolicies = {
     gcTime: 10 * minute,
   }),
   notifications: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 60 * 1000,
     gcTime: 15 * minute,
   }),

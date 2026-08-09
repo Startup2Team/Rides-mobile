@@ -15,7 +15,7 @@ import { formatOtpTime, OTP_VALIDITY_SECONDS } from '@/constants/otp';
 import { typography } from '@/constants/typography';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
-import { navigateToCustomerHomeAfterCompletion } from '@/navigation/navigationPolicy';
+import { navigateToCustomerHomeAfterCompletion, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { requestOtp, verifyOtp } from '@/services/authSession';
 import type { User } from '@/types';
 
@@ -108,8 +108,12 @@ export default function OTPScreen() {
         isDriver: sessionUser?.isDriver ?? false,
         createdAt: sessionUser?.createdAt || new Date().toISOString(),
       };
-      await login(user);
-      navigateToCustomerHomeAfterCompletion(router);
+      const landing = await login(user);
+      if (landing === 'driver') {
+        navigateToDriverHomeAfterCompletion(router);
+      } else {
+        navigateToCustomerHomeAfterCompletion(router);
+      }
     } catch {
       setError("That code didn't work. Check it and try again.");
       setCode(Array(otpLength).fill(''));
