@@ -7,6 +7,7 @@ import { loadStoredDriverProfile } from '@/persistence/authPersistence';
 import { getSecureStorageKey, saveSecureStorage } from '@/persistence/secureStorage';
 import { AuthProvider, useAuth } from '../AuthContext';
 import type { RoleSwitchResult } from '../AuthContext';
+import { toLocalDateString } from '@/domains/driver-statistics/driverDailyGoals';
 import { saveAuthTokens } from '@/persistence/authTokens';
 import { queueRoleSync } from '@/services/roleSwitchSync';
 import { resetAppModeStore } from '@/state/appModeStore';
@@ -61,6 +62,10 @@ const baseProfile: DriverProfile = {
   completedRides: 0,
   dailyRides: 0,
   dailyDeclines: 0,
+  // Stamped as today so the daily rollover is a no-op — these tests are about
+  // counting within a day. The rollover itself is covered separately, both in
+  // domain/__tests__/driverDailyCounters.test.ts and below.
+  dailyCountersDate: toLocalDateString(new Date()),
   policyAccepted: true,
   earningsTotal: 0,
   verificationStatus: 'approved',
@@ -265,6 +270,27 @@ describe('recordCompletedRide', () => {
     });
 
     expect(result.current.driverProfile?.acceptanceRate).toBe(25);
+  });
+
+  test('a ride completed on a new day starts that day at 1', async () => {
+    // The counters used to be incremented only, so yesterday's total carried
+    // into today and grew for the life of the install.
+    const { result } = await setupWithProfile({
+      ...baseProfile,
+      completedRides: 40,
+      dailyRides: 9,
+      dailyDeclines: 6,
+      dailyCountersDate: '2020-01-01',
+    });
+
+    await act(async () => {
+      await result.current.recordCompletedRide(2000);
+    });
+
+    expect(result.current.driverProfile?.dailyRides).toBe(1);
+    expect(result.current.driverProfile?.dailyDeclines).toBe(0);
+    // Lifetime totals are untouched by the rollover.
+    expect(result.current.driverProfile?.completedRides).toBe(41);
   });
 
   test('does nothing if no driverProfile is set', async () => {
