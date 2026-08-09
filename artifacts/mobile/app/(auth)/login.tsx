@@ -24,6 +24,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { navigateToCustomerHomeAfterCompletion, replaceAuthBoundary } from '@/navigation/navigationPolicy';
 import { loginWithPhone } from '@/services/authSession';
+import { readBackendError } from '@/utils/backendErrorMessage';
 import type { User } from '@/types';
 
 const COUNTRIES = [
@@ -81,10 +82,21 @@ export default function LoginScreen() {
       };
       await login(user);
       navigateToCustomerHomeAfterCompletion(router);
-    } catch {
-      // Wrong/unregistered number, or backend unreachable. Keep it actionable —
-      // a brand-new user needs to Register (link below) to verify their number.
-      setError("We couldn't sign you in with this number. Check it's correct — or tap Register below if you're new.");
+    } catch (err) {
+      // Surface the backend's own reason where it has one. A suspended account
+      // (403 ACCOUNT_SUSPENDED — the penalty engine bans for excessive
+      // cancellations) is indistinguishable from a typo'd number otherwise, so
+      // the user retypes a correct number forever and never learns why.
+      const { code, message } = readBackendError(err);
+      if (code === 'ACCOUNT_SUSPENDED') {
+        setError(message ?? 'Your account has been suspended. Please contact support.');
+      } else if (message && code !== 'NOT_FOUND') {
+        setError(message);
+      } else {
+        // Wrong/unregistered number, or backend unreachable. Keep it actionable —
+        // a brand-new user needs to Register (link below) to verify their number.
+        setError("We couldn't sign you in with this number. Check it's correct — or tap Register below if you're new.");
+      }
     } finally {
       setSubmitting(false);
     }

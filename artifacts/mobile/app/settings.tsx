@@ -26,7 +26,8 @@ import { sizes } from '@/constants/sizes';
 import { spacing, semanticSpacing } from '@/constants/spacing';
 import { typography } from '@/constants/typography';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
-import { submitSupportTicket } from '@/services/support';
+import { reportRuntimeError } from '@/observability/monitoring';
+import { deleteAccount } from '@/services/authSession';
 import { usePressGuard } from '@/hooks/usePressGuard';
 import { DailyGoalIcon } from "@/components/DailyGoalIcon";
 import { PrivacySecurityIcon } from "@/components/PrivacySecurityIcon";
@@ -72,23 +73,32 @@ export default function SettingsScreen() {
           text: 'Delete Forever',
           style: 'destructive',
           onPress: async () => {
-            // No self-serve deletion endpoint exists yet — file a deletion
-            // request for the team to action, then sign the user out locally.
+            // Actually delete the account. DELETE /v1/auth/account has existed all
+            // along (authenticated, rate-limited to 3 per 24h) and the client for
+            // it was already written — but this handler filed a support ticket and
+            // signed out locally instead, under a comment claiming no endpoint
+            // existed. The dialog promised "permanently delete your account and all
+            // ride history" while the account stayed fully intact, which is a
+            // promise we cannot leave unkept.
             try {
-              await submitSupportTicket({
-                subject: 'Account deletion request',
-                type: 'account_deletion',
-              });
-            } catch {
-              // Proceed with local sign-out even if the request fails to send.
+              await deleteAccount();
+            } catch (error) {
+              // Deletion failed server-side: do NOT sign out, or the user is left
+              // believing a deletion happened that did not. Keep them signed in so
+              // they can retry, and surface it — a deletion that silently fails is
+              // the one failure a user can never discover for themselves.
+              reportRuntimeError(error, 'account.delete_failed');
+              Alert.alert(
+                'Could not delete account',
+                'Something went wrong and your account was not deleted. Please try again, or contact support if this keeps happening.',
+              );
+              return;
             }
             await logout();
             replaceAuthBoundary(router, '/(auth)/welcome');
           },
         },
         { text: 'Cancel', style: 'cancel' },
-        { text: "Delete Forever", style: "destructive", onPress: () => {} },
-        { text: "Cancel", style: "cancel" },
       ],
     );
   };
