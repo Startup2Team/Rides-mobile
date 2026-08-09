@@ -1,5 +1,6 @@
 import { acceptDriverPolicy, applyAsDriver, type DriverApplicationInput } from './driverProfile';
 import { uploadDriverDocument, type DriverDocumentType } from './driverDocuments';
+import { updateProfile } from './profile';
 import { reportOperationalFailure } from '@/observability/monitoring';
 
 // Orchestrates the real driver application: create the application
@@ -31,7 +32,20 @@ export async function submitDriverApplicationWithDocuments(
   // losing the (already created) application.
   for (const doc of documents) {
     try {
-      await uploadDriverDocument(doc.uri, doc.documentType, doc.contentType);
+      const fileUrl = await uploadDriverDocument(doc.uri, doc.documentType, doc.contentType);
+      // The selfie IS the driver's account photo. POST /v1/driver/documents
+      // stores the file but never touches users.profile_image_url — only the
+      // admin review path does that — so a driver who onboarded and never
+      // manually picked a photo kept profile_image_url NULL and showed no photo
+      // on a second handset, which is the very thing uploading it was meant to
+      // fix. Best-effort: the document itself is already safely stored.
+      if (doc.documentType === 'SELFIE' && fileUrl) {
+        try {
+          await updateProfile({ profileImageUrl: fileUrl });
+        } catch (error) {
+          reportOperationalFailure('driver.selfie.promoteToAccountPhoto', error);
+        }
+      }
     } catch {
       // continue with the remaining documents
     }
