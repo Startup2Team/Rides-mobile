@@ -16,7 +16,11 @@ import {
   type GalleryImage,
 } from '@/components/ImageGalleryPreview';
 import { useAuth } from '@/context/AuthContext';
+import { DRIVER_DOCUMENT_API_TYPES } from '@/domain/driverDocuments';
 import { resolveVehicleDocuments } from '@/domain/driverVehicleDocuments';
+import { reportOperationalFailure } from '@/observability/monitoring';
+import { uploadDriverDocument } from '@/services/driverDocuments';
+import { readBackendError } from '@/utils/backendErrorMessage';
 import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
 import {
   getAuthorizationComplianceMessage,
@@ -248,6 +252,39 @@ export default function DriverVehicleDetailsScreen() {
       return;
     }
     setSavingUpdate(true);
+
+    // FIRST, actually send the replaced documents to the backend. Everything
+    // below this block is local bookkeeping (the verification-submissions store
+    // never makes a network call), which is why a driver could "resubmit",
+    // read "Submitted for review", and the admin console never saw a thing.
+    // A face the driver replaced is a local file:// URI; faces already on the
+    // server are https URLs — so the local ones are exactly what needs sending.
+    try {
+      const uploads: Promise<string>[] = [];
+      for (const key of Object.keys(documents) as (keyof DriverVehicleDocumentSet)[]) {
+        const [frontType, backType] = DRIVER_DOCUMENT_API_TYPES[key];
+        documents[key].faces.forEach((uri, face) => {
+          if (!uri || !uri.startsWith('file:')) return;
+          const documentType = face === 0 ? frontType : backType;
+          if (!documentType) return;
+          uploads.push(uploadDriverDocument(uri, documentType));
+        });
+      }
+      await Promise.all(uploads);
+    } catch (error) {
+      // The backend refused (approved documents are view-only until an admin
+      // opens a re-upload window) or the network failed. Say so — pretending
+      // the submission went through is the bug this replaces.
+      setSavingUpdate(false);
+      reportOperationalFailure('vehicle.documents.resubmit', error);
+      Alert.alert(
+        "Couldn't submit documents",
+        readBackendError(error).message ??
+          "Your documents couldn't be sent for review. Check your connection and try again.",
+      );
+      return;
+    }
+
     const updatedVehicle = submitDriverVehicleDocumentUpdate(vehicle, {
       documents,
       photos: draftPhotos,
@@ -264,6 +301,8 @@ export default function DriverVehicleDetailsScreen() {
       photos: updatedVehicle.pendingDocumentUpdate!.photos,
       submittedAt: updatedVehicle.pendingDocumentUpdate!.submittedAt,
     });
+    // The server now holds new documents — refresh every consumer of them.
+    void queryClient.invalidateQueries({ queryKey: driverKeys.documents() });
     setSavingUpdate(false);
     setUpdateTarget(null);
     Alert.alert('Submitted for review', 'Updated documents submitted for review. Your approved documents remain active until review completes.');
