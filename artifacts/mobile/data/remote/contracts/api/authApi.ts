@@ -26,12 +26,19 @@ export interface VerifyOtpRequestDto {
   app_version?: string;
 }
 
-// Verify returns a flat token payload — NO nested user; hydrate via /customer/profile.
+// Flat session payload — no nested user object, but it does state WHO signed in.
+// full_name/phone_number/email were added because without them the app had to
+// guess at a name until a follow-up /customer/profile call landed, and showed
+// the previously stored account's name whenever that call failed.
+// Optional: an older backend omits them, and the app must keep working against it.
 export interface VerifyOtpResponseDto {
   access_token: string;
   refresh_token: string;
   role_state: string;
   user_id: string;
+  phone_number?: string;
+  full_name?: string;
+  email?: string;
 }
 
 // POST /auth/refresh
