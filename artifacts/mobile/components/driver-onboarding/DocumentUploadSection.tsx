@@ -18,7 +18,8 @@ const EXPIRY_FIELDS: Partial<Record<DocumentKey, keyof Pick<DriverOnboardingForm
   authorization: 'authorizationExpiryDate',
 };
 
-export function DocumentUploadSection({ colors, docs, errors, form, vehiclePhotos, takeVehiclePhoto, takeDocumentPhoto, update }: {
+export function DocumentUploadSection({ approvedDocuments = [], colors, docs, errors, form, vehiclePhotos, takeVehiclePhoto, takeDocumentPhoto, update }: {
+  approvedDocuments?: DocumentKey[];
   colors: ReturnType<typeof useColors>; docs: Record<DocumentKey, DocFaces>; errors: Record<string, string>; form: DriverOnboardingForm;
   vehiclePhotos?: Record<VehiclePhotoKey, string | null>;
   takeVehiclePhoto?: (key: VehiclePhotoKey) => Promise<void>;
@@ -31,17 +32,27 @@ export function DocumentUploadSection({ colors, docs, errors, form, vehiclePhoto
 
   return <View style={styles.section}>
     <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Document Photos</AppText>
-    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Capture clear photos of each document. Driver's licence and National ID require front and back photos.</AppText>
-    {DOCUMENTS.map(document => <View key={document.key} style={styles.docRow}>
-      <View style={styles.docHeader}><AppText style={[styles.docLabel, { color: colors.foreground }]}>{document.label}<AppText style={{ color: colors.destructive }}> *</AppText></AppText><AppText style={[styles.docHint, { color: colors.mutedForeground }]}>{document.hint}</AppText></View>
-      {EXPIRY_FIELDS[document.key] ? <DatePickerField label="Expiry date" value={form[EXPIRY_FIELDS[document.key]!]} onChange={value => update(EXPIRY_FIELDS[document.key]!, value)} error={errors[EXPIRY_FIELDS[document.key]!]} placeholder="DD/MM/YYYY" minimumDate={minimumExpiryDate} /> : null}
-      <AppText style={[styles.docFaceLabel, { color: colors.mutedForeground }]}>Front face</AppText>
-      <DocumentFace colors={colors} uri={docs[document.key][0]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 0)} captureLabel="Take Front Photo" />
-      {errors[document.key] ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors[document.key]}</AppText> : null}
-      {docs[document.key][0] && DOCUMENTS_REQUIRING_BACK.includes(document.key) && <><AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: spacing[4] }]}>Back face</AppText>
-        <DocumentFace colors={colors} uri={docs[document.key][1]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 1)} captureLabel="Take Back Photo" />
-      </>}
-    </View>)}
+    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Capture clear photos of each document. Approved items are locked and do not require re-uploading.</AppText>
+    {DOCUMENTS.map(document => {
+      const isApproved = approvedDocuments.includes(document.key);
+      return (
+        <View key={document.key} style={styles.docRow}>
+          <View style={styles.docHeader}>
+            <AppText style={[styles.docLabel, { color: colors.foreground }]}>
+              {document.label}{!isApproved && <AppText style={{ color: colors.destructive }}> *</AppText>}
+            </AppText>
+            <AppText style={[styles.docHint, { color: colors.mutedForeground }]}>{document.hint}</AppText>
+          </View>
+          {EXPIRY_FIELDS[document.key] ? <DatePickerField label="Expiry date" value={form[EXPIRY_FIELDS[document.key]!]} onChange={value => update(EXPIRY_FIELDS[document.key]!, value)} error={errors[EXPIRY_FIELDS[document.key]!]} placeholder="DD/MM/YYYY" minimumDate={minimumExpiryDate} disabled={isApproved} /> : null}
+          <AppText style={[styles.docFaceLabel, { color: colors.mutedForeground }]}>Front face</AppText>
+          <DocumentFace colors={colors} uri={docs[document.key][0]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 0)} captureLabel="Take Front Photo" isApproved={isApproved} />
+          {errors[document.key] ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors[document.key]}</AppText> : null}
+          {docs[document.key][0] && DOCUMENTS_REQUIRING_BACK.includes(document.key) && <><AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: spacing[4] }]}>Back face</AppText>
+            <DocumentFace colors={colors} uri={docs[document.key][1]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 1)} captureLabel="Take Back Photo" isApproved={isApproved} />
+          </>}
+        </View>
+      );
+    })}
     {vehiclePhotos && takeVehiclePhoto && getRequiredVehiclePhotoKeys(form.vehicleType).length > 0 ? (
       <View style={styles.docRow}>
         <View style={styles.docHeader}>
@@ -67,9 +78,26 @@ export function DocumentUploadSection({ colors, docs, errors, form, vehiclePhoto
   </View>;
 }
 
-function DocumentFace({ captureLabel, colors, hasError, onTake, uri }: {
-  captureLabel: string; colors: ReturnType<typeof useColors>; hasError: boolean; onTake: () => void; uri: string | null;
+function DocumentFace({ captureLabel, colors, hasError, isApproved, onTake, uri }: {
+  captureLabel: string; colors: ReturnType<typeof useColors>; hasError: boolean; isApproved?: boolean; onTake: () => void; uri: string | null;
 }) {
+  if (uri && isApproved) {
+    return (
+      <View style={[styles.docPreviewCard, { borderColor: colors.successHex + '40' }]}>
+        <Image source={{ uri }} style={styles.docThumb} resizeMode="cover" />
+        <View style={styles.docPreviewContent}>
+          <View style={styles.docCapturedRow}>
+            <View style={[styles.docCapturedIcon, { backgroundColor: colors.successHex + '20' }]}>
+              <Feather name="check" size={icons.size.xs} color={colors.success} />
+            </View>
+            <View style={styles.docCapturedCopy}>
+              <AppText style={[styles.docUploadedText, { color: colors.success }]}>Approved & Verified</AppText>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
   if (uri) {
     return (
       <View style={styles.docPreviewCard}>

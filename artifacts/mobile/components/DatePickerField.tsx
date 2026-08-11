@@ -27,6 +27,7 @@ interface DatePickerFieldProps {
   placeholder?: string;
   minimumDate?: Date;
   maximumDate?: Date;
+  disabled?: boolean;
 }
 
 export function DatePickerField({
@@ -37,6 +38,7 @@ export function DatePickerField({
   placeholder = 'Select date',
   minimumDate,
   maximumDate,
+  disabled = false,
 }: DatePickerFieldProps) {
   const colors = useColors();
   const scheme = useColorScheme();
@@ -48,6 +50,7 @@ export function DatePickerField({
   const [pendingDate, setPendingDate] = useState<Date>(parsedDate ?? fallbackDate);
 
   const openPicker = useCallback(() => {
+    if (disabled) return;
     setPendingDate(parsedDate ?? fallbackDate);
 
     if (Platform.OS === 'android') {
