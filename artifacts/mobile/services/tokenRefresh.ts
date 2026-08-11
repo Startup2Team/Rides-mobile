@@ -20,7 +20,8 @@ async function doRefresh(): Promise<boolean> {
   if (!refreshToken) return false;
 
   const config = resolveBackendTransportConfig();
-  const baseUrl = (config.baseUrl ?? process.env.EXPO_PUBLIC_BACKEND_BASE_URL ?? '').replace(/\/+$/, '');
+  const rawBase = (config.baseUrl ?? process.env.EXPO_PUBLIC_BACKEND_BASE_URL ?? '').replace(/\/+$/, '');
+  const baseUrl = rawBase.endsWith('/v1') ? rawBase.slice(0, -3) : rawBase;
 
   try {
     const response = await fetch(`${baseUrl}/v1/auth/refresh`, {
