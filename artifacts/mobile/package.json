@@ -6,6 +6,10 @@
   "scripts": {
     "eas-build-post-install": "node scripts/eas-link-expo.js",
     "dev": "pnpm exec expo start --dev-client",
+    "dev:local": "EXPO_PUBLIC_BACKEND_ENV=LOCAL pnpm exec expo start --go",
+    "dev:staging": "EXPO_PUBLIC_BACKEND_ENV=STAGING EXPO_PUBLIC_API_BASE_URL=https://stg-api.rides.rw/api/v1 pnpm exec expo start --go",
+    "build:apk:staging": "npx eas-cli build -p android --profile preview",
+    "build:aab:prod": "npx eas-cli build -p android --profile production",
     "dev:go": "pnpm exec expo start --go",
     "dev:android": "pnpm exec expo run:android",
     "dev:ios": "pnpm exec expo run:ios",
