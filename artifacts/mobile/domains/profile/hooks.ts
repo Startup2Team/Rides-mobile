@@ -7,7 +7,14 @@ import { useToast } from '@/context/ToastContext';
 import { profileRepository } from './repository';
 import type { DriverProfile, ProfileIdentity, ProfilePhoto, UserProfile } from './types';
 import type { User } from '@/types';
-import { useProfilePhotoQuery, useProfileQuery, useUpdateProfileMutation } from '@/query/hooks/useProfileQuery';
+import { clearProfilePhoto, uploadProfilePhoto } from '@/services/profile';
+import { reportOperationalFailure } from '@/observability/monitoring';
+import {
+  loadProfilePhotoUri,
+  useProfilePhotoQuery,
+  useProfileQuery,
+  useUpdateProfileMutation,
+} from '@/query/hooks/useProfileQuery';
 
 function buildIdentity(user: User | null, profilePhoto: ProfilePhoto | null): ProfileIdentity | null {
   if (!user) return null;
@@ -88,8 +95,9 @@ export function useProfilePhoto(fallbackImage?: string | null) {
 
   const profileImage = storedProfileImage ?? fallbackImage ?? null;
 
+  // Reads the account photo, not just this install's cache — see loadProfilePhotoUri.
   const refreshProfileImage = useCallback(async () => {
-    const next = await profileRepository.getProfileImage();
+    const next = await loadProfilePhotoUri();
     setStoredProfileImage(next);
   }, []);
 
@@ -144,10 +152,25 @@ export function useProfilePhoto(fallbackImage?: string | null) {
         }
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
+          // Show the picked file straight away, then replace it with the stored
+          // URL. Only the uploaded URL survives a reinstall or a second handset —
+          // a `file://` URI is meaningless anywhere but this install.
           await profileRepository.saveProfileImage(asset.uri);
           setStoredProfileImage(asset.uri);
-          showToast('Photo updated', 'info');
-          return asset.uri;
+          try {
+            const remoteUrl = await uploadProfilePhoto(asset.uri, asset.mimeType ?? 'image/jpeg');
+            await profileRepository.saveProfileImage(remoteUrl);
+            setStoredProfileImage(remoteUrl);
+            showToast('Photo updated', 'info');
+            return remoteUrl;
+          } catch (error) {
+            // The photo is on this device but not on the account. Say so rather
+            // than claiming success — the user would otherwise only discover it
+            // on their next phone.
+            reportOperationalFailure('profile.photo.upload', error);
+            showToast("Photo saved on this phone — we couldn't sync it. Try again.", 'info');
+            return asset.uri;
+          }
         }
       } catch (error) {
         console.error('Failed to pick image:', error);
@@ -161,6 +184,14 @@ export function useProfilePhoto(fallbackImage?: string | null) {
   const handleDeletePhoto = useCallback(async () => {
     await profileRepository.removeProfileImage();
     setStoredProfileImage(null);
+    // Clear it on the account too, otherwise the next sign-in re-hydrates the
+    // photo the user just deleted. Best-effort: the local removal already
+    // happened and must not be undone by a network failure.
+    try {
+      await clearProfilePhoto();
+    } catch (error) {
+      reportOperationalFailure('profile.photo.clear', error);
+    }
     if (driverProfile) {
       const nextProfile: DriverProfile = { ...driverProfile };
       delete nextProfile.profileImage;

@@ -6,7 +6,10 @@ function policy(overrides: Partial<QueryPolicy>): QueryPolicy {
   return {
     staleTime: 5 * minute,
     gcTime: 30 * minute,
-    refetchOnWindowFocus: false,
+    // The app-foreground moment is when a user checks whether something changed
+    // (an approval, a payment, a new offer). Stale queries refetch then;
+    // staleTime still protects anything fetched moments ago.
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     refetchOnMount: true,
     retry: 2,
@@ -35,6 +38,8 @@ export const queryPolicies = {
     refetchOnMount: 'always',
   }),
   driverProfile: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
@@ -70,6 +75,8 @@ export const queryPolicies = {
   // KYC documents change rarely and the screen is entered deliberately, so a
   // longer stale window is fine; refetchOnMount still picks up a review result.
   driverDocuments: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
@@ -94,6 +101,8 @@ export const queryPolicies = {
     gcTime: 45 * minute,
   }),
   packageEntitlements: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 2 * minute,
     gcTime: 20 * minute,
   }),
@@ -106,6 +115,8 @@ export const queryPolicies = {
     gcTime: 10 * minute,
   }),
   notifications: policy({
+    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
+    refetchOnWindowFocus: 'always',
     staleTime: 60 * 1000,
     gcTime: 15 * minute,
   }),
@@ -127,6 +138,46 @@ export const queryPolicies = {
     // Demand shifts continuously; keep it fresh but cheap to poll.
     staleTime: 60 * 1000,
     gcTime: 10 * minute,
+    retry: 1,
+  }),
+  landmarks: policy({
+    // Curated Rwanda landmarks: a seeded list that only moves on a backend
+    // deploy. Cache it for the day so the destination sheet opens with free
+    // results instead of waiting on a paid geocoder, and keep it in gc for a
+    // week so a returning rider still has it offline.
+    staleTime: 24 * 60 * minute,
+    gcTime: 7 * 24 * 60 * minute,
+    refetchOnMount: false,
+  }),
+  adminUnits: policy({
+    // Province/district/sector hierarchy — reference data that changes when the
+    // country redistricts. Same treatment as landmarks.
+    staleTime: 24 * 60 * minute,
+    gcTime: 7 * 24 * 60 * minute,
+    refetchOnMount: false,
+  }),
+  adminUnitSearch: policy({
+    // Autocomplete over that same static tree, so a result stays correct for as
+    // long as the rider is typing. One retry: a miss just hides the area chips.
+    staleTime: 30 * minute,
+    gcTime: 60 * minute,
+    refetchOnMount: false,
+    retry: 1,
+  }),
+  locationSuggestions: policy({
+    // Personalised, and the server already caches it for 10 minutes while
+    // busting on every new recent. Mirror that window, but revalidate on mount
+    // so a destination picked on another device shows up when the sheet opens.
+    staleTime: 5 * minute,
+    gcTime: 30 * minute,
+    refetchOnMount: 'always',
+    retry: 1,
+  }),
+  recentLocations: policy({
+    // Changes the moment the rider picks a destination — never serve it stale.
+    staleTime: 0,
+    gcTime: 15 * minute,
+    refetchOnMount: 'always',
     retry: 1,
   }),
 } satisfies QueryPolicyMap;

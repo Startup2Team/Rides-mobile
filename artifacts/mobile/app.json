@@ -62,6 +62,11 @@
         }
       ],
       "./plugins/withNonModularHeaders",
+      "./plugins/withPodDeploymentTarget",
+      "./plugins/withRNFirebaseStaticFramework",
+      "./plugins/withNoExplicitModules",
+      "./plugins/withFirebaseNotificationManifestFix",
+      "./plugins/withGoogleMapsApiKey",
       [
         "expo-router",
         {

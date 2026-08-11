@@ -3,9 +3,11 @@ import {
   buildDriverDocumentsFromProfile,
   buildInitialDriverDocuments,
   getDriverDocumentDisplayStatus,
+  mergeServerDriverDocuments,
   reconcileDriverDocumentsWithProfile,
 } from '../driverDocuments';
 import { INITIAL_DRIVER_DOCUMENTS, INITIAL_DRIVER_ONBOARDING_FORM } from '@/hooks/driver-onboarding/onboardingTypes';
+import type { DriverDocument } from '@/services/driverDocuments';
 import type { DriverProfile } from '@/types';
 
 const profile: DriverProfile = {
@@ -81,5 +83,39 @@ describe('driver documents', () => {
 
     expect(reconciled.license.reviewStatus).toBe('verified');
     expect(reconciled.insurance.reviewStatus).toBe('pending_review');
+  });
+
+  test('shows the documents the server holds, not just this handset', () => {
+    // A reinstall: nothing local, everything on the backend.
+    const local = buildInitialDriverDocuments(INITIAL_DRIVER_ONBOARDING_FORM, INITIAL_DRIVER_DOCUMENTS);
+    const server: DriverDocument[] = [
+      { id: '1', documentType: 'LICENCE_FRONT', fileUrl: 'https://cdn/1.jpg', reviewStatus: 'APPROVED', editable: false },
+      { id: '2', documentType: 'LICENCE_BACK', fileUrl: 'https://cdn/2.jpg', reviewStatus: 'APPROVED', editable: false },
+      { id: '3', documentType: 'VEHICLE_INSURANCE', fileUrl: 'https://cdn/3.jpg', reviewStatus: 'REJECTED', editable: true },
+    ];
+
+    const merged = mergeServerDriverDocuments(local, server);
+
+    expect(merged.license.faces).toEqual(['https://cdn/1.jpg', 'https://cdn/2.jpg']);
+    expect(merged.license.reviewStatus).toBe('verified');
+    expect(merged.license.editable).toBe(false);
+    expect(merged.insurance.reviewStatus).toBe('rejected');
+    expect(merged.insurance.editable).toBe(true);
+    // Nothing on file for this type — the local record is left alone.
+    expect(merged.authorization).toBe(local.authorization);
+  });
+
+  test('keeps locally held numbers and expiry dates the API does not carry', () => {
+    const local = buildInitialDriverDocuments(
+      { ...INITIAL_DRIVER_ONBOARDING_FORM, licenseNumber: '1234567890123456', licenseExpiryDate: '01/01/2030' },
+      INITIAL_DRIVER_DOCUMENTS,
+    );
+
+    const merged = mergeServerDriverDocuments(local, [
+      { id: '1', documentType: 'LICENCE_FRONT', fileUrl: 'https://cdn/1.jpg', reviewStatus: 'PENDING', editable: true },
+    ]);
+
+    expect(merged.license.documentNumber).toBe('1234567890123456');
+    expect(merged.license.expiryDate).toBe('01/01/2030');
   });
 });

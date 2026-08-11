@@ -148,6 +148,13 @@ jest.mock('@/query/hooks/useRideHistoryQuery', () => ({
     data: [],
     refetch: jest.fn(() => Promise.resolve({ data: [] })),
   }),
+  // The driver profile screen reads its ride history through the driver-scoped
+  // hook. Leaving it out of the mock made the module resolve to undefined and
+  // the screen threw before rendering, failing every test in the file.
+  useDriverRideHistoryQuery: () => ({
+    data: [],
+    refetch: jest.fn(() => Promise.resolve({ data: [] })),
+  }),
 }));
 
 jest.mock('@/persistence/profilePersistence', () => ({

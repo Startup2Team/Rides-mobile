@@ -42,6 +42,11 @@ export interface RemoteAuthRepositoryOptions {
 export interface AuthSessionRepository extends AuthRepository {
   requestOtp(input: AuthOtpRequestInput): Promise<AuthOtpRequestResult>;
   verifyOtp(input: AuthVerifyOtpInput): Promise<AuthSessionDomain>;
+  // Phone-only login (no OTP): the number was already verified at registration,
+  // so a returning user — on ANY device — signs in with just the number. The
+  // backend resolves the existing account and mints a session, or 404s if the
+  // number was never registered.
+  login(phoneNumber: string): Promise<AuthSessionDomain>;
   refreshSession(refreshToken: string): Promise<AuthSessionDomain>;
   logout(refreshToken?: string | null): Promise<void>;
   getCurrentSession(): Promise<AuthCurrentSessionDomain | null>;
@@ -220,6 +225,23 @@ export class RemoteAuthRepository implements AuthSessionRepository {
     }, input.phoneNumber);
   }
 
+  async login(phoneNumber: string): Promise<AuthSessionDomain> {
+    return this.shadow('login', async () => {
+      const client = resolveClient('login', this.client);
+      const device = await getDeviceMetadata();
+      // Real backend: POST /api/v1/auth/login — phone-only, no OTP. Returns the
+      // same flat session payload as verify-otp ({ user_id, role_state, tokens }).
+      const response = await client.post<ApiEnvelope<VerifyOtpResponseDto>>('/v1/auth/login', {
+        body: {
+          phone_number: phoneNumber,
+          device_id: device.device_id,
+          platform: device.platform,
+        },
+      });
+      return dtoToDomainAuthSession(response.data.data, phoneNumber);
+    }, phoneNumber);
+  }
+
   async refreshSession(refreshToken: string): Promise<AuthSessionDomain> {
     return this.shadow('refreshSession', async () => {
       const client = resolveClient('refreshSession', this.client);
@@ -324,6 +346,19 @@ export function createAuthShadowRepository(options: {
         const remoteSummary = summarizeSession(remote);
         if (JSON.stringify(localSummary) !== JSON.stringify(remoteSummary)) {
           recordMismatch('verifyOtp', localSummary, remoteSummary, 'session');
+        }
+      });
+      return local;
+    },
+    async login(phoneNumber: string) {
+      const local = localRepository.login
+        ? await localRepository.login(phoneNumber)
+        : { user: null, accessToken: '', refreshToken: '', expiresAt: new Date(0).toISOString() };
+      await runRemote('login', () => remoteRepository.login(phoneNumber), remote => {
+        const localSummary = summarizeSession(local);
+        const remoteSummary = summarizeSession(remote);
+        if (JSON.stringify(localSummary) !== JSON.stringify(remoteSummary)) {
+          recordMismatch('login', localSummary, remoteSummary, 'session');
         }
       });
       return local;

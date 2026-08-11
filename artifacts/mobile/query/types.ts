@@ -5,7 +5,9 @@ export type AppQueryKey = QueryKey;
 export interface QueryPolicy {
   staleTime: number;
   gcTime: number;
-  refetchOnWindowFocus: boolean;
+  // 'always' bypasses staleTime on app-foreground — reserved for data whose
+  // change the user is actively waiting on (an admin approval landing).
+  refetchOnWindowFocus: boolean | 'always';
   refetchOnReconnect: boolean;
   refetchOnMount: boolean | 'always';
   retry: number;
@@ -37,7 +39,12 @@ export type QueryPolicyName =
   | 'paymentMethods'
   | 'searchAutocomplete'
   | 'reverseGeocode'
-  | 'demandHeatmap';
+  | 'demandHeatmap'
+  | 'landmarks'
+  | 'adminUnits'
+  | 'adminUnitSearch'
+  | 'locationSuggestions'
+  | 'recentLocations';
 
 export type QueryPolicyMap = Record<QueryPolicyName, QueryPolicy>;
 

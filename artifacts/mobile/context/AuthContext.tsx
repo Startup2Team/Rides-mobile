@@ -17,15 +17,19 @@ import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { clearSensitiveStorage } from '@/persistence/secureStorage';
 import { endSession } from '@/services/authSession';
 import { getAccessToken, clearAuthTokens } from '@/persistence/authTokens';
+import { refreshAccessToken } from '@/services/tokenRefresh';
 import { fetchProfile } from '@/services/profile';
 import { setDriverAvailability } from '@/services/driverAvailability';
 import {
   clearRoleSync,
   initRoleSync,
   queueRoleSync,
+  readRoleSyncRejection,
   subscribeRoleSync,
   type RoleSyncEvent,
 } from '@/services/roleSwitchSync';
+import { navigateToModeHome } from '@/navigation/navigationPolicy';
+import { cancelRide, getActiveRide } from '@/services/rides';
 import {
   cancelModeSwitch,
   completeModeSwitch,
@@ -39,6 +43,7 @@ import { getDriverProfile } from '@/services/driverProfile';
 import { configurePushNotifications, registerPushToken, resetPushRegistration } from '@/services/pushRegistration';
 import { AppMode, DriverProfile, User } from '@/types';
 import { canAccessDriverMode } from '@/utils/driverVerification';
+import { withDailyCountersForToday } from '@/domain/driverDailyCounters';
 import { getApprovedDriverVehicles, getDriverVehicleForSession, setDriverActiveVehicle } from '@/domain/driverVehicles';
 import { activateVehicleByPlate } from '@/services/driverVehicles';
 
@@ -58,7 +63,9 @@ interface AuthContextType {
   user: User | null;
   driverProfile: DriverProfile | null;
   isLoading: boolean;
-  login: (user: User) => Promise<void>;
+  // Resolves to the home the caller should navigate to ('driver' only when the
+  // backend confirms an approved driver — see the login implementation).
+  login: (user: User) => Promise<AppMode>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   saveDriverProfile: (profile: DriverProfile) => Promise<void>;
@@ -69,7 +76,8 @@ interface AuthContextType {
   // Re-pull the driver's real approval status + online state from the backend.
   // Screens that show approval state (e.g. submission confirmation) call this on
   // focus so a PENDING → APPROVED transition appears without a cold restart.
-  refreshDriverProfile: () => Promise<void>;
+  // Resolves true when the backend confirms an approved driver.
+  refreshDriverProfile: () => Promise<boolean>;
 }
 
 // Backend approval_status → mobile status. The backend uses PENDING_REVIEW for a
@@ -141,6 +149,35 @@ function buildLocalDriverProfile(b: BackendDriverProfile): DriverProfile {
   };
 }
 
+// Backend refusal codes from PATCH /v1/users/mode (internal/location/service.go
+// SwitchMode). Each one is actionable, so each gets its own copy — a generic
+// "please try again" sends the driver in circles on a state they must fix.
+function getRoleSwitchFailureTitle(code: string | null) {
+  if (code === 'ACTIVE_RIDE') return 'Finish your ride first';
+  if (code === 'POLICY_NOT_ACCEPTED') return 'Accept the driver policies';
+  if (code === 'DRIVER_NOT_ACTIVE' || code === 'NO_DRIVER_PROFILE') return 'Driver account not active';
+  return 'Mode switch failed';
+}
+
+function getRoleSwitchFailureMessage(mode: AppMode, code: string | null, message: string | null) {
+  switch (code) {
+    case 'ACTIVE_RIDE':
+      return 'You still have a ride in progress. Complete or cancel it, then switch modes.';
+    case 'POLICY_NOT_ACCEPTED':
+      return 'You need to accept the driver policies before driving. Open your driver profile to review them.';
+    case 'DRIVER_NOT_ACTIVE':
+      return 'Your driver account is not approved for driving right now. Check your application status.';
+    case 'NO_DRIVER_PROFILE':
+      return "We couldn't find your driver profile on this account. Apply as a driver to continue.";
+    default:
+      break;
+  }
+  if (message) return message;
+  return mode === 'driver'
+    ? "We couldn't switch you to driver mode. Please try again."
+    : "We couldn't switch you to customer mode. Please try again.";
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -172,12 +209,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(reverted);
       void saveStoredUser(reverted).catch(() => {});
       completeModeSwitch(revertTo);
-      Alert.alert(
-        'Mode switch failed',
-        event.mode === 'driver'
-          ? "We couldn't switch you to driver mode. Please try again."
-          : "We couldn't switch you to customer mode. Please try again.",
-      );
+      // The reverted mode is meaningless while the screen for the REFUSED mode
+      // is still on top — the driver dashboard stayed up under the alert,
+      // showing driver UI backed by customer state. Send them where the
+      // rollback actually put them.
+      navigateToModeHome(revertTo);
+      // The refused mode was rolled back — say WHY, using the backend's own
+      // reason (policy not accepted, active ride, …) rather than a dead end.
+      const { code, message } = readRoleSyncRejection(event.error);
+      const title = getRoleSwitchFailureTitle(code);
+      const body = getRoleSwitchFailureMessage(event.mode, code, message);
+      if (code === 'ACTIVE_RIDE') {
+        // A ride the user never finished — often one abandoned mid-search —
+        // blocks every future switch with no in-app way out. Offer to release
+        // it. Destructive, so it is explicitly confirmed, never automatic.
+        Alert.alert(title, `${body}\n\nIf you're not actually on a ride, you can release it now.`, [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Release ride',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                try {
+                  const active = await getActiveRide();
+                  if (!active?.id) {
+                    Alert.alert('Nothing to release', 'We found no active ride on your account. Try switching again.');
+                    return;
+                  }
+                  await cancelRide(active.id);
+                  Alert.alert('Ride released', 'You can switch modes now.');
+                } catch (error) {
+                  reportOperationalFailure('auth.roleSwitch.releaseRide', error);
+                  Alert.alert('Could not release the ride', 'Please try again, or contact support if it keeps failing.');
+                }
+              })();
+            },
+          },
+        ]);
+        return;
+      }
+      Alert.alert(title, body);
     });
   }, []);
 
@@ -198,11 +269,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void syncProfileFromBackend();
           void registerPushToken();
         } else {
-          await clearAuthTokens();
+          // No usable access token — but before bouncing a returning user to
+          // the login screen, try a SILENT re-auth with the stored refresh
+          // token (valid 30 days). refreshAccessToken() no-ops to false when
+          // there is no refresh token (e.g. after logout, which wipes it), so
+          // this only rescues genuine sessions whose access token expired.
+          // Without it, a 15-minute access-token expiry logged people out.
+          const refreshed = await refreshAccessToken();
+          if (refreshed) {
+            setUser(storedUser.data);
+            void syncProfileFromBackend();
+            void registerPushToken();
+          } else {
+            await clearAuthTokens();
+          }
         }
       }
       if (storedDriverProfile.data) {
-        setDriverProfile(storedDriverProfile.data);
+        // Roll the daily counters over before anything renders, so a driver
+        // opening the app on a new day sees today's numbers rather than
+        // yesterday's carried forward.
+        const rolled = withDailyCountersForToday(storedDriverProfile.data);
+        setDriverProfile(rolled);
+        if (rolled !== storedDriverProfile.data) void saveStoredDriverProfile(rolled);
       }
       // Always reconcile driver identity from the backend when authed (the call
       // self-guards on the token). A driver may have NO local profile after a
@@ -225,10 +314,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await fetchProfile();
       setUser(prev => {
         if (!prev) return prev;
+        // Emergency contacts must come along. Edit Profile seeds its form from
+        // this user object and now sends '' to clear a field, so a form opened
+        // before these landed showed them blank and Save ERASED them on the
+        // server — losing the very data the sync was added to preserve.
         const updated: User = {
           ...prev,
           name: profile.fullName || prev.name,
           email: profile.email ?? prev.email,
+          emergencyContactName: profile.emergencyContactName ?? prev.emergencyContactName,
+          emergencyContactPhone: profile.emergencyContactPhone ?? prev.emergencyContactPhone,
         };
         void saveStoredUser(updated);
         return updated;
@@ -244,10 +339,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // no local profile, so if the backend says this user is a driver we BUILD one —
   // otherwise a real driver would come back as a customer with a "Join as rider"
   // prompt. Non-driver users 404 here (caught) and stay customers.
-  const syncDriverProfileFromBackend = useCallback(async () => {
+  // Returns whether the backend says this user is an APPROVED driver, so login
+  // can decide the landing screen without waiting on React state (the ref only
+  // updates on the next render, after this promise has already resolved).
+  const syncDriverProfileFromBackend = useCallback(async (): Promise<boolean> => {
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token) return false;
       const backend = await getDriverProfile();
       const status = mapApprovalStatus(backend.approvalStatus);
       setDriverProfile(prev => {
@@ -293,8 +391,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void saveStoredDriverProfile(updated);
         return updated;
       });
+      return status === 'approved';
     } catch {
       // Not a driver yet, or backend unreachable — keep the local profile.
+      return false;
     }
   }, []);
 
@@ -311,14 +411,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [syncProfileFromBackend, syncDriverProfileFromBackend]);
 
-  const login = useCallback(async (newUser: User) => {
+  // Resolves to the mode the login screen should land on. A driver who logged
+  // out in driver mode comes back with role_state DRIVER_ACTIVE, and used to be
+  // seated on the customer home anyway because the post-login navigation was
+  // hardcoded — the backend remembered them, the screen didn't.
+  const login = useCallback(async (newUser: User): Promise<AppMode> => {
     setUser(newUser);
     await saveStoredUser(newUser);
     void syncProfileFromBackend();
+    void registerPushToken();
+    if (newUser.mode === 'driver') {
+      // Await the driver profile: the (driver) layout redirects to the
+      // submission screen when no profile is loaded, so landing there before
+      // the sync finishes would bounce an approved driver. One extra round
+      // trip, only on driver logins; falls back to customer on any failure.
+      const approved = await syncDriverProfileFromBackend();
+      return approved ? 'driver' : 'customer';
+    }
     // Recognise a returning driver: pull their real driver profile from the
     // backend (identity survives logout, which clears local storage).
     void syncDriverProfileFromBackend();
-    void registerPushToken();
+    return 'customer';
   }, [syncProfileFromBackend, syncDriverProfileFromBackend]);
 
   const logout = useCallback(async () => {
@@ -454,8 +567,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const recordCompletedRide = useCallback(async (agreedFare?: number | null) => {
-    const prev = driverProfileRef.current;
-    if (!prev) return;
+    const stored = driverProfileRef.current;
+    if (!stored) return;
+    // A ride finishing after midnight is the first of the new day, not the
+    // eleventh of yesterday — roll over before counting it.
+    const prev = withDailyCountersForToday(stored);
     const completedRides = (prev.completedRides ?? 0) + 1;
     const dailyRides = (prev.dailyRides ?? 0) + 1;
     const completedFare = typeof agreedFare === 'number' && Number.isFinite(agreedFare)

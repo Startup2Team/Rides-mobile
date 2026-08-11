@@ -10,6 +10,15 @@ import type { useColors } from '@/hooks/useColors';
 import type { RideLocation, SavedLocation } from '@/types';
 import { styles } from './homeStyles';
 
+/**
+ * A previously used destination. `recentId` is present only for entries the
+ * backend owns (/locations/recent) — those can be forgotten; entries derived
+ * from the on-device ride history cannot.
+ */
+export interface RecentPlace extends RideLocation {
+  recentId?: string;
+}
+
 export function SavedLocationsSection({
   tab,
   colors,
@@ -19,15 +28,17 @@ export function SavedLocationsSection({
   onSelect,
   onShowActions,
   onAddSavedLocation,
+  onForgetRecent,
 }: {
   tab: 'saved' | 'previous';
   colors: ReturnType<typeof useColors>;
   hasSearchResults: boolean;
   savedLocations: SavedLocation[];
-  recentLocations: RideLocation[];
+  recentLocations: RecentPlace[];
   onSelect: (location: RideLocation) => void;
   onShowActions: (location: SavedLocation) => void;
   onAddSavedLocation: () => void;
+  onForgetRecent?: (location: RecentPlace) => void;
 }) {
   if (tab === 'saved') {
     return (
@@ -121,20 +132,42 @@ export function SavedLocationsSection({
           </AppText>
         </View>
       )}
-      {recentLocations.map((location, index) => (
-        <TouchableOpacity
-          key={`${location.address}-${index}-recent`}
-          style={[styles.locationOption, { borderBottomColor: colors.border }]}
-          onPress={() => onSelect(location)}
-        >
-          <View style={styles.locationOptionText}>
-            <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
-              {location.address ?? 'Recent location'}
-            </AppText>
-            <AppText variant="caption" style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>Previous ride</AppText>
-          </View>
-        </TouchableOpacity>
-      ))}
+      {recentLocations.map((location, index) => {
+        const canForget = Boolean(location.recentId) && Boolean(onForgetRecent);
+        return (
+          <TouchableOpacity
+            key={location.recentId ?? `${location.address}-${index}-recent`}
+            style={[styles.locationOption, { borderBottomColor: colors.border }]}
+            onPress={() => onSelect(location)}
+            onLongPress={canForget ? () => onForgetRecent?.(location) : undefined}
+            delayLongPress={400}
+            accessibilityRole="button"
+            accessibilityLabel={location.address ?? 'Recent location'}
+            accessibilityHint={canForget ? 'Long press to remove from recent destinations' : undefined}
+          >
+            <View style={styles.locationOptionText}>
+              <AppText variant="bodySmall" style={[styles.locationOptionTitle, { color: colors.foreground }]} numberOfLines={1}>
+                {location.address ?? 'Recent location'}
+              </AppText>
+              <AppText variant="caption" style={[styles.locationOptionSub, { color: colors.mutedForeground }]}>
+                {canForget ? 'Recent destination' : 'Previous ride'}
+              </AppText>
+            </View>
+            {canForget ? (
+              <TouchableOpacity
+                style={styles.savedLocationMenuButton}
+                onPress={() => onForgetRecent?.(location)}
+                activeOpacity={0.8}
+                hitSlop={{ top: spacing[6], bottom: spacing[6], left: spacing[6], right: spacing[6] }}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${location.address ?? 'recent destination'} from recents`}
+              >
+                <Feather name="x" size={icons.semantic.row} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            ) : null}
+          </TouchableOpacity>
+        );
+      })}
     </>
   );
 }

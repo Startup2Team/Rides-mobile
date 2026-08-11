@@ -97,13 +97,22 @@ function maskPhone(phone: string): string {
 
 // Build a minimal User from the flat verify response. The backend returns only
 // { user_id, role_state } here, so name/email are filled later by a profile fetch.
-function minimalUser(userId: string, roleState: string, phoneNumber: string): User {
+function minimalUser(
+  userId: string,
+  roleState: string,
+  phoneNumber: string,
+  fullName?: string,
+  email?: string,
+): User {
   const driver = isDriverRole(roleState);
   return {
     id: userId,
-    name: '',
+    // The session response now states who signed in. It used to be blank here,
+    // so the login screen fell back to the literal string "User" and the real
+    // name only arrived if a separate /customer/profile call succeeded.
+    name: fullName?.trim() ?? '',
     phone: phoneNumber,
-    email: undefined,
+    email: email?.trim() ? email.trim() : undefined,
     mode: driver ? 'driver' : 'customer',
     isDriver: driver,
     createdAt: '',
@@ -149,7 +158,14 @@ export function dtoToDomainAuthSession(
   phoneNumber?: string,
 ): AuthSessionDomain {
   const userId = 'user_id' in dto ? dto.user_id : undefined;
-  const user = userId && phoneNumber ? minimalUser(userId, dto.role_state ?? '', phoneNumber) : null;
+  // The response's own phone_number wins over the one the caller typed — it is
+  // the number the account is actually registered under.
+  const phone = ('phone_number' in dto ? dto.phone_number : undefined) || phoneNumber;
+  const fullName = 'full_name' in dto ? dto.full_name : undefined;
+  const email = 'email' in dto ? dto.email : undefined;
+  const user = userId && phone
+    ? minimalUser(userId, dto.role_state ?? '', phone, fullName, email)
+    : null;
   return {
     user,
     accessToken: dto.access_token,

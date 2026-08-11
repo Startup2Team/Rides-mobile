@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -54,6 +54,19 @@ export default function EditProfileScreen() {
   const { profileImage, handleImagePick, handleDeletePhoto, updateUser } = useProfileActions(driverProfile?.profileImage);
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
+  // The backend profile sync is async and can land after this screen mounts. The
+  // form seeds once from `user`, and Save now sends '' to clear a field — so a
+  // form opened before the sync arrived would show blanks and ERASE them. Re-seed
+  // while the driver has not typed anything; once they have, their edits win.
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    if (dirtyRef.current || !user) return;
+    setName(user.name ?? '');
+    setEmail(user.email ?? '');
+    setEmergencyContactName(user.emergencyContactName ?? '');
+    setEmergencyContactPhone(user.emergencyContactPhone ?? '');
+  }, [user]);
+
   const handlePickImage = () => {
     setShowPhotoSheet(true);
   };
@@ -89,17 +102,24 @@ export default function EditProfileScreen() {
     }
     setSaving(true);
     try {
-      // Real backend: PUT /customer/profile persists full_name + email. The
-      // emergency-contact fields have no backend equivalent, so they stay local.
+      const normalizedEmergencyPhone = emergencyContactPhone.trim()
+        ? normalizeRwandaPhoneNumber(emergencyContactPhone) || ''
+        : '';
+      // Real backend: PUT /customer/profile persists all of these on `users`.
+      // Emergency contacts used to stay device-local even though the columns
+      // exist (migration 069), so they were lost on any reinstall. Empty string
+      // is how the API clears a column — see the note on updateProfile.
       await updateProfile({
         fullName: name.trim(),
-        email: email.trim() || null,
+        email: email.trim(),
+        emergencyContactName: emergencyContactName.trim(),
+        emergencyContactPhone: normalizedEmergencyPhone,
       });
       await updateUser({
         name: name.trim(),
         email: email.trim() || undefined,
         emergencyContactName: emergencyContactName.trim() || undefined,
-        emergencyContactPhone: emergencyContactPhone.trim() ? (normalizeRwandaPhoneNumber(emergencyContactPhone) || undefined) : undefined,
+        emergencyContactPhone: normalizedEmergencyPhone || undefined,
       });
       showToast('Profile updated', 'info');
       router.back();
@@ -159,6 +179,7 @@ export default function EditProfileScreen() {
             label="Full Name"
             value={name}
             onChangeText={text => {
+              dirtyRef.current = true;
               setName(text);
               if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
             }}
@@ -171,6 +192,7 @@ export default function EditProfileScreen() {
             label="Email"
             value={email}
             onChangeText={text => {
+              dirtyRef.current = true;
               setEmail(text);
               if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
             }}
@@ -210,6 +232,7 @@ export default function EditProfileScreen() {
             label="Contact Name"
             value={emergencyContactName}
             onChangeText={text => {
+              dirtyRef.current = true;
               setEmergencyContactName(text);
               if (errors.emergencyContactName) setErrors(prev => ({ ...prev, emergencyContactName: undefined }));
             }}
@@ -222,6 +245,7 @@ export default function EditProfileScreen() {
             label="Contact Phone"
             value={emergencyContactPhone}
             onChangeText={text => {
+              dirtyRef.current = true;
               setEmergencyContactPhone(formatRwandaPhoneInput(text));
               if (errors.emergencyContactPhone) setErrors(prev => ({ ...prev, emergencyContactPhone: undefined }));
             }}

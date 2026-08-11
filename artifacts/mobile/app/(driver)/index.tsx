@@ -44,6 +44,7 @@ import { HOME_TAB_BAR_HEIGHT } from '@/components/home/homeUtils';
 import { useDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { canDriverGoOnlineWithCredits, getActiveBonusRides, getActiveRideCredits, getEntitlementVehicleForProfile, getRideBalance, getVehicleEntitlement } from '@/domain/driverRidePackages';
 import { formatRwf, getDriverActivitySummary } from '@/domain/driverActivitySummary';
+import { withDailyCountersForToday } from '@/domain/driverDailyCounters';
 import { buttonCornerRadius, BUTTON_HEIGHT } from '@/constants/buttons';
 import { DRIVER_CTA_PILL_WIDTH } from '@/constants/homeDriverCta';
 import { elevation } from '@/constants/elevation';
@@ -75,6 +76,8 @@ import {
 } from "@/domain/driverRequestCard";
 const MAP_TYPES = ["standard", "satellite", "hybrid"] as const;
 type AppMapType = (typeof MAP_TYPES)[number];
+// A cached fix older than this is too stale to seed the map with.
+const LAST_KNOWN_LOCATION_MAX_AGE_MS = 120_000;
 const CTA_AVATAR_SIZE = 34;
 const CTA_AVATAR_INSET = 5;
 const CTA_LEFT_WIDTH = CTA_AVATAR_INSET + CTA_AVATAR_SIZE + 6;
@@ -295,8 +298,25 @@ export default function DriverDashboard() {
         ? permission
         : await Location.requestForegroundPermissionsAsync();
       if (!finalPermission.granted) return;
+      // Seed from the OS's cached fix first — it returns in milliseconds, so
+      // the map lands on the driver instead of sitting on the Kigali default
+      // for the ~10s a cold high-accuracy fix takes. The precise fix below
+      // then refines it.
+      try {
+        const cached = await Location.getLastKnownPositionAsync({
+          maxAge: LAST_KNOWN_LOCATION_MAX_AGE_MS,
+        });
+        if (cached) {
+          setCoords({
+            latitude: cached.coords.latitude,
+            longitude: cached.coords.longitude,
+          });
+        }
+      } catch {
+        // No cached fix — fall through to the live one.
+      }
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
       });
       setCoords({
         latitude: loc.coords.latitude,
@@ -458,11 +478,15 @@ export default function DriverDashboard() {
     }).start(() => {
       setCountdown(15);
     });
-    if (driverProfile)
+    if (driverProfile) {
+      // Roll over first: a decline after midnight starts the new day's count
+      // rather than adding to yesterday's.
+      const rolled = withDailyCountersForToday(driverProfile);
       saveDriverProfile({
-        ...driverProfile,
-        dailyDeclines: (driverProfile.dailyDeclines ?? 0) + 1,
+        ...rolled,
+        dailyDeclines: (rolled.dailyDeclines ?? 0) + 1,
       });
+    }
   };
 
   const handleDecline = () => {

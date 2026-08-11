@@ -62,12 +62,22 @@ const mockUseProfileQuery = jest.fn();
 const mockUseProfilePhotoQuery = jest.fn();
 const mockUseUpdateProfileMutation = jest.fn();
 const mockUseUpdateProfilePhotoMutation = jest.fn();
+const mockLoadProfilePhotoUri = jest.fn();
 
 jest.mock('@/query/hooks/useProfileQuery', () => ({
   useProfileQuery: () => mockUseProfileQuery(),
   useProfilePhotoQuery: () => mockUseProfilePhotoQuery(),
   useUpdateProfileMutation: () => mockUseUpdateProfileMutation(),
   useUpdateProfilePhotoMutation: () => mockUseUpdateProfilePhotoMutation(),
+  loadProfilePhotoUri: () => mockLoadProfilePhotoUri(),
+}));
+
+const mockUploadProfilePhoto = jest.fn();
+const mockClearProfilePhoto = jest.fn();
+
+jest.mock('@/services/profile', () => ({
+  uploadProfilePhoto: (...args: unknown[]) => mockUploadProfilePhoto(...args),
+  clearProfilePhoto: () => mockClearProfilePhoto(),
 }));
 
 jest.mock('expo-router', () => ({
@@ -100,6 +110,10 @@ describe('profile domain', () => {
     mockUseProfilePhotoQuery.mockReturnValue({ data: 'file://stored.jpg', refetch: jest.fn() });
     mockUseUpdateProfileMutation.mockReturnValue({ mutateAsync: jest.fn(async (updates: Partial<typeof mockUser>) => ({ ...mockUser, ...updates })) });
     mockUseUpdateProfilePhotoMutation.mockReturnValue({ mutateAsync: jest.fn(async (uri: string | null) => uri) });
+    // The account photo, which is what a fresh install actually reads.
+    mockLoadProfilePhotoUri.mockResolvedValue('file://stored.jpg');
+    mockUploadProfilePhoto.mockResolvedValue('https://cdn.test/avatars/abc.jpg');
+    mockClearProfilePhoto.mockResolvedValue(undefined);
   });
 
   test('exports the profile repository boundary', () => {
@@ -162,5 +176,7 @@ describe('profile domain', () => {
     expect(mockAuth.saveDriverProfile).toHaveBeenCalled();
     const savedProfile = mockAuth.saveDriverProfile.mock.calls.at(-1)?.[0];
     expect(savedProfile).toEqual(expect.not.objectContaining({ profileImage: expect.anything() }));
+    // Removing must reach the account too, or signing in elsewhere brings it back.
+    expect(mockClearProfilePhoto).toHaveBeenCalled();
   });
 });
