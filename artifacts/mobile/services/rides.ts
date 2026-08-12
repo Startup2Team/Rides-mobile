@@ -12,6 +12,10 @@ export interface CustomerRide {
   id: string;
   status: string;
   vehicleType: VehicleType | null;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerRating: number | null;
   driverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
@@ -36,6 +40,11 @@ export interface RideResponseDto {
   id: string;
   status: string;
   transport_type: string;
+  // Populated on the /driver/rides/* responses (the driver sees the customer).
+  customer_id?: string | null;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_rating?: number | null;
   driver_id: string | null;
   driver_name?: string;
   driver_phone?: string;
@@ -75,6 +84,10 @@ function toDomain(dto: RideResponseDto): CustomerRide {
     id: dto.id,
     status: dto.status,
     vehicleType: fromBackendTransportType(dto.transport_type),
+    customerId: dto.customer_id ?? null,
+    customerName: dto.customer_name ?? null,
+    customerPhone: dto.customer_phone ?? null,
+    customerRating: dto.customer_rating ?? null,
     driverId: dto.driver_id ?? null,
     driverName: dto.driver_name ?? null,
     driverPhone: dto.driver_phone ?? null,
@@ -104,9 +117,21 @@ export interface CreateRideInput {
   distanceKm?: number;
 }
 
-// POST /customer/rides → { ride_id, status }. initial_fare is the customer's
-// opening offer for the fare negotiation (optional).
-export async function createRide(input: CreateRideInput): Promise<{ rideId: string; status: string }> {
+export interface CreateRideResult {
+  rideId: string;
+  status: string;
+  /**
+   * How long the backend will search before giving up. Optional — the fields
+   * are being added to the API in parallel, so absent values simply leave the
+   * searching screen on its local fallback budget.
+   */
+  giveUpSeconds: number | null;
+  searchDeadlineAt: string | null;
+}
+
+// POST /customer/rides → { ride_id, status, give_up_seconds?, search_deadline_at? }.
+// initial_fare is the customer's opening offer for the fare negotiation (optional).
+export async function createRide(input: CreateRideInput): Promise<CreateRideResult> {
   const client = getAppBackendClient();
   const body: Record<string, unknown> = {
     pickup_lat: input.pickup.lat,
@@ -120,11 +145,19 @@ export async function createRide(input: CreateRideInput): Promise<{ rideId: stri
   if (input.initialFare !== undefined) body.initial_fare = input.initialFare;
   if (input.distanceKm !== undefined) body.distance_km = input.distanceKm;
 
-  const response = await client.post<Envelope<{ ride_id: string; status: string }>>(
-    '/v1/customer/rides',
-    { body },
-  );
-  return { rideId: response.data.data.ride_id, status: response.data.data.status };
+  const response = await client.post<
+    Envelope<{ ride_id: string; status: string; give_up_seconds?: number; search_deadline_at?: string }>
+  >('/v1/customer/rides', { body });
+  const data = response.data.data;
+  return {
+    rideId: data.ride_id,
+    status: data.status,
+    giveUpSeconds:
+      typeof data.give_up_seconds === 'number' && Number.isFinite(data.give_up_seconds) && data.give_up_seconds > 0
+        ? data.give_up_seconds
+        : null,
+    searchDeadlineAt: typeof data.search_deadline_at === 'string' && data.search_deadline_at ? data.search_deadline_at : null,
+  };
 }
 
 export async function listRides(): Promise<CustomerRide[]> {

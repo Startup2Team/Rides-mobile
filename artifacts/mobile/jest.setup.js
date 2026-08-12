@@ -3,6 +3,18 @@ globalThis.__DEV__ = true;
 globalThis.requestAnimationFrame = globalThis.requestAnimationFrame ?? (callback => setTimeout(callback, 0));
 globalThis.cancelAnimationFrame = globalThis.cancelAnimationFrame ?? (handle => clearTimeout(handle));
 
+// AppState's real module reaches into native TurboModules that don't exist
+// under node, and any component subscribing to it (e.g. RideProvider's
+// active-ride resume) would crash every suite that mounts it. Suites that mock
+// 'react-native' wholesale are unaffected.
+jest.mock('react-native/Libraries/AppState/AppState', () => ({
+  __esModule: true,
+  default: {
+    currentState: 'active',
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  },
+}));
+
 jest.mock('@sentry/react-native', () => {
   const scope = {
     setTag: jest.fn(),

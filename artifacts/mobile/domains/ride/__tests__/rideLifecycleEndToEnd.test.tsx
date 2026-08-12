@@ -41,6 +41,8 @@ jest.mock('@/observability/monitoring', () => ({
 jest.mock('@/services/rides', () => ({
   createRide: jest.fn(async () => ({ rideId: 'backend-ride-1' })),
   cancelRide: jest.fn(async () => undefined),
+  // Resume check on mount — no active ride in these scenarios.
+  getActiveRide: jest.fn(async () => null),
 }));
 jest.mock('@/services/customerTrackingSocket', () => ({
   openCustomerTrackingSocket: () => ({ close: jest.fn() }),

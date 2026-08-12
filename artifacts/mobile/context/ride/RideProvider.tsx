@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import {
   BookingFormDraft,
   Coords,
@@ -55,7 +55,9 @@ import {
   shadowWireStartRideCommand,
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
-import { createRide as createBackendRide, cancelRide as cancelBackendRide } from '@/services/rides';
+import { createRide as createBackendRide, cancelRide as cancelBackendRide, getActiveRide } from '@/services/rides';
+import { getActiveDriverRide } from '@/services/driverRides';
+import { readBackendError } from '@/utils/backendErrorMessage';
 import { estimateFare } from '@/services/fare';
 import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare } from '@/services/negotiation';
 import {
@@ -83,6 +85,7 @@ import {
   isLifecycleEvent,
   localStatusFromBackend,
   parseDriverCoords,
+  rideFromActiveRideSnapshot,
   type BackendEventPayload,
 } from './rideBackendSync';
 import { createCompleteRideCommand, createStartRideCommand } from '@/domains/ride/commandCreators';
@@ -153,8 +156,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   // on every app foreground) — otherwise the driver WebSocket is torn down and
   // re-handshaked each time, for no state change at all.
   const authDriverProfileRef = useRef(auth?.driverProfile ?? null);
+  const authUserRef = useRef(auth?.user ?? null);
   const driverEntitlementRef = useRef(driverEntitlement?.entitlement ?? null);
   authDriverProfileRef.current = auth?.driverProfile ?? null;
+  authUserRef.current = auth?.user ?? null;
   driverEntitlementRef.current = driverEntitlement?.entitlement ?? null;
   const rideCommandCapabilitySnapshot = useMemo<CapabilitySnapshot>(() => ({
     ...resolveCapabilities({
@@ -486,6 +491,45 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setRestoreBookingOnHomeFocus(false);
   }, []);
 
+  // ── Active-ride resume ─────────────────────────────────────────────────────
+  // Ask the backend which ride this account is actually on and rehydrate local
+  // state from the snapshot. Without this, killing the app mid-ride stranded
+  // both roles on their home screens while the server still held the ride:
+  // currentRide started null, nothing ever read GET /rides/active, and the
+  // socket's ride_state replay was discarded against null state.
+  const hydrateActiveRide = useCallback(async () => {
+    const user = authUserRef.current;
+    if (!user) return;
+    // Hydration only fills an empty seat — never clobber a live local ride or
+    // a pending driver offer.
+    if (currentRideRef.current || pendingRequestRef.current) return;
+    const viewer = user.mode === 'driver' ? 'driver' : 'customer';
+    try {
+      const snapshot = viewer === 'driver' ? await getActiveDriverRide() : await getActiveRide();
+      if (!snapshot) return;
+      const ride = rideFromActiveRideSnapshot(snapshot, viewer);
+      if (!ride) return;
+      // Re-check after the await: a ride created or accepted while the request
+      // was in flight wins over the snapshot.
+      if (currentRideRef.current || pendingRequestRef.current) return;
+      backendRideIdRef.current = snapshot.id;
+      backendDrivingRef.current = true;
+      // A resumed CONFIRMED ride must still auto-advance to en-route (the app
+      // died right after accept); anything further along must not re-fire it.
+      driverEnRouteFiredRef.current = ride.status === 'confirmed' ? null : snapshot.id;
+      localCancelInitiatedRef.current = false;
+      timers.startSession();
+      setCurrentRide(ride);
+    } catch (error) {
+      reportOperationalFailure('ride.resume.hydrate', error, { mode: user.mode });
+    }
+  }, [timers]);
+  // Stable handle for the driver socket handler, whose useCallback identity
+  // must not churn (see the ref block above) — a churned identity re-handshakes
+  // the WebSocket.
+  const hydrateActiveRideRef = useRef(hydrateActiveRide);
+  hydrateActiveRideRef.current = hydrateActiveRide;
+
   const createRide = useCallback(async (
     pickup: RideLocation,
     destination: RideLocation,
@@ -562,51 +606,97 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     // Status stays `searching`; the real backend `driver_matched` event
     // (delivered over the customer tracking socket) transitions to `negotiating`.
 
-    // Safety net: the backend ends every search (~60s budget) with a
-    // ride_cancelled event, but if the socket died mid-search nothing else
-    // stops the spinner. Cleared by driver_matched / any lifecycle event via
-    // clearSearchTimers.
+    // Safety net: the backend ends every search with a ride_cancelled event,
+    // but if the socket died mid-search nothing else stops the spinner. Cleared
+    // by driver_matched / any lifecycle event via clearSearchTimers. Ends the
+    // search the same way the backend give-up does — the in-place "no drivers"
+    // state on /searching (status stays 'searching', so navigation keeps the
+    // customer on the screen with its real Try-again) — and releases the
+    // server-side active_ride pointer so the next booking isn't 409'd.
     matchDriverTimeoutRef.current = timers.scheduleTimeout(() => {
       matchDriverTimeoutRef.current = null;
       const active = currentRideRef.current;
-      if (!active || active.id !== ride.id || active.status !== 'searching') return;
-      const staleBackendRideId = backendRideIdRef.current;
-      if (staleBackendRideId) {
-        void cancelBackendRide(staleBackendRideId).catch(error =>
-          reportOperationalFailure('ride.search.timeoutCancel', error, { rideId: staleBackendRideId }),
+      if (!active || active.id !== ride.id || active.status !== 'searching' || active.searchOutcome) return;
+      const timedOutBackendRideId = backendRideIdRef.current;
+      if (timedOutBackendRideId) {
+        void cancelBackendRide(timedOutBackendRideId).catch(error =>
+          reportOperationalFailure('ride.search.timeoutCancel', error, { rideId: timedOutBackendRideId }),
         );
       }
+      backendRideIdRef.current = null;
       setCurrentRide(prev =>
         prev && prev.id === ride.id && prev.status === 'searching'
-          ? { ...prev, status: 'cancelled' }
+          ? { ...prev, searchOutcome: 'no_drivers', backendRideId: undefined }
           : prev,
       );
-      timers.scheduleTimeout(() => {
-        setCurrentRide(prev => (prev?.status === 'cancelled' ? null : prev));
-        setDriverLocation(null);
-      }, CANCELLED_RIDE_CLEAR_DELAY_MS);
-      Alert.alert('No drivers found', 'No drivers are available nearby right now. Please try again.');
     }, CUSTOMER_SEARCH_TIMEOUT_MS);
 
     // Create the ride on the real backend (best-effort). On success we stash the
     // server ride id so cancel + negotiation hit the same ride, and the customer
     // tracking socket takes over state once the backend starts pushing events.
+    const staleBackendRideId = backendRideIdRef.current;
     backendRideIdRef.current = null;
     backendDrivingRef.current = false;
     driverEnRouteFiredRef.current = null;
     if (auth?.user) {
-      void createBackendRide({
-        vehicleType,
-        pickup: { lat: pickup.latitude, lng: pickup.longitude, address: pickup.address ?? '' },
-        destination: { lat: destination.latitude, lng: destination.longitude, address: destination.address ?? '' },
-        initialFare: fare,
-        distanceKm: parseFloat(dist.toFixed(2)),
-      })
-        .then(res => {
-          backendRideIdRef.current = res.rideId;
-          setCurrentRide(prev => (prev && prev.id === ride.id ? { ...prev, backendRideId: res.rideId } : prev));
-        })
-        .catch(error => reportOperationalFailure('ride.backend.create', error, { rideId: ride.id }));
+      void (async () => {
+        // A leftover search (e.g. a local timeout whose cancel never landed)
+        // may still hold the server's active_ride pointer — release it BEFORE
+        // the new POST, or it 409s. Sequenced, not fire-and-forget, so the
+        // cancel cannot race the create.
+        if (staleBackendRideId) {
+          await cancelBackendRide(staleBackendRideId).catch(error =>
+            reportOperationalFailure('ride.backend.staleCancel', error, { rideId: staleBackendRideId }),
+          );
+        }
+        const res = await createBackendRide({
+          vehicleType,
+          pickup: { lat: pickup.latitude, lng: pickup.longitude, address: pickup.address ?? '' },
+          destination: { lat: destination.latitude, lng: destination.longitude, address: destination.address ?? '' },
+          initialFare: fare,
+          distanceKm: parseFloat(dist.toFixed(2)),
+        });
+        backendRideIdRef.current = res.rideId;
+        setCurrentRide(prev =>
+          prev && prev.id === ride.id
+            ? {
+                ...prev,
+                backendRideId: res.rideId,
+                // Server-granted search budget (optional fields, rolling out in
+                // parallel) — the searching screen counts down against it.
+                ...(res.giveUpSeconds != null ? { searchBudgetSeconds: res.giveUpSeconds } : {}),
+                ...(res.searchDeadlineAt ? { searchDeadlineAt: res.searchDeadlineAt } : {}),
+              }
+            : prev,
+        );
+      })().catch(async error => {
+        // The server already holds a live ride for this account. The local
+        // "searching" would be fiction — no backend ride backs it, so it could
+        // only end in a fake "No drivers found". Rejoin the real ride instead
+        // and say so.
+        const { code } = readBackendError(error);
+        if (code === 'RIDE_ALREADY_ACTIVE') {
+          try {
+            const snapshot = await getActiveRide();
+            const active = snapshot ? rideFromActiveRideSnapshot(snapshot, 'customer') : null;
+            if (snapshot && active) {
+              clearSearchTimers();
+              backendRideIdRef.current = snapshot.id;
+              backendDrivingRef.current = true;
+              driverEnRouteFiredRef.current = null;
+              setCurrentRide(prev => (prev && prev.id === ride.id ? active : prev));
+              Alert.alert(
+                'Ride in progress',
+                'You already have a ride in progress — taking you back to it.',
+              );
+              return;
+            }
+          } catch (hydrateError) {
+            reportOperationalFailure('ride.backend.activeAfter409', hydrateError, { rideId: ride.id });
+          }
+        }
+        reportOperationalFailure('ride.backend.create', error, { rideId: ride.id });
+      });
     }
   }, [auth?.user, clearSearchTimers, rideCommandCapabilitySnapshot, timers]);
 
@@ -1037,18 +1127,35 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         const statusBeforeEvent = currentRideRef.current?.status ?? null;
         const coords = parseDriverCoords(payload);
         if (coords) setDriverLocation(coords);
-        setCurrentRide(prev => (prev ? applyLifecycleEvent(prev, type, payload) : prev));
 
         // The dispatcher's give-up cancels the ride while we're still
-        // 'searching'. Without this the spinner just vanishes and the customer
-        // lands back on booking with no explanation (the backend's reason was
-        // dropped on the floor; only the FCM push ever said why).
+        // 'searching'. Keep the customer ON /searching in its in-place
+        // "no drivers" state — with a real Try-again for the same trip —
+        // instead of the old Alert + pop-to-home. Status stays 'searching' (so
+        // the navigation policy holds the screen); the backend ride is finished,
+        // so its id is dropped — the tracking socket closes and nothing later
+        // tries to cancel a dead ride. Explicit user cancels
+        // (localCancelInitiatedRef) still leave the screen as before.
         if (type === 'ride_cancelled' && statusBeforeEvent === 'searching' && !localCancelInitiatedRef.current) {
           const reason = typeof payload.reason === 'string' && payload.reason.trim()
             ? payload.reason.trim()
-            : 'No drivers are available nearby right now. Please try again.';
-          Alert.alert('No drivers found', reason);
+            : undefined;
+          backendRideIdRef.current = null;
+          timers.endSession();
+          setCurrentRide(prev =>
+            prev && prev.status === 'searching'
+              ? {
+                  ...prev,
+                  searchOutcome: 'no_drivers',
+                  ...(reason ? { searchFailureReason: reason } : {}),
+                  backendRideId: undefined,
+                }
+              : prev,
+          );
+          return;
         }
+
+        setCurrentRide(prev => (prev ? applyLifecycleEvent(prev, type, payload) : prev));
 
         if (type === 'ride_completed') {
           const session = timers.endSession();
@@ -1119,6 +1226,25 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // The server replays a ride_state snapshot on every (re)connect. It used
+      // to be silently discarded here, so a driver whose socket reconnected
+      // mid-ride never resynced. Apply it to the local ride when one exists;
+      // on a cold reconnect with no local ride the snapshot only carries the
+      // status, so pull the full ride over REST instead.
+      if (type === 'ride_state') {
+        const local = localStatusFromBackend(payload.status);
+        if (!local) return;
+        backendDrivingRef.current = true;
+        if (!currentRideRef.current) {
+          if (local !== 'completed' && local !== 'cancelled') {
+            void hydrateActiveRideRef.current();
+          }
+          return;
+        }
+        setCurrentRide(prev => (prev ? { ...prev, status: local } : prev));
+        return;
+      }
+
       if (type === 'ride_cancelled') {
         backendDrivingRef.current = true;
         setPendingRequest(null);
@@ -1182,6 +1308,21 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       driverSocketRef.current = null;
     };
   }, [handleDriverSocketEvent, isDriverSocketActive]);
+
+  // Resume check: once auth is ready (and again on every mode change), and on
+  // each return to the foreground. A single cheap GET that no-ops while a ride
+  // is already loaded — see hydrateActiveRide.
+  const authUserId = auth?.user?.id ?? null;
+  const authUserMode = auth?.user?.mode ?? null;
+  React.useEffect(() => {
+    if (!authUserId) return;
+    void hydrateActiveRide();
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      void hydrateActiveRide();
+    });
+    return () => subscription.remove();
+  }, [authUserId, authUserMode, hydrateActiveRide]);
 
   // Driver: mark en-route once a backend-backed ride is confirmed (covers both
   // negotiation paths), so it advances to DRIVER_EN_ROUTE. Fires once per ride.

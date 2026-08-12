@@ -381,6 +381,28 @@ export interface Ride {
   completedAt?: string;
   arrivedAt?: string;
   waitStartedAt?: string;
+  /**
+   * Search budget the backend granted this ride (POST /customer/rides may
+   * return give_up_seconds / search_deadline_at). The searching screen counts
+   * DOWN against these instead of its hardcoded fallback, so the countdown
+   * matches when the server will actually give up. Both optional — the
+   * backend contract is being rolled out in parallel.
+   */
+  searchBudgetSeconds?: number;
+  searchDeadlineAt?: string;
+  /**
+   * Set when the search ended without a driver (backend give-up or local
+   * timeout). Status stays 'searching' so navigation keeps the customer on
+   * /searching, where this flag switches the screen into its in-place
+   * "no drivers" state with a real Try-again — instead of an Alert + pop.
+   */
+  searchOutcome?: 'no_drivers';
+  searchFailureReason?: string;
+  /**
+   * Driver-side: how long this ride offer stays valid (ride_request
+   * window_seconds). Drives the accept/decline countdown; 15s fallback.
+   */
+  offerWindowSeconds?: number;
 }
 
 export const VEHICLE_MCI: Record<VehicleType, string> = {

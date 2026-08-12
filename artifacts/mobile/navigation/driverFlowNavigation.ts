@@ -20,14 +20,17 @@ export function getDriverFlowNavigationDecision({
 }): DriverFlowNavigationDecision | null {
   if (isDriverHomePath(pathname)) {
     if (status === 'negotiating') return { method: 'push', href: '/driver-negotiation' };
-    if (status === 'confirmed' || status === 'arriving') {
+    // 'arrived' / 'in_progress' matter on cold start: an active ride resumed
+    // from GET /driver/rides/active can hydrate straight into them, and the
+    // driver must land back on the navigate screen, not the dashboard.
+    if (status === 'confirmed' || status === 'arriving' || status === 'arrived' || status === 'in_progress') {
       return { method: 'push', href: '/driver-navigate' };
     }
     return null;
   }
 
   if (pathname === '/driver-negotiation') {
-    if (status === 'confirmed' || status === 'arriving') {
+    if (status === 'confirmed' || status === 'arriving' || status === 'arrived' || status === 'in_progress') {
       return { method: 'replace', href: '/driver-navigate' };
     }
     if (!status || status === 'cancelled') {

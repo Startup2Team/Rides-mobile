@@ -18,8 +18,10 @@ import {
 import { VEHICLE_LABELS } from '@/types';
 import { typography } from '@/constants/typography';
 
-// Mirrors MATCH_GIVE_UP_SECONDS on the API (default 60s). The grace window keeps
-// the server authoritative: we only show a terminal state if its own give-up
+// Fallback search budget when the create-ride response carries no
+// give_up_seconds / search_deadline_at (those fields are rolling out on the API
+// in parallel — when present they override this). The grace window keeps the
+// server authoritative: we only show a terminal state if its own give-up
 // notification failed to arrive, rather than racing it. RideProvider holds a
 // last-resort reaper well behind this (CUSTOMER_SEARCH_TIMEOUT_MS) for searches
 // abandoned off-screen — it must never fire before this in-place state does.
@@ -29,10 +31,18 @@ const SEARCH_DEADLINE_GRACE_SECONDS = 5;
 export default function SearchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, cancelRide, pauseDriverMatching, resumeDriverMatching } = useRide();
+  const {
+    currentRide,
+    cancelRide,
+    createRide,
+    cancelledSearchDraft,
+    pauseDriverMatching,
+    resumeDriverMatching,
+  } = useRide();
   const { showToast } = useToast();
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const searchStartedAtRef = useRef(Date.now());
 
   const pulseA = useRef(new Animated.Value(0)).current;
   const pulseB = useRef(new Animated.Value(0)).current;
@@ -62,36 +72,56 @@ export default function SearchingScreen() {
     startPulse(pulseC, 1000);
   }, [pulseA, pulseB, pulseC]);
 
-  // Elapsed seconds, driving both the staged copy and the client deadline.
-  //
-  // This screen had no timeout of any kind: no elapsed indication, no stages, no
-  // terminal state. If the backend never answered — and it frequently didn't,
-  // because matching used to give up in milliseconds and publish `ride_cancelled`
-  // before this screen's socket existed, so the message was dropped — the
-  // customer sat on a pulsing animation indefinitely with Cancel as the only exit.
+  // Elapsed seconds (Date.now() delta so a backgrounded app stays honest),
+  // driving both the staged copy and the countdown. Keyed on the ride id so a
+  // Try-again restarts the clock with the fresh search.
   useEffect(() => {
-    const started = Date.now();
+    searchStartedAtRef.current = Date.now();
+    setElapsedSeconds(0);
     const id = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - started) / 1000));
+      setElapsedSeconds(Math.floor((Date.now() - searchStartedAtRef.current) / 1000));
     }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [currentRide?.id]);
 
-  // Give the server SEARCH_DEADLINE_SECONDS plus a grace window before declaring
+  // Total budget this search actually has: the server's own deadline when the
+  // create response carried one (absolute timestamp preferred over the plain
+  // seconds grant), else the local fallback. The countdown renders budget → 0.
+  const budgetSeconds = useMemo(() => {
+    const deadlineAt = currentRide?.searchDeadlineAt;
+    if (deadlineAt) {
+      const delta = Math.round((new Date(deadlineAt).getTime() - searchStartedAtRef.current) / 1000);
+      if (Number.isFinite(delta) && delta > 0) return delta;
+    }
+    const granted = currentRide?.searchBudgetSeconds;
+    if (granted && granted > 0) return granted;
+    return SEARCH_DEADLINE_SECONDS;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRide?.id, currentRide?.searchBudgetSeconds, currentRide?.searchDeadlineAt]);
+
+  const remainingSeconds = Math.max(0, budgetSeconds - elapsedSeconds);
+
+  // Give the server its full budget plus a grace window before declaring
   // failure ourselves, so the backend stays authoritative and we only surface a
-  // terminal state when its own give-up genuinely failed to reach us.
-  const timedOut = elapsedSeconds >= SEARCH_DEADLINE_SECONDS + SEARCH_DEADLINE_GRACE_SECONDS;
+  // terminal state when its own give-up genuinely failed to reach us. When the
+  // give-up DOES arrive, RideProvider marks the ride (searchOutcome) instead of
+  // popping the screen, and this same in-place state shows immediately.
+  const timedOut = elapsedSeconds >= budgetSeconds + SEARCH_DEADLINE_GRACE_SECONDS;
+  const searchFailed = currentRide?.searchOutcome === 'no_drivers' || timedOut;
 
-  const searchStage = timedOut
+  const searchStage = searchFailed
     ? 'No drivers available right now'
-    // Thresholds track the API's wave cadence (MATCH_WAVE_INTERVAL_SECONDS=12,
-    // 2km first ring widening to 10km) so the copy changes when the search
-    // actually widens, rather than on numbers left over from the old 90s budget.
+    // The first threshold tracks the API's wave cadence
+    // (MATCH_WAVE_INTERVAL_SECONDS=12, 2km first ring widening out); the rest
+    // key off REMAINING time so the copy stays truthful whatever budget the
+    // server granted — including the final "all asked, waiting" stage.
     : elapsedSeconds < 12
       ? 'Finding your driver'
-      : elapsedSeconds < 36
+      : remainingSeconds > budgetSeconds * 0.4
         ? 'Looking a bit wider…'
-        : 'Still searching — drivers nearby may be busy';
+        : remainingSeconds > 10
+          ? 'Still searching — drivers nearby may be busy'
+          : "We've asked all nearby riders — waiting for one to free up";
 
   const finishCancelSearch = () => {
     cancelRide();
@@ -103,10 +133,31 @@ export default function SearchingScreen() {
     }
   };
 
-  // Retry means: release this dead ride, then return home so the customer can
-  // book again. Without cancelling first, the server-side active_ride pointer
-  // would still be set and CreateRide would reject the next attempt.
+  // Try again re-books the SAME trip (pickup/destination/vehicle from the saved
+  // booking draft, falling back to the failed ride itself). createRide swaps in
+  // a fresh 'searching' ride synchronously — this screen never unmounts — and
+  // it releases any backend ride the dead search still holds BEFORE the new
+  // POST, so the retry cannot be rejected as RIDE_ALREADY_ACTIVE.
   const handleRetry = () => {
+    const draft = cancelledSearchDraft;
+    const failedRide = currentRide;
+    if (draft) {
+      void createRide(draft.pickup, draft.destination, draft.vehicleType, draft.destText);
+    } else if (failedRide) {
+      void createRide(
+        failedRide.pickup,
+        failedRide.destination,
+        failedRide.requestedVehicleType ?? failedRide.vehicleType,
+        failedRide.destination.address ?? '',
+      );
+    } else {
+      navigateToCustomerHomeAfterCompletion(router);
+    }
+  };
+
+  // In the failed state there is nothing left to confirm — the search already
+  // ended — so leave directly instead of raising the cancel-search alert.
+  const handleBackHome = () => {
     cancelRide();
     navigateToCustomerHomeAfterCompletion(router);
   };
@@ -180,10 +231,21 @@ export default function SearchingScreen() {
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.foreground }]}>{searchStage}</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          {timedOut
-            ? 'No one accepted this time. You can try again — it often works on a second attempt.'
-            : `Connecting you with nearby ${VEHICLE_LABELS[vehicleType].toLowerCase()} riders · ${elapsedSeconds}s`}
+          {searchFailed
+            ? currentRide?.searchFailureReason ??
+              'No one accepted this time. You can try again — it often works on a second attempt.'
+            : `Connecting you with nearby ${VEHICLE_LABELS[vehicleType].toLowerCase()} riders`}
         </Text>
+        {!searchFailed && (
+          <View
+            style={styles.countdownRow}
+            accessibilityRole="text"
+            accessibilityLabel={`${remainingSeconds} seconds left in this search`}
+          >
+            <Text style={[styles.countdownValue, { color: colors.primary }]}>{remainingSeconds}</Text>
+            <Text style={[styles.countdownUnit, { color: colors.mutedForeground }]}>s</Text>
+          </View>
+        )}
 
         {currentRide && (
           <View style={[styles.routeCard, { backgroundColor: colors.card }]}>
@@ -205,7 +267,7 @@ export default function SearchingScreen() {
       </View>
 
       <View style={styles.footer}>
-        {timedOut ? (
+        {searchFailed ? (
           <AppButton
             title="Try again"
             onPress={handleRetry}
@@ -214,8 +276,8 @@ export default function SearchingScreen() {
           />
         ) : null}
         <AppButton
-          title={timedOut ? 'Back to home' : 'Cancel Search'}
-          onPress={handleCancel}
+          title={searchFailed ? 'Back to home' : 'Cancel Search'}
+          onPress={searchFailed ? handleBackHome : handleCancel}
           variant="outline"
           fullWidth
           size="lg"
@@ -272,6 +334,20 @@ const styles = StyleSheet.create({
     ...typography.body,
     textAlign: 'center',
   },
+  countdownRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 2,
+    marginTop: spacing[4],
+  },
+  countdownValue: {
+    ...typography.h1,
+    fontVariant: ['tabular-nums'],
+  },
+  countdownUnit: {
+    ...typography.body,
+  },
   routeCard: {
     borderRadius: radius['2xl'],
     padding: semanticSpacing.listItemPadding,
@@ -303,5 +379,6 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 24,
     paddingBottom: 32,
+    gap: spacing[10],
   },
 });

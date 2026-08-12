@@ -44,6 +44,13 @@ export function getRideFlowNavigationDecision({
     if (status === 'negotiating' && !isMatchingPaused) {
       return { method: 'replace', href: '/negotiation' };
     }
+    // A 409-rejoin (RIDE_ALREADY_ACTIVE) can land an already-confirmed or
+    // in-progress ride while the customer is still on the searching screen —
+    // route them straight to it rather than leaving the spinner up.
+    if (status && ACTIVE_RIDE_STATUSES.includes(status)) {
+      return { method: 'replace', href: '/ride' };
+    }
+    if (status === 'completed') return { method: 'replace', href: '/rating' };
     if (!status || status === 'cancelled') return { method: 'backOrHome' };
     return null;
   }
