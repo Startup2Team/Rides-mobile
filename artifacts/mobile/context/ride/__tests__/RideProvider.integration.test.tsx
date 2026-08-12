@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { BackendError } from '@/data/remote/contracts/backendErrors';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { RideProvider, useRide } from '../RideProvider';
@@ -17,8 +19,11 @@ let mockDriverEntitlement: any = null;
 // Handlers captured from the (mocked) customer tracking socket so tests can
 // drive real backend events — matching + negotiation are now socket-driven.
 let mockCapturedCustomerHandlers: any = null;
+let mockCapturedDriverHandlers: any = null;
 const mockCreateBackendRide = jest.fn(async (..._args: unknown[]) => ({ rideId: 'backend-ride-1' }));
 const mockCancelBackendRide = jest.fn(async (..._args: unknown[]) => undefined);
+const mockGetActiveRide = jest.fn(async (): Promise<any> => null);
+const mockGetActiveDriverRide = jest.fn(async (): Promise<any> => null);
 const mockShadowWireRequestRideCommand = jest.fn();
 const mockShadowWireCancelRideCommand = jest.fn();
 const mockShadowWireAcceptRideCommand = jest.fn();
@@ -51,12 +56,14 @@ jest.mock('@/context/AuthContext', () => ({
 jest.mock('@/services/rides', () => ({
   createRide: (...args: unknown[]) => mockCreateBackendRide(...args),
   cancelRide: (...args: unknown[]) => mockCancelBackendRide(...args),
+  getActiveRide: () => mockGetActiveRide(),
 }));
 jest.mock('@/services/negotiation', () => ({
   proposeFare: jest.fn(async () => undefined),
   acceptFare: jest.fn(async () => undefined),
 }));
 jest.mock('@/services/driverRides', () => ({
+  getActiveDriverRide: () => mockGetActiveDriverRide(),
   acceptRide: jest.fn(async () => undefined),
   declineRide: jest.fn(async () => undefined),
   driverCancelRide: jest.fn(async () => undefined),
@@ -77,7 +84,10 @@ jest.mock('@/services/customerTrackingSocket', () => ({
   },
 }));
 jest.mock('@/services/driverTrackingSocket', () => ({
-  openDriverSocket: () => ({ close: jest.fn() }),
+  openDriverSocket: (handlers: any) => {
+    mockCapturedDriverHandlers = handlers;
+    return { close: jest.fn() };
+  },
 }));
 
 jest.mock('@/context/DriverEntitlementContext', () => ({
@@ -164,8 +174,14 @@ describe('RideProvider lifecycle orchestration', () => {
     mockAuthUser = null;
     mockDriverEntitlement = null;
     mockCapturedCustomerHandlers = null;
+    mockCapturedDriverHandlers = null;
     mockCreateBackendRide.mockClear();
+    mockCreateBackendRide.mockImplementation(async () => ({ rideId: 'backend-ride-1' }));
     mockCancelBackendRide.mockClear();
+    mockGetActiveRide.mockReset();
+    mockGetActiveRide.mockResolvedValue(null);
+    mockGetActiveDriverRide.mockReset();
+    mockGetActiveDriverRide.mockResolvedValue(null);
     mockShadowWireRequestRideCommand.mockReset();
     mockShadowWireCancelRideCommand.mockReset();
     mockShadowWireAcceptRideCommand.mockReset();
@@ -609,5 +625,185 @@ describe('RideProvider lifecycle orchestration', () => {
       driverId: 'driver-1',
       driverName: 'Test Driver',
     }));
+  });
+
+  // ── Active-ride resume + search UX ─────────────────────────────────────────
+
+  // GET /rides/active snapshot as mapped by services/rides.toDomain.
+  const activeSnapshot = (overrides: Record<string, unknown> = {}) => ({
+    id: 'srv-active-1',
+    status: 'IN_PROGRESS',
+    vehicleType: 'moto',
+    customerId: 'cust-9',
+    customerName: 'Cust',
+    customerPhone: '+250780000555',
+    customerRating: null,
+    driverId: 'drv-3',
+    driverName: 'Drv',
+    driverPhone: '+250780000333',
+    driverRating: 4.9,
+    driverPlate: 'RAD3750A',
+    pickup: { lat: pickup.latitude, lng: pickup.longitude, address: pickup.address },
+    destination: { lat: destination.latitude, lng: destination.longitude, address: destination.address },
+    estimatedDistanceKm: 2.4,
+    customerInitialFare: 1200,
+    agreedFare: 1500,
+    estimatedFareRwf: 1300,
+    finalFareRwf: null,
+    cancelReason: null,
+    driverArrivedAt: null,
+    startedAt: '2026-08-12T08:02:00Z',
+    completedAt: null,
+    createdAt: '2026-08-12T07:55:00Z',
+    updatedAt: '2026-08-12T08:02:00Z',
+    ...overrides,
+  });
+
+  const driverProfileFixture = () => ({
+    id: 'driver-1',
+    isOnline: true,
+    isVerified: true,
+    verificationStatus: 'approved',
+    vehicleType: 'moto',
+    plateNumber: 'RAD 001 A',
+    licenseNumber: 'LIC001',
+    vehicles: [],
+  });
+
+  test('hydrates the customer active ride on cold start so navigation can resume it', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    mockGetActiveRide.mockResolvedValue(activeSnapshot());
+
+    const { result } = renderRideProvider();
+
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'in_progress',
+      backendRideId: 'srv-active-1',
+      driverId: 'drv-3',
+      agreedFare: 1500,
+    })));
+    expect(result.current.currentRide?.driver).toEqual(expect.objectContaining({
+      name: 'Drv',
+      phone: '+250780000333',
+      plateNumber: 'RAD3750A',
+    }));
+  });
+
+  test('hydrates the driver active ride on cold start with the customer identity', async () => {
+    mockAuthDriverProfile = driverProfileFixture();
+    mockGetActiveDriverRide.mockResolvedValue(activeSnapshot({ status: 'DRIVER_ARRIVED', driverArrivedAt: '2026-08-12T08:00:00Z' }));
+
+    const { result } = renderRideProvider();
+
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'arrived',
+      backendRideId: 'srv-active-1',
+      customerName: 'Cust',
+      customerPhone: '+250780000555',
+      waitStartedAt: '2026-08-12T08:00:00Z',
+    })));
+  });
+
+  test('hydration never clobbers a ride that is already live locally', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    let resolveActive: (value: unknown) => void = () => {};
+    mockGetActiveRide.mockImplementation(() => new Promise(resolve => { resolveActive = resolve; }));
+
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    const localRideId = result.current.currentRide?.id;
+
+    await act(async () => {
+      resolveActive(activeSnapshot());
+      await Promise.resolve();
+    });
+    expect(result.current.currentRide?.id).toBe(localRideId);
+    expect(result.current.currentRide?.status).toBe('searching');
+  });
+
+  test('driver ride_state replay resyncs the local ride status', async () => {
+    mockAuthDriverProfile = driverProfileFixture();
+    mockGetActiveDriverRide.mockResolvedValue(activeSnapshot({ status: 'DRIVER_EN_ROUTE' }));
+
+    const { result } = renderRideProvider();
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('arriving'));
+
+    await waitFor(() => expect(mockCapturedDriverHandlers).not.toBeNull());
+    await act(async () => {
+      mockCapturedDriverHandlers.onEvent({ type: 'ride_state', payload: { status: 'IN_PROGRESS' } });
+    });
+    expect(result.current.currentRide?.status).toBe('in_progress');
+  });
+
+  test('409 RIDE_ALREADY_ACTIVE rejoins the real ride instead of faking a search', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockCreateBackendRide.mockRejectedValue(new BackendError('conflict', 'Conflict', {
+      status: 409,
+      cause: { error: { code: 'RIDE_ALREADY_ACTIVE', message: 'You already have an active ride' } },
+    }));
+    mockGetActiveRide.mockResolvedValue(activeSnapshot());
+
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'in_progress',
+      backendRideId: 'srv-active-1',
+    })));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Ride in progress',
+      expect.stringContaining('already have a ride in progress'),
+    );
+    expect(alertSpy).not.toHaveBeenCalledWith('No drivers found', expect.anything());
+  });
+
+  test('backend no-driver give-up flips the search into the in-place failed state', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockCreateBackendRide.mockResolvedValue({
+      rideId: 'backend-ride-1',
+      giveUpSeconds: 45,
+      searchDeadlineAt: '2026-08-12T08:00:45Z',
+    } as any);
+
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      backendRideId: 'backend-ride-1',
+      searchBudgetSeconds: 45,
+      searchDeadlineAt: '2026-08-12T08:00:45Z',
+    })));
+
+    await emitCustomer('ride_cancelled', { reason: 'No drivers accepted your request' });
+
+    // Status stays 'searching' so navigation keeps the customer on /searching,
+    // where searchOutcome switches the screen into its Try-again state.
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'searching',
+      searchOutcome: 'no_drivers',
+      searchFailureReason: 'No drivers accepted your request',
+    }));
+    expect(result.current.currentRide?.backendRideId).toBeUndefined();
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  test('an explicit customer cancel still cancels instead of entering the failed state', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    await waitFor(() => expect(result.current.currentRide?.backendRideId).toBe('backend-ride-1'));
+
+    act(() => result.current.cancelRide());
+    expect(result.current.currentRide?.status).toBe('cancelled');
+    expect(result.current.currentRide?.searchOutcome).toBeUndefined();
   });
 });

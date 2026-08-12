@@ -10,7 +10,9 @@ describe('query foundation', () => {
     expect(defaults.queries).toEqual(expect.objectContaining({
       retry: 2,
       networkMode: 'online',
-      refetchOnWindowFocus: false,
+      // Stale queries refetch when the app returns to the foreground — the
+      // focusManager is wired to AppState in query/client.ts.
+      refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       refetchOnMount: true,
       staleTime: 0,
@@ -138,13 +140,16 @@ describe('query foundation', () => {
       expect(policy).toEqual(expect.objectContaining({
         staleTime: expect.any(Number),
         gcTime: expect.any(Number),
-        refetchOnWindowFocus: expect.any(Boolean),
         refetchOnReconnect: expect.any(Boolean),
         refetchOnMount: expect.anything(),
         retry: expect.any(Number),
         retryDelayMs: expect.any(Number),
         networkMode: 'online',
       }));
+      // boolean for most policies; 'always' for waiting-on-an-admin data
+      // (driverProfile, driverDocuments, packageEntitlements, notifications),
+      // which must refresh on every return to the app regardless of staleness.
+      expect([true, false, 'always']).toContain(policy.refetchOnWindowFocus);
     }
   });
 });

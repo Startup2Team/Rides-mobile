@@ -43,8 +43,24 @@ describe('driver ride-flow navigation', () => {
     });
   });
 
+  test('routes resumed mid-trip rides back onto the navigate screen', () => {
+    // Cold-start hydration from GET /driver/rides/active can land straight in
+    // 'arrived' / 'in_progress'; the dashboard must hand off to navigation.
+    expect(decide('/(driver)', 'arrived')).toEqual({
+      method: 'push',
+      href: '/driver-navigate',
+    });
+    expect(decide('/(driver)', 'in_progress')).toEqual({
+      method: 'push',
+      href: '/driver-navigate',
+    });
+    expect(decide('/driver-negotiation', 'in_progress')).toEqual({
+      method: 'replace',
+      href: '/driver-navigate',
+    });
+  });
+
   test('preserves existing screens for statuses without automatic redirects', () => {
-    expect(decide('/(driver)', 'arrived')).toBeNull();
     expect(decide('/driver-negotiation', 'negotiating')).toBeNull();
     expect(decide('/driver-navigate', 'cancelled')).toBeNull();
     expect(decide('/(tabs)', 'negotiating')).toBeNull();
