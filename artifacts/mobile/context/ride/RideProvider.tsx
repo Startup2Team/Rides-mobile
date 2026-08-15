@@ -60,7 +60,10 @@ import { getActiveDriverRide } from '@/services/driverRides';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import { estimateFare } from '@/services/fare';
 import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare, getNegotiationHistory } from '@/services/negotiation';
-import { getNegotiationHistory as getDriverNegotiationHistory } from '@/services/driverNegotiation';
+import {
+  declineFare as driverDeclineFare,
+  getNegotiationHistory as getDriverNegotiationHistory,
+} from '@/services/driverNegotiation';
 import {
   acceptRide as driverAcceptRide,
   declineRide as driverDeclineRide,
@@ -757,10 +760,20 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       });
     }
     // Cancel the ride on the real backend too (best-effort). Drivers hit the
-    // driver cancel endpoint; customers the customer one.
+    // driver cancel endpoint; customers the customer one. One exception: a
+    // driver walking away mid-negotiation must use the negotiation decline
+    // endpoint — the generic driver cancel rejects NEGOTIATING
+    // (ErrInvalidTransition), so the backend silently kept the ride alive
+    // while this app had already gone home, stranding the customer in a
+    // zombie negotiation and the driver invisible to matching.
     const backendRideId = backendRideIdRef.current ?? currentRideSnapshot?.backendRideId ?? null;
     if (backendRideId) {
-      const cancelOnBackend = auth?.user?.mode === 'driver' ? driverCancelRide : cancelBackendRide;
+      const cancelOnBackend =
+        auth?.user?.mode === 'driver'
+          ? currentRideSnapshot?.status === 'negotiating'
+            ? driverDeclineFare
+            : driverCancelRide
+          : cancelBackendRide;
       void cancelOnBackend(backendRideId).catch(error =>
         reportOperationalFailure('ride.backend.cancel', error, { rideId: backendRideId }),
       );
