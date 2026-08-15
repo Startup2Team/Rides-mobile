@@ -59,7 +59,8 @@ import { createRide as createBackendRide, cancelRide as cancelBackendRide, getAc
 import { getActiveDriverRide } from '@/services/driverRides';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import { estimateFare } from '@/services/fare';
-import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare } from '@/services/negotiation';
+import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare, getNegotiationHistory } from '@/services/negotiation';
+import { getNegotiationHistory as getDriverNegotiationHistory } from '@/services/driverNegotiation';
 import {
   acceptRide as driverAcceptRide,
   declineRide as driverDeclineRide,
@@ -84,6 +85,7 @@ import {
   isDriverRequestEvent,
   isLifecycleEvent,
   localStatusFromBackend,
+  negotiationMessagesFromHistory,
   parseDriverCoords,
   rideFromActiveRideSnapshot,
   type BackendEventPayload,
@@ -509,6 +511,20 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (!snapshot) return;
       const ride = rideFromActiveRideSnapshot(snapshot, viewer);
       if (!ride) return;
+      // The snapshot carries no messages — replay the negotiation thread so
+      // the resumed conversation isn't empty. Non-fatal: a failed replay must
+      // not block rejoining the ride itself.
+      try {
+        const history =
+          viewer === 'driver'
+            ? await getDriverNegotiationHistory(snapshot.id)
+            : await getNegotiationHistory(snapshot.id);
+        ride.negotiation = negotiationMessagesFromHistory(history);
+      } catch (historyError) {
+        reportOperationalFailure('ride.resume.negotiationHistory', historyError, {
+          mode: user.mode,
+        });
+      }
       // Re-check after the await: a ride created or accepted while the request
       // was in flight wins over the snapshot.
       if (currentRideRef.current || pendingRequestRef.current) return;
@@ -680,6 +696,16 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
             const snapshot = await getActiveRide();
             const active = snapshot ? rideFromActiveRideSnapshot(snapshot, 'customer') : null;
             if (snapshot && active) {
+              // Same replay as hydrateActiveRide: the snapshot has no messages.
+              try {
+                active.negotiation = negotiationMessagesFromHistory(
+                  await getNegotiationHistory(snapshot.id),
+                );
+              } catch (historyError) {
+                reportOperationalFailure('ride.resume.negotiationHistory', historyError, {
+                  rideId: ride.id,
+                });
+              }
               clearSearchTimers();
               backendRideIdRef.current = snapshot.id;
               backendDrivingRef.current = true;

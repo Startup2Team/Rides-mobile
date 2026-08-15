@@ -16,11 +16,13 @@ export interface CustomerRide {
   customerName: string | null;
   customerPhone: string | null;
   customerRating: number | null;
+  customerImageUrl: string | null;
   driverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
   driverRating: number | null;
   driverPlate: string | null;
+  driverImageUrl: string | null;
   pickup: { lat: number; lng: number; address: string };
   destination: { lat: number; lng: number; address: string };
   estimatedDistanceKm: number | null;
@@ -45,11 +47,13 @@ export interface RideResponseDto {
   customer_name?: string;
   customer_phone?: string;
   customer_rating?: number | null;
+  customer_image_url?: string;
   driver_id: string | null;
   driver_name?: string;
   driver_phone?: string;
   driver_rating?: number | null;
   driver_plate?: string;
+  driver_image_url?: string;
   pickup_lat: number;
   pickup_lng: number;
   pickup_address: string;
@@ -88,11 +92,13 @@ function toDomain(dto: RideResponseDto): CustomerRide {
     customerName: dto.customer_name ?? null,
     customerPhone: dto.customer_phone ?? null,
     customerRating: dto.customer_rating ?? null,
+    customerImageUrl: dto.customer_image_url || null,
     driverId: dto.driver_id ?? null,
     driverName: dto.driver_name ?? null,
     driverPhone: dto.driver_phone ?? null,
     driverRating: dto.driver_rating ?? null,
     driverPlate: dto.driver_plate ?? null,
+    driverImageUrl: dto.driver_image_url || null,
     pickup: { lat: dto.pickup_lat, lng: dto.pickup_lng, address: dto.pickup_address },
     destination: { lat: dto.dest_lat, lng: dto.dest_lng, address: dto.destination_address },
     estimatedDistanceKm: dto.estimated_distance_km ?? null,

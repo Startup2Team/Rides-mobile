@@ -79,6 +79,7 @@ export function applyDriverMatched(ride: Ride, payload: BackendEventPayload): Ri
   const rating = num(payload.driver_rating) ?? ride.driver?.rating ?? 5;
   const eta = num(payload.eta ?? payload.eta_minutes) ?? ride.driver?.eta ?? 5;
   const location = parseDriverCoords(payload) ?? ride.driver?.location ?? ride.pickup;
+  const profileImage = str(payload.driver_image_url) ?? ride.driver?.profileImage;
 
   const driver: MockDriver = {
     id: driverId ?? 'backend_driver',
@@ -89,6 +90,7 @@ export function applyDriverMatched(ride: Ride, payload: BackendEventPayload): Ri
     location,
     rating,
     eta,
+    ...(profileImage ? { profileImage } : {}),
   };
 
   const nextStatus: RideStatus =
@@ -179,6 +181,50 @@ export function appendNegotiationEvent(
   return { ...ride, negotiation: [...ride.negotiation, message] };
 }
 
+// Rebuild the local negotiation thread from GET …/negotiation/history entries.
+// The active-ride snapshot carries no messages, so resume paths replay the
+// thread through this — otherwise a killed app rejoins the conversation with
+// an empty timeline. Unlike appendNegotiationEvent there is no viewer echo
+// filter: history is the full thread, both sides' messages included.
+export function negotiationMessagesFromHistory(
+  entries: NegotiationHistoryThreadEntry[],
+): NegotiationMessage[] {
+  const messages: NegotiationMessage[] = [];
+  for (const entry of entries) {
+    const role = entry.actorRole.toUpperCase();
+    const sender: NegotiationMessage['sender'] =
+      role === 'DRIVER' ? 'driver' : role === 'CUSTOMER' ? 'customer' : 'system';
+    const timestamp = entry.createdAt || new Date().toISOString();
+    const id = entry.id || generateRideId();
+    if (entry.kind === 'offer' && entry.amount != null) {
+      messages.push({
+        id,
+        sender,
+        type: 'offer',
+        amount: entry.amount,
+        timestamp,
+        ...(entry.isFinal || entry.response === 'ACCEPTED' ? { isFinal: true } : {}),
+      });
+    } else if (entry.text) {
+      messages.push({ id, sender, type: 'text', text: entry.text, timestamp });
+    }
+  }
+  return messages;
+}
+
+// Structural twin of services/negotiation.ts NegotiationEntry — declared here
+// so this pure-mapper module doesn't import from the services layer.
+export interface NegotiationHistoryThreadEntry {
+  id: string;
+  actorRole: string;
+  kind: string;
+  amount: number | null;
+  text: string | null;
+  response: string | null;
+  isFinal: boolean;
+  createdAt: string;
+}
+
 // Build the driver-side incoming-request Ride from a `ride_request` payload.
 // The backend ride id is stashed on `backendRideId` so the driver actions
 // (accept/decline/en-route/…) target the same ride.
@@ -238,6 +284,7 @@ export function buildDriverRequestFromPayload(
     customerName: str(payload.customer_name) ?? 'Customer',
     customerPhone: str(payload.customer_phone) ?? '',
     ...(num(payload.customer_rating) !== undefined ? { customerRating: num(payload.customer_rating) } : {}),
+    ...(str(payload.customer_image_url) ? { customerImage: str(payload.customer_image_url) } : {}),
     vehicleType: requestedVehicleType,
     requestedVehicleType,
     ...(matchedVehicle ? { matchedVehicleId: matchedVehicle.vehicleId, matchedVehicleType: matchedVehicle.vehicleType } : {}),
@@ -319,6 +366,7 @@ export function rideFromActiveRideSnapshot(
           location: { latitude: pickup.latitude, longitude: pickup.longitude },
           rating: snapshot.driverRating ?? 5,
           eta: 5,
+          ...(snapshot.driverImageUrl ? { profileImage: snapshot.driverImageUrl } : {}),
         }
       : undefined;
 
@@ -329,6 +377,7 @@ export function rideFromActiveRideSnapshot(
     customerName: snapshot.customerName ?? 'Customer',
     customerPhone: snapshot.customerPhone ?? '',
     ...(snapshot.customerRating != null ? { customerRating: snapshot.customerRating } : {}),
+    ...(snapshot.customerImageUrl ? { customerImage: snapshot.customerImageUrl } : {}),
     ...(driver ? { driver, driverId: driver.id, driverName: driver.name } : {}),
     ...(viewer === 'driver' && snapshot.driverId ? { driverId: snapshot.driverId } : {}),
     vehicleType,
@@ -340,6 +389,8 @@ export function rideFromActiveRideSnapshot(
     duration: Math.round(distance * 3 + 5),
     suggestedFare,
     ...(agreedFare !== undefined ? { agreedFare } : {}),
+    // The snapshot has no messages — resume paths replay the thread via
+    // negotiationMessagesFromHistory, or the conversation restarts empty.
     negotiation: [],
     createdAt: snapshot.createdAt,
     ...(snapshot.driverArrivedAt

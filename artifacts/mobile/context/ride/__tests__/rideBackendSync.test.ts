@@ -9,8 +9,10 @@ import {
   isLifecycleEvent,
   lifecycleStatusForEvent,
   localStatusFromBackend,
+  negotiationMessagesFromHistory,
   parseDriverCoords,
   rideFromActiveRideSnapshot,
+  type NegotiationHistoryThreadEntry,
 } from '../rideBackendSync';
 
 // Payloads below mirror the real backend WebSocket events captured against a
@@ -140,6 +142,21 @@ describe('rideBackendSync', () => {
     expect(buildDriverRequestFromPayload({ ...base, window_seconds: 0 })?.offerWindowSeconds).toBeUndefined();
   });
 
+  test('buildDriverRequestFromPayload carries the customer profile photo when sent', () => {
+    const base = {
+      ride_id: 'srv-9',
+      pickup_lat: -1.9441,
+      pickup_lng: 30.0619,
+      dest_lat: -1.9536,
+      dest_lng: 30.0606,
+    };
+    expect(
+      buildDriverRequestFromPayload({ ...base, customer_image_url: 'https://cdn.example/avatars/cust.jpg' })
+        ?.customerImage,
+    ).toBe('https://cdn.example/avatars/cust.jpg');
+    expect(buildDriverRequestFromPayload(base)?.customerImage).toBeUndefined();
+  });
+
   // Snapshot mirroring a real GET /customer|driver/rides/active response after
   // mapping through services/rides.toDomain.
   function activeSnapshot(overrides: Partial<CustomerRide> = {}): CustomerRide {
@@ -151,11 +168,13 @@ describe('rideBackendSync', () => {
       customerName: 'Cust',
       customerPhone: '+250780000555',
       customerRating: 4.6,
+      customerImageUrl: null,
       driverId: 'drv-3',
       driverName: 'Drv',
       driverPhone: '+250780000333',
       driverRating: 4.9,
       driverPlate: 'RAD3750A',
+      driverImageUrl: null,
       pickup: { lat: -1.9441, lng: 30.0619, address: 'Kigali Center' },
       destination: { lat: -1.9536, lng: 30.0606, address: 'Nyamirambo' },
       estimatedDistanceKm: 2.4,
@@ -220,6 +239,19 @@ describe('rideBackendSync', () => {
       expect(ride?.status).toBe('negotiating');
     });
 
+    test('carries counterpart profile photos into the resumed ride', () => {
+      const asCustomer = rideFromActiveRideSnapshot(
+        activeSnapshot({ driverImageUrl: 'https://cdn.example/avatars/drv.jpg' }),
+        'customer',
+      );
+      expect(asCustomer?.driver?.profileImage).toBe('https://cdn.example/avatars/drv.jpg');
+      const asDriver = rideFromActiveRideSnapshot(
+        activeSnapshot({ customerImageUrl: 'https://cdn.example/avatars/cust.jpg' }),
+        'driver',
+      );
+      expect(asDriver?.customerImage).toBe('https://cdn.example/avatars/cust.jpg');
+    });
+
     test('refuses non-resumable snapshots', () => {
       expect(rideFromActiveRideSnapshot(activeSnapshot({ status: 'COMPLETED' }), 'customer')).toBeNull();
       expect(rideFromActiveRideSnapshot(activeSnapshot({ status: 'CANCELLED' }), 'driver')).toBeNull();
@@ -236,6 +268,60 @@ describe('rideBackendSync', () => {
       );
       expect(ride?.distance).toBeGreaterThan(0);
       expect(ride?.suggestedFare).toBeGreaterThan(0);
+    });
+  });
+
+  describe('negotiationMessagesFromHistory', () => {
+    const entry = (over: Partial<NegotiationHistoryThreadEntry>): NegotiationHistoryThreadEntry => ({
+      id: 'n-1',
+      actorRole: 'customer',
+      kind: 'text',
+      amount: null,
+      text: null,
+      response: null,
+      isFinal: false,
+      createdAt: '2026-08-14T10:00:00Z',
+      ...over,
+    });
+
+    test('replays the full thread — both sides, offers and texts, in order', () => {
+      const messages = negotiationMessagesFromHistory([
+        entry({ id: 'n-1', actorRole: 'customer', kind: 'offer', amount: 2000 }),
+        entry({ id: 'n-2', actorRole: 'driver', kind: 'text', text: 'Can you do 2500?' }),
+        entry({ id: 'n-3', actorRole: 'customer', kind: 'text', text: 'Deal' }),
+      ]);
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toMatchObject({ id: 'n-1', sender: 'customer', type: 'offer', amount: 2000 });
+      expect(messages[1]).toMatchObject({ id: 'n-2', sender: 'driver', type: 'text', text: 'Can you do 2500?' });
+      expect(messages[2]).toMatchObject({ sender: 'customer', text: 'Deal' });
+      expect(messages.every(m => m.timestamp === '2026-08-14T10:00:00Z')).toBe(true);
+    });
+
+    test('marks accepted or final offers as final', () => {
+      const [accepted, flagged] = negotiationMessagesFromHistory([
+        entry({ kind: 'offer', amount: 2500, response: 'ACCEPTED' }),
+        entry({ kind: 'offer', amount: 2500, isFinal: true }),
+      ]);
+      expect(accepted.isFinal).toBe(true);
+      expect(flagged.isFinal).toBe(true);
+    });
+
+    test('maps unknown senders to system and drops empty entries', () => {
+      const messages = negotiationMessagesFromHistory([
+        entry({ actorRole: 'system', kind: 'text', text: 'Fare locked' }),
+        entry({ kind: 'text', text: null }), // no text, no amount — dropped
+        entry({ kind: 'offer', amount: null }), // offer without amount — dropped
+      ]);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].sender).toBe('system');
+    });
+
+    test('generates ids and timestamps when the backend omits them', () => {
+      const [message] = negotiationMessagesFromHistory([
+        entry({ id: '', createdAt: '', kind: 'text', text: 'hi' }),
+      ]);
+      expect(message.id).not.toBe('');
+      expect(message.timestamp).not.toBe('');
     });
   });
 });
