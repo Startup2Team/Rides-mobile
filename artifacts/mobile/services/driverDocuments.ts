@@ -1,3 +1,6 @@
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { FileSystemUploadType } from 'expo-file-system/legacy';
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
 import { getAccessToken } from '@/persistence/authTokens';
 import { expectField } from '@/observability/monitoring';
@@ -108,16 +111,30 @@ export async function uploadFileBytes(
   localUri: string,
   contentType: string,
 ): Promise<void> {
-  const fileResponse = await fetch(localUri);
-  const blob = await fileResponse.blob();
   const token = await getAccessToken().catch(() => null);
   const headers: Record<string, string> = { 'Content-Type': contentType };
   if (token && uploadUrl.includes('/uploads/objects/')) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const put = await fetch(uploadUrl, { method: 'PUT', body: blob, headers });
-  if (!put.ok) {
-    throw new Error(`upload failed with status ${put.status}`);
+
+  if (Platform.OS === 'web') {
+    const fileResponse = await fetch(localUri);
+    const blob = await fileResponse.blob();
+    const put = await fetch(uploadUrl, { method: 'PUT', body: blob, headers });
+    if (!put.ok) {
+      throw new Error(`upload failed with status ${put.status}`);
+    }
+    return;
+  }
+
+  const result = await FileSystem.uploadAsync(uploadUrl, localUri, {
+    httpMethod: 'PUT',
+    uploadType: FileSystemUploadType.BINARY_CONTENT,
+    headers,
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`upload failed with status ${result.status}`);
   }
 }
 
