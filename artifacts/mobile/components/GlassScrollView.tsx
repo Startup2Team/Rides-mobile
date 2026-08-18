@@ -23,6 +23,15 @@ interface GlassScrollViewProps extends ScrollViewProps {
   onRefresh?: () => void;
   refreshing?: boolean;
   refreshIndicatorTop?: number;
+  /**
+   * Keep the focused input above the keyboard on forms. Opt-in because most
+   * screens using this scroll view have no text inputs. On iOS this turns on
+   * `automaticallyAdjustKeyboardInsets`, which insets the content for the
+   * keyboard AND scrolls the focused field into view natively. On Android the
+   * prop is a no-op — pair it with a `KeyboardAvoidingView` (behavior="height")
+   * on the screen, matching the existing form screens.
+   */
+  keyboardAware?: boolean;
 }
 
 export function resolveGlassScrollViewLayout({
@@ -94,6 +103,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
       refreshing = false,
       refreshIndicatorTop,
       showsVerticalScrollIndicator = false,
+      keyboardAware = false,
       ...props
     },
     ref,
@@ -296,6 +306,7 @@ export const GlassScrollView = React.forwardRef<ScrollView, GlassScrollViewProps
           scrollIndicatorInsets={finalScrollIndicatorInsets}
           contentContainerStyle={finalContentContainerStyle}
           showsVerticalScrollIndicator={showsVerticalScrollIndicator}
+          automaticallyAdjustKeyboardInsets={keyboardAware && Platform.OS === 'ios'}
           scrollEventThrottle={scrollEventThrottle}
           onScroll={handleScroll}
           onScrollBeginDrag={handleScrollBeginDrag}
