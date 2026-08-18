@@ -4,6 +4,7 @@ import { FileSystemUploadType } from 'expo-file-system/legacy';
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
 import { getAccessToken } from '@/persistence/authTokens';
 import { expectField } from '@/observability/monitoring';
+import { resolveBackendTransportConfig } from '@/data/remote/transport/backendTransportConfig';
 
 // Driver document upload = 3 steps:
 //   1. POST /uploads/presigned-url {content_type, purpose} → {upload_url, file_url}
@@ -82,6 +83,29 @@ function toDriverDocument(dto: DriverDocumentDto): DriverDocument {
   };
 }
 
+function resolveUploadUrlForMobile(targetUrl: string): string {
+  if (Platform.OS === 'web') return targetUrl;
+  try {
+    const config = resolveBackendTransportConfig();
+    const backendBaseUrl = config.baseUrl ?? process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
+    if (!backendBaseUrl) return targetUrl;
+
+    const backendUrlObj = new URL(backendBaseUrl);
+    const backendHost = backendUrlObj.hostname;
+
+    if ((targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1')) && backendHost && backendHost !== 'localhost' && backendHost !== '127.0.0.1') {
+      const resolved = targetUrl
+        .replace('localhost', backendHost)
+        .replace('127.0.0.1', backendHost);
+      console.log('[MOBILE:UPLOAD] 🔀 Resolved local upload URL for mobile device:', { original: targetUrl, resolved });
+      return resolved;
+    }
+  } catch (err) {
+    console.warn('[MOBILE:UPLOAD] Could not parse upload URL host:', err);
+  }
+  return targetUrl;
+}
+
 interface Envelope<T> {
   data: T;
 }
@@ -110,10 +134,11 @@ export async function requestUploadTarget(
 // object key is the credential (no bearer needed); we still send it when present
 // so authenticated proxy setups also work.
 export async function uploadFileBytes(
-  uploadUrl: string,
+  rawUploadUrl: string,
   localUri: string,
   contentType: string,
 ): Promise<void> {
+  const uploadUrl = resolveUploadUrlForMobile(rawUploadUrl);
   console.log('[MOBILE:UPLOAD] 📤 Starting binary file upload...', { localUri, uploadUrl, contentType, platform: Platform.OS });
   const token = await getAccessToken().catch(() => null);
   const headers: Record<string, string> = { 'Content-Type': contentType };
