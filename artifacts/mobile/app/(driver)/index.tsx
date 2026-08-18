@@ -86,6 +86,10 @@ const CTA_LABEL_SLOT_WIDTH =
   DRIVER_CTA_PILL_WIDTH - CTA_LEFT_WIDTH - CTA_PILL_PADDING_RIGHT;
 const CTA_SLIDE_THRESHOLD_RATIO = 0.7;
 const MAP_VISIBLE_DELTA = { latitudeDelta: 0.015, longitudeDelta: 0.015 };
+// Fallback accept/decline window when the ride_request payload carries no
+// window_seconds (the field is rolling out on the API in parallel; when
+// present, the server's window drives the countdown).
+const DEFAULT_OFFER_WINDOW_SECONDS = 15;
 
 function visibleDriverRegion(location: typeof KIGALI_CENTER) {
   return {
@@ -159,7 +163,7 @@ export default function DriverDashboard() {
   } = useRide();
   const { data: rideHistory = [] } = useDriverRideHistoryQuery(user?.id);
 
-  const [countdown, setCountdown] = useState(15);
+  const [countdown, setCountdown] = useState(DEFAULT_OFFER_WINDOW_SECONDS);
   const [driverLocation, setDriverLocation] = useState(KIGALI_CENTER);
   const [mapType, setMapType] = useState<AppMapType>("standard");
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -197,7 +201,7 @@ export default function DriverDashboard() {
   const adCarouselPositionedRef = useRef(false);
   const requestSessionRef = useRef(timers.currentSession());
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownValueRef = useRef(15);
+  const countdownValueRef = useRef(DEFAULT_OFFER_WINDOW_SECONDS);
   const switchModeTrackWidthRef = useRef(DRIVER_CTA_PILL_WIDTH);
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
@@ -429,7 +433,7 @@ export default function DriverDashboard() {
       timers.clearInterval(countdownRef.current);
       countdownRef.current = null;
       slideAnim.setValue(300);
-      setCountdown(15);
+      setCountdown(DEFAULT_OFFER_WINDOW_SECONDS);
       declineRideRequest();
     }
   }, [declineRideRequest, driverProfile, isOnline, slideAnim, timers]);
@@ -444,8 +448,13 @@ export default function DriverDashboard() {
       toValue: 0,
       useNativeDriver: true,
     }).start();
-    countdownValueRef.current = 15;
-    setCountdown(15);
+    // The server's offer window when the request carried one; 15s otherwise.
+    const offerWindowSeconds =
+      pendingRequest.offerWindowSeconds && pendingRequest.offerWindowSeconds > 0
+        ? Math.round(pendingRequest.offerWindowSeconds)
+        : DEFAULT_OFFER_WINDOW_SECONDS;
+    countdownValueRef.current = offerWindowSeconds;
+    setCountdown(offerWindowSeconds);
     countdownRef.current = timers.scheduleInterval(
       () => {
         const nextCountdown = Math.max(0, countdownValueRef.current - 1);
@@ -476,7 +485,7 @@ export default function DriverDashboard() {
       duration: duration.modal,
       useNativeDriver: true,
     }).start(() => {
-      setCountdown(15);
+      setCountdown(DEFAULT_OFFER_WINDOW_SECONDS);
     });
     if (driverProfile) {
       // Roll over first: a decline after midnight starts the new day's count

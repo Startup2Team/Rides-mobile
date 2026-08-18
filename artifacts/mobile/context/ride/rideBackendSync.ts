@@ -1,5 +1,6 @@
 import type { Coords, MockDriver, NegotiationMessage, Ride, RideStatus, VehicleType } from '@/types';
 import { fromBackendTransportType } from '@/constants/vehicles';
+import type { CustomerRide } from '@/services/rides';
 import { calcDistance, calcFare } from './rideFare';
 import { generateRideId } from './rideUtils';
 
@@ -78,6 +79,7 @@ export function applyDriverMatched(ride: Ride, payload: BackendEventPayload): Ri
   const rating = num(payload.driver_rating) ?? ride.driver?.rating ?? 5;
   const eta = num(payload.eta ?? payload.eta_minutes) ?? ride.driver?.eta ?? 5;
   const location = parseDriverCoords(payload) ?? ride.driver?.location ?? ride.pickup;
+  const profileImage = str(payload.driver_image_url) ?? ride.driver?.profileImage;
 
   const driver: MockDriver = {
     id: driverId ?? 'backend_driver',
@@ -88,6 +90,7 @@ export function applyDriverMatched(ride: Ride, payload: BackendEventPayload): Ri
     location,
     rating,
     eta,
+    ...(profileImage ? { profileImage } : {}),
   };
 
   const nextStatus: RideStatus =
@@ -178,6 +181,50 @@ export function appendNegotiationEvent(
   return { ...ride, negotiation: [...ride.negotiation, message] };
 }
 
+// Rebuild the local negotiation thread from GET …/negotiation/history entries.
+// The active-ride snapshot carries no messages, so resume paths replay the
+// thread through this — otherwise a killed app rejoins the conversation with
+// an empty timeline. Unlike appendNegotiationEvent there is no viewer echo
+// filter: history is the full thread, both sides' messages included.
+export function negotiationMessagesFromHistory(
+  entries: NegotiationHistoryThreadEntry[],
+): NegotiationMessage[] {
+  const messages: NegotiationMessage[] = [];
+  for (const entry of entries) {
+    const role = entry.actorRole.toUpperCase();
+    const sender: NegotiationMessage['sender'] =
+      role === 'DRIVER' ? 'driver' : role === 'CUSTOMER' ? 'customer' : 'system';
+    const timestamp = entry.createdAt || new Date().toISOString();
+    const id = entry.id || generateRideId();
+    if (entry.kind === 'offer' && entry.amount != null) {
+      messages.push({
+        id,
+        sender,
+        type: 'offer',
+        amount: entry.amount,
+        timestamp,
+        ...(entry.isFinal || entry.response === 'ACCEPTED' ? { isFinal: true } : {}),
+      });
+    } else if (entry.text) {
+      messages.push({ id, sender, type: 'text', text: entry.text, timestamp });
+    }
+  }
+  return messages;
+}
+
+// Structural twin of services/negotiation.ts NegotiationEntry — declared here
+// so this pure-mapper module doesn't import from the services layer.
+export interface NegotiationHistoryThreadEntry {
+  id: string;
+  actorRole: string;
+  kind: string;
+  amount: number | null;
+  text: string | null;
+  response: string | null;
+  isFinal: boolean;
+  createdAt: string;
+}
+
 // Build the driver-side incoming-request Ride from a `ride_request` payload.
 // The backend ride id is stashed on `backendRideId` so the driver actions
 // (accept/decline/en-route/…) target the same ride.
@@ -226,6 +273,10 @@ export function buildDriverRequestFromPayload(
     num(payload.suggested_fare ?? payload.customer_initial_fare ?? payload.estimated_fare_rwf) ??
     calcFare(requestedVehicleType, distance);
 
+  // How long the offer stays valid. The backend is adding window_seconds to the
+  // ride_request payload; when absent the driver screen keeps its 15s fallback.
+  const offerWindowSeconds = num(payload.window_seconds);
+
   return {
     id: generateRideId(),
     backendRideId,
@@ -233,6 +284,7 @@ export function buildDriverRequestFromPayload(
     customerName: str(payload.customer_name) ?? 'Customer',
     customerPhone: str(payload.customer_phone) ?? '',
     ...(num(payload.customer_rating) !== undefined ? { customerRating: num(payload.customer_rating) } : {}),
+    ...(str(payload.customer_image_url) ? { customerImage: str(payload.customer_image_url) } : {}),
     vehicleType: requestedVehicleType,
     requestedVehicleType,
     ...(matchedVehicle ? { matchedVehicleId: matchedVehicle.vehicleId, matchedVehicleType: matchedVehicle.vehicleType } : {}),
@@ -242,6 +294,7 @@ export function buildDriverRequestFromPayload(
     distance,
     duration: Math.round(distance * 3 + 5),
     suggestedFare,
+    ...(offerWindowSeconds && offerWindowSeconds > 0 ? { offerWindowSeconds } : {}),
     negotiation: [],
     createdAt: new Date().toISOString(),
   };
@@ -250,4 +303,98 @@ export function buildDriverRequestFromPayload(
 // Driver-side incoming request event names the backend may use.
 export function isDriverRequestEvent(type: string): boolean {
   return type === 'ride_request' || type === 'ride_requested' || type === 'new_ride_request';
+}
+
+// ── Active-ride resume (GET /customer|driver/rides/active) ──────────────────
+
+// Build a local Ride from the active-ride REST snapshot, so a cold-started app
+// can rejoin an in-flight ride: the existing flow-navigation policies route off
+// `status`, the ride screens read pickup/destination/fare/driver (or customer)
+// off the fields set here, and the customer tracking socket re-opens off
+// `backendRideId`. Returns null when the snapshot is not a resumable live ride
+// (completed / cancelled / unknown status) — the caller treats that exactly
+// like "no active ride".
+export function rideFromActiveRideSnapshot(
+  snapshot: CustomerRide,
+  viewer: 'customer' | 'driver',
+): Ride | null {
+  const status = localStatusFromBackend(snapshot.status);
+  if (!status || status === 'completed' || status === 'cancelled') return null;
+  // A MATCHED ride is an offer the driver has not accepted yet — that flow is
+  // owned by the ride_request socket event (with its accept window), not by
+  // resume. Only rides the driver actually holds are rehydrated.
+  if (viewer === 'driver' && (status === 'searching' || status === 'driver_assigned')) return null;
+
+  const vehicleType = snapshot.vehicleType ?? 'moto';
+  const pickup = {
+    latitude: snapshot.pickup.lat,
+    longitude: snapshot.pickup.lng,
+    address: snapshot.pickup.address || 'Pickup',
+    locationType: 'precise' as const,
+  };
+  const destination = {
+    latitude: snapshot.destination.lat,
+    longitude: snapshot.destination.lng,
+    address: snapshot.destination.address || 'Destination',
+    locationType: 'precise' as const,
+  };
+  const distance =
+    snapshot.estimatedDistanceKm && snapshot.estimatedDistanceKm > 0
+      ? snapshot.estimatedDistanceKm
+      : parseFloat(calcDistance(pickup, destination).toFixed(2));
+  const suggestedFare =
+    snapshot.customerInitialFare ??
+    snapshot.estimatedFareRwf ??
+    calcFare(vehicleType, distance);
+  const agreedFare = snapshot.agreedFare ?? snapshot.finalFareRwf ?? undefined;
+
+  // For the customer, MATCHED means "driver found, negotiation starting" — the
+  // same transition applyDriverMatched performs on the live socket event.
+  const customerStatus: RideStatus =
+    status === 'driver_assigned' && snapshot.driverId ? 'negotiating' : status;
+
+  const driver: MockDriver | undefined =
+    viewer === 'customer' && snapshot.driverId
+      ? {
+          id: snapshot.driverId,
+          name: snapshot.driverName ?? 'Driver',
+          phone: snapshot.driverPhone ?? '',
+          vehicleType,
+          plateNumber: snapshot.driverPlate ?? '',
+          // No live fix yet — seed at pickup like applyDriverMatched's fallback;
+          // the first driver_location event replaces it.
+          location: { latitude: pickup.latitude, longitude: pickup.longitude },
+          rating: snapshot.driverRating ?? 5,
+          eta: 5,
+          ...(snapshot.driverImageUrl ? { profileImage: snapshot.driverImageUrl } : {}),
+        }
+      : undefined;
+
+  return {
+    id: generateRideId(),
+    backendRideId: snapshot.id,
+    customerId: snapshot.customerId ?? 'backend_customer',
+    customerName: snapshot.customerName ?? 'Customer',
+    customerPhone: snapshot.customerPhone ?? '',
+    ...(snapshot.customerRating != null ? { customerRating: snapshot.customerRating } : {}),
+    ...(snapshot.customerImageUrl ? { customerImage: snapshot.customerImageUrl } : {}),
+    ...(driver ? { driver, driverId: driver.id, driverName: driver.name } : {}),
+    ...(viewer === 'driver' && snapshot.driverId ? { driverId: snapshot.driverId } : {}),
+    vehicleType,
+    requestedVehicleType: vehicleType,
+    pickup,
+    destination,
+    status: viewer === 'customer' ? customerStatus : status,
+    distance,
+    duration: Math.round(distance * 3 + 5),
+    suggestedFare,
+    ...(agreedFare !== undefined ? { agreedFare } : {}),
+    // The snapshot has no messages — resume paths replay the thread via
+    // negotiationMessagesFromHistory, or the conversation restarts empty.
+    negotiation: [],
+    createdAt: snapshot.createdAt,
+    ...(snapshot.driverArrivedAt
+      ? { arrivedAt: snapshot.driverArrivedAt, waitStartedAt: snapshot.driverArrivedAt }
+      : {}),
+  };
 }

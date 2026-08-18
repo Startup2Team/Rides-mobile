@@ -55,6 +55,14 @@ describe('customer ride-flow navigation', () => {
     expect(decide('/ride', 'completed')).toEqual({ method: 'replace', href: '/rating' });
   });
 
+  test('routes a searching screen holding a rejoined active ride to it', () => {
+    // A 409 RIDE_ALREADY_ACTIVE rejoin can hydrate an already-live ride while
+    // the customer still sits on /searching.
+    expect(decide('/searching', 'in_progress')).toEqual({ method: 'replace', href: '/ride' });
+    expect(decide('/searching', 'arriving')).toEqual({ method: 'replace', href: '/ride' });
+    expect(decide('/searching', 'completed')).toEqual({ method: 'replace', href: '/rating' });
+  });
+
   test('suppresses home redirects while rating completion clears the ride', () => {
     expect(decide('/', 'searching', { suppressHomeRedirect: true })).toBeNull();
     expect(decide('/', 'in_progress', { suppressHomeRedirect: true })).toBeNull();
