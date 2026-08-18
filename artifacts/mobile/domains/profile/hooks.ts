@@ -152,25 +152,35 @@ export function useProfilePhoto(fallbackImage?: string | null) {
         }
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
-          // Show the picked file straight away, then replace it with the stored
-          // URL. Only the uploaded URL survives a reinstall or a second handset —
-          // a `file://` URI is meaningless anywhere but this install.
+          console.log('[MOBILE:PROFILE] 📸 Image picked successfully:', {
+            uri: asset.uri,
+            mimeType: asset.mimeType,
+            width: asset.width,
+            height: asset.height,
+            fileSize: asset.fileSize,
+          });
+
           await profileRepository.saveProfileImage(asset.uri);
           setStoredProfileImage(asset.uri);
+          console.log('[MOBILE:PROFILE] 💾 Local profile image cached:', asset.uri);
+
           try {
+            console.log('[MOBILE:PROFILE] 🚀 Initiating remote photo upload...');
             const remoteUrl = await uploadProfilePhoto(asset.uri, asset.mimeType ?? 'image/jpeg');
+            console.log('[MOBILE:PROFILE] ✅ Remote photo upload succeeded! Remote URL:', remoteUrl);
+
             await profileRepository.saveProfileImage(remoteUrl);
             setStoredProfileImage(remoteUrl);
             showToast('Photo updated', 'info');
             return remoteUrl;
           } catch (error) {
-            // The photo is on this device but not on the account. Say so rather
-            // than claiming success — the user would otherwise only discover it
-            // on their next phone.
+            console.error('[MOBILE:PROFILE_ERROR] ❌ Remote photo upload failed:', error);
             reportOperationalFailure('profile.photo.upload', error);
             showToast("Photo saved on this phone — we couldn't sync it. Try again.", 'info');
             return asset.uri;
           }
+        } else {
+          console.log('[MOBILE:PROFILE] ℹ️ Image picker canceled by user.');
         }
       } catch (error) {
         console.error('Failed to pick image:', error);

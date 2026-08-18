@@ -96,11 +96,14 @@ export async function requestUploadTarget(
   contentType: string,
   purpose = 'driver_document',
 ): Promise<{ uploadUrl: string; fileUrl: string }> {
+  console.log('[MOBILE:UPLOAD] 🔑 Requesting presigned upload target...', { contentType, purpose });
   const response = await getAppBackendClient().post<Envelope<PresignResponse>>(
     '/v1/uploads/presigned-url',
     { body: { content_type: contentType, purpose } },
   );
-  return { uploadUrl: response.data.data.upload_url, fileUrl: response.data.data.file_url };
+  const target = { uploadUrl: response.data.data.upload_url, fileUrl: response.data.data.file_url };
+  console.log('[MOBILE:UPLOAD] 🔑 Presigned target acquired:', target);
+  return target;
 }
 
 // Step 2: stream the local file's bytes to the upload target. In proxy mode the
@@ -111,6 +114,7 @@ export async function uploadFileBytes(
   localUri: string,
   contentType: string,
 ): Promise<void> {
+  console.log('[MOBILE:UPLOAD] 📤 Starting binary file upload...', { localUri, uploadUrl, contentType, platform: Platform.OS });
   const token = await getAccessToken().catch(() => null);
   const headers: Record<string, string> = { 'Content-Type': contentType };
   if (token && uploadUrl.includes('/uploads/objects/')) {
@@ -122,20 +126,27 @@ export async function uploadFileBytes(
     const blob = await fileResponse.blob();
     const put = await fetch(uploadUrl, { method: 'PUT', body: blob, headers });
     if (!put.ok) {
+      console.error('[MOBILE:UPLOAD_ERROR] ❌ Web fetch upload failed with status:', put.status);
       throw new Error(`upload failed with status ${put.status}`);
     }
+    console.log('[MOBILE:UPLOAD] ✅ Web fetch upload completed successfully!');
     return;
   }
 
+  console.log('[MOBILE:UPLOAD] ⚡ Streaming binary bytes using FileSystem.uploadAsync...');
   const result = await FileSystem.uploadAsync(uploadUrl, localUri, {
     httpMethod: 'PUT',
     uploadType: FileSystemUploadType.BINARY_CONTENT,
     headers,
   });
 
+  console.log('[MOBILE:UPLOAD] 📥 Upload result status:', result.status);
   if (result.status < 200 || result.status >= 300) {
+    console.error('[MOBILE:UPLOAD_ERROR] ❌ FileSystem.uploadAsync failed with status:', result.status, 'body:', result.body);
     throw new Error(`upload failed with status ${result.status}`);
   }
+
+  console.log('[MOBILE:UPLOAD] ✅ Binary file upload completed successfully!');
 }
 
 // Step 3: record the uploaded document against the driver.
