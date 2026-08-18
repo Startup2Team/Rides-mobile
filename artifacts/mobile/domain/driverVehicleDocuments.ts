@@ -43,6 +43,27 @@ export function emptyVehicleDocumentSet(at = new Date().toISOString()): DriverVe
  * A pending document update wins over the stored set: it is the driver's most
  * recent submission and is what review is currently looking at.
  */
+/**
+ * Whether a document card should offer a Replace affordance.
+ *
+ * The server owns this decision via the per-document `editable` flag (an
+ * APPROVED document is view-only until an admin opens a re-upload window). The
+ * screen used to gate re-upload on the vehicle-level status instead, which both
+ * blocked legitimate re-uploads (e.g. a REJECTED document on a not-yet-approved
+ * vehicle) and offered Replace on locked documents that then 409'd on submit.
+ *
+ * We trust an explicit server signal in either direction, and only fall back to
+ * the vehicle-status rule when the flag is absent (older server / offline).
+ */
+export function isDocumentReplaceable(
+  editable: boolean | undefined,
+  fallbackWhenUnknown: boolean,
+): boolean {
+  if (editable === true) return true;
+  if (editable === false) return false;
+  return fallbackWhenUnknown;
+}
+
 export function resolveVehicleDocuments(
   vehicle: Pick<DriverVehicleProfile, 'documents' | 'pendingDocumentUpdate'> | null | undefined,
   serverDocuments: readonly DriverDocument[] = [],

@@ -9,10 +9,11 @@ import {
   getDriverVehicleType,
   getDriverVehicles,
   migrateDriverProfileToMultiVehicle,
+  reconcileDriverVehicles,
   resubmitDriverVehicleApplication,
   submitDriverVehicleDocumentUpdate,
 } from '../driverVehicles';
-import type { DriverProfile } from '@/types';
+import type { DriverProfile, DriverVehicleProfile } from '@/types';
 
 const baseProfile: DriverProfile = {
   vehicleType: 'moto',
@@ -231,3 +232,53 @@ function migratedVehicle(vehicleType: 'moto' | 'cab' | 'fuso', status: 'approved
     submittedAt: '2026-06-15T10:00:00.000Z',
   } satisfies NonNullable<DriverProfile['vehicles']>[number];
 }
+
+describe('reconcileDriverVehicles capacity', () => {
+  const localVehicle: DriverVehicleProfile = {
+    id: 'driver-vehicle:cab:rac-001-b',
+    vehicleType: 'cab',
+    status: 'approved',
+    plateNumber: 'RAC 001 B',
+    licenseNumber: '1234567890123456',
+  };
+
+  it('carries backend passenger seats / load capacity onto a matched local vehicle', () => {
+    const [merged] = reconcileDriverVehicles(
+      [localVehicle],
+      [
+        {
+          id: 'backend-uuid',
+          vehicleType: 'cab',
+          plateNumber: 'RAC 001 B',
+          passengerSeats: 4,
+          loadCapacityKg: null,
+        },
+      ],
+      'approved',
+    );
+
+    // Local id is preserved (details lookup keys off it) while capacity fills in.
+    expect(merged.id).toBe('driver-vehicle:cab:rac-001-b');
+    expect(merged.passengerSeats).toBe(4);
+    expect(merged.loadCapacityKg).toBeUndefined();
+  });
+
+  it('surfaces capacity on a backend-only vehicle', () => {
+    const [surfaced] = reconcileDriverVehicles(
+      [],
+      [
+        {
+          id: 'backend-uuid',
+          vehicleType: 'fuso',
+          plateNumber: 'RAB 001 K',
+          passengerSeats: null,
+          loadCapacityKg: 3500,
+        },
+      ],
+      'approved',
+    );
+
+    expect(surfaced.loadCapacityKg).toBe(3500);
+    expect(surfaced.passengerSeats).toBeUndefined();
+  });
+});
