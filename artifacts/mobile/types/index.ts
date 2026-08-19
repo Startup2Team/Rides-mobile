@@ -283,6 +283,8 @@ export interface DriverProfile {
   plateNumber: string;
   licenseNumber: string;
   nationalId?: string;
+  nationalIdCountry?: 'RW' | 'UG';
+  gender?: 'male' | 'female' | 'other';
   licenseExpiryDate?: string;
   insuranceExpiryDate?: string;
   authorizationExpiryDate?: string;

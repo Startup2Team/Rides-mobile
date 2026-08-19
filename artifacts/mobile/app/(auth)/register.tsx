@@ -40,7 +40,7 @@ function getCountryFlag(code: string) {
 export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [form, setForm] = useState({ name: '', phone: '' });
+  const [form, setForm] = useState<{ name: string; phone: string; gender: 'male' | 'female' | 'other' | '' }>({ name: '', phone: '', gender: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editingForm, setEditingForm] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
@@ -62,6 +62,12 @@ export default function RegisterScreen() {
   const update = (field: string, val: string) => {
     setForm(f => ({ ...f, [field]: val }));
     setErrors(e => ({ ...e, [field]: '' }));
+  };
+
+  // Tapping the already-selected option clears it — gender stays fully
+  // skippable, there's no requirement to pick one to continue.
+  const selectGender = (value: 'male' | 'female' | 'other') => {
+    setForm(f => ({ ...f, gender: f.gender === value ? '' : value }));
   };
 
   const validate = () => {
@@ -92,7 +98,7 @@ export default function RegisterScreen() {
       await requestOtp({ phoneNumber, fullName });
       router.push({
         pathname: '/(auth)/otp',
-        params: { phone: phoneNumber, name: fullName, mode: 'register' },
+        params: { phone: phoneNumber, name: fullName, mode: 'register', gender: form.gender },
       });
     } catch {
       setErrors({ phone: "Couldn't send the code. Check the number and try again." });
@@ -183,6 +189,41 @@ export default function RegisterScreen() {
                 </View>
               </View>
               {errors.phone ? <AppText variant="caption" style={[styles.errorText, { color: colors.destructive }]}>{errors.phone}</AppText> : null}
+            </View>
+
+            <View style={styles.genderField}>
+              <AppText variant="label" style={[styles.phoneLabel, { color: colors.mutedForeground }]}>
+                Gender (optional)
+              </AppText>
+              <View style={styles.genderRow}>
+                {(['male', 'female', 'other'] as const).map(g => {
+                  const selected = form.gender === g;
+                  return (
+                    <TouchableOpacity
+                      key={g}
+                      onPress={() => selectGender(g)}
+                      activeOpacity={0.8}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Gender: ${g}`}
+                      style={[
+                        styles.genderOption,
+                        {
+                          backgroundColor: selected ? colors.primary : colors.input,
+                          borderColor: selected ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        variant="bodySmall"
+                        style={{ color: selected ? colors.primaryForeground : colors.foreground, textTransform: 'capitalize' }}
+                      >
+                        {g}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             {editingForm && (
@@ -351,6 +392,22 @@ const styles = StyleSheet.create({
   },
   phoneLabel: {
     marginLeft: 2,
+  },
+  genderField: {
+    gap: 6,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderOption: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorText: {
     marginLeft: 2,

@@ -116,6 +116,13 @@ export interface DriverApplicationInput {
   sector: string;
   cell: string;
   village: string;
+  // National ID (FEAT-onboarding-fields): the form already collects and
+  // requires these client-side, so they're always sent — even though the
+  // backend only enforces them as mandatory behind NATIONAL_ID_REQUIRED
+  // (staged rollout). Required here, not optional, so a caller can't
+  // silently drop them again.
+  nationalIdNumber: string;
+  nationalIdCountry: 'RW' | 'UG';
   gender?: 'male' | 'female' | 'other';
   passengerSeats?: number;
   loadCapacityKg?: number;
@@ -139,6 +146,8 @@ export async function applyAsDriver(input: DriverApplicationInput): Promise<void
     sector: input.sector,
     cell: input.cell,
     village: input.village,
+    national_id_number: input.nationalIdNumber,
+    national_id_country: input.nationalIdCountry,
   };
   if (input.gender) body.gender = input.gender;
   if (input.passengerSeats !== undefined) body.passenger_seats = input.passengerSeats;

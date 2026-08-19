@@ -4,10 +4,10 @@ import { parseDateDdMmYyyy } from '@/utils/dateUtils';
 import { isAtLeastAge } from '@/utils/dateUtils';
 import { isValidDocumentImageUri } from '@/utils/documentValidation';
 import {
-  isValidRwandaNationalId,
   isValidRwandaPlateNumber,
   normalizeRwandaPhoneNumber,
 } from '@/utils/rwandaValidation';
+import { isValidNationalId } from '@/utils/nationalId';
 import { DOCUMENTS_REQUIRING_BACK } from '@/domain/driverDocuments';
 
 export const isValidDriverLicenceNumber = (licenceNumber: string) => /^\d{16}$/.test(licenceNumber);
@@ -39,8 +39,13 @@ export function useDriverOnboardingValidation({
       if (!selfieUri) errors.selfie = 'Identity photo is required';
       if (!form.dob) errors.dob = 'Required';
       else if (!isAtLeastAge(form.dob, 18)) errors.dob = 'Driver applicants must be at least 18 years old';
+      if (!form.nationalIdCountry) errors.nationalIdCountry = 'Select the country that issued this ID';
       if (!form.nationalId) errors.nationalId = 'Required';
-      else if (!isValidRwandaNationalId(form.nationalId)) errors.nationalId = 'National ID must be exactly 16 digits';
+      else if (form.nationalIdCountry && !isValidNationalId(form.nationalIdCountry, form.nationalId)) {
+        errors.nationalId = form.nationalIdCountry === 'UG'
+          ? 'National ID must be exactly 14 letters/digits'
+          : 'National ID must be exactly 16 digits';
+      }
       if (!form.province) errors.province = 'Required';
       if (!form.district) errors.district = 'Required';
       if (!form.sector) errors.sector = 'Required';

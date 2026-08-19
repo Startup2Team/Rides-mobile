@@ -345,6 +345,8 @@ const driverProfileShapeSchema = z.object({
   plateNumber: z.string(),
   licenseNumber: z.string(),
   nationalId: z.string().optional(),
+  nationalIdCountry: z.enum(['RW', 'UG']).optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
   licenseExpiryDate: z.string().optional(),
   insuranceExpiryDate: z.string().optional(),
   authorizationExpiryDate: z.string().optional(),
@@ -400,6 +402,10 @@ export const driverOnboardingDraftSchema = z.object({
     plateNumber: z.string(),
     licenseNumber: z.string(),
     nationalId: z.string(),
+    // Optional-with-default (not required) so a draft persisted before this
+    // field existed still parses under the SAME envelope version — see the
+    // note on STORAGE_VERSION in versionedStorage.ts before ever bumping it.
+    nationalIdCountry: z.enum(['RW', 'UG', '']).optional().default(''),
     licenseExpiryDate: z.string(),
     insuranceExpiryDate: z.string(),
     authorizationExpiryDate: z.string(),

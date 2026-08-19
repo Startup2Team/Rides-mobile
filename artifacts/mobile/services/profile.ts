@@ -16,6 +16,7 @@ export interface CustomerProfile {
   profileImageUrl: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  gender: 'male' | 'female' | 'other' | null;
 }
 
 interface ProfileDto {
@@ -28,6 +29,7 @@ interface ProfileDto {
   profile_image_url?: string | null;
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
+  gender?: 'male' | 'female' | 'other' | null;
 }
 
 interface ApiEnvelope<T> {
@@ -52,6 +54,7 @@ function toDomain(dto: ProfileDto): CustomerProfile {
     profileImageUrl: orNull(dto.profile_image_url),
     emergencyContactName: orNull(dto.emergency_contact_name),
     emergencyContactPhone: orNull(dto.emergency_contact_phone),
+    gender: dto.gender ?? null,
   };
 }
 
@@ -68,6 +71,10 @@ export interface ProfileUpdate {
   profileImageUrl?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  // Optional, never required (FEAT-onboarding-fields). '' is sent to mean "no
+  // selection" and the backend treats it as leave-unchanged, same as omitting
+  // the field entirely — there's no "clear my gender" UI path.
+  gender?: 'male' | 'female' | 'other' | '';
 }
 
 // PUT /customer/profile returns 204. Only send the fields the caller provided
@@ -84,6 +91,7 @@ export async function updateProfile(patch: ProfileUpdate): Promise<void> {
   if (patch.profileImageUrl !== undefined) body.profile_image_url = patch.profileImageUrl;
   if (patch.emergencyContactName !== undefined) body.emergency_contact_name = patch.emergencyContactName;
   if (patch.emergencyContactPhone !== undefined) body.emergency_contact_phone = patch.emergencyContactPhone;
+  if (patch.gender !== undefined) body.gender = patch.gender;
 
   const client = getAppBackendClient();
   await client.put('/v1/customer/profile', { body });
