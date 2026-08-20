@@ -13,6 +13,7 @@ export interface DriverOnboardingForm {
   plateNumber: string;
   licenseNumber: string;
   nationalId: string;
+  nationalIdCountry: 'RW' | 'UG' | '';
   licenseExpiryDate: string;
   insuranceExpiryDate: string;
   authorizationExpiryDate: string;
@@ -38,6 +39,7 @@ export const INITIAL_DRIVER_ONBOARDING_FORM: DriverOnboardingForm = {
   plateNumber: '',
   licenseNumber: '',
   nationalId: '',
+  nationalIdCountry: '',
   licenseExpiryDate: '',
   insuranceExpiryDate: '',
   authorizationExpiryDate: '',

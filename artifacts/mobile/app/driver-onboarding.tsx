@@ -188,6 +188,10 @@ export default function DriverOnboarding() {
           sector: form.sector,
           cell: form.cell,
           village: form.village,
+          // Client-validated required at step 0 (useDriverOnboardingValidation);
+          // nationalIdCountry can only be '' if that validation was bypassed.
+          nationalIdNumber: form.nationalId,
+          nationalIdCountry: form.nationalIdCountry || 'RW',
           gender: form.gender || undefined,
           passengerSeats: form.passengerSeats ? Number(form.passengerSeats) : undefined,
           loadCapacityKg: form.loadCapacityKg ? Number(form.loadCapacityKg) : undefined,

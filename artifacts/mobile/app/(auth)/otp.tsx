@@ -17,6 +17,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { navigateToCustomerHomeAfterCompletion, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { requestOtp, verifyOtp } from '@/services/authSession';
+import { updateProfile } from '@/services/profile';
+import { reportOperationalFailure } from '@/observability/monitoring';
 import type { User } from '@/types';
 
 // Client-side throttle before a fresh OTP can be requested again. The backend
@@ -26,8 +28,8 @@ const RESEND_COOLDOWN_SECONDS = 30;
 export default function OTPScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { phone, name, email, mode, length } = useLocalSearchParams<{
-    phone: string; name: string; email: string; mode: string; length?: string;
+  const { phone, name, email, mode, length, gender } = useLocalSearchParams<{
+    phone: string; name: string; email: string; mode: string; length?: string; gender?: string;
   }>();
   const { login } = useAuth();
 
@@ -98,6 +100,17 @@ export default function OTPScreen() {
       // Real backend: exchanges the OTP for a session; tokens are persisted
       // inside verifyOtp() so subsequent requests are authenticated.
       const session = await verifyOtp({ phoneNumber: phone ?? '', otp: entered });
+
+      // Best-effort rider gender capture (FEAT-onboarding-fields): optional,
+      // never blocks registration. Tokens are already persisted by verifyOtp
+      // above, so this call is authenticated; a failure here must not stop
+      // the user from landing on their home screen.
+      if (gender === 'male' || gender === 'female' || gender === 'other') {
+        void updateProfile({ gender }).catch(error => {
+          reportOperationalFailure('auth.register.gender', error);
+        });
+      }
+
       const sessionUser = session.user;
       const user: User = {
         id: sessionUser?.id ?? (phone ?? entered),
@@ -163,6 +176,8 @@ export default function OTPScreen() {
               maxLength={1}
               textAlign="center"
               editable={!verifying}
+              testID={`otp-digit-${i}`}
+              accessibilityLabel={`Verification code digit ${i + 1} of ${otpLength}`}
             />
           ))}
         </View>

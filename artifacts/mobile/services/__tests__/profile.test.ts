@@ -37,6 +37,7 @@ describe('customer profile service', () => {
       profile_image_url: 'https://cdn.test/avatars/a.jpg',
       emergency_contact_name: 'Bob',
       emergency_contact_phone: '+250788222333',
+      gender: 'female',
     });
 
     await expect(fetchProfile()).resolves.toEqual({
@@ -49,7 +50,21 @@ describe('customer profile service', () => {
       profileImageUrl: 'https://cdn.test/avatars/a.jpg',
       emergencyContactName: 'Bob',
       emergencyContactPhone: '+250788222333',
+      gender: 'female',
     });
+  });
+
+  test('reads null gender when the account never set one', async () => {
+    stubClient({
+      id: 'user-1',
+      phone_number: '+250788111000',
+      full_name: 'Alice Rider',
+      role_state: 'CUSTOMER',
+    });
+
+    const profile = await fetchProfile();
+
+    expect(profile.gender).toBeNull();
   });
 
   test("treats a cleared field ('') as not set", async () => {
@@ -76,6 +91,22 @@ describe('customer profile service', () => {
     expect(put).toHaveBeenCalledWith('/v1/customer/profile', {
       body: { full_name: 'Alice', emergency_contact_phone: '+250788222333' },
     });
+  });
+
+  test('sends the optional gender when provided (FEAT-onboarding-fields)', async () => {
+    const { put } = stubClient();
+
+    await updateProfile({ gender: 'other' });
+
+    expect(put).toHaveBeenCalledWith('/v1/customer/profile', { body: { gender: 'other' } });
+  });
+
+  test('omits gender entirely when the caller does not pass it', async () => {
+    const { put } = stubClient();
+
+    await updateProfile({ fullName: 'Alice' });
+
+    expect(put).toHaveBeenCalledWith('/v1/customer/profile', { body: { full_name: 'Alice' } });
   });
 
   test('stores the avatar in object storage and points the account at it', async () => {

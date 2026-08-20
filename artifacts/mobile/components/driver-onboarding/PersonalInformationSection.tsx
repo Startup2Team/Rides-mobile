@@ -8,8 +8,16 @@ import type { useColors } from '@/hooks/useColors';
 import type { User } from '@/types';
 import type { CascadeField, DriverOnboardingForm } from '@/hooks/driver-onboarding/onboardingTypes';
 import { RWANDA_PROVINCES, getDistricts, getSectors, getCells, getVillages } from '@/data/rwanda-locations';
+import { formatNationalIdInput } from '@/utils/nationalId';
 import { CascadeDropdown } from './CascadeDropdown';
 import { styles } from './onboardingStyles';
+
+// Mirrors the register.tsx COUNTRIES picker (name/code/flag shape) — the two
+// countries the backend's pkg/nationalid currently supports formats for.
+const NATIONAL_ID_COUNTRIES = [
+  { code: 'RW' as const, name: 'Rwanda', flag: '🇷🇼' },
+  { code: 'UG' as const, name: 'Uganda', flag: '🇺🇬' },
+];
 
 export function PersonalInformationSection({ colors, errors, form, maxDobDate, selfieUri, takeSelfie, update, updateCascade, user }: {
   colors: ReturnType<typeof useColors>; errors: Record<string, string>; form: DriverOnboardingForm; maxDobDate: Date;
@@ -28,7 +36,59 @@ export function PersonalInformationSection({ colors, errors, form, maxDobDate, s
     <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><AppText style={[styles.infoLabel, { color: colors.mutedForeground }]}>Full Name</AppText><AppText style={[styles.infoValue, { color: colors.foreground }]}>{user?.name}</AppText></View>
     <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.border }]}><AppText style={[styles.infoLabel, { color: colors.mutedForeground }]}>Phone</AppText><AppText style={[styles.infoValue, { color: colors.foreground }]}>{user?.phone}</AppText></View>
     <DatePickerField label="Date of Birth" value={form.dob} onChange={dob => update('dob', dob)} error={errors.dob} placeholder="DD/MM/YYYY" maximumDate={maxDobDate} />
-    <AppInput label="National ID Number" placeholder="16-digit National ID" value={form.nationalId} onChangeText={text => update('nationalId', text.replace(/\D/g, '').slice(0, 16))} error={errors.nationalId} leftIcon="credit-card" keyboardType="numeric" maxLength={16} />
+    <View style={{ gap: 6 }}>
+      <AppText style={[styles.sectionSubtitle, { color: colors.foreground }]}>National ID country</AppText>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {NATIONAL_ID_COUNTRIES.map(country => {
+          const selected = form.nationalIdCountry === country.code;
+          return (
+            <TouchableOpacity
+              key={country.code}
+              onPress={() => {
+                // Formats differ per country — clear the number so a stale
+                // RW-shaped value can't masquerade as a valid UG one (or vice
+                // versa) after switching.
+                update('nationalIdCountry', country.code);
+                update('nationalId', '');
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`National ID issued by ${country.name}`}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: selected ? colors.primary : colors.card,
+                borderColor: selected ? colors.primary : colors.border,
+              }}
+            >
+              <AppText style={{ fontSize: 16 }}>{country.flag}</AppText>
+              <AppText style={{ color: selected ? colors.primaryForeground : colors.foreground }}>{country.name}</AppText>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {error('nationalIdCountry')}
+    </View>
+    <AppInput
+      label="National ID Number"
+      placeholder={form.nationalIdCountry === 'UG' ? '14-character National ID' : '16-digit National ID'}
+      value={form.nationalId}
+      onChangeText={text => update('nationalId', formatNationalIdInput(form.nationalIdCountry, text))}
+      error={errors.nationalId}
+      leftIcon="credit-card"
+      keyboardType={form.nationalIdCountry === 'UG' ? 'default' : 'numeric'}
+      autoCapitalize={form.nationalIdCountry === 'UG' ? 'characters' : 'none'}
+      maxLength={form.nationalIdCountry === 'UG' ? 14 : 16}
+      accessibilityLabel="National ID number"
+    />
     <View style={{ gap: 6 }}>
       <AppText style={[styles.sectionSubtitle, { color: colors.foreground }]}>Gender</AppText>
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -36,8 +96,8 @@ export function PersonalInformationSection({ colors, errors, form, maxDobDate, s
           const selected = form.gender === g;
           return (
             <TouchableOpacity key={g} onPress={() => update('gender', g)} activeOpacity={0.8}
-              accessibilityRole="radio" accessibilityState={{ selected }}
-              style={{ flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center',
+              accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={`Gender: ${g}`}
+              style={{ flex: 1, minHeight: 44, paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center',
                 backgroundColor: selected ? colors.primary : colors.card,
                 borderColor: selected ? colors.primary : colors.border }}>
               <AppText style={{ color: selected ? colors.primaryForeground : colors.foreground, textTransform: 'capitalize' }}>{g}</AppText>

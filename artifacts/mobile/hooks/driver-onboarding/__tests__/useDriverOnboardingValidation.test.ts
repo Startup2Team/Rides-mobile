@@ -37,6 +37,7 @@ describe('driver onboarding blocking validation', () => {
     manufactureYear: '2020',
     dob: '31/12/2099',
     nationalId: '1990010112345678',
+    nationalIdCountry: 'RW' as const,
     province: 'City of Kigali',
     district: 'Gasabo',
     sector: 'Kacyiru',
@@ -54,10 +55,27 @@ describe('driver onboarding blocking validation', () => {
     ...overrides,
   })();
 
-  test('requires a valid 16-digit National ID', () => {
+  test('requires a national ID country before checking the number format', () => {
+    expect(validateStep(0).nationalIdCountry).toBe('Select the country that issued this ID');
+  });
+
+  test('requires a valid 16-digit National ID for Rwanda', () => {
     expect(validateStep(0).nationalId).toBe('Required');
-    expect(validateStep(0, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalId: '1234' } }).nationalId)
+    expect(validateStep(0, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalIdCountry: 'RW' as const, nationalId: '1234' } }).nationalId)
       .toBe('National ID must be exactly 16 digits');
+    expect(validateStep(0, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalIdCountry: 'RW' as const, nationalId: '1990010112345678' } }).nationalId)
+      .toBeUndefined();
+  });
+
+  test('requires a valid 14-character National ID for Uganda', () => {
+    expect(validateStep(0, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalIdCountry: 'UG' as const, nationalId: 'TOO-SHORT' } }).nationalId)
+      .toBe('National ID must be exactly 14 letters/digits');
+    expect(validateStep(0, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalIdCountry: 'UG' as const, nationalId: 'CM12345678901A' } }).nationalId)
+      .toBeUndefined();
+  });
+
+  test('does not format-check the number until a country is selected (avoids a misleading error)', () => {
+    expect(validateStep(0, { form: { ...INITIAL_DRIVER_ONBOARDING_FORM, nationalId: '1234' } }).nationalId).toBeUndefined();
   });
 
   test('blocks an invalid Rwanda plate', () => {

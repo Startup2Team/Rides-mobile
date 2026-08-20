@@ -12,6 +12,8 @@ export function buildPendingDriverProfile(form: DriverOnboardingForm, selfieUri:
     plateNumber: normalizeRwandaPlateNumber(form.plateNumber),
     licenseNumber: form.licenseNumber,
     nationalId: form.nationalId,
+    nationalIdCountry: form.nationalIdCountry || undefined,
+    gender: form.gender || undefined,
     licenseExpiryDate: form.licenseExpiryDate,
     insuranceExpiryDate: form.insuranceExpiryDate,
     authorizationExpiryDate: form.authorizationExpiryDate,
@@ -57,6 +59,7 @@ export function formFromDriverProfile(profile: DriverProfile): DriverOnboardingF
     plateNumber: profile.plateNumber,
     licenseNumber: profile.licenseNumber,
     nationalId: profile.nationalId ?? '',
+    nationalIdCountry: profile.nationalIdCountry ?? '',
     licenseExpiryDate: profile.licenseExpiryDate ?? '',
     insuranceExpiryDate: profile.insuranceExpiryDate ?? '',
     authorizationExpiryDate: profile.authorizationExpiryDate ?? '',
@@ -66,7 +69,10 @@ export function formFromDriverProfile(profile: DriverProfile): DriverOnboardingF
     sector: profile.sector,
     cell: profile.cell ?? '',
     village: profile.village ?? '',
-    gender: '',
+    // Was hardcoded to '' — every resume/resubmit silently dropped the
+    // driver's previously-chosen gender even though it was saved on the
+    // profile. Read it back like every other optional field here.
+    gender: profile.gender ?? '',
     momoProvider: profile.momoProvider,
     momoCode: profile.momoCode,
     merchantCode: profile.merchantCode ?? '',
