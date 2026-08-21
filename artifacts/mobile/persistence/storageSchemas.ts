@@ -55,6 +55,10 @@ export const roleSyncTargetSchema = z.object({
   seq: z.number(),
 });
 
+// services/customerLocationBackgroundTask.ts — the ride id the background
+// location task is currently streaming for (absent when no ride holds it).
+export const customerLocationBackgroundRideIdSchema = z.string().min(1);
+
 export const paymentMethodsSchema = z.array(z.object({
   id: z.string(),
   provider: z.enum(['mtn', 'airtel', 'cash']),

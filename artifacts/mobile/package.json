@@ -117,6 +117,7 @@
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "^14.0.8",
     "expo-store-review": "~9.0.9",
+    "expo-task-manager": "~14.0.9",
     "expo-updates": "~29.0.18",
     "invariant": "^2.2.4",
     "qrcode": "^1.5.4",

@@ -144,6 +144,27 @@ jest.mock('expo-location', () => ({
     });
     return { remove: jest.fn() };
   }),
+  // Background-location APIs (customer live-location background streaming) —
+  // default to "denied, can't ask again" so a suite that doesn't care about
+  // this feature gets the graceful-degradation path, not a real OS prompt.
+  getBackgroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'denied', canAskAgain: false })),
+  requestBackgroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'denied', canAskAgain: false })),
+  hasStartedLocationUpdatesAsync: jest.fn(async () => false),
+  startLocationUpdatesAsync: jest.fn(async () => undefined),
+  stopLocationUpdatesAsync: jest.fn(async () => undefined),
+}));
+
+// expo-task-manager's real module reaches into a native module
+// (requireNativeModule('ExpoTaskManager')) that doesn't exist under node, and
+// it's also published as ESM (no CommonJS build), which jest can't parse
+// without transforming node_modules. defineTask itself is pure bookkeeping in
+// the real module (just stores the callback in a Map) — this stub mirrors
+// that so importing it for its module-load side effect never crashes a suite.
+jest.mock('expo-task-manager', () => ({
+  defineTask: jest.fn(),
+  isTaskDefined: jest.fn(() => false),
+  isTaskRegisteredAsync: jest.fn(async () => false),
+  unregisterTaskAsync: jest.fn(async () => undefined),
 }));
 
 jest.mock('@/constants/savedLocations', () => ({

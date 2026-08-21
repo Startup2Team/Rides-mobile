@@ -60,6 +60,10 @@ import {
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
 import { createRide as createBackendRide, cancelRide as cancelBackendRide, getActiveRide } from '@/services/rides';
 import { updateCustomerLocation } from '@/services/customerLocation';
+import {
+  startCustomerLocationBackgroundUpdates,
+  stopCustomerLocationBackgroundUpdates,
+} from '@/services/customerLocationBackgroundTask';
 import { getActiveDriverRide } from '@/services/driverRides';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import { estimateFare } from '@/services/fare';
@@ -1421,6 +1425,22 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       clearInterval(interval);
+    };
+  }, [isCustomerLocationPublishActive, trackedRideId]);
+
+  // ── Flow K: customer background location (product decision: whole-trip,
+  // survives the app being backgrounded) ──────────────────────────────────
+  // Purely additive on top of Flow J: while the JS interval above already
+  // covers the app-open case, this asks to upgrade to "Always" so a native
+  // background task keeps streaming when the app is backgrounded/suspended.
+  // Deliberately its own effect (and its own commit) so it can be reverted
+  // independently of the foreground streaming — App Store review treats
+  // background location very differently from foreground.
+  React.useEffect(() => {
+    if (!isCustomerLocationPublishActive || !trackedRideId) return;
+    void startCustomerLocationBackgroundUpdates(trackedRideId);
+    return () => {
+      void stopCustomerLocationBackgroundUpdates();
     };
   }, [isCustomerLocationPublishActive, trackedRideId]);
 
