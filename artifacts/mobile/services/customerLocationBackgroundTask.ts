@@ -8,7 +8,7 @@ import {
   removeVersionedStorage,
   saveVersionedStorage,
 } from '@/persistence/versionedStorage';
-import { updateCustomerLocation } from './customerLocation';
+import { isTerminalCustomerLocationError, updateCustomerLocation } from './customerLocation';
 
 // Background customer live-location streaming — the "app is backgrounded
 // during an active ride" half of the feature. Deliberately separate from the
@@ -49,6 +49,18 @@ async function loadTrackedRideId(): Promise<string | null> {
   return stored.data;
 }
 
+/**
+ * Public read of the ride id the background task is (or was last) tracking,
+ * if any. Used by RideProvider's bootstrap/resume hydration to detect an
+ * orphaned task after a force-kill: the native task survives app
+ * termination, so a cold start with this key set but no matching active ride
+ * means the task is still running for a ride that's already over — the
+ * caller should stopCustomerLocationBackgroundUpdates() in that case.
+ */
+export async function getTrackedCustomerLocationBackgroundRideId(): Promise<string | null> {
+  return loadTrackedRideId();
+}
+
 // MUST run unconditionally at module load, before any ride exists — imported
 // once from app/_layout.tsx so the task is registered from cold start. A task
 // name that isn't already defined when the OS tries to deliver to it is
@@ -75,9 +87,15 @@ TaskManager.defineTask(CUSTOMER_LOCATION_BACKGROUND_TASK, async ({ data, error }
       heading: latest.coords.heading ?? undefined,
       speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
     });
-  } catch {
-    // Endpoint not deployed yet, offline, or the ride already ended on the
-    // backend — ignore and retry on the next delivered fix.
+  } catch (error) {
+    // A definitive 404/409 means the ride is over on the backend and will
+    // never accept another update — self-stop instead of running this native
+    // task (and its persistent "sharing your location" notification)
+    // indefinitely. Anything else (offline, rate limit, 5xx) is transient —
+    // ignore and retry on the next delivered fix.
+    if (isTerminalCustomerLocationError(error)) {
+      await stopCustomerLocationBackgroundUpdates();
+    }
   }
 });
 

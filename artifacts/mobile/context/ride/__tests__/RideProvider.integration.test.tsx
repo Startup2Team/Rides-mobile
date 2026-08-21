@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { BackendError } from '@/data/remote/contracts/backendErrors';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
@@ -31,6 +32,10 @@ const mockShadowWireDeclineRideCommand = jest.fn();
 const mockShadowWireStartRideCommand = jest.fn();
 const mockShadowWireCompleteRideCommand = jest.fn();
 const mockUpdateCustomerLocation = jest.fn(async (..._args: unknown[]) => undefined);
+const mockIsTerminalCustomerLocationError = jest.fn((_error: unknown) => false);
+const mockStartCustomerLocationBackgroundUpdates = jest.fn(async (..._args: unknown[]) => false);
+const mockStopCustomerLocationBackgroundUpdates = jest.fn(async () => undefined);
+const mockGetTrackedCustomerLocationBackgroundRideId = jest.fn(async (): Promise<string | null> => null);
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
@@ -82,6 +87,16 @@ jest.mock('@/services/driverNegotiation', () => ({
 // CONFIRMED — stub it so tests never make a real backend call.
 jest.mock('@/services/customerLocation', () => ({
   updateCustomerLocation: (...args: unknown[]) => mockUpdateCustomerLocation(...args),
+  isTerminalCustomerLocationError: (error: unknown) => mockIsTerminalCustomerLocationError(error),
+}));
+// The native background-location task itself is exercised in
+// services/__tests__/customerLocationBackgroundTask.test.ts — here it's
+// stubbed so Flow K and the bootstrap orphan-reconcile can be asserted on
+// without touching expo-location's native background-permission surface.
+jest.mock('@/services/customerLocationBackgroundTask', () => ({
+  startCustomerLocationBackgroundUpdates: (...args: unknown[]) => mockStartCustomerLocationBackgroundUpdates(...args),
+  stopCustomerLocationBackgroundUpdates: () => mockStopCustomerLocationBackgroundUpdates(),
+  getTrackedCustomerLocationBackgroundRideId: () => mockGetTrackedCustomerLocationBackgroundRideId(),
 }));
 jest.mock('@/services/customerTrackingSocket', () => ({
   openCustomerTrackingSocket: (_rideId: string, handlers: any) => {
@@ -195,6 +210,12 @@ describe('RideProvider lifecycle orchestration', () => {
     mockShadowWireStartRideCommand.mockReset();
     mockShadowWireCompleteRideCommand.mockReset();
     mockUpdateCustomerLocation.mockClear();
+    mockIsTerminalCustomerLocationError.mockReset();
+    mockIsTerminalCustomerLocationError.mockReturnValue(false);
+    mockStartCustomerLocationBackgroundUpdates.mockClear();
+    mockStopCustomerLocationBackgroundUpdates.mockClear();
+    mockGetTrackedCustomerLocationBackgroundRideId.mockReset();
+    mockGetTrackedCustomerLocationBackgroundRideId.mockResolvedValue(null);
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -815,6 +836,116 @@ describe('RideProvider lifecycle orchestration', () => {
       jest.advanceTimersByTime(30_000);
     });
     expect(mockUpdateCustomerLocation.mock.calls.length).toBe(callsAfterCompletion);
+  });
+
+  test('customer live-location publish loop stops itself on a terminal 404/409 instead of polling a dead ride forever', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+
+    await createAndMatchRide(result);
+    await emitCustomer('negotiation_message', { actor_role: 'DRIVER', amount: 3000 });
+    await act(async () => {
+      result.current.acceptDriverOffer();
+    });
+    await flushPromises();
+    expect(mockUpdateCustomerLocation).toHaveBeenCalledTimes(1);
+
+    // The backend has, unbeknownst to this still-"confirmed" local state,
+    // already ended the ride (RIDE_NOT_ACTIVE) — every further POST rejects
+    // the same way and the classifier says so.
+    mockUpdateCustomerLocation.mockRejectedValue(new Error('RIDE_NOT_ACTIVE'));
+    mockIsTerminalCustomerLocationError.mockReturnValue(true);
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
+    });
+    const callsAfterTerminalRejection = mockUpdateCustomerLocation.mock.calls.length;
+    expect(callsAfterTerminalRejection).toBe(2);
+
+    // Further ticks must not call it again — the loop tore itself down.
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+    expect(mockUpdateCustomerLocation.mock.calls.length).toBe(callsAfterTerminalRejection);
+  });
+
+  test('bootstrap reconcile stops an orphaned background-location task when there is no matching active ride', async () => {
+    // Simulates a force-kill mid-ride: the native task survives termination
+    // and left its ride id persisted, but by the time the app cold-starts
+    // again there is no active ride at all (it ended on the backend while
+    // the app was dead).
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    mockGetTrackedCustomerLocationBackgroundRideId.mockResolvedValue('orphaned-ride-1');
+    mockGetActiveRide.mockResolvedValue(null);
+
+    renderRideProvider();
+
+    await waitFor(() => expect(mockStopCustomerLocationBackgroundUpdates).toHaveBeenCalled());
+  });
+
+  test('bootstrap reconcile stops an orphaned task when the resumed ride is no longer in a location-active status', async () => {
+    // The tracked ride resolved, but the snapshot maps to a status outside
+    // CUSTOMER_LOCATION_ACTIVE_STATUSES (completed) — rideFromActiveRideSnapshot
+    // returns null for it, which must be treated the same as "no active ride".
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    mockGetTrackedCustomerLocationBackgroundRideId.mockResolvedValue('srv-active-1');
+    mockGetActiveRide.mockResolvedValue(activeSnapshot({ status: 'COMPLETED' }));
+
+    renderRideProvider();
+
+    await waitFor(() => expect(mockStopCustomerLocationBackgroundUpdates).toHaveBeenCalled());
+  });
+
+  test('bootstrap reconcile does NOT stop the task when the resumed ride is genuinely still active', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    mockGetTrackedCustomerLocationBackgroundRideId.mockResolvedValue('srv-active-1');
+    mockGetActiveRide.mockResolvedValue(activeSnapshot({ status: 'IN_PROGRESS' }));
+
+    const { result } = renderRideProvider();
+
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('in_progress'));
+    await flushPromises();
+    expect(mockStopCustomerLocationBackgroundUpdates).not.toHaveBeenCalled();
+  });
+
+  test('bootstrap reconcile is a no-op when nothing is persisted (the common case)', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    mockGetActiveRide.mockResolvedValue(null);
+
+    renderRideProvider();
+    await flushPromises();
+
+    expect(mockStopCustomerLocationBackgroundUpdates).not.toHaveBeenCalled();
+  });
+
+  test('background streaming retries once foreground permission resolves after being denied at first check (fresh-install ordering)', async () => {
+    // Fresh install: RideProvider's mount-time bootstrap check sees foreground
+    // permission not-yet-granted (the OS prompt hasn't resolved), so Flow K's
+    // first attempt for this ride runs with foregroundLocationGranted still
+    // false. Flow J's own request (fired at the same time) resolves granted a
+    // tick later — foregroundLocationGranted flipping true must make Flow K
+    // retry instead of being permanently stuck on its first, premature call.
+    (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+      granted: false,
+      status: 'denied',
+    });
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+
+    await createAndMatchRide(result);
+    await emitCustomer('negotiation_message', { actor_role: 'DRIVER', amount: 3000 });
+    await act(async () => {
+      result.current.acceptDriverOffer();
+    });
+    expect(result.current.currentRide?.status).toBe('confirmed');
+    await flushPromises();
+
+    // Flow J's requestForegroundPermissionsAsync (granted by the jest.setup
+    // default) has now resolved, flipping foregroundLocationGranted — Flow K
+    // must have re-run and attempted to start background streaming again.
+    expect(mockStartCustomerLocationBackgroundUpdates.mock.calls.length).toBeGreaterThan(1);
   });
 
   test('409 RIDE_ALREADY_ACTIVE rejoins the real ride instead of faking a search', async () => {

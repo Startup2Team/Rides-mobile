@@ -444,8 +444,12 @@ export default function DriverNavigateScreen() {
         )}
         {/* Customer's LIVE position (customer_location WS events) — separate from
             the static pickup pin above, which just marks where the trip starts.
-            Hidden once the trip starts: the customer is with the driver by then. */}
-        {phase !== 'inprogress' && customerLocation && (
+            Rendered through the whole trip (product decision: whole-trip
+            tracking) to match how long the customer side actually publishes
+            (CUSTOMER_LOCATION_ACTIVE_STATUSES includes in_progress) — showing
+            it stops in_progress while publishing kept going would just be a
+            marker that silently freezes instead of disappearing. */}
+        {customerLocation && (
           <Marker
             coordinate={customerLocation}
             anchor={{ x: 0.5, y: 0.5 }}

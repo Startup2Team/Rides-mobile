@@ -455,16 +455,20 @@ describe('DriverNavigateScreen', () => {
     expect(router.replace).toHaveBeenCalledWith('/(driver)');
   });
 
-  test('shows the customer live marker while heading to pickup and hides it once the trip starts', () => {
+  test('shows the customer live marker through the whole trip, including in_progress', () => {
     mockCustomerLocation = { latitude: -1.94, longitude: 30.06 };
     setRide('arriving');
 
     const { rerender } = render(<DriverNavigateScreen />);
     expect(screen.getByLabelText('Customer, live location')).toBeTruthy();
 
+    // Whole-trip tracking (product decision): the customer keeps publishing
+    // through in_progress, so the driver must keep rendering the marker too —
+    // otherwise it silently freezes at the last pre-trip fix instead of
+    // disappearing or updating.
     setRide('in_progress');
     rerender(<DriverNavigateScreen />);
-    expect(screen.queryByLabelText('Customer, live location')).toBeNull();
+    expect(screen.getByLabelText('Customer, live location')).toBeTruthy();
   });
 
   test('does not render a customer marker until a live location has arrived', () => {
