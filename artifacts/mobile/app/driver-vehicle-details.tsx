@@ -17,8 +17,9 @@ import {
 } from '@/components/ImageGalleryPreview';
 import { useAuth } from '@/context/AuthContext';
 import { DRIVER_DOCUMENT_API_TYPES } from '@/domain/driverDocuments';
-import { resolveVehicleDocuments } from '@/domain/driverVehicleDocuments';
+import { isDocumentReplaceable, resolveVehicleDocuments } from '@/domain/driverVehicleDocuments';
 import { reportOperationalFailure } from '@/observability/monitoring';
+import { ConflictError } from '@/data/remote/contracts/backendErrors';
 import { uploadDriverDocument } from '@/services/driverDocuments';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import { appendDriverVehicle, getDriverVehicleReviewHistory, getDriverVehicleTimeline, submitDriverVehicleDocumentUpdate } from '@/domain/driverVehicles';
@@ -277,10 +278,16 @@ export default function DriverVehicleDetailsScreen() {
       // the submission went through is the bug this replaces.
       setSavingUpdate(false);
       reportOperationalFailure('vehicle.documents.resubmit', error);
+      const backendError = readBackendError(error);
+      const locked =
+        backendError.code === 'DOCUMENT_LOCKED' || error instanceof ConflictError;
       Alert.alert(
-        "Couldn't submit documents",
-        readBackendError(error).message ??
-          "Your documents couldn't be sent for review. Check your connection and try again.",
+        locked ? 'Document locked' : "Couldn't submit documents",
+        locked
+          ? backendError.message ??
+              'This document is locked and can’t be replaced right now. Contact support to request a re-upload window.'
+          : backendError.message ??
+              "Your documents couldn't be sent for review. Check your connection and try again.",
       );
       return;
     }
@@ -364,10 +371,20 @@ export default function DriverVehicleDetailsScreen() {
       >
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
           <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</AppText>
+          {/* Friendly type label mapped client-side from the domain vehicle code
+              (VEHICLE_LABELS covers all 5 DB types: Moto / Cab / Hilux / Fuso /
+              Rifani). TODO: source labels from a future GET /vehicle-types
+              catalog so naming stays in lock-step with the backend. */}
           <InfoRow label="Vehicle Type" value={VEHICLE_LABELS[vehicle.vehicleType]} />
           <InfoRow label="Brand" value={vehicle.brand ?? 'Not set'} />
           <InfoRow label="Model" value={vehicle.model ?? 'Not set'} />
           <InfoRow label="Manufacture Year" value={vehicle.manufactureYear?.toString() ?? 'Not set'} />
+          {vehicle.passengerSeats != null ? (
+            <InfoRow label="Passenger Seats" value={vehicle.passengerSeats.toString()} />
+          ) : null}
+          {vehicle.loadCapacityKg != null ? (
+            <InfoRow label="Load Capacity" value={`${vehicle.loadCapacityKg} kg`} />
+          ) : null}
           <InfoRow label="Plate Number" value={vehicle.plateNumber} last />
         </View>
 
@@ -417,24 +434,32 @@ export default function DriverVehicleDetailsScreen() {
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
           <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Documents</AppText>
           <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>Tap any thumbnail to preview the full image.</AppText>
-          {documentCards.map(card => (
-            <DocumentBlock
-              key={card.key}
-              colors={colors}
-              label={card.label}
-              record={card.record}
-              faces={card.faces}
-              warningText={getDocumentExpiryWarning(card.label, card.record?.expiryDate)}
-              galleryStartIndex={card.galleryStartIndex}
-              onPreview={(index) => setPreviewTarget({ index })}
-              onReplaceFace={canReplaceDocuments
-                ? (face) => void pickImageForUpdate(
-                    { kind: 'document', key: card.key, face, label: card.label },
-                    true,
-                  )
-                : undefined}
-            />
-          ))}
+          {documentCards.map(card => {
+            // Re-upload is governed by the server's per-document `editable` flag,
+            // falling back to the vehicle-status rule only when the server has
+            // said nothing yet. A document the server has locked (editable
+            // false) shows a Locked hint instead of a Replace button.
+            const replaceable = isDocumentReplaceable(card.record?.editable, canReplaceDocuments);
+            return (
+              <DocumentBlock
+                key={card.key}
+                colors={colors}
+                label={card.label}
+                record={card.record}
+                faces={card.faces}
+                locked={card.record?.editable === false}
+                warningText={getDocumentExpiryWarning(card.label, card.record?.expiryDate)}
+                galleryStartIndex={card.galleryStartIndex}
+                onPreview={(index) => setPreviewTarget({ index })}
+                onReplaceFace={replaceable
+                  ? (face) => void pickImageForUpdate(
+                      { kind: 'document', key: card.key, face, label: card.label },
+                      true,
+                    )
+                  : undefined}
+              />
+            );
+          })}
         </View>
 
         {/*
@@ -498,7 +523,10 @@ export default function DriverVehicleDetailsScreen() {
           ))}
         </View>
 
-        {canReplaceDocuments && hasUnsavedChanges ? (
+        {/* Any unsaved change can be submitted: a face only becomes editable when
+            the server (or the status fallback) allowed the Replace that produced
+            it, so this no longer needs the vehicle-level status gate. */}
+        {hasUnsavedChanges ? (
           <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
             <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Changes Ready</AppText>
             <AppText style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
@@ -649,6 +677,7 @@ function DocumentBlock({
   faces,
   label,
   galleryStartIndex,
+  locked = false,
   onPreview,
   onReplaceFace,
   warningText,
@@ -658,6 +687,7 @@ function DocumentBlock({
   faces: 1 | 2;
   galleryStartIndex: number;
   label: string;
+  locked?: boolean;
   onPreview: (index: number) => void;
   onReplaceFace?: (face: 0 | 1) => void;
   warningText?: string | null;
@@ -704,6 +734,14 @@ function DocumentBlock({
           </View>
         ))}
       </View>
+      {locked && !onReplaceFace ? (
+        <View style={styles.lockedRow}>
+          <Feather name="lock" size={13} color={colors.mutedForeground} />
+          <AppText style={[styles.lockedText, { color: colors.mutedForeground }]}>
+            Locked — this document is view-only. Contact support to request a re-upload.
+          </AppText>
+        </View>
+      ) : null}
       {warningText ? <AppText style={[styles.warningText, { color: colors.warningHex }]}>{warningText}</AppText> : null}
     </View>
   );
@@ -988,6 +1026,8 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   replaceFaceButtonText: { ...typography.button },
+  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: spacing[2] },
+  lockedText: { flex: 1, ...typography.tiny, lineHeight: 15 },
   warningText: { ...typography.tiny, lineHeight: 16 },
   timeline: { gap: spacing[14] },
   timelineRow: { flexDirection: 'row', gap: semanticSpacing.rowGap },

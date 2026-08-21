@@ -145,7 +145,11 @@ export function useUpdateProfileMutation() {
       setProfileCache(queryClient, context.previous);
     },
     onSettled: async () => {
+      // Re-read the server-backed profile so display fields (name, email) reflect
+      // what the backend persisted, not just the optimistic merge — the edited
+      // name has to show without an app restart. Photo shares this source too.
       await queryClient.invalidateQueries({ queryKey: profileKeys.current() });
+      await queryClient.invalidateQueries({ queryKey: profileKeys.photo() });
     },
   });
 }

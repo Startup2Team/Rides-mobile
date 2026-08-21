@@ -58,6 +58,11 @@ export function reconcileDriverVehicles(
       brand: v.brand ?? b.brand ?? undefined,
       model: v.model ?? b.model ?? undefined,
       manufactureYear: v.manufactureYear ?? b.manufactureYear ?? undefined,
+      // Capacity is backend-owned (migration for all 5 vehicle types); carry it
+      // through so the details screen can show seats / load without it getting
+      // dropped on reconciliation.
+      passengerSeats: v.passengerSeats ?? b.passengerSeats ?? undefined,
+      loadCapacityKg: v.loadCapacityKg ?? b.loadCapacityKg ?? undefined,
     };
   });
 
@@ -75,6 +80,8 @@ export function reconcileDriverVehicles(
       brand: b.brand ?? undefined,
       model: b.model ?? undefined,
       manufactureYear: b.manufactureYear ?? undefined,
+      passengerSeats: b.passengerSeats ?? undefined,
+      loadCapacityKg: b.loadCapacityKg ?? undefined,
     });
   }
   return merged;

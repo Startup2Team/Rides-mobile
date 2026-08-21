@@ -1,4 +1,8 @@
-import { emptyVehicleDocumentSet, resolveVehicleDocuments } from '@/domain/driverVehicleDocuments';
+import {
+  emptyVehicleDocumentSet,
+  isDocumentReplaceable,
+  resolveVehicleDocuments,
+} from '@/domain/driverVehicleDocuments';
 import type { DriverDocument } from '@/services/driverDocuments';
 import type { DriverVehicleDocumentSet } from '@/types';
 
@@ -104,5 +108,32 @@ describe('resolveVehicleDocuments', () => {
 
     expect(resolved.nationalId.reviewStatus).toBe('rejected');
     expect(resolved.nationalId.faces[0]).toBe('https://cdn/id.jpg');
+  });
+
+  it('carries the server editable flag onto the card so re-upload can be gated on it', () => {
+    const resolved = resolveVehicleDocuments({ documents: localSet(), pendingDocumentUpdate: null } as never, [
+      // Locked (view-only) front, admin-opened window on the national id.
+      serverDoc('LICENCE_FRONT', 'https://cdn/licence.jpg', { reviewStatus: 'APPROVED', editable: false }),
+      serverDoc('NATIONAL_ID_FRONT', 'https://cdn/id.jpg', { reviewStatus: 'REJECTED', editable: true }),
+    ]);
+
+    expect(resolved.license.editable).toBe(false);
+    expect(resolved.nationalId.editable).toBe(true);
+  });
+});
+
+describe('isDocumentReplaceable', () => {
+  it('trusts an explicit server signal over the vehicle-status fallback', () => {
+    // Admin opened a re-upload window on a not-yet-approved vehicle.
+    expect(isDocumentReplaceable(true, false)).toBe(true);
+    // Approved document the server has locked — no Replace even on an approved
+    // vehicle (this is the silent-409 the change removes).
+    expect(isDocumentReplaceable(false, true)).toBe(false);
+  });
+
+  it('falls back to the vehicle-status rule when the server said nothing', () => {
+    // Older server / offline: preserve the prior behaviour.
+    expect(isDocumentReplaceable(undefined, true)).toBe(true);
+    expect(isDocumentReplaceable(undefined, false)).toBe(false);
   });
 });

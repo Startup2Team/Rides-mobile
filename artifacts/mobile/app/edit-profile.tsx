@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { GlassHeader, useGlassHeaderMetrics } from '@/components/GlassHeader';
 import { GlassScrollView } from '@/components/GlassScrollView';
@@ -26,6 +27,7 @@ import { updateProfile } from '@/services/profile';
 import { useToast } from '@/context/ToastContext';
 import { useColors } from '@/hooks/useColors';
 import { useProfileActions } from '@/domains/profile';
+import { profileKeys } from '@/query/keys';
 import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
 import { icons } from '@/constants/icons';
 import { radius } from '@/constants/radius';
@@ -37,8 +39,9 @@ export default function EditProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const headerMetrics = useGlassHeaderMetrics();
-  const { user, driverProfile } = useAuth();
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -51,7 +54,10 @@ export default function EditProfileScreen() {
     emergencyContactName?: string;
     emergencyContactPhone?: string;
   }>({});
-  const { profileImage, handleImagePick, handleDeletePhoto, updateUser } = useProfileActions(driverProfile?.profileImage);
+  // One source of truth for the avatar: the shared photo hook reads the account
+  // photo (server `profile_image_url`, cached locally). Seeding from the driver
+  // projection here made Edit Profile diverge from the profile screen — dropped.
+  const { profileImage, handleImagePick, handleDeletePhoto, updateUser } = useProfileActions();
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   // The backend profile sync is async and can land after this screen mounts. The
@@ -121,6 +127,13 @@ export default function EditProfileScreen() {
         emergencyContactName: emergencyContactName.trim() || undefined,
         emergencyContactPhone: normalizedEmergencyPhone || undefined,
       });
+      // Re-read server state so the profile screens (which render the
+      // server-backed `profile.fullName`) reflect the new name immediately,
+      // without waiting for an app restart. The direct PUT above doesn't touch
+      // the query cache on its own — invalidate both profile queries so the name
+      // and photo refetch from the one server-backed source of truth.
+      await queryClient.invalidateQueries({ queryKey: profileKeys.current() });
+      await queryClient.invalidateQueries({ queryKey: profileKeys.photo() });
       showToast('Profile updated', 'info');
       router.back();
     } catch {
@@ -141,7 +154,10 @@ export default function EditProfileScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      // iOS keeps the focused field visible via the scroll view's
+      // automaticallyAdjustKeyboardInsets (keyboardAware below); Android shrinks
+      // the container so the scroll view can bring the field above the keyboard.
+      behavior={Platform.OS === 'android' ? 'height' : undefined}
     >
       <GlassHeader title="Edit Profile" />
 
@@ -152,6 +168,7 @@ export default function EditProfileScreen() {
           { paddingTop: headerMetrics.contentTop + spacing[28], paddingBottom: insets.bottom + FORM_BOTTOM_PADDING },
         ]}
         keyboardShouldPersistTaps="handled"
+        keyboardAware
       >
         {/* Avatar preview */}
         <View style={styles.avatarSection}>

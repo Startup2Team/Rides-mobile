@@ -92,6 +92,15 @@ export interface DriverVehicleDocumentRecord {
   submissionKind: 'initial' | 'replacement';
   submittedAt: string;
   updatedAt: string;
+  /**
+   * Server-derived (GET /v1/driver/documents `editable`): whether the API would
+   * accept a replacement of this document. Approved documents are view-only
+   * until an admin opens a re-upload window, so the screen can gate the Replace
+   * affordance on the server's own signal instead of the vehicle-level status.
+   * Undefined when nothing has been read back from the API yet (older server /
+   * offline), where the screen falls back to the vehicle-status rule.
+   */
+  editable?: boolean;
 }
 
 export interface DriverVehicleDocumentSet {
