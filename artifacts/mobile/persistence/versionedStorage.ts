@@ -27,6 +27,10 @@ export async function saveVersionedStorage<T>(key: string, data: T) {
   await AsyncStorage.setItem(key, serializeVersionedStorage(data));
 }
 
+export async function removeVersionedStorage(key: string) {
+  await AsyncStorage.removeItem(key);
+}
+
 export async function loadVersionedStorage<T>(
   key: string,
   schema: z.ZodType<T, z.ZodTypeDef, unknown>,

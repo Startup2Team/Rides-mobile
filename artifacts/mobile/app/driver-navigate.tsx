@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
+import { CustomerLocationMarker } from '@/components/maps/CustomerLocationMarker';
 import {
   getLocationMapPinCenterOffset,
   LOCATION_MAP_PIN_ANCHOR,
@@ -37,6 +38,9 @@ import { navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPoli
 
 const WAIT_LIMIT_SECONDS = 180;
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
+// Beyond this, the customer marker is shown dimmed — the fix is old enough
+// that its position may no longer be trustworthy (app backgrounded, GPS lost).
+const CUSTOMER_LOCATION_STALE_MS = 30_000;
 const WAITING_CANCEL_REASONS = [
   'Passenger did not show up',
   'Wrong pickup location',
@@ -118,7 +122,7 @@ export default function DriverNavigateScreen() {
   const colors = useColors();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
-  const { currentRide, driverLocation, markArrived, startJourney, cancelRide } = useRide();
+  const { currentRide, driverLocation, customerLocation, markArrived, startJourney, cancelRide } = useRide();
   const { driverProfile, user } = useAuth();
 
   const [waitClockTick, setWaitClockTick] = useState(0);
@@ -168,6 +172,29 @@ export default function DriverNavigateScreen() {
   // route). Falls back to the last context location, then Kigali centre.
   const liveDriverPos = useDeviceLocation(phase === 'pickup' || phase === 'inprogress');
   const driverPos = liveDriverPos ?? driverLocation ?? KIGALI_CENTER;
+
+  // Customer's live marker: track when each fix actually arrived (Coords has
+  // no timestamp of its own) so a stalled feed can be shown dimmed instead of
+  // silently pinning the customer at a position that may no longer be real.
+  const customerLocationUpdatedAtRef = useRef<number | null>(null);
+  const customerStaleTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [, forceCustomerStaleTick] = useState(0);
+  useEffect(() => {
+    if (customerLocation) customerLocationUpdatedAtRef.current = Date.now();
+  }, [customerLocation]);
+  useEffect(() => {
+    timers.clearInterval(customerStaleTickRef.current);
+    customerStaleTickRef.current = null;
+    if (!customerLocation) return;
+    // Re-render periodically purely to re-evaluate staleness against the
+    // clock — the coordinate itself may not change tick to tick.
+    customerStaleTickRef.current = timers.scheduleInterval(() => forceCustomerStaleTick(t => t + 1), 5000);
+    return () => { timers.clearInterval(customerStaleTickRef.current); customerStaleTickRef.current = null; };
+  }, [customerLocation, timers]);
+  const isCustomerLocationStale =
+    customerLocation != null &&
+    customerLocationUpdatedAtRef.current != null &&
+    Date.now() - customerLocationUpdatedAtRef.current > CUSTOMER_LOCATION_STALE_MS;
 
   // Wait clock
   useEffect(() => {
@@ -413,6 +440,30 @@ export default function DriverNavigateScreen() {
         {phase !== 'pickup' && (
           <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} centerOffset={getLocationMapPinCenterOffset()} tracksViewChanges={false}>
             <LocationMapPin variant="destination" mapType={mapType} />
+          </Marker>
+        )}
+        {/* Customer's LIVE position (customer_location WS events) — separate from
+            the static pickup pin above, which just marks where the trip starts.
+            Rendered through the whole trip (product decision: whole-trip
+            tracking) to match how long the customer side actually publishes
+            (CUSTOMER_LOCATION_ACTIVE_STATUSES includes in_progress) — showing
+            it stops in_progress while publishing kept going would just be a
+            marker that silently freezes instead of disappearing. */}
+        {customerLocation && (
+          <Marker
+            coordinate={customerLocation}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+            zIndex={2}
+            title="Customer"
+            description={isCustomerLocationStale ? 'Location may be out of date' : 'Live location'}
+            accessibilityLabel={isCustomerLocationStale ? 'Customer location, may be out of date' : 'Customer, live location'}
+          >
+            <CustomerLocationMarker
+              initial={customerInitial}
+              imageUri={currentRide.customerImage ?? null}
+              stale={isCustomerLocationStale}
+            />
           </Marker>
         )}
         {phase !== 'waiting' && remainingRoute && (

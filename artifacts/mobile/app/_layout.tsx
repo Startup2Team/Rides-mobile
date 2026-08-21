@@ -61,6 +61,11 @@ import { useDriverFlowNavigation } from '@/navigation/useDriverFlowNavigation';
 import { usePushNotifications } from '@/services/usePushNotifications';
 import { replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { initializeMonitoring, reportRuntimeError } from '@/observability/monitoring';
+// Side-effect only: registers the background customer-location TaskManager
+// task. Must be imported unconditionally, before any ride exists — the OS can
+// relaunch the app in the background purely to deliver a queued location fix,
+// and a task that isn't already defined by then silently drops the delivery.
+import '@/services/customerLocationBackgroundTask';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessDriverMode, isProtectedDriverPath } from '@/utils/driverVerification';
 import { bootstrapShadowRideProjection, stopShadowRideProjection } from '@/domains/ride/shadow';

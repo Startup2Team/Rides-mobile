@@ -4,8 +4,31 @@ import { getAccessToken } from '@/persistence/authTokens';
 // requests to match on, plus lifecycle/negotiation events for the active ride.
 // Same Bearer-header auth + self-reconnect as the customer socket.
 
+// Known event types the backend pushes on this socket. Unlike
+// CUSTOMER_TRACKING_EVENT_TYPES this isn't consumed as a runtime allow-list
+// (DriverSocketEvent.type stays a plain string so an unrecognised type never
+// throws) — it exists purely so a new event type is documented in one place.
+// `customer_location` mirrors `driver_location` on the customer socket: the
+// customer's live position `{lat, lng}` while the ride is active, and the
+// `ride_state` reconnect replay may also carry it as `customer_lat`/`customer_lng`.
+export const DRIVER_SOCKET_EVENT_TYPES = [
+  'ride_request',
+  'ride_requested',
+  'new_ride_request',
+  'driver_location',
+  'customer_location',
+  'ride_state',
+  'ride_cancelled',
+  'ride_confirmed',
+  'negotiation_message',
+  'negotiation_declined',
+  'negotiation_text',
+] as const;
+
+export type DriverSocketEventType = (typeof DRIVER_SOCKET_EVENT_TYPES)[number];
+
 export interface DriverSocketEvent {
-  type: string;
+  type: DriverSocketEventType | string;
   payload: Record<string, unknown>;
 }
 

@@ -22,6 +22,8 @@
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Rides uses your precise location while the app is open to find nearby vehicles and set accurate pickup locations.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Rides shares your live location with your driver during an active trip, even when you switch to another app, so they can find you and follow your progress. This only runs while you have a ride in progress.",
+        "NSLocationAlwaysUsageDescription": "Rides shares your live location with your driver during an active trip, even when you switch to another app, so they can find you and follow your progress. This only runs while you have a ride in progress.",
         "NSCameraUsageDescription": "Rides needs access to your camera to take a profile picture.",
         "NSPhotoLibraryUsageDescription": "Rides needs access to your photo library to select a profile picture.",
         "UIBackgroundModes": [
@@ -87,7 +89,12 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Rides uses your precise location while the app is open to find nearby vehicles and set accurate pickup locations."
+          "locationWhenInUsePermission": "Rides uses your precise location while the app is open to find nearby vehicles and set accurate pickup locations.",
+          "locationAlwaysAndWhenInUsePermission": "Rides shares your live location with your driver during an active trip, even when you switch to another app, so they can find you and follow your progress. This only runs while you have a ride in progress.",
+          "locationAlwaysPermission": "Rides shares your live location with your driver during an active trip, even when you switch to another app, so they can find you and follow your progress. This only runs while you have a ride in progress.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "@react-native-community/datetimepicker",

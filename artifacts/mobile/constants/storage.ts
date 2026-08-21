@@ -20,6 +20,10 @@ export const STORAGE_KEYS = {
   packageOfferSourceCache: '@rides_package_offer_source_cache',
   lockedPackageOffers: '@rides_locked_package_offers',
   roleSync: '@rides_role_sync',
+  // The ride the background location TaskManager task is currently streaming
+  // for. Read by a task callback that can run headless (no React tree
+  // mounted), so it can't come from RideProvider's in-memory state.
+  customerLocationBackgroundRideId: '@rides_customer_location_bg_ride_id',
 } as const;
 
 /**
@@ -44,7 +48,11 @@ export const STORAGE_CLASSIFICATION = {
     STORAGE_KEYS.savedLocations,
     STORAGE_KEYS.lockedPackageOffers,
   ],
-  internal: [STORAGE_KEYS.referralEvents, STORAGE_KEYS.roleSync],
+  internal: [
+    STORAGE_KEYS.referralEvents,
+    STORAGE_KEYS.roleSync,
+    STORAGE_KEYS.customerLocationBackgroundRideId,
+  ],
   cacheable: [
     STORAGE_KEYS.packageCatalogCache,
     STORAGE_KEYS.packageCampaignCache,

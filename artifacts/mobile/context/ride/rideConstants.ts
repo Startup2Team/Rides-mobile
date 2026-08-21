@@ -1,4 +1,4 @@
-import type { VehicleType } from '@/types';
+import type { RideStatus, VehicleType } from '@/types';
 
 // Last-resort reaper for the customer search. Ordering matters — three layers:
 // 1. Backend give-up (MATCH_GIVE_UP_SECONDS) → ride_cancelled event, which
@@ -25,6 +25,22 @@ export const ARRIVING_TRACKING_NOISE = 0.002;
 export const JOURNEY_TRACKING_INTERVAL_MS = 3000;
 export const JOURNEY_TRACKING_NOISE = 0.001;
 export const RIDE_HISTORY_LIMIT = 50;
+
+// How often the customer streams their real GPS to the driver while a ride is
+// active (see RideProvider's customer-location publish effect) — matches the
+// driver's own reporting cadence in app/(driver)/index.tsx.
+export const CUSTOMER_LOCATION_PUBLISH_INTERVAL_MS = 10_000;
+
+// The ride is "active" for location-publish purposes from the fare being
+// locked in through the trip itself — not while still negotiating, and never
+// once the ride is completed/cancelled (product decision: whole-trip
+// tracking, but nothing before acceptance and nothing after the ride ends).
+export const CUSTOMER_LOCATION_ACTIVE_STATUSES: ReadonlySet<RideStatus> = new Set([
+  'confirmed',
+  'arriving',
+  'arrived',
+  'in_progress',
+]);
 
 // ── Negotiation fare guardrails ──────────────────────────────────────────────
 // Client-side mirror of the backend hard per-vehicle floor/cap in
