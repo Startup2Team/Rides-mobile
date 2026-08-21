@@ -7,6 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { Alert, AppState, type AppStateStatus } from 'react-native';
+import * as Location from 'expo-location';
 import {
   BookingFormDraft,
   Coords,
@@ -39,6 +40,8 @@ import { cloneBookingDraft, generateRideId } from './rideUtils';
 import {
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   CONFIRMED_RIDE_START_DELAY_MS,
+  CUSTOMER_LOCATION_ACTIVE_STATUSES,
+  CUSTOMER_LOCATION_PUBLISH_INTERVAL_MS,
   CUSTOMER_SEARCH_TIMEOUT_MS,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
@@ -56,6 +59,7 @@ import {
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
 import { createRide as createBackendRide, cancelRide as cancelBackendRide, getActiveRide } from '@/services/rides';
+import { updateCustomerLocation } from '@/services/customerLocation';
 import { getActiveDriverRide } from '@/services/driverRides';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import { estimateFare } from '@/services/fare';
@@ -89,6 +93,7 @@ import {
   isLifecycleEvent,
   localStatusFromBackend,
   negotiationMessagesFromHistory,
+  parseCustomerCoords,
   parseDriverCoords,
   rideFromActiveRideSnapshot,
   type BackendEventPayload,
@@ -129,6 +134,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const [restoreBookingOnHomeFocus, setRestoreBookingOnHomeFocus] = useState(false);
   const [rideHistory, setRideHistory] = useState<Ride[]>([]);
   const [driverLocation, setDriverLocation] = useState<Coords | null>(null);
+  // Driver-side only: the customer's live position, from `customer_location`
+  // WS events (see handleDriverSocketEvent). Never populated on the customer's
+  // own context.
+  const [customerLocation, setCustomerLocation] = useState<Coords | null>(null);
   const [pendingRequest, setPendingRequest] = useState<Ride | null>(null);
   const [isMatchingPaused, setIsMatchingPaused] = useState(false);
   const driverIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -738,6 +747,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
     setDriverLocation(null);
+    setCustomerLocation(null);
     setRestoreBookingOnHomeFocus(true);
     const currentRideSnapshot = currentRideRef.current;
     try {
@@ -958,6 +968,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       return null;
     });
     setDriverLocation(null);
+    setCustomerLocation(null);
     if (!currentRideSnapshot) return;
     const completedAt = new Date().toISOString();
     const actorRole = source === 'driver' ? 'driver' : 'system';
@@ -1265,12 +1276,27 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // The customer's live position, streamed while the ride is active (see
+      // RideProvider's customer-location publish effect). Same shape as
+      // driver_location, just the other party.
+      if (type === 'customer_location') {
+        const coords = parseCustomerCoords(payload);
+        if (coords) setCustomerLocation(coords);
+        return;
+      }
+
       // The server replays a ride_state snapshot on every (re)connect. It used
       // to be silently discarded here, so a driver whose socket reconnected
       // mid-ride never resynced. Apply it to the local ride when one exists;
       // on a cold reconnect with no local ride the snapshot only carries the
-      // status, so pull the full ride over REST instead.
+      // status, so pull the full ride over REST instead. The replay may also
+      // carry the customer's last-known fix as customer_lat/customer_lng —
+      // seed it regardless of whether a local ride exists yet, so a driver
+      // whose socket reconnects mid-ride doesn't wait a full publish interval
+      // to see the customer marker again.
       if (type === 'ride_state') {
+        const customerCoords = parseCustomerCoords(payload);
+        if (customerCoords) setCustomerLocation(customerCoords);
         const local = localStatusFromBackend(payload.status);
         if (!local) return;
         backendDrivingRef.current = true;
@@ -1292,6 +1318,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         timers.scheduleTimeout(() => {
           setCurrentRide(prev => (prev?.status === 'cancelled' ? null : prev));
           setDriverLocation(null);
+          setCustomerLocation(null);
         }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
         return;
       }
@@ -1347,6 +1374,55 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       driverSocketRef.current = null;
     };
   }, [handleDriverSocketEvent, isDriverSocketActive]);
+
+  // ── Flow J: customer live location publish ───────────────────────────────
+  // Streams the customer's real GPS to the driver (POST …/customer-location)
+  // for the whole active window of the ride — from the fare being locked in
+  // (CONFIRMED) through the trip itself (IN_PROGRESS), never before
+  // acceptance and never once the ride ends. Mirrors the driver's own
+  // location-report loop in app/(driver)/index.tsx: fire immediately + every
+  // CUSTOMER_LOCATION_PUBLISH_INTERVAL_MS, fire-and-forget. The backend
+  // pushes the fix back out to the driver as a `customer_location` WS event
+  // (handled above) — this effect only publishes, it never reads the result.
+  const isCustomerLocationPublishActive =
+    auth?.user?.mode !== 'driver' &&
+    Boolean(trackedRideId) &&
+    currentRide != null &&
+    CUSTOMER_LOCATION_ACTIVE_STATUSES.has(currentRide.status);
+  React.useEffect(() => {
+    if (!isCustomerLocationPublishActive || !trackedRideId) return;
+    let cancelled = false;
+    let permissionGranted = false;
+    const publish = async () => {
+      try {
+        if (!permissionGranted) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          permissionGranted = status === 'granted';
+        }
+        if (!permissionGranted || cancelled) return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (cancelled) return;
+        // expo-location reports speed in metres/second; the backend field is
+        // speed_kmh, so convert (m/s → km/h) before sending.
+        const speedMps = loc.coords.speed;
+        await updateCustomerLocation(trackedRideId, {
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          heading: loc.coords.heading ?? undefined,
+          speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
+        });
+      } catch {
+        // Endpoint not deployed yet, offline, or permission revoked mid-ride —
+        // ignore and retry on the next tick. Never surfaced to the rider.
+      }
+    };
+    void publish();
+    const interval = setInterval(() => void publish(), CUSTOMER_LOCATION_PUBLISH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isCustomerLocationPublishActive, trackedRideId]);
 
   // Resume check: once auth is ready (and again on every mode change), and on
   // each return to the foreground. A single cheap GET that no-ops while a ride
@@ -1432,6 +1508,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     currentRide,
     rideHistory,
     driverLocation,
+    customerLocation,
     pendingRequest,
     createRide,
     cancelledSearchDraft,
@@ -1473,6 +1550,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     declineDriverOffer,
     declineRideRequest,
     driverLocation,
+    customerLocation,
     isMatchingPaused,
     loadHistory,
     markArrived,

@@ -69,6 +69,16 @@ export function parseDriverCoords(payload: BackendEventPayload): Coords | null {
   return { latitude: lat, longitude: lng };
 }
 
+// Customer position from a `customer_location` event, or from the optional
+// customer_lat/customer_lng fields on a driver `ride_state` replay — tolerant
+// of the same field-spelling variance as parseDriverCoords.
+export function parseCustomerCoords(payload: BackendEventPayload): Coords | null {
+  const lat = num(payload.lat ?? payload.latitude ?? payload.customer_lat ?? payload.customer_latitude);
+  const lng = num(payload.lng ?? payload.longitude ?? payload.customer_lng ?? payload.customer_longitude);
+  if (lat === undefined || lng === undefined) return null;
+  return { latitude: lat, longitude: lng };
+}
+
 // Merge driver identity from a `driver_matched` payload into the ride and move
 // it into negotiation (the customer then negotiates the fare).
 export function applyDriverMatched(ride: Ride, payload: BackendEventPayload): Ride {

@@ -13,6 +13,7 @@ const mockRecordCompletedRide = jest.fn();
 
 let mockRide: Ride | null;
 let mockDriverLocation = { latitude: -1.9366, longitude: 30.1011 };
+let mockCustomerLocation: { latitude: number; longitude: number } | null = null;
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -67,7 +68,13 @@ jest.mock('react-native-maps', () => {
   return {
     __esModule: true,
     default: MapView,
-    Marker: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    // Forward accessibilityLabel so tests can assert which marker rendered —
+    // everything else about a real Marker (coordinate, anchor, ...) is
+    // irrelevant to this screen's tests.
+    Marker: ({ children, accessibilityLabel }: { children: React.ReactNode; accessibilityLabel?: string }) => {
+      const { View: MockView } = require('react-native');
+      return <MockView accessibilityLabel={accessibilityLabel}>{children}</MockView>;
+    },
     PROVIDER_DEFAULT: null,
   };
 });
@@ -209,6 +216,7 @@ jest.mock('@/context/RideContext', () => ({
   useRide: () => ({
     currentRide: mockRide,
     driverLocation: mockDriverLocation,
+    customerLocation: mockCustomerLocation,
     markArrived: mockMarkArrived,
     startJourney: mockStartJourney,
     completeRide: mockCompleteRide,
@@ -242,6 +250,7 @@ describe('DriverNavigateScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDriverLocation = { latitude: -1.9366, longitude: 30.1011 };
+    mockCustomerLocation = null;
     setRide('arriving');
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
@@ -444,5 +453,27 @@ describe('DriverNavigateScreen', () => {
     expect(mockShowToast).toHaveBeenCalledWith('Ride cancelled: Safety concern', 'info');
     const { router } = require('expo-router');
     expect(router.replace).toHaveBeenCalledWith('/(driver)');
+  });
+
+  test('shows the customer live marker while heading to pickup and hides it once the trip starts', () => {
+    mockCustomerLocation = { latitude: -1.94, longitude: 30.06 };
+    setRide('arriving');
+
+    const { rerender } = render(<DriverNavigateScreen />);
+    expect(screen.getByLabelText('Customer, live location')).toBeTruthy();
+
+    setRide('in_progress');
+    rerender(<DriverNavigateScreen />);
+    expect(screen.queryByLabelText('Customer, live location')).toBeNull();
+  });
+
+  test('does not render a customer marker until a live location has arrived', () => {
+    mockCustomerLocation = null;
+    setRide('arriving');
+
+    render(<DriverNavigateScreen />);
+
+    expect(screen.queryByLabelText('Customer, live location')).toBeNull();
+    expect(screen.queryByLabelText('Customer location, may be out of date')).toBeNull();
   });
 });

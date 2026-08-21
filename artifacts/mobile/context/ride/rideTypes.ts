@@ -16,6 +16,10 @@ export interface RideContextType {
   currentRide: Ride | null;
   rideHistory: Ride[];
   driverLocation: Coords | null;
+  // Driver-side only: the customer's live position during an active ride
+  // (from `customer_location` WS events / the ride_state replay's
+  // customer_lat/customer_lng). Always null on the customer's own context.
+  customerLocation: Coords | null;
   pendingRequest: Ride | null;
   createRide: (
     pickup: RideLocation,

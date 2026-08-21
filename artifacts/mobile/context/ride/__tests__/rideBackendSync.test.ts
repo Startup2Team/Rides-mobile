@@ -10,6 +10,7 @@ import {
   lifecycleStatusForEvent,
   localStatusFromBackend,
   negotiationMessagesFromHistory,
+  parseCustomerCoords,
   parseDriverCoords,
   rideFromActiveRideSnapshot,
   type NegotiationHistoryThreadEntry,
@@ -56,6 +57,21 @@ describe('rideBackendSync', () => {
   test('parses driver coords from a driver_matched payload', () => {
     expect(parseDriverCoords({ lat: -1.9441, lng: 30.0619 })).toEqual({ latitude: -1.9441, longitude: 30.0619 });
     expect(parseDriverCoords({})).toBeNull();
+  });
+
+  test('parses customer coords from a customer_location payload', () => {
+    expect(parseCustomerCoords({ lat: -1.9441, lng: 30.0619 })).toEqual({ latitude: -1.9441, longitude: 30.0619 });
+    expect(parseCustomerCoords({})).toBeNull();
+  });
+
+  test('parses customer coords from the customer_lat/customer_lng fields on a ride_state replay', () => {
+    expect(parseCustomerCoords({ status: 'IN_PROGRESS', customer_lat: -1.95, customer_lng: 30.05 })).toEqual({
+      latitude: -1.95,
+      longitude: 30.05,
+    });
+    // ride_state replays without the optional fields (older backend, or no fix
+    // yet) must not throw or produce garbage coords.
+    expect(parseCustomerCoords({ status: 'IN_PROGRESS' })).toBeNull();
   });
 
   test('applyDriverMatched merges the real matched payload into the ride', () => {

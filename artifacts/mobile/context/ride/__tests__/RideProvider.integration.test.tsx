@@ -30,6 +30,7 @@ const mockShadowWireAcceptRideCommand = jest.fn();
 const mockShadowWireDeclineRideCommand = jest.fn();
 const mockShadowWireStartRideCommand = jest.fn();
 const mockShadowWireCompleteRideCommand = jest.fn();
+const mockUpdateCustomerLocation = jest.fn(async (..._args: unknown[]) => undefined);
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
@@ -76,6 +77,11 @@ jest.mock('@/services/driverNegotiation', () => ({
   proposeFare: jest.fn(async () => undefined),
   acceptFare: jest.fn(async () => undefined),
   lockManualFare: jest.fn(async () => undefined),
+}));
+// The customer live-location publish effect fires as soon as a ride is
+// CONFIRMED — stub it so tests never make a real backend call.
+jest.mock('@/services/customerLocation', () => ({
+  updateCustomerLocation: (...args: unknown[]) => mockUpdateCustomerLocation(...args),
 }));
 jest.mock('@/services/customerTrackingSocket', () => ({
   openCustomerTrackingSocket: (_rideId: string, handlers: any) => {
@@ -188,6 +194,7 @@ describe('RideProvider lifecycle orchestration', () => {
     mockShadowWireDeclineRideCommand.mockReset();
     mockShadowWireStartRideCommand.mockReset();
     mockShadowWireCompleteRideCommand.mockReset();
+    mockUpdateCustomerLocation.mockClear();
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -735,6 +742,79 @@ describe('RideProvider lifecycle orchestration', () => {
       mockCapturedDriverHandlers.onEvent({ type: 'ride_state', payload: { status: 'IN_PROGRESS' } });
     });
     expect(result.current.currentRide?.status).toBe('in_progress');
+  });
+
+  test('driver socket customer_location events update customerLocation', async () => {
+    mockAuthDriverProfile = driverProfileFixture();
+    mockGetActiveDriverRide.mockResolvedValue(activeSnapshot({ status: 'IN_PROGRESS' }));
+
+    const { result } = renderRideProvider();
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('in_progress'));
+    expect(result.current.customerLocation).toBeNull();
+
+    await waitFor(() => expect(mockCapturedDriverHandlers).not.toBeNull());
+    await act(async () => {
+      mockCapturedDriverHandlers.onEvent({ type: 'customer_location', payload: { lat: -1.95, lng: 30.05 } });
+    });
+    expect(result.current.customerLocation).toEqual({ latitude: -1.95, longitude: 30.05 });
+
+    // A reconnect's ride_state replay carries customer_lat/customer_lng and
+    // must seed the same state — otherwise a driver whose socket reconnects
+    // mid-ride sees a stale customer marker until the next publish tick.
+    await act(async () => {
+      mockCapturedDriverHandlers.onEvent({
+        type: 'ride_state',
+        payload: { status: 'IN_PROGRESS', customer_lat: -1.96, customer_lng: 30.06 },
+      });
+    });
+    expect(result.current.customerLocation).toEqual({ latitude: -1.96, longitude: 30.06 });
+
+    // The ride ending must not leave a stale customer marker behind.
+    await act(async () => {
+      mockCapturedDriverHandlers.onEvent({ type: 'ride_cancelled', payload: {} });
+    });
+    act(() => {
+      jest.advanceTimersByTime(CANCELLED_RIDE_CLEAR_DELAY_MS);
+    });
+    expect(result.current.customerLocation).toBeNull();
+  });
+
+  test('customer live-location publish loop runs only while the ride is active', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+
+    await createAndMatchRide(result);
+    expect(mockUpdateCustomerLocation).not.toHaveBeenCalled();
+
+    // The driver's fare offer, accepted → CONFIRMED, is the start of the
+    // publish window (whole-trip tracking begins at acceptance, not before).
+    await emitCustomer('negotiation_message', { actor_role: 'DRIVER', amount: 3000 });
+    await act(async () => {
+      result.current.acceptDriverOffer();
+    });
+    expect(result.current.currentRide?.status).toBe('confirmed');
+    await flushPromises();
+    expect(mockUpdateCustomerLocation).toHaveBeenCalledWith(
+      'backend-ride-1',
+      expect.objectContaining({ lat: -1.9441, lng: 30.0619 }),
+    );
+
+    const callsWhileActive = mockUpdateCustomerLocation.mock.calls.length;
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
+    });
+    expect(mockUpdateCustomerLocation.mock.calls.length).toBeGreaterThan(callsWhileActive);
+
+    // Ride completes → the effect must tear down immediately, not merely stop
+    // being scheduled — a force-killed-and-relaunched app has no way to leak
+    // this interval, but a live app session must not keep POSTing either.
+    act(() => result.current.completeRide());
+    const callsAfterCompletion = mockUpdateCustomerLocation.mock.calls.length;
+    act(() => {
+      jest.advanceTimersByTime(30_000);
+    });
+    expect(mockUpdateCustomerLocation.mock.calls.length).toBe(callsAfterCompletion);
   });
 
   test('409 RIDE_ALREADY_ACTIVE rejoins the real ride instead of faking a search', async () => {
