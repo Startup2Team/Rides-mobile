@@ -1,7 +1,7 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
 import type { DriverApplicationRejectionSummary } from '@/domain/verificationSubmissions';
@@ -41,10 +41,12 @@ export function DriverApplicationRejectionBanner({
   colors,
   rejectionSummary,
   rejectionReason,
+  onPress,
 }: {
   colors: ReturnType<typeof useColors>;
   rejectionSummary?: DriverApplicationRejectionSummary | null;
   rejectionReason?: string | null;
+  onPress?: () => void;
 }) {
   if (!rejectionSummary && !rejectionReason) return null;
 
@@ -52,14 +54,20 @@ export function DriverApplicationRejectionBanner({
   const documents = rejectionSummary?.rejectedDocuments ?? [];
   const reviewedAt = rejectionSummary?.reviewedAt ? new Date(rejectionSummary.reviewedAt) : null;
 
+  const CardContainer = onPress ? TouchableOpacity : View;
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.destructiveHex + '12', borderColor: colors.destructiveHex + '28' }]}>
+    <CardContainer
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={[styles.card, { backgroundColor: colors.destructiveHex + '12', borderColor: colors.destructiveHex + '28' }]}
+    >
       <View style={styles.header}>
         <Feather name="alert-circle" size={18} color={colors.destructive} />
         <AppText style={[styles.title, { color: colors.destructive }]}>Reviewer requested changes</AppText>
       </View>
       <AppText style={[styles.message, { color: colors.foreground }]}>
-        {rejectionSummary?.reason ?? rejectionReason ?? 'Your application was rejected. Please review the items below and resubmit.'}
+        {rejectionSummary?.reason ?? rejectionReason ?? 'Your application requires updates. Please review the requested items below.'}
       </AppText>
       {!!fields.length && (
         <View style={styles.group}>
@@ -94,7 +102,14 @@ export function DriverApplicationRejectionBanner({
       {rejectionSummary?.submissionId ? (
         <AppText style={[styles.meta, { color: colors.mutedForeground }]}>Submission ID: {rejectionSummary.submissionId}</AppText>
       ) : null}
-    </View>
+
+      {onPress && (
+        <View style={[styles.actionRow, { backgroundColor: colors.destructiveHex + '18' }]}>
+          <AppText style={[styles.actionText, { color: colors.destructive }]}>Tap here to update requested items</AppText>
+          <Feather name="arrow-right" size={16} color={colors.destructive} />
+        </View>
+      )}
+    </CardContainer>
   );
 }
 
@@ -143,5 +158,18 @@ const styles = StyleSheet.create({
   meta: {
     ...typography.tiny,
     lineHeight: 16,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  actionText: {
+    ...typography.caption,
+    fontWeight: '700',
   },
 });

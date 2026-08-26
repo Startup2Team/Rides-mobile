@@ -133,6 +133,7 @@ export interface DriverApplicationInput {
 
 // POST /driver/apply — creates the driver application (status PENDING → admin review).
 export async function applyAsDriver(input: DriverApplicationInput): Promise<void> {
+  console.log('[MOBILE:DRIVER_APPLY] 🚀 Submitting driver application input:', input);
   const body: Record<string, unknown> = {
     transport_type: toBackendTransportType(input.vehicleType),
     vehicle_plate: input.vehiclePlate,
@@ -145,17 +146,47 @@ export async function applyAsDriver(input: DriverApplicationInput): Promise<void
     district: input.district,
     sector: input.sector,
     cell: input.cell,
-    village: input.village,
     national_id_number: input.nationalIdNumber,
     national_id_country: input.nationalIdCountry,
+
+    // Dual camelCase aliases
+    vehicleType: input.vehicleType,
+    vehiclePlate: input.vehiclePlate,
+    licenseNumber: input.licenseNumber,
+    dateOfBirth: input.dateOfBirth,
+    momoPayCode: input.momoPayCode,
+    momoProvider: input.momoProvider,
   };
   if (input.gender) body.gender = input.gender;
   if (input.passengerSeats !== undefined) body.passenger_seats = input.passengerSeats;
   if (input.loadCapacityKg !== undefined) body.load_capacity_kg = input.loadCapacityKg;
-  if (input.licenseExpiryDate) body.license_expiry_date = input.licenseExpiryDate;
-  if (input.insuranceExpiryDate) body.insurance_expiry_date = input.insuranceExpiryDate;
-  if (input.authorizationExpiryDate) body.authorization_expiry_date = input.authorizationExpiryDate;
-  await getAppBackendClient().post('/v1/driver/apply', { body });
+  if (input.licenseExpiryDate) {
+    body.license_expiry_date = input.licenseExpiryDate;
+    body.licenseExpiryDate = input.licenseExpiryDate;
+  }
+  if (input.insuranceExpiryDate) {
+    body.insurance_expiry_date = input.insuranceExpiryDate;
+    body.insuranceExpiryDate = input.insuranceExpiryDate;
+  }
+  if (input.authorizationExpiryDate) {
+    body.authorization_expiry_date = input.authorizationExpiryDate;
+    body.authorizationExpiryDate = input.authorizationExpiryDate;
+  }
+
+  console.log('[MOBILE:DRIVER_APPLY] 📦 Sending backend body:', JSON.stringify(body));
+
+  try {
+    const res = await getAppBackendClient().post('/v1/driver/apply', { body });
+    console.log('[MOBILE:DRIVER_APPLY] ✅ Driver application POST /v1/driver/apply succeeded:', res);
+  } catch (err: any) {
+    console.error(
+      '[MOBILE:DRIVER_APPLY_ERROR] ❌ Driver application POST /v1/driver/apply failed:',
+      err?.message,
+      '| HTTP Status:', err?.status,
+      '| Server Error Cause:', JSON.stringify(err?.cause ?? err?.details ?? err),
+    );
+    throw err;
+  }
 }
 
 export async function acceptDriverPolicy(): Promise<void> {

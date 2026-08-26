@@ -25,8 +25,12 @@ const BACKEND_CODE_TO_VEHICLE: Record<BackendTransportType, VehicleType> = {
   HEAVY_FUSO: 'fuso',
 };
 
-export function toBackendTransportType(vehicle: VehicleType): BackendTransportType {
-  return VEHICLE_BACKEND_CODE[vehicle];
+export function toBackendTransportType(vehicle: string): BackendTransportType {
+  const upper = (vehicle || '').toUpperCase();
+  if (upper === 'MOTO_BIKE' || upper === 'CAB_TAXI' || upper === 'HEAVY_FUSO' || upper === 'LIGHT_HILUX' || upper === 'TUK_TUK') {
+    return upper as BackendTransportType;
+  }
+  return VEHICLE_BACKEND_CODE[vehicle as VehicleType] ?? 'MOTO_BIKE';
 }
 
 export function fromBackendTransportType(code: string): VehicleType | null {

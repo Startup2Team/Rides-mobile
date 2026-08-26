@@ -65,7 +65,7 @@ export async function getTrackedCustomerLocationBackgroundRideId(): Promise<stri
 // once from app/_layout.tsx so the task is registered from cold start. A task
 // name that isn't already defined when the OS tries to deliver to it is
 // silently dropped.
-TaskManager.defineTask(CUSTOMER_LOCATION_BACKGROUND_TASK, async ({ data, error }) => {
+TaskManager.defineTask(CUSTOMER_LOCATION_BACKGROUND_TASK, async ({ data, error }: any) => {
   if (error) {
     reportOperationalFailure('ride.customerLocation.backgroundTask', error);
     return;

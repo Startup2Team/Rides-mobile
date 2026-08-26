@@ -18,8 +18,9 @@ const EXPIRY_FIELDS: Partial<Record<DocumentKey, keyof Pick<DriverOnboardingForm
   authorization: 'authorizationExpiryDate',
 };
 
-export function DocumentUploadSection({ approvedDocuments = [], colors, docs, errors, form, vehiclePhotos, takeVehiclePhoto, takeDocumentPhoto, update }: {
+export function DocumentUploadSection({ approvedDocuments = [], rejectedDocuments = [], colors, docs, errors, form, vehiclePhotos, takeVehiclePhoto, takeDocumentPhoto, update }: {
   approvedDocuments?: DocumentKey[];
+  rejectedDocuments?: string[];
   colors: ReturnType<typeof useColors>; docs: Record<DocumentKey, DocFaces>; errors: Record<string, string>; form: DriverOnboardingForm;
   vehiclePhotos?: Record<VehiclePhotoKey, string | null>;
   takeVehiclePhoto?: (key: VehiclePhotoKey) => Promise<void>;
@@ -30,10 +31,21 @@ export function DocumentUploadSection({ approvedDocuments = [], colors, docs, er
   minimumExpiryDate.setHours(0, 0, 0, 0);
   minimumExpiryDate.setDate(minimumExpiryDate.getDate() + 1);
 
+  const displayDocuments = DOCUMENTS.filter(doc => {
+    if (rejectedDocuments && rejectedDocuments.length > 0) {
+      return rejectedDocuments.includes(doc.key);
+    }
+    return true;
+  });
+
   return <View style={styles.section}>
     <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Document Photos</AppText>
-    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>Capture clear photos of each document. Approved items are locked and do not require re-uploading.</AppText>
-    {DOCUMENTS.map(document => {
+    <AppText style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
+      {rejectedDocuments && rejectedDocuments.length > 0
+        ? 'Please update ONLY the specific document(s) requested for review below.'
+        : 'Capture clear photos of each document. Approved items are locked and do not require re-uploading.'}
+    </AppText>
+    {displayDocuments.map(document => {
       const isApproved = approvedDocuments.includes(document.key);
       return (
         <View key={document.key} style={styles.docRow}>

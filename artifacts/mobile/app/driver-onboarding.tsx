@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -114,6 +115,13 @@ export default function DriverOnboarding() {
       setRejectionSummary(summary);
       if (summary) {
         setErrors(current => ({ ...current, ...buildRejectionErrors(summary) }));
+        if (summary.rejectedFields && summary.rejectedFields.some(f => ['brand', 'model', 'plateNumber'].includes(f))) {
+          setStep(0);
+        } else if (summary.rejectedFields && summary.rejectedFields.some(f => ['licenseNumber', 'nationalId', 'dob', 'province', 'district', 'sector', 'cell', 'village', 'momoCode'].includes(f))) {
+          setStep(1);
+        } else if (summary.rejectedDocuments && summary.rejectedDocuments.length > 0) {
+          setStep(2);
+        }
       }
     })();
   }, [draftLoaded, driverProfile?.verificationStatus, setErrors, user?.id]);
@@ -201,8 +209,14 @@ export default function DriverOnboarding() {
         },
         documents,
       );
-    } catch {
-      // Local submission still recorded; the backend application can be retried.
+    } catch (err: any) {
+      console.error('[MOBILE:ONBOARDING_SUBMIT_ERROR] ❌ Driver onboarding submission error:', err);
+      Alert.alert(
+        'Submission Error',
+        'Could not submit your application to the server. Please check your connection and try again.',
+      );
+      setLoading(false);
+      return;
     }
 
     await removeStoredDriverOnboardingDraft();
@@ -264,6 +278,7 @@ export default function DriverOnboarding() {
         )}
         {step === 2 && (
           <DocumentUploadSection
+            rejectedDocuments={rejectionSummary?.rejectedDocuments}
             colors={colors}
             docs={docs}
             errors={errors}

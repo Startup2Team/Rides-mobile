@@ -89,7 +89,7 @@ export default function DriverSubmissionConfirmation() {
   );
 
   useEffect(() => {
-    if (!isRejected || !user?.id) {
+    if (isApproved || !user?.id) {
       setRejectionSummary(null);
       return;
     }
@@ -98,7 +98,7 @@ export default function DriverSubmissionConfirmation() {
       const summary = await getLatestDriverApplicationRejectionSummary(user.id);
       setRejectionSummary(summary);
     })();
-  }, [isRejected, user?.id]);
+  }, [isApproved, user?.id]);
 
   // Pull the real approval status whenever this screen is focused, and poll while
   // still pending so an approval (admin action or dev auto-approve) flips the UI
@@ -207,12 +207,13 @@ export default function DriverSubmissionConfirmation() {
           ))}
         </View>
 
-        {/* Rejection feedback */}
-        {isRejected && (
+        {/* Rejection / Re-upload feedback */}
+        {(isRejected || Boolean(rejectionSummary) || Boolean(driverProfile?.rejectionReason)) && (
           <DriverApplicationRejectionBanner
             colors={colors}
-            rejectionReason={driverProfile.rejectionReason}
+            rejectionReason={driverProfile?.rejectionReason}
             rejectionSummary={rejectionSummary}
+            onPress={() => router.push('/driver-onboarding')}
           />
         )}
 
@@ -220,10 +221,18 @@ export default function DriverSubmissionConfirmation() {
 
       {/* ── Actions pinned to bottom ── */}
       <Animated.View style={[styles.actions, { opacity: contentOpacity }]}>
-        {(isApproved || isRejected) && (
+        {(isApproved || isRejected || Boolean(rejectionSummary) || Boolean(driverProfile?.rejectionReason)) && (
           <AppButton
             title={isApproved ? 'Continue to driver mode' : 'Update Application'}
-            onPress={handlePrimaryAction}
+            onPress={() => router.push('/driver-onboarding')}
+            fullWidth
+            size="lg"
+          />
+        )}
+        {!isApproved && !isRejected && (
+          <AppButton
+            title="Re-submit Application"
+            onPress={() => router.push('/driver-onboarding')}
             fullWidth
             size="lg"
           />
