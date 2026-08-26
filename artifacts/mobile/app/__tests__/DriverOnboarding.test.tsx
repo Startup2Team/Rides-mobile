@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { router } from 'expo-router';
 import DriverOnboarding from '../driver-onboarding';
 
 const mockSaveDriverProfile = jest.fn(() => Promise.resolve());
@@ -14,6 +15,9 @@ const mockTakeDocumentPhoto = jest.fn();
 const mockSaveDocuments = jest.fn(() => Promise.resolve());
 const mockSaveProfileImage = jest.fn(() => Promise.resolve());
 const mockSubmitApplication = jest.fn(() => Promise.resolve());
+const mockSubmitDriverApplicationWithDocuments = jest.fn((_application: unknown, _documents: unknown) =>
+  Promise.resolve({ allDocumentsUploaded: true, documentResults: [] }),
+);
 const mockImageGalleryPreview = jest.fn(({ visible }: { visible?: boolean }) => (
   <View testID={visible ? 'image-gallery-preview-visible' : 'image-gallery-preview-hidden'} />
 ));
@@ -61,6 +65,8 @@ jest.mock('react-native', () => {
   const React = require('react');
   const host = (name: string) => React.forwardRef((props: object, ref: unknown) => React.createElement(name, { ...props, ref }));
   return {
+    ActivityIndicator: host('ActivityIndicator'),
+    Alert: { alert: jest.fn() },
     Image: host('Image'),
     KeyboardAvoidingView: host('KeyboardAvoidingView'),
     Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android ?? options.default },
@@ -197,6 +203,24 @@ jest.mock('@/persistence/driverDocumentsPersistence', () => ({
   saveStoredDriverDocuments: mockSaveDocuments,
 }));
 
+// Real @/services/driverApplication transitively imports expo-file-system's
+// legacy ESM entry point, which Jest can't parse (pre-existing, unrelated to
+// this suite — see services/driverDocuments.ts). Mocking it here is also what
+// keeps this suite runnable at all.
+jest.mock('@/services/driverApplication', () => ({
+  submitDriverApplicationWithDocuments: (application: unknown, documents: unknown) =>
+    mockSubmitDriverApplicationWithDocuments(application, documents),
+}));
+
+jest.mock('@/observability/monitoring', () => ({
+  expectField: jest.fn(),
+  initializeMonitoring: jest.fn(),
+  isMonitoringEnabled: jest.fn(() => false),
+  reportOperationalFailure: jest.fn(),
+  reportOperationalWarning: jest.fn(),
+  reportRuntimeError: jest.fn(),
+}));
+
 jest.mock('@/components/driver-onboarding/ProgressHeader', () => ({
   ProgressHeader: () => null,
 }));
@@ -287,5 +311,43 @@ describe('DriverOnboarding', () => {
       nationalId: 'Please retake this photo.',
       vehicleOutsidePhoto: 'Please retake this photo.',
     }));
+  });
+
+  // Regression test for the resubmit-fails-silently bug: saveAndContinue used
+  // to write a local pending_review profile + document cache and navigate to
+  // the confirmation screen BEFORE the backend call, so a rejected/needs-more-
+  // info driver who resubmitted on a bad connection saw "Application
+  // Submitted!" while the backend never received anything (see
+  // app/driver-onboarding.tsx saveAndContinue and
+  // services/__tests__/driverApplication.test.ts for the service-level
+  // contract this depends on).
+  test('does not fake success and keeps the driver on the form when the backend submission fails', async () => {
+    const submitError = new Error('network unreachable');
+    mockSubmitDriverApplicationWithDocuments.mockRejectedValueOnce(submitError);
+    render(<DriverOnboarding />);
+
+    for (let i = 0; i < 3; i += 1) {
+      fireEvent.press(screen.getByLabelText('Continue'));
+    }
+    await waitFor(() => expect(screen.getByLabelText('Continue').props.accessibilityState.disabled).toBe(false));
+    fireEvent.press(screen.getByLabelText('Continue'));
+    await waitFor(() => expect(screen.getByText('Review Your Application')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Submit Registration'));
+
+    await waitFor(() => expect(mockSubmitDriverApplicationWithDocuments).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+      "Couldn't submit application",
+      expect.any(String),
+    ));
+
+    // Nothing about the failed submission is mirrored locally or navigated
+    // past — the driver stays on the review step with the draft intact and
+    // can retry.
+    expect(mockSaveDriverProfile).not.toHaveBeenCalled();
+    expect(mockSaveDocuments).not.toHaveBeenCalled();
+    expect(mockSwitchMode).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByText('Review Your Application')).toBeTruthy();
   });
 });

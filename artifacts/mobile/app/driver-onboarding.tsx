@@ -36,7 +36,7 @@ import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardin
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { profileRepository } from '@/domains/profile/repository';
-import { submitDriverApplicationWithDocuments, type DriverApplicationDocument } from '@/services/driverApplication';
+import { submitDriverApplicationWithDocuments, type DriverApplicationDocument, type DriverApplicationSubmitResult } from '@/services/driverApplication';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { readBackendError } from '@/utils/backendErrorMessage';
 
@@ -166,7 +166,7 @@ export default function DriverOnboarding() {
     // faked or swallowed: a network failure here used to be silently eaten
     // while the app still told the driver "Application Submitted!" and wrote
     // a local pending_review status that the backend never agreed with.
-    let result;
+    let result: DriverApplicationSubmitResult;
     try {
       result = await submitDriverApplicationWithDocuments(
         {
