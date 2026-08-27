@@ -36,7 +36,9 @@ import { getRequiredVehiclePhotoKeys } from '@/hooks/driver-onboarding/onboardin
 import { isValidImageAsset } from '@/utils/documentValidation';
 import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { profileRepository } from '@/domains/profile/repository';
-import { submitDriverApplicationWithDocuments, type DriverApplicationDocument } from '@/services/driverApplication';
+import { submitDriverApplicationWithDocuments, type DriverApplicationDocument, type DriverApplicationSubmitResult } from '@/services/driverApplication';
+import { reportOperationalFailure } from '@/observability/monitoring';
+import { readBackendError } from '@/utils/backendErrorMessage';
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -154,35 +156,26 @@ export default function DriverOnboarding() {
   const saveAndContinue = async () => {
     setDraftLoaded(false);
     setLoading(true);
-    const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
-    await saveDriverProfile(profile);
-    await saveStoredDriverDocuments(buildInitialDriverDocuments(form, docs));
-    await submitDriverApplication({
-      userId: user?.id ?? 'unknown-user',
-      fullName: user?.name ?? 'Unknown driver',
-      phone: user?.phone ?? profile.momoCode,
-      driverProfile: profile,
-      form,
-      docs,
-      vehiclePhotos: buildVehiclePhotosPayload(form.vehicleType, vehiclePhotos),
-      selfieUri,
-      submittedAt: new Date().toISOString(),
-    });
-    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
 
-    // Real backend: create the driver application + upload KYC documents.
-    // Best-effort so a network failure doesn't lose the local submission.
+    const documents: DriverApplicationDocument[] = [];
+    if (docs.license?.[0]) documents.push({ documentType: 'LICENCE_FRONT', uri: docs.license[0] });
+    if (docs.license?.[1]) documents.push({ documentType: 'LICENCE_BACK', uri: docs.license[1] });
+    if (docs.nationalId?.[0]) documents.push({ documentType: 'NATIONAL_ID_FRONT', uri: docs.nationalId[0] });
+    if (docs.nationalId?.[1]) documents.push({ documentType: 'NATIONAL_ID_BACK', uri: docs.nationalId[1] });
+    if (docs.insurance?.[0]) documents.push({ documentType: 'VEHICLE_INSURANCE', uri: docs.insurance[0] });
+    if (docs.authorization?.[0]) documents.push({ documentType: 'VEHICLE_AUTHORIZATION', uri: docs.authorization[0] });
+    if (selfieUri) documents.push({ documentType: 'SELFIE', uri: selfieUri });
+
+    // Real backend: create the driver application, then upload every KYC
+    // document. This is the ONLY thing that actually resubmits a rejected /
+    // needs-more-info application — the backend flips the status back to
+    // PENDING_REVIEW when (and only when) this succeeds. It must never be
+    // faked or swallowed: a network failure here used to be silently eaten
+    // while the app still told the driver "Application Submitted!" and wrote
+    // a local pending_review status that the backend never agreed with.
+    let result: DriverApplicationSubmitResult;
     try {
-      const documents: DriverApplicationDocument[] = [];
-      if (docs.license?.[0]) documents.push({ documentType: 'LICENCE_FRONT', uri: docs.license[0] });
-      if (docs.license?.[1]) documents.push({ documentType: 'LICENCE_BACK', uri: docs.license[1] });
-      if (docs.nationalId?.[0]) documents.push({ documentType: 'NATIONAL_ID_FRONT', uri: docs.nationalId[0] });
-      if (docs.nationalId?.[1]) documents.push({ documentType: 'NATIONAL_ID_BACK', uri: docs.nationalId[1] });
-      if (docs.insurance?.[0]) documents.push({ documentType: 'VEHICLE_INSURANCE', uri: docs.insurance[0] });
-      if (docs.authorization?.[0]) documents.push({ documentType: 'VEHICLE_AUTHORIZATION', uri: docs.authorization[0] });
-      if (selfieUri) documents.push({ documentType: 'SELFIE', uri: selfieUri });
-
-      await submitDriverApplicationWithDocuments(
+      result = await submitDriverApplicationWithDocuments(
         {
           vehicleType: form.vehicleType,
           vehiclePlate: form.plateNumber,
@@ -209,15 +202,47 @@ export default function DriverOnboarding() {
         },
         documents,
       );
-    } catch (err: any) {
-      console.error('[MOBILE:ONBOARDING_SUBMIT_ERROR] ❌ Driver onboarding submission error:', err);
-      Alert.alert(
-        'Submission Error',
-        'Could not submit your application to the server. Please check your connection and try again.',
-      );
+    } catch (error) {
+      reportOperationalFailure('driver.application.submit', error);
+      const backendError = readBackendError(error);
       setLoading(false);
+      setDraftLoaded(true);
+      Alert.alert(
+        "Couldn't submit application",
+        backendError.message ?? "We couldn't reach the server. Check your connection and try again.",
+      );
+      // Nothing was recorded as pending and the draft stays intact — the
+      // driver stays on the form and can retry the same submission.
       return;
     }
+
+    if (!result.allDocumentsUploaded) {
+      const failedCount = result.documentResults.filter(item => !item.ok).length;
+      reportOperationalFailure('driver.application.partialDocuments', undefined, { failedCount });
+      Alert.alert(
+        'Some documents failed to upload',
+        `Your application was submitted, but ${failedCount} document${failedCount === 1 ? '' : 's'} didn't upload. Open Driver Documents from your profile to retry the missing ones — review can't finish without them.`,
+      );
+    }
+
+    // The application genuinely reached the backend at this point (and
+    // whatever documents made it are already there) — only now is it safe to
+    // mirror a pending status locally and persist the local document cache.
+    const profile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
+    await saveDriverProfile(profile);
+    await saveStoredDriverDocuments(buildInitialDriverDocuments(form, docs));
+    await submitDriverApplication({
+      userId: user?.id ?? 'unknown-user',
+      fullName: user?.name ?? 'Unknown driver',
+      phone: user?.phone ?? profile.momoCode,
+      driverProfile: profile,
+      form,
+      docs,
+      vehiclePhotos: buildVehiclePhotosPayload(form.vehicleType, vehiclePhotos),
+      selfieUri,
+      submittedAt: new Date().toISOString(),
+    });
+    if (selfieUri) await profileRepository.saveProfileImage(selfieUri);
 
     await removeStoredDriverOnboardingDraft();
     await switchMode('customer');
