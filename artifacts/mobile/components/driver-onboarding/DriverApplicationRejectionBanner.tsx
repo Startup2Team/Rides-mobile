@@ -54,12 +54,11 @@ export function DriverApplicationRejectionBanner({
   const documents = rejectionSummary?.rejectedDocuments ?? [];
   const reviewedAt = rejectionSummary?.reviewedAt ? new Date(rejectionSummary.reviewedAt) : null;
 
-  const CardContainer = onPress ? TouchableOpacity : View;
-
   return (
-    <CardContainer
+    <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.8}
+      disabled={!onPress}
+      activeOpacity={0.75}
       style={[styles.card, { backgroundColor: colors.destructiveHex + '12', borderColor: colors.destructiveHex + '28' }]}
     >
       <View style={styles.header}>
@@ -105,11 +104,11 @@ export function DriverApplicationRejectionBanner({
 
       {onPress && (
         <View style={[styles.actionRow, { backgroundColor: colors.destructiveHex + '18' }]}>
-          <AppText style={[styles.actionText, { color: colors.destructive }]}>Tap here to update requested items</AppText>
+          <AppText style={[styles.actionText, { color: colors.destructive }]}>Tap here to update requested items ➔</AppText>
           <Feather name="arrow-right" size={16} color={colors.destructive} />
         </View>
       )}
-    </CardContainer>
+    </TouchableOpacity>
   );
 }
 
