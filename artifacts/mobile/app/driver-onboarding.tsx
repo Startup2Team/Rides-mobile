@@ -105,17 +105,24 @@ export default function DriverOnboarding() {
     rejectedDocuments: rejectionSummary?.rejectedDocuments,
   });
 
+  const initialStepSetRef = React.useRef(false);
+
   useEffect(() => {
     void (async () => {
       const stored = await loadStoredDriverOnboardingDraft();
+      const status = (driverProfile?.verificationStatus ?? '').toLowerCase();
+      const isRejectedStatus = status === 'rejected' || status === 'needs_more_info' || status === 'needs_info';
+
       if (stored.data) {
         setForm(stored.data.form);
         setDocs(stored.data.docs);
         setVehiclePhotos(stored.data.vehiclePhotos ?? { outside: null, inside: null });
         setSelfieUri(stored.data.selfieUri);
         setAcceptedTerms(stored.data.acceptedTerms);
-        setStep(stored.data.step);
-      } else if (driverProfile?.verificationStatus === 'rejected' || driverProfile?.verificationStatus === 'draft') {
+        if (!isRejectedStatus) {
+          setStep(stored.data.step);
+        }
+      } else if (driverProfile && (isRejectedStatus || status === 'draft')) {
         setForm(formFromDriverProfile(driverProfile));
         setSelfieUri(driverProfile.profileImage ?? null);
       }
@@ -125,7 +132,10 @@ export default function DriverOnboarding() {
 
   useEffect(() => {
     if (!draftLoaded) return;
-    if (driverProfile?.verificationStatus !== 'rejected' || !user?.id) {
+    const status = (driverProfile?.verificationStatus ?? '').toLowerCase();
+    const isRejectedStatus = status === 'rejected' || status === 'needs_more_info' || status === 'needs_info';
+
+    if (!isRejectedStatus || !user?.id) {
       setRejectionSummary(null);
       return;
     }
@@ -133,7 +143,8 @@ export default function DriverOnboarding() {
     void (async () => {
       const summary = await getLatestDriverApplicationRejectionSummary(user.id);
       setRejectionSummary(summary);
-      if (summary) {
+      if (summary && !initialStepSetRef.current) {
+        initialStepSetRef.current = true;
         setErrors(current => ({ ...current, ...buildRejectionErrors(summary) }));
         if (summary.rejectedDocuments && summary.rejectedDocuments.length > 0) {
           setStep(2);
@@ -283,7 +294,8 @@ export default function DriverOnboarding() {
     replaceFlowScreen(router, '/driver-submission-confirmation');
   };
 
-  const isResubmission = driverProfile?.verificationStatus === 'rejected' || !!rejectionSummary;
+  const statusLower = (driverProfile?.verificationStatus ?? '').toLowerCase();
+  const isResubmission = statusLower === 'rejected' || statusLower === 'needs_more_info' || statusLower === 'needs_info' || !!rejectionSummary;
 
   const handleNext = () => {
     const validationErrors = validate();
