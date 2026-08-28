@@ -37,8 +37,25 @@ import { isValidImageAsset } from '@/utils/documentValidation';
 import { navigateToCustomerHomeAfterCompletion, replaceFlowScreen } from '@/navigation/navigationPolicy';
 import { profileRepository } from '@/domains/profile/repository';
 import { submitDriverApplicationWithDocuments, type DriverApplicationDocument, type DriverApplicationSubmitResult } from '@/services/driverApplication';
+import type { DriverDocumentType } from '@/services/driverDocuments';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { readBackendError } from '@/utils/backendErrorMessage';
+
+function isDocumentRejected(documentType: DriverDocumentType, rejectedList: string[]): boolean {
+  const upperList = rejectedList.map(item => item.toUpperCase().replace(/_/g, ''));
+  const docUpper = documentType.toUpperCase();
+  const docUpperClean = docUpper.replace(/_/g, '');
+
+  if (upperList.includes(docUpper) || upperList.includes(docUpperClean)) return true;
+
+  if (docUpper.startsWith('LICENCE') && (upperList.includes('LICENSE') || upperList.includes('LICENCE'))) return true;
+  if (docUpper.startsWith('NATIONAL_ID') && (upperList.includes('NATIONALID') || upperList.includes('NATIONAL_ID'))) return true;
+  if (docUpper === 'VEHICLE_INSURANCE' && upperList.includes('INSURANCE')) return true;
+  if (docUpper === 'VEHICLE_AUTHORIZATION' && upperList.includes('AUTHORIZATION')) return true;
+  if (docUpper === 'SELFIE' && (upperList.includes('SELFIE') || upperList.includes('PROFILEPHOTO'))) return true;
+
+  return false;
+}
 
 export default function DriverOnboarding() {
   const colors = useColors();
@@ -168,16 +185,14 @@ export default function DriverOnboarding() {
     if (docs.insurance?.[0]) documents.push({ documentType: 'VEHICLE_INSURANCE', uri: docs.insurance[0] });
     if (docs.authorization?.[0]) documents.push({ documentType: 'VEHICLE_AUTHORIZATION', uri: docs.authorization[0] });
     let documentsToUpload = documents;
-    if (isResubmission && rejectionSummary?.rejectedDocuments && rejectionSummary.rejectedDocuments.length > 0) {
-      const rejectedTypes = rejectionSummary.rejectedDocuments;
-      documentsToUpload = documents.filter(doc => {
-        if (doc.documentType === 'LICENCE_FRONT' || doc.documentType === 'LICENCE_BACK') return rejectedTypes.includes('license');
-        if (doc.documentType === 'NATIONAL_ID_FRONT' || doc.documentType === 'NATIONAL_ID_BACK') return rejectedTypes.includes('nationalId');
-        if (doc.documentType === 'VEHICLE_INSURANCE') return rejectedTypes.includes('insurance');
-        if (doc.documentType === 'VEHICLE_AUTHORIZATION') return rejectedTypes.includes('authorization');
-        if (doc.documentType === 'SELFIE') return rejectedTypes.includes('selfie');
-        return true;
-      });
+    if (isResubmission) {
+      if (rejectionSummary?.rejectedDocuments && rejectionSummary.rejectedDocuments.length > 0) {
+        const rejectedList = rejectionSummary.rejectedDocuments;
+        const filtered = documents.filter(doc => isDocumentRejected(doc.documentType, rejectedList));
+        if (filtered.length > 0) {
+          documentsToUpload = filtered;
+        }
+      }
     }
 
     let result: DriverApplicationSubmitResult;
