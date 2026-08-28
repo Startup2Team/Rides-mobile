@@ -7,7 +7,7 @@ import type { Ride } from '@/types';
 const mockMarkArrived = jest.fn();
 const mockStartJourney = jest.fn();
 const mockCompleteRide = jest.fn();
-const mockCancelRide = jest.fn();
+const mockCancelRide = jest.fn(async () => true);
 const mockShowToast = jest.fn();
 const mockRecordCompletedRide = jest.fn();
 
@@ -53,29 +53,30 @@ jest.mock('@expo/vector-icons', () => ({
   },
 }));
 
-jest.mock('react-native-maps', () => {
+jest.mock('@/components/map', () => {
   const React = require('react');
   const { View } = require('react-native');
 
-  const MapView = React.forwardRef(({ children }: { children: React.ReactNode }, ref: React.Ref<unknown>) => {
+  const AppMap = React.forwardRef(({ children }: { children: React.ReactNode }, ref: React.Ref<unknown>) => {
     React.useImperativeHandle(ref, () => ({
       fitToCoordinates: jest.fn(),
+      animateToRegion: jest.fn(),
+      coordinateForPoint: jest.fn(),
     }));
     return <View>{children}</View>;
   });
-  MapView.displayName = 'MapView';
+  AppMap.displayName = 'AppMap';
 
   return {
     __esModule: true,
-    default: MapView,
+    AppMap,
     // Forward accessibilityLabel so tests can assert which marker rendered —
-    // everything else about a real Marker (coordinate, anchor, ...) is
+    // everything else about a real marker (coordinate, anchor, ...) is
     // irrelevant to this screen's tests.
-    Marker: ({ children, accessibilityLabel }: { children: React.ReactNode; accessibilityLabel?: string }) => {
+    AppMarker: ({ children, accessibilityLabel }: { children: React.ReactNode; accessibilityLabel?: string }) => {
       const { View: MockView } = require('react-native');
       return <MockView accessibilityLabel={accessibilityLabel}>{children}</MockView>;
     },
-    PROVIDER_DEFAULT: null,
   };
 });
 
@@ -341,7 +342,7 @@ describe('DriverNavigateScreen', () => {
     expect(screen.getByText(/Customer .* late/)).toBeTruthy();
   });
 
-  test('late wait cancellation asks for confirmation and can cancel ride', () => {
+  test('late wait cancellation asks for confirmation and can cancel ride', async () => {
     setRide('arrived', {
       arrivedAt: '2026-06-17T08:10:00.000Z',
       waitStartedAt: new Date(Date.now() - 181000).toISOString(),
@@ -357,11 +358,36 @@ describe('DriverNavigateScreen', () => {
     );
 
     const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    buttons[1].onPress();
+    await act(async () => {
+      await buttons[1].onPress();
+    });
     expect(mockCancelRide).toHaveBeenCalledTimes(1);
     expect(mockShowToast).toHaveBeenCalledWith('Ride cancelled: Passenger did not show up', 'info');
     const { router } = require('expo-router');
     expect(router.replace).toHaveBeenCalledWith('/(driver)');
+  });
+
+  test('a rejected cancel does not toast or leave the trip screen', async () => {
+    setRide('arrived', {
+      arrivedAt: '2026-06-17T08:10:00.000Z',
+      waitStartedAt: new Date(Date.now() - 181000).toISOString(),
+    });
+    // cancelRide already surfaces its own Alert on a backend rejection and
+    // leaves the ride untouched — the screen must not also claim success.
+    mockCancelRide.mockResolvedValueOnce(false);
+
+    render(<DriverNavigateScreen />);
+
+    fireEvent.press(screen.getByText('Cancel Ride'));
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
+    await act(async () => {
+      await buttons[1].onPress();
+    });
+
+    expect(mockCancelRide).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).not.toHaveBeenCalled();
+    const { router } = require('expo-router');
+    expect(router.replace).not.toHaveBeenCalledWith('/(driver)');
   });
 
   test('complete ride appears only during active trip and asks for confirmation', () => {
@@ -407,7 +433,7 @@ describe('DriverNavigateScreen', () => {
     });
   });
 
-  test('confetti does not appear on cancellation', () => {
+  test('confetti does not appear on cancellation', async () => {
     setRide('arrived', {
       arrivedAt: '2026-06-17T08:10:00.000Z',
       waitStartedAt: new Date(Date.now() - 181000).toISOString(),
@@ -417,7 +443,9 @@ describe('DriverNavigateScreen', () => {
 
     fireEvent.press(screen.getByText('Cancel Ride'));
     const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    buttons[1].onPress();
+    await act(async () => {
+      await buttons[1].onPress();
+    });
 
     expect(mockCompleteRide).not.toHaveBeenCalled();
     const { router } = require('expo-router');
@@ -425,7 +453,7 @@ describe('DriverNavigateScreen', () => {
     expect(router.replace).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/driver-ride-complete' }));
   });
 
-  test('active trip SOS shows emergency options', () => {
+  test('active trip SOS shows emergency options', async () => {
     setRide('in_progress');
 
     render(<DriverNavigateScreen />);
@@ -448,7 +476,9 @@ describe('DriverNavigateScreen', () => {
     );
 
     const cancelButtons = (Alert.alert as jest.Mock).mock.calls[1][2];
-    cancelButtons[1].onPress();
+    await act(async () => {
+      await cancelButtons[1].onPress();
+    });
     expect(mockCancelRide).toHaveBeenCalledTimes(1);
     expect(mockShowToast).toHaveBeenCalledWith('Ride cancelled: Safety concern', 'info');
     const { router } = require('expo-router');

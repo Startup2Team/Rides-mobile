@@ -2,9 +2,9 @@ import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import MapView, { type Region } from 'react-native-maps';
 import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
+import type { AppMapHandle, AppMapRegion } from '@/components/map';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { useMapPicker } from '@/context/MapPickerContext';
 import type { MapPickerBookingTarget } from '@/context/MapPickerContext';
@@ -48,7 +48,7 @@ function buildLocation(coords: { latitude: number; longitude: number }, address:
 export default function MapPickerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<AppMapHandle>(null);
   const { setBookingSelection, setResult } = useMapPicker();
   const { pickup, destination, setPickup, setDestination, setDestText } = useRide();
   const { savedPlaces } = useSavedLocations();
@@ -138,7 +138,7 @@ export default function MapPickerScreen() {
     }
   }, []);
 
-  const syncCoordsFromCenter = useCallback(async (regionFallback?: Region) => {
+  const syncCoordsFromCenter = useCallback(async (regionFallback?: AppMapRegion) => {
     const map = mapRef.current;
     if (map && mapSize.width > 0 && mapSize.height > 0) {
       try {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
 import { InteractionManager, Platform } from 'react-native';
-import MapView from 'react-native-maps';
+import type { AppMapHandle } from '@/components/map';
 import { getRouteKey, useRoute } from '@/hooks/useRoute';
 import type { Coords, RideLocation, VehicleType } from '@/types';
 import { homeRoutePolyline, sampleRouteCoordsForFit } from '@/utils/mapUtils';
@@ -28,7 +28,7 @@ export function useRoutePreview({
   destination: RideLocation | null;
   showBooking: boolean;
   isMapReady: boolean;
-  mapRef: RefObject<MapView | null>;
+  mapRef: RefObject<AppMapHandle | null>;
   bookingPanelMapInset: number;
   topInset: number;
   bottomInset: number;

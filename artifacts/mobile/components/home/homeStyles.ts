@@ -21,15 +21,9 @@ import {
   SCREEN_WIDTH,
 } from './homeUtils';
 
-export const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#1a3646' }] },
-  { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#98a5be' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-];
+// Google-only dark map style moved to components/map/googleDarkMapStyle.ts —
+// AppMap now resolves map styling per-provider internally (see
+// components/map/README.md), so screens no longer pass it in.
 
 export const styles = StyleSheet.create({
   container: { flex: 1 },

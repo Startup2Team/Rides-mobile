@@ -215,21 +215,25 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockSafeAreaInsets,
 }));
 
-jest.mock('react-native-maps', () => {
+jest.mock('@/components/map', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const MapView = React.forwardRef(({ children, ...props }: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
-    React.useImperativeHandle(ref, () => ({ animateToRegion: jest.fn() }));
+  const AppMap = React.forwardRef(({ children, ...props }: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
+    React.useImperativeHandle(ref, () => ({
+      animateToRegion: jest.fn(),
+      fitToCoordinates: jest.fn(),
+      coordinateForPoint: jest.fn(),
+    }));
     return <View {...props}>{children}</View>;
   });
-  MapView.displayName = 'MapView';
+  AppMap.displayName = 'AppMap';
 
   return {
     __esModule: true,
-    default: MapView,
-    Marker: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-    Polyline: () => null,
-    PROVIDER_DEFAULT: null,
+    AppMap,
+    AppMarker: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    AppCircle: () => null,
+    AppPolyline: () => null,
   };
 });
 
