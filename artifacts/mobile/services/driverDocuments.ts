@@ -94,14 +94,23 @@ function resolveUploadUrlForMobile(targetUrl: string): string {
     const backendHost = backendUrlObj.hostname;
     const backendOrigin = backendUrlObj.origin;
 
-    if (targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1') || targetUrl.includes('minio:9000') || targetUrl.includes(':9000') || targetUrl.startsWith('https:///')) {
+    if (
+      targetUrl.includes('localhost') ||
+      targetUrl.includes('127.0.0.1') ||
+      targetUrl.includes('minio:9000') ||
+      targetUrl.includes(':9000') ||
+      targetUrl.startsWith('https:///') ||
+      targetUrl.includes('<your-public-r2-domain>')
+    ) {
       let resolved = targetUrl
         .replace('localhost', backendHost)
         .replace('127.0.0.1', backendHost)
         .replace('minio', backendHost);
 
-      // Route through backend proxy port 8080 if pointing at MinIO port 9000 directly or malformed URL
-      if (resolved.includes(':9000') || resolved.startsWith('https:///')) {
+      if (targetUrl.includes('<your-public-r2-domain>')) {
+        const pathPart = targetUrl.split('<your-public-r2-domain>')[1] || '';
+        resolved = `${backendOrigin}/api/v1/uploads/objects${pathPart}`;
+      } else if (resolved.includes(':9000') || resolved.startsWith('https:///')) {
         const match = resolved.match(/(?::9000|\/rides-docs|\/ride-documents)\/+(.+)$/);
         if (match && match[1]) {
           resolved = `${backendOrigin}/api/v1/uploads/objects/${match[1]}`;
