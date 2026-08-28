@@ -123,8 +123,11 @@ export default function SearchingScreen() {
           ? 'Still searching — drivers nearby may be busy'
           : "We've asked all nearby riders — waiting for one to free up";
 
-  const finishCancelSearch = () => {
-    cancelRide();
+  const finishCancelSearch = async () => {
+    // cancelRide already surfaces its own Alert and leaves the search running
+    // on a backend rejection — only leave the screen once it actually
+    // confirmed.
+    if (!(await cancelRide())) return;
     showToast('Search cancelled', 'info');
     if (router.canGoBack()) {
       router.back();
@@ -156,9 +159,14 @@ export default function SearchingScreen() {
   };
 
   // In the failed state there is nothing left to confirm — the search already
-  // ended — so leave directly instead of raising the cancel-search alert.
+  // ended (searchOutcome is already showing the truth on this screen) — so
+  // leave directly instead of raising the cancel-search alert. cancelRide is
+  // best-effort cleanup here (a stale backendRideId the give-up reaper hasn't
+  // swept yet), not a claim that a still-live ride got cancelled, so
+  // navigation must not wait on it or block if the backend says there was
+  // nothing left to cancel.
   const handleBackHome = () => {
-    cancelRide();
+    void cancelRide();
     navigateToCustomerHomeAfterCompletion(router);
   };
 

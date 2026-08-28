@@ -31,7 +31,10 @@ export interface RideContextType {
   restoreBookingOnHomeFocus: boolean;
   clearCancelledSearchDraft: () => void;
   clearRestoreBookingOnHomeFocus: () => void;
-  cancelRide: () => void;
+  // Resolves true once the backend has actually confirmed the cancel; false
+  // when it rejected/failed (in which case the ride is left untouched and an
+  // Alert already explains why — callers should not assume success).
+  cancelRide: () => Promise<boolean>;
   pauseDriverMatching: () => void;
   resumeDriverMatching: () => void;
   isMatchingPaused: boolean;

@@ -10,12 +10,16 @@ export function useRideActions({
   currentRide,
   showToast,
 }: {
-  cancelRide: () => void;
+  cancelRide: () => Promise<boolean>;
   currentRide: Ride | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }) {
-  const doCancelRide = useCallback(() => {
-    cancelRide();
+  const doCancelRide = useCallback(async () => {
+    // cancelRide already surfaces its own Alert on a backend rejection and
+    // leaves the ride untouched — only toast + leave the screen once it
+    // actually confirmed.
+    const cancelled = await cancelRide();
+    if (!cancelled) return;
     showToast('Ride cancelled', 'info');
     navigateToCustomerHomeAfterCompletion(router);
   }, [cancelRide, showToast]);

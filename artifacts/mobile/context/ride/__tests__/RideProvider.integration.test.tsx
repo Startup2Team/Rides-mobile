@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { BackendError } from '@/data/remote/contracts/backendErrors';
@@ -12,6 +12,7 @@ import {
 } from '../rideConstants';
 import { loadRideHistory } from '../ridePersistence';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { triggerRideReconcile } from '@/state/rideReconcileTrigger';
 import type { RideLocation } from '@/types';
 
 let mockAuthDriverProfile: any = null;
@@ -357,7 +358,9 @@ describe('RideProvider lifecycle orchestration', () => {
     });
     const cancelledRideId = result.current.currentRide?.id;
 
-    act(() => result.current.cancelRide());
+    await act(async () => {
+      await result.current.cancelRide();
+    });
     expect(mockShadowWireCancelRideCommand).toHaveBeenCalledTimes(1);
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       id: cancelledRideId,
@@ -396,7 +399,9 @@ describe('RideProvider lifecycle orchestration', () => {
       status: 'searching',
     }));
 
-    act(() => result.current.cancelRide());
+    await act(async () => {
+      await result.current.cancelRide();
+    });
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       status: 'cancelled',
     }));
@@ -1013,8 +1018,116 @@ describe('RideProvider lifecycle orchestration', () => {
     });
     await waitFor(() => expect(result.current.currentRide?.backendRideId).toBe('backend-ride-1'));
 
-    act(() => result.current.cancelRide());
+    await act(async () => {
+      await result.current.cancelRide();
+    });
     expect(result.current.currentRide?.status).toBe('cancelled');
     expect(result.current.currentRide?.searchOutcome).toBeUndefined();
+  });
+
+  // ── Cancel-sync gaps (fix/cancel-sync) ───────────────────────────────────
+
+  test('cancelRide surfaces a backend rejection and leaves the ride untouched instead of faking success', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    await waitFor(() => expect(result.current.currentRide?.backendRideId).toBe('backend-ride-1'));
+
+    // The backend rejects the cancel (bad transition / race / dropped
+    // network) but the ride is genuinely still live server-side — the
+    // failure-path reconcile must confirm that and leave it alone.
+    mockCancelBackendRide.mockRejectedValueOnce(new Error('network down'));
+    mockGetActiveRide.mockResolvedValue(activeSnapshot({ id: 'backend-ride-1', status: 'SEARCHING' }));
+
+    let cancelResolvedTo: boolean | undefined;
+    await act(async () => {
+      cancelResolvedTo = await result.current.cancelRide();
+    });
+
+    expect(cancelResolvedTo).toBe(false);
+    expect(alertSpy).toHaveBeenCalledWith('Could not cancel ride', expect.any(String));
+    // The old bug: local state flipped to 'cancelled' regardless of the
+    // backend result. It must not here — the ride stays exactly as it was.
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'searching',
+      backendRideId: 'backend-ride-1',
+    }));
+    expect(result.current.restoreBookingOnHomeFocus).toBe(false);
+  });
+
+  test('foreground resume reconciles an already-loaded ride the server reports gone (a missed ride_cancelled self-heals)', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const priorAppStateCalls = (AppState.addEventListener as jest.Mock).mock.calls.length;
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    await waitFor(() => expect(result.current.currentRide?.backendRideId).toBe('backend-ride-1'));
+
+    // The socket missed the ride_cancelled — the server no longer has this
+    // ride live at all.
+    mockGetActiveRide.mockResolvedValue(null);
+
+    const [, foregroundListener] = (AppState.addEventListener as jest.Mock).mock.calls
+      .slice(priorAppStateCalls)
+      .find(([eventType]: [string, unknown]) => eventType === 'change') ?? [];
+    expect(typeof foregroundListener).toBe('function');
+
+    await act(async () => {
+      foregroundListener('active');
+    });
+
+    expect(result.current.currentRide?.status).toBe('cancelled');
+    act(() => {
+      jest.advanceTimersByTime(CANCELLED_RIDE_CLEAR_DELAY_MS);
+    });
+    expect(result.current.currentRide).toBeNull();
+  });
+
+  test('foreground resume leaves a genuinely still-live ride alone', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const priorAppStateCalls = (AppState.addEventListener as jest.Mock).mock.calls.length;
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    await waitFor(() => expect(result.current.currentRide?.backendRideId).toBe('backend-ride-1'));
+
+    mockGetActiveRide.mockResolvedValue(activeSnapshot({ id: 'backend-ride-1', status: 'SEARCHING' }));
+
+    const [, foregroundListener] = (AppState.addEventListener as jest.Mock).mock.calls
+      .slice(priorAppStateCalls)
+      .find(([eventType]: [string, unknown]) => eventType === 'change') ?? [];
+
+    await act(async () => {
+      foregroundListener('active');
+    });
+
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'searching',
+      backendRideId: 'backend-ride-1',
+    }));
+  });
+
+  test('an inbound reconcile trigger (push self-heal) clears a ride the server reports gone', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+    await act(async () => {
+      await result.current.createRide(pickup, destination, 'moto');
+    });
+    await waitFor(() => expect(result.current.currentRide?.backendRideId).toBe('backend-ride-1'));
+
+    mockGetActiveRide.mockResolvedValue(null);
+
+    // Simulates services/usePushNotifications.ts reacting to a ride_cancelled/
+    // ride_taken push — RideProvider registered this handler on mount.
+    await act(async () => {
+      triggerRideReconcile();
+    });
+
+    expect(result.current.currentRide?.status).toBe('cancelled');
   });
 });
