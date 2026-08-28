@@ -297,6 +297,34 @@ export default function DriverOnboarding() {
   const statusLower = (driverProfile?.verificationStatus ?? '').toLowerCase();
   const isResubmission = statusLower === 'rejected' || statusLower === 'needs_more_info' || statusLower === 'needs_info' || !!rejectionSummary;
 
+  const handleRejectionBannerPress = React.useCallback(() => {
+    if (rejectionSummary?.rejectedDocuments && rejectionSummary.rejectedDocuments.length > 0) {
+      setStep(2);
+    } else if (rejectionSummary?.rejectedFields && rejectionSummary.rejectedFields.some(f => ['brand', 'model', 'plateNumber', 'manufactureYear'].includes(f))) {
+      setStep(1);
+    } else {
+      setStep(0);
+    }
+  }, [rejectionSummary]);
+
+  const canResubmit = React.useMemo(() => {
+    if (!isResubmission) return true;
+    if (rejectionSummary?.rejectedDocuments && rejectionSummary.rejectedDocuments.length > 0) {
+      if (step !== 2) return false;
+      const hasPickedDoc = Boolean(
+        docs.license?.[0] || docs.license?.[1] ||
+        docs.nationalId?.[0] || docs.nationalId?.[1] ||
+        docs.insurance?.[0] || docs.authorization?.[0] ||
+        selfieUri
+      );
+      return hasPickedDoc;
+    }
+    if (rejectionSummary?.rejectedFields && rejectionSummary.rejectedFields.some(f => ['brand', 'model', 'plateNumber', 'manufactureYear'].includes(f))) {
+      return step === 1;
+    }
+    return true;
+  }, [isResubmission, rejectionSummary, step, docs, selfieUri]);
+
   const handleNext = () => {
     const validationErrors = validate();
     if (Object.keys(validationErrors).length) {
@@ -327,6 +355,7 @@ export default function DriverOnboarding() {
               colors={colors}
               rejectionReason={driverProfile?.rejectionReason}
               rejectionSummary={rejectionSummary}
+              onPress={handleRejectionBannerPress}
             />
             <PersonalInformationSection
               colors={colors}
@@ -389,6 +418,7 @@ export default function DriverOnboarding() {
               colors={colors}
               rejectionReason={driverProfile?.rejectionReason}
               rejectionSummary={rejectionSummary}
+              onPress={handleRejectionBannerPress}
             />
             <ReviewSubmissionSection
               colors={colors}
@@ -415,7 +445,7 @@ export default function DriverOnboarding() {
           fullWidth
           size="lg"
           loading={loading}
-          disabled={step === 3 && !acceptedTerms}
+          disabled={(step === 3 && !acceptedTerms) || (isResubmission && !canResubmit)}
         />
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <AppButton title="Save and exit" onPress={saveDraftAndExit} size="sm" compact variant="secondary" loading={loading} style={{ flex: 1 }} />
