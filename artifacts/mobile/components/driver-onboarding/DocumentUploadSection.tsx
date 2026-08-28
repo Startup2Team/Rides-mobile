@@ -47,20 +47,71 @@ export function DocumentUploadSection({ approvedDocuments = [], rejectedDocument
     </AppText>
     {displayDocuments.map(document => {
       const isApproved = approvedDocuments.includes(document.key);
+      const isNeedsUpdate = rejectedDocuments && rejectedDocuments.includes(document.key);
       return (
-        <View key={document.key} style={styles.docRow}>
+        <View
+          key={document.key}
+          style={[
+            styles.docRow,
+            isNeedsUpdate && {
+              borderColor: '#F59E0B',
+              borderWidth: 1.5,
+              backgroundColor: 'rgba(245, 158, 11, 0.06)',
+              borderRadius: 16,
+              padding: spacing[4],
+            },
+          ]}
+        >
+          {isNeedsUpdate && (
+            <View
+              style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                borderWidth: 1,
+                borderColor: 'rgba(245, 158, 11, 0.35)',
+                borderRadius: 10,
+                padding: 10,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Feather name="alert-triangle" size={16} color="#D97706" />
+              <AppText style={{ fontSize: 12, fontWeight: '600', color: colors.foreground, flex: 1 }}>
+                Update required: Reviewer requested a new photo for this document. Tap below to capture.
+              </AppText>
+            </View>
+          )}
           <View style={styles.docHeader}>
-            <AppText style={[styles.docLabel, { color: colors.foreground }]}>
-              {document.label}{!isApproved && <AppText style={{ color: colors.destructive }}> *</AppText>}
-            </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <AppText style={[styles.docLabel, { color: colors.foreground }]}>
+                {document.label}{!isApproved && <AppText style={{ color: colors.destructive }}> *</AppText>}
+              </AppText>
+              {isNeedsUpdate && (
+                <View
+                  style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(245, 158, 11, 0.5)',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 12,
+                  }}
+                >
+                  <AppText style={{ fontSize: 10, fontWeight: '700', color: '#D97706', textTransform: 'uppercase' }}>
+                    🟨 Update required
+                  </AppText>
+                </View>
+              )}
+            </View>
             <AppText style={[styles.docHint, { color: colors.mutedForeground }]}>{document.hint}</AppText>
           </View>
           {EXPIRY_FIELDS[document.key] ? <DatePickerField label="Expiry date" value={form[EXPIRY_FIELDS[document.key]!]} onChange={value => update(EXPIRY_FIELDS[document.key]!, value)} error={errors[EXPIRY_FIELDS[document.key]!]} placeholder="DD/MM/YYYY" minimumDate={minimumExpiryDate} disabled={isApproved} /> : null}
           <AppText style={[styles.docFaceLabel, { color: colors.mutedForeground }]}>Front face</AppText>
-          <DocumentFace colors={colors} uri={docs[document.key][0]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 0)} captureLabel="Take Front Photo" isApproved={isApproved} />
+          <DocumentFace colors={colors} uri={docs[document.key][0]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 0)} captureLabel={isNeedsUpdate ? 'Tap to Update Front Photo' : 'Take Front Photo'} isApproved={isApproved} isNeedsUpdate={isNeedsUpdate} />
           {errors[document.key] ? <AppText style={[styles.errorText, { color: colors.destructive }]}>{errors[document.key]}</AppText> : null}
           {docs[document.key][0] && DOCUMENTS_REQUIRING_BACK.includes(document.key) && <><AppText style={[styles.docFaceLabel, { color: colors.mutedForeground, marginTop: spacing[4] }]}>Back face</AppText>
-            <DocumentFace colors={colors} uri={docs[document.key][1]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 1)} captureLabel="Take Back Photo" isApproved={isApproved} />
+            <DocumentFace colors={colors} uri={docs[document.key][1]} hasError={Boolean(errors[document.key])} onTake={() => takeDocumentPhoto(document.key, 1)} captureLabel={isNeedsUpdate ? 'Tap to Update Back Photo' : 'Take Back Photo'} isApproved={isApproved} isNeedsUpdate={isNeedsUpdate} />
           </>}
         </View>
       );
@@ -90,8 +141,8 @@ export function DocumentUploadSection({ approvedDocuments = [], rejectedDocument
   </View>;
 }
 
-function DocumentFace({ captureLabel, colors, hasError, isApproved, onTake, uri }: {
-  captureLabel: string; colors: ReturnType<typeof useColors>; hasError: boolean; isApproved?: boolean; onTake: () => void; uri: string | null;
+function DocumentFace({ captureLabel, colors, hasError, isApproved, isNeedsUpdate, onTake, uri }: {
+  captureLabel: string; colors: ReturnType<typeof useColors>; hasError: boolean; isApproved?: boolean; isNeedsUpdate?: boolean; onTake: () => void; uri: string | null;
 }) {
   if (uri && isApproved) {
     return (
@@ -106,6 +157,24 @@ function DocumentFace({ captureLabel, colors, hasError, isApproved, onTake, uri 
               <AppText style={[styles.docUploadedText, { color: colors.success }]}>Approved & Verified</AppText>
             </View>
           </View>
+        </View>
+      </View>
+    );
+  }
+  if (uri && isNeedsUpdate) {
+    return (
+      <View style={[styles.docPreviewCard, { borderColor: '#F59E0B' }]}>
+        <Image source={{ uri }} style={styles.docThumb} resizeMode="cover" />
+        <View style={styles.docPreviewContent}>
+          <View style={styles.docCapturedRow}>
+            <View style={[styles.docCapturedIcon, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
+              <Feather name="alert-circle" size={icons.size.xs} color="#D97706" />
+            </View>
+            <View style={styles.docCapturedCopy}>
+              <AppText style={[styles.docUploadedText, { color: '#D97706' }]}>Update Required</AppText>
+            </View>
+          </View>
+          <SmallAction colors={colors} label="Update Photo 📷" onPress={onTake} />
         </View>
       </View>
     );
@@ -128,7 +197,23 @@ function DocumentFace({ captureLabel, colors, hasError, isApproved, onTake, uri 
       </View>
     );
   }
-  return <CaptureAction colors={colors} hasError={hasError} label={captureLabel} onPress={onTake} />;
+  return (
+    <TouchableOpacity
+      style={[
+        styles.docUploadBtn,
+        {
+          borderColor: isNeedsUpdate ? '#F59E0B' : hasError ? colors.destructive : colors.border,
+          backgroundColor: isNeedsUpdate ? 'rgba(245, 158, 11, 0.12)' : colors.card,
+        },
+      ]}
+      onPress={onTake}
+    >
+      <Feather name="camera" size={icons.size.lg} color={isNeedsUpdate ? '#D97706' : colors.primary} />
+      <AppText style={[styles.docUploadText, { color: isNeedsUpdate ? '#D97706' : colors.primary, fontWeight: '700' }]}>
+        {captureLabel}
+      </AppText>
+    </TouchableOpacity>
+  );
 }
 
 function SmallAction({ colors, label, onPress }: { colors: ReturnType<typeof useColors>; label: string; onPress: () => void }) {

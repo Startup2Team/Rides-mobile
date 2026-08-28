@@ -25,6 +25,7 @@ export function useDriverOnboardingValidation({
   vehiclePhotos,
   selfieUri,
   step,
+  rejectedDocuments,
 }: {
   acceptedTerms: boolean;
   docs: Record<DocumentKey, DocFaces>;
@@ -32,6 +33,7 @@ export function useDriverOnboardingValidation({
   vehiclePhotos: Record<VehiclePhotoKey, string | null>;
   selfieUri: string | null;
   step: number;
+  rejectedDocuments?: string[];
 }) {
   return () => {
     const errors: Record<string, string> = {};
@@ -71,21 +73,43 @@ export function useDriverOnboardingValidation({
       if (form.vehicleType === 'fuso' && (!form.loadCapacityKg || parseInt(form.loadCapacityKg) < 1)) errors.loadCapacityKg = 'Enter load capacity in kg';
     }
     if (step === 2) {
-      validateRequiredImages(errors, 'license', docs.license, "Driver's licence", DOCUMENTS_REQUIRING_BACK.includes('license'));
-      validateRequiredImages(errors, 'nationalId', docs.nationalId, 'National ID', DOCUMENTS_REQUIRING_BACK.includes('nationalId'));
-      validateRequiredImages(errors, 'insurance', docs.insurance, 'Insurance document', DOCUMENTS_REQUIRING_BACK.includes('insurance'));
-      validateRequiredImages(errors, 'authorization', docs.authorization, 'Authorization certificate', DOCUMENTS_REQUIRING_BACK.includes('authorization'));
-      getRequiredVehiclePhotoKeys(form.vehicleType).forEach(key => {
-        const label = key === 'outside' ? 'Vehicle outside photo' : 'Vehicle inside photo';
-        if (!vehiclePhotos[key]) errors[`vehicle${key === 'outside' ? 'Outside' : 'Inside'}Photo`] = `${label} is required`;
-        else if (!isValidDocumentImageUri(vehiclePhotos[key])) errors[`vehicle${key === 'outside' ? 'Outside' : 'Inside'}Photo`] = `${label} must be a valid image`;
-      });
-      if (!form.licenseExpiryDate) errors.licenseExpiryDate = 'Required';
-      else if (!isFutureExpiryDate(form.licenseExpiryDate)) errors.licenseExpiryDate = 'Expiry date must be in the future';
-      if (!form.insuranceExpiryDate) errors.insuranceExpiryDate = 'Required';
-      else if (!isFutureExpiryDate(form.insuranceExpiryDate)) errors.insuranceExpiryDate = 'Expiry date must be in the future';
-      if (!form.authorizationExpiryDate) errors.authorizationExpiryDate = 'Required';
-      else if (!isFutureExpiryDate(form.authorizationExpiryDate)) errors.authorizationExpiryDate = 'Expiry date must be in the future';
+      const isFilteredReupload = Boolean(rejectedDocuments && rejectedDocuments.length > 0);
+
+      const checkDoc = (key: DocumentKey) => !isFilteredReupload || rejectedDocuments!.includes(key);
+
+      if (checkDoc('license')) {
+        validateRequiredImages(errors, 'license', docs.license, "Driver's licence", DOCUMENTS_REQUIRING_BACK.includes('license'));
+      }
+      if (checkDoc('nationalId')) {
+        validateRequiredImages(errors, 'nationalId', docs.nationalId, 'National ID', DOCUMENTS_REQUIRING_BACK.includes('nationalId'));
+      }
+      if (checkDoc('insurance')) {
+        validateRequiredImages(errors, 'insurance', docs.insurance, 'Insurance document', DOCUMENTS_REQUIRING_BACK.includes('insurance'));
+      }
+      if (checkDoc('authorization')) {
+        validateRequiredImages(errors, 'authorization', docs.authorization, 'Authorization certificate', DOCUMENTS_REQUIRING_BACK.includes('authorization'));
+      }
+
+      if (!isFilteredReupload) {
+        getRequiredVehiclePhotoKeys(form.vehicleType).forEach(key => {
+          const label = key === 'outside' ? 'Vehicle outside photo' : 'Vehicle inside photo';
+          if (!vehiclePhotos[key]) errors[`vehicle${key === 'outside' ? 'Outside' : 'Inside'}Photo`] = `${label} is required`;
+          else if (!isValidDocumentImageUri(vehiclePhotos[key])) errors[`vehicle${key === 'outside' ? 'Outside' : 'Inside'}Photo`] = `${label} must be a valid image`;
+        });
+      }
+
+      if (checkDoc('license')) {
+        if (!form.licenseExpiryDate) errors.licenseExpiryDate = 'Required';
+        else if (!isFutureExpiryDate(form.licenseExpiryDate)) errors.licenseExpiryDate = 'Expiry date must be in the future';
+      }
+      if (checkDoc('insurance')) {
+        if (!form.insuranceExpiryDate) errors.insuranceExpiryDate = 'Required';
+        else if (!isFutureExpiryDate(form.insuranceExpiryDate)) errors.insuranceExpiryDate = 'Expiry date must be in the future';
+      }
+      if (checkDoc('authorization')) {
+        if (!form.authorizationExpiryDate) errors.authorizationExpiryDate = 'Required';
+        else if (!isFutureExpiryDate(form.authorizationExpiryDate)) errors.authorizationExpiryDate = 'Expiry date must be in the future';
+      }
     }
     if (step === 3) {
       const hasMomoCode = form.momoCode.trim().length > 0;

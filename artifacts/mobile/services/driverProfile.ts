@@ -146,6 +146,7 @@ export async function applyAsDriver(input: DriverApplicationInput): Promise<void
     district: input.district,
     sector: input.sector,
     cell: input.cell,
+    village: input.village,
     national_id_number: input.nationalIdNumber,
     national_id_country: input.nationalIdCountry,
 

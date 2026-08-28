@@ -94,15 +94,18 @@ function resolveUploadUrlForMobile(targetUrl: string): string {
     const backendHost = backendUrlObj.hostname;
     const backendOrigin = backendUrlObj.origin;
 
-    if (targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1')) {
+    if (targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1') || targetUrl.includes('minio:9000') || targetUrl.includes(':9000')) {
       let resolved = targetUrl
         .replace('localhost', backendHost)
-        .replace('127.0.0.1', backendHost);
+        .replace('127.0.0.1', backendHost)
+        .replace('minio', backendHost);
 
       // Route through backend proxy port 8080 if pointing at MinIO port 9000 directly
-      if (resolved.includes(':9000/rides-docs/')) {
-        const parts = resolved.split('/rides-docs/');
-        resolved = `${backendOrigin}/api/v1/uploads/objects/${parts[1]}`;
+      if (resolved.includes(':9000')) {
+        const match = resolved.match(/(?::9000)\/+(.+)$/);
+        if (match && match[1]) {
+          resolved = `${backendOrigin}/api/v1/uploads/objects/${match[1]}`;
+        }
       }
 
       console.log('[MOBILE:UPLOAD] 🔀 Resolved local upload URL for mobile device:', { original: targetUrl, resolved });

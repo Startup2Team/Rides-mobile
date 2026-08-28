@@ -43,7 +43,7 @@ import { readBackendError } from '@/utils/backendErrorMessage';
 export default function DriverOnboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { driverProfile, user, saveDriverProfile, switchMode } = useAuth();
+  const { driverProfile, user, saveDriverProfile, switchMode, refreshDriverProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -85,6 +85,7 @@ export default function DriverOnboarding() {
     vehiclePhotos,
     selfieUri,
     step,
+    rejectedDocuments: rejectionSummary?.rejectedDocuments,
   });
 
   useEffect(() => {
@@ -204,6 +205,19 @@ export default function DriverOnboarding() {
       );
     } catch (error) {
       reportOperationalFailure('driver.application.submit', error);
+      // Check if the backend genuinely created the application (e.g., 409 duplicate
+      // credentials or secondary network drop after driver_profiles insertion).
+      const backendSynced = await refreshDriverProfile();
+      if (backendSynced || driverProfile?.verificationStatus === 'pending_review') {
+        const pendingProfile: DriverProfile = buildPendingDriverProfile(form, selfieUri);
+        await saveDriverProfile(pendingProfile);
+        await removeStoredDriverOnboardingDraft();
+        await switchMode('customer');
+        setLoading(false);
+        replaceFlowScreen(router, '/driver-submission-confirmation');
+        return;
+      }
+
       const backendError = readBackendError(error);
       setLoading(false);
       setDraftLoaded(true);
