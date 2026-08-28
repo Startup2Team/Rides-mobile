@@ -118,11 +118,13 @@ export default function DriverOnboarding() {
       setRejectionSummary(summary);
       if (summary) {
         setErrors(current => ({ ...current, ...buildRejectionErrors(summary) }));
-        if (summary.rejectedFields && summary.rejectedFields.some(f => ['brand', 'model', 'plateNumber'].includes(f))) {
-          setStep(0);
-        } else if (summary.rejectedFields && summary.rejectedFields.some(f => ['licenseNumber', 'nationalId', 'dob', 'province', 'district', 'sector', 'cell', 'village', 'momoCode'].includes(f))) {
+        if (summary.rejectedDocuments && summary.rejectedDocuments.length > 0) {
+          setStep(2);
+        } else if (summary.rejectedFields && summary.rejectedFields.some(f => ['brand', 'model', 'plateNumber', 'manufactureYear'].includes(f))) {
           setStep(1);
-        } else if (summary.rejectedDocuments && summary.rejectedDocuments.length > 0) {
+        } else if (summary.rejectedFields && summary.rejectedFields.some(f => ['nationalId', 'dob', 'province', 'district', 'sector', 'cell', 'village', 'selfie'].includes(f))) {
+          setStep(0);
+        } else {
           setStep(2);
         }
       }
@@ -264,16 +266,22 @@ export default function DriverOnboarding() {
     replaceFlowScreen(router, '/driver-submission-confirmation');
   };
 
+  const isResubmission = driverProfile?.verificationStatus === 'rejected' || !!rejectionSummary;
+
   const handleNext = () => {
     const validationErrors = validate();
     if (Object.keys(validationErrors).length) {
       setErrors(validationErrors);
       return;
     }
+    if (isResubmission) {
+      void saveAndContinue();
+      return;
+    }
     if (step < 4) {
       setStep(current => current + 1);
     } else {
-      saveAndContinue();
+      void saveAndContinue();
     }
   };
 
@@ -365,7 +373,15 @@ export default function DriverOnboarding() {
           </>
         )}
         <AppButton
-          title={step < 4 ? 'Continue' : 'Submit Registration'}
+          title={
+            isResubmission
+              ? step === 2
+                ? 'Resubmit Document'
+                : 'Resubmit Application'
+              : step < 4
+              ? 'Continue'
+              : 'Submit Registration'
+          }
           onPress={handleNext}
           fullWidth
           size="lg"
