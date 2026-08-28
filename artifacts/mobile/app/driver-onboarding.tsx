@@ -167,15 +167,19 @@ export default function DriverOnboarding() {
     if (docs.nationalId?.[1]) documents.push({ documentType: 'NATIONAL_ID_BACK', uri: docs.nationalId[1] });
     if (docs.insurance?.[0]) documents.push({ documentType: 'VEHICLE_INSURANCE', uri: docs.insurance[0] });
     if (docs.authorization?.[0]) documents.push({ documentType: 'VEHICLE_AUTHORIZATION', uri: docs.authorization[0] });
-    if (selfieUri) documents.push({ documentType: 'SELFIE', uri: selfieUri });
+    let documentsToUpload = documents;
+    if (isResubmission && rejectionSummary?.rejectedDocuments && rejectionSummary.rejectedDocuments.length > 0) {
+      const rejectedTypes = rejectionSummary.rejectedDocuments;
+      documentsToUpload = documents.filter(doc => {
+        if (doc.documentType === 'LICENCE_FRONT' || doc.documentType === 'LICENCE_BACK') return rejectedTypes.includes('license');
+        if (doc.documentType === 'NATIONAL_ID_FRONT' || doc.documentType === 'NATIONAL_ID_BACK') return rejectedTypes.includes('nationalId');
+        if (doc.documentType === 'VEHICLE_INSURANCE') return rejectedTypes.includes('insurance');
+        if (doc.documentType === 'VEHICLE_AUTHORIZATION') return rejectedTypes.includes('authorization');
+        if (doc.documentType === 'SELFIE') return rejectedTypes.includes('selfie');
+        return true;
+      });
+    }
 
-    // Real backend: create the driver application, then upload every KYC
-    // document. This is the ONLY thing that actually resubmits a rejected /
-    // needs-more-info application — the backend flips the status back to
-    // PENDING_REVIEW when (and only when) this succeeds. It must never be
-    // faked or swallowed: a network failure here used to be silently eaten
-    // while the app still told the driver "Application Submitted!" and wrote
-    // a local pending_review status that the backend never agreed with.
     let result: DriverApplicationSubmitResult;
     try {
       result = await submitDriverApplicationWithDocuments(
@@ -192,8 +196,6 @@ export default function DriverOnboarding() {
           sector: form.sector,
           cell: form.cell,
           village: form.village,
-          // Client-validated required at step 0 (useDriverOnboardingValidation);
-          // nationalIdCountry can only be '' if that validation was bypassed.
           nationalIdNumber: form.nationalId,
           nationalIdCountry: form.nationalIdCountry || 'RW',
           gender: form.gender || undefined,
@@ -203,7 +205,7 @@ export default function DriverOnboarding() {
           insuranceExpiryDate: form.insuranceExpiryDate || undefined,
           authorizationExpiryDate: form.authorizationExpiryDate || undefined,
         },
-        documents,
+        documentsToUpload,
       );
     } catch (error) {
       reportOperationalFailure('driver.application.submit', error);
