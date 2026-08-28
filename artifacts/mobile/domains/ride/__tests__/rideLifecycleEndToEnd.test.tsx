@@ -262,7 +262,9 @@ describe('ride lifecycle end-to-end shadow verification', () => {
     mockProcessRideCommand.mockClear();
     resetObservabilityForTests();
 
-    act(() => result.current.cancelRide());
+    await act(async () => {
+      await result.current.cancelRide();
+    });
 
     expect(result.current.currentRide).toEqual(expect.objectContaining({
       status: 'cancelled',

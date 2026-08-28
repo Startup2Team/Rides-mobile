@@ -16,7 +16,7 @@ export function useDriverNegotiationActions({
 }: {
   canSendOffer: boolean;
   sendDriverOffer: (amount: number) => void;
-  cancelRide: () => void;
+  cancelRide: () => Promise<boolean>;
   currentRide: Ride | null;
   offerText: string;
   setFareError: (message: string | null) => void;
@@ -46,14 +46,20 @@ export function useDriverNegotiationActions({
   }, [currentRide?.customerPhone]);
 
   const handleDecline = useCallback(() => {
+    // cancelRide already surfaces its own Alert and leaves the ride untouched
+    // on a backend rejection — only leave the negotiation screen once it
+    // actually confirmed.
+    const declineAndLeave = async () => {
+      if (await cancelRide()) navigateToDriverHomeAfterCompletion(router);
+    };
     Alert.alert(
       'Decline ride',
       'Why do you want to decline this negotiation?',
       [
-        { text: 'Price is too low', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
-        { text: 'Too far from pickup', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
-        { text: 'Busy right now', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
-        { text: 'Other reason', onPress: () => { cancelRide(); navigateToDriverHomeAfterCompletion(router); } },
+        { text: 'Price is too low', onPress: declineAndLeave },
+        { text: 'Too far from pickup', onPress: declineAndLeave },
+        { text: 'Busy right now', onPress: declineAndLeave },
+        { text: 'Other reason', onPress: declineAndLeave },
         { text: 'Keep negotiating', style: 'cancel' },
       ],
       { cancelable: true },
