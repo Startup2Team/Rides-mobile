@@ -26,6 +26,16 @@ export const JOURNEY_TRACKING_INTERVAL_MS = 3000;
 export const JOURNEY_TRACKING_NOISE = 0.001;
 export const RIDE_HISTORY_LIMIT = 50;
 
+// Backstop cadence for re-verifying an already-loaded ride against
+// GET /rides/active while one is active. The tracking sockets' own read-idle
+// watchdog (services/customerTrackingSocket.ts, services/driverTrackingSocket.ts)
+// is the primary defense against a silently-dead connection; this interval
+// (+ the foreground trigger + the FCM-reconcile trigger) is a second,
+// independent line of defense that doesn't depend on the socket noticing
+// anything at all — deliberately not aggressive, it's a backstop, not a
+// polling replacement for the socket.
+export const RIDE_RECONCILE_INTERVAL_MS = 30_000;
+
 // How often the customer streams their real GPS to the driver while a ride is
 // active (see RideProvider's customer-location publish effect) — matches the
 // driver's own reporting cadence in app/(driver)/index.tsx.
