@@ -32,7 +32,9 @@ const registeredTaskCallback = (() => {
   return call[1] as (input: { data?: unknown; error?: unknown }) => Promise<void>;
 })();
 
-function fixDelivery(overrides: Partial<{ latitude: number; longitude: number }> = {}) {
+function fixDelivery(
+  overrides: Partial<{ latitude: number; longitude: number; heading: number | null; speed: number | null }> = {},
+) {
   return {
     data: {
       locations: [
@@ -40,8 +42,8 @@ function fixDelivery(overrides: Partial<{ latitude: number; longitude: number }>
           coords: {
             latitude: overrides.latitude ?? -1.95,
             longitude: overrides.longitude ?? 30.05,
-            heading: null,
-            speed: null,
+            heading: overrides.heading ?? null,
+            speed: overrides.speed ?? null,
           },
         },
       ],
@@ -104,5 +106,22 @@ describe('customer-live-location background task', () => {
 
     expect(mockUpdateCustomerLocation).not.toHaveBeenCalled();
     expect(Location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
+  });
+
+  // Regression: expo-location reports heading/speed as -1 (a number, not null)
+  // when unknown. Forwarding -1 made the backend 400 the whole update (gte=0),
+  // silently dropping the rider's live position. They must be omitted, not sent.
+  test('omits heading and speed when the device reports -1 (unknown) so the update is not rejected', async () => {
+    await saveVersionedStorage(STORAGE_KEYS.customerLocationBackgroundRideId, 'ride-live-unknown-course');
+    mockUpdateCustomerLocation.mockResolvedValue(undefined);
+
+    await registeredTaskCallback(fixDelivery({ heading: -1, speed: -1 }));
+
+    expect(mockUpdateCustomerLocation).toHaveBeenCalledWith('ride-live-unknown-course', {
+      lat: -1.95,
+      lng: 30.05,
+      heading: undefined,
+      speed: undefined,
+    });
   });
 });
