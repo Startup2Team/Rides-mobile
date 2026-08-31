@@ -5,8 +5,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppMap, AppMarker, MAP_TYPES, type AppMapHandle, type AppMapType } from '@/components/map';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -32,8 +32,6 @@ import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { Coords, KIGALI_CENTER, VehicleType } from '@/types';
 import { useActiveRideReadModel } from '@/domains/ride/dualRead/rideDualReadAdapter';
 
-const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
-type AppMapType = (typeof MAP_TYPES)[number];
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
@@ -81,7 +79,7 @@ export default function RideScreen() {
   const { currentRide, driverLocation, cancelRide } = useRide();
   const activeRideReadModel = useActiveRideReadModel();
   const { showToast } = useToast();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<AppMapHandle>(null);
   const fittedMapStateRef = useRef<string | null>(null);
   const previousRideStatusRef = useRef<string | null>(null);
   /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
@@ -356,41 +354,39 @@ export default function RideScreen() {
   return (
     <View style={styles.container}>
       {/* Map */}
-      <MapView
+      <AppMap
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
         initialRegion={mapInitialRegion}
         mapType={mapType}
-        customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
         {mapDriverLocation && (
-          <Marker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <AppMarker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <VehicleMapMarker
               type={currentRide.vehicleType}
               rotationDeg={vehicleRotationDeg}
             />
-          </Marker>
+          </AppMarker>
         )}
         {!isInProgress && pickupPinCoordinate && (
-          <Marker
+          <AppMarker
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
             centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
-          </Marker>
+          </AppMarker>
         )}
         {(isArrived || isInProgress) && destinationPinCoordinate && (
-          <Marker
+          <AppMarker
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
             centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
-          </Marker>
+          </AppMarker>
         )}
         {isArriving && remainingDriverToPickupRoute ? (
           <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
@@ -401,7 +397,7 @@ export default function RideScreen() {
         {isArrived && fullRideRouteThroughPins ? (
           <RoutePolyline coordinates={fullRideRouteThroughPins} color={colors.destructiveHex} width={4} />
         ) : null}
-      </MapView>
+      </AppMap>
 
       {showMapControls && (
         <>
@@ -490,13 +486,6 @@ export default function RideScreen() {
     </View>
   );
 }
-
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-];
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

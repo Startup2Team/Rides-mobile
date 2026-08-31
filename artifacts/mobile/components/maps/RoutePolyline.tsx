@@ -1,5 +1,5 @@
 import React from 'react';
-import { Polyline } from 'react-native-maps';
+import { AppPolyline } from '@/components/map';
 import { APPLE_SYSTEM_RED_HEX } from '@/constants/systemColors';
 import { Coords } from '@/types';
 
@@ -10,7 +10,7 @@ interface RoutePolylineProps {
 }
 
 /**
- * Renders a road-following polyline on a react-native-maps MapView.
+ * Renders a road-following polyline on the app map.
  * Pass the decoded coordinates from useRoute().route.coordinates.
  */
 export function RoutePolyline({
@@ -21,10 +21,10 @@ export function RoutePolyline({
   if (coordinates.length < 2) return null;
 
   return (
-    <Polyline
+    <AppPolyline
       coordinates={coordinates}
-      strokeColor={color}
-      strokeWidth={width}
+      color={color}
+      width={width}
       lineCap="butt"
       lineJoin="round"
     />

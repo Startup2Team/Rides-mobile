@@ -22,7 +22,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { AppMap, AppCircle, AppMarker, MAP_TYPES, type AppMapHandle, type AppMapType } from '@/components/map';
 import { useDemandHeatmapQuery } from '@/query/hooks/useDemandHeatmapQuery';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -74,8 +74,6 @@ import {
   formatTripDistance,
   formatTripDuration,
 } from "@/domain/driverRequestCard";
-const MAP_TYPES = ["standard", "satellite", "hybrid"] as const;
-type AppMapType = (typeof MAP_TYPES)[number];
 // A cached fix older than this is too stale to seed the map with.
 const LAST_KNOWN_LOCATION_MAX_AGE_MS = 120_000;
 const CTA_AVATAR_SIZE = 34;
@@ -206,7 +204,7 @@ export default function DriverDashboard() {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<AppMapHandle | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const { vehicles } = useVehicles();
 
@@ -911,15 +909,11 @@ export default function DriverDashboard() {
   return (
     <View style={[styles.root, { backgroundColor: dashboardPageBackground }]}>
       {/* ── Full-screen map ── */}
-      <MapView
+      <AppMap
         ref={mapRef}
         style={[StyleSheet.absoluteFill, { top: dashboardCardHeight }]}
-        provider={PROVIDER_DEFAULT}
         mapType={mapType}
         initialRegion={visibleDriverRegion(driverLocation)}
-        customMapStyle={mapType === "standard" ? darkMapStyle : undefined}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
       >
         {showHeatmap &&
           heatmap?.cells.map(cell => {
@@ -927,7 +921,7 @@ export default function DriverDashboard() {
             const intensity = maxDemand > 0 ? cell.count / maxDemand : 0;
             const fillOpacity = 0.18 + intensity * 0.42;
             return (
-              <Circle
+              <AppCircle
                 key={`demand-${cell.latitude}-${cell.longitude}`}
                 center={{ latitude: cell.latitude, longitude: cell.longitude }}
                 radius={140}
@@ -937,16 +931,16 @@ export default function DriverDashboard() {
               />
             );
           })}
-        <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
+        <AppMarker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
             <VehicleMapMarker
               type={activeVehicleType}
               style={styles.driverVehicleMarker}
             />
           </View>
-        </Marker>
+        </AppMarker>
         {request && (
-          <Marker coordinate={request.pickup}>
+          <AppMarker coordinate={request.pickup}>
             <View
               style={[styles.pickupPin, { backgroundColor: colors.primary }]}
             >
@@ -956,9 +950,9 @@ export default function DriverDashboard() {
                 color={colors.primaryForeground}
               />
             </View>
-          </Marker>
+          </AppMarker>
         )}
-      </MapView>
+      </AppMap>
 
       {/* Top dashboard overlay */}
       <View
@@ -1842,20 +1836,6 @@ export default function DriverDashboard() {
     </View>
   );
 }
-
-const darkMapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#1d2c4d" }] },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [{ color: "#304a7d" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#0e1626" }],
-  },
-];
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

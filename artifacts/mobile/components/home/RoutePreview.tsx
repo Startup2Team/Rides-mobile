@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
-import { Marker, Polyline } from 'react-native-maps';
+import { AppMarker, AppPolyline } from '@/components/map';
 import {
   getLocationMapPinCenterOffset,
   LOCATION_MAP_PIN_ANCHOR,
@@ -55,16 +55,16 @@ function RoutePreviewComponent({
   return (
     <>
       {animatedCoordinates.length > 1 && (
-        <Polyline
+        <AppPolyline
           coordinates={animatedCoordinates}
-          strokeColor={color}
-          strokeWidth={4}
+          color={color}
+          width={4}
           lineCap="butt"
           lineJoin="round"
         />
       )}
       {showPickup && (
-        <Marker
+        <AppMarker
           identifier="booking-pickup"
           coordinate={pickup}
           anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -73,10 +73,10 @@ function RoutePreviewComponent({
           zIndex={3}
         >
           <LocationMapPin variant="pickup" mapType={mapType} />
-        </Marker>
+        </AppMarker>
       )}
       {showDestination && destination && (
-        <Marker
+        <AppMarker
           identifier="booking-destination"
           coordinate={destination}
           anchor={LOCATION_MAP_PIN_ANCHOR}
@@ -85,7 +85,7 @@ function RoutePreviewComponent({
           zIndex={4}
         >
           <LocationMapPin variant="destination" mapType={mapType} />
-        </Marker>
+        </AppMarker>
       )}
     </>
   );

@@ -3,10 +3,10 @@ import { AppText } from '@/components/AppText';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
+import { AppMap, AppMarker, type AppMapHandle, type AppMapType } from '@/components/map';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { CustomerLocationMarker } from '@/components/maps/CustomerLocationMarker';
 import {
@@ -127,10 +127,10 @@ export default function DriverNavigateScreen() {
 
   const [waitClockTick, setWaitClockTick] = useState(0);
   const [bottomCardHeight, setBottomCardHeight] = useState(260);
-  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
+  const [mapType, setMapType] = useState<AppMapType>('standard');
   const [completionInProgress, setCompletionInProgress] = useState(false);
 
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<AppMapHandle>(null);
   const fittedMapPhaseRef = useRef<string | null>(null);
   const timers = useScreenTimerManager();
   const waitClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -421,26 +421,24 @@ export default function DriverNavigateScreen() {
   return (
     <View style={styles.container}>
       {/* Fullscreen map */}
-      <MapView
+      <AppMap
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
         initialRegion={{ ...driverPos, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
         mapType={mapType}
-        customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
-        <Marker coordinate={driverPos} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
+        <AppMarker coordinate={driverPos} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
           <VehicleMapMarker type={currentRide.vehicleType} rotationDeg={vehicleRotationDeg} />
-        </Marker>
+        </AppMarker>
         {phase !== 'inprogress' && (
-          <Marker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} centerOffset={getLocationMapPinCenterOffset()} tracksViewChanges={false}>
+          <AppMarker coordinate={pickupPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} centerOffset={getLocationMapPinCenterOffset()} tracksViewChanges={false}>
             <LocationMapPin variant="pickup" mapType={mapType} />
-          </Marker>
+          </AppMarker>
         )}
         {phase !== 'pickup' && (
-          <Marker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} centerOffset={getLocationMapPinCenterOffset()} tracksViewChanges={false}>
+          <AppMarker coordinate={destinationPinCoordinate} anchor={LOCATION_MAP_PIN_ANCHOR} centerOffset={getLocationMapPinCenterOffset()} tracksViewChanges={false}>
             <LocationMapPin variant="destination" mapType={mapType} />
-          </Marker>
+          </AppMarker>
         )}
         {/* Customer's LIVE position (customer_location WS events) — separate from
             the static pickup pin above, which just marks where the trip starts.
@@ -450,7 +448,7 @@ export default function DriverNavigateScreen() {
             it stops in_progress while publishing kept going would just be a
             marker that silently freezes instead of disappearing. */}
         {customerLocation && (
-          <Marker
+          <AppMarker
             coordinate={customerLocation}
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
@@ -464,7 +462,7 @@ export default function DriverNavigateScreen() {
               imageUri={currentRide.customerImage ?? null}
               stale={isCustomerLocationStale}
             />
-          </Marker>
+          </AppMarker>
         )}
         {phase !== 'waiting' && remainingRoute && (
           <RoutePolyline coordinates={remainingRoute} color={colors.destructiveHex} width={4} />
@@ -472,7 +470,7 @@ export default function DriverNavigateScreen() {
         {phase === 'waiting' && fullRideRouteThroughPins && (
           <RoutePolyline coordinates={fullRideRouteThroughPins} color={colors.destructiveHex} width={4} />
         )}
-      </MapView>
+      </AppMap>
 
       {/* Map controls */}
       <TouchableOpacity
@@ -726,13 +724,6 @@ export default function DriverNavigateScreen() {
     </View>
   );
 }
-
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-];
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

@@ -1,7 +1,15 @@
 import { Dimensions } from 'react-native';
+// Import from the leaf types module, NOT the '@/components/map' barrel —
+// that barrel pulls in the real react-native-maps/@rnmapbox/maps native
+// modules at import time (both providers are statically wired for the
+// runtime MAP_PROVIDER switch), which breaks Jest for every screen that
+// merely needs this string-union type/constant, not an actual map.
+import { MAP_TYPES, type AppMapType } from '@/components/map/types';
 import { VEHICLE_BASE_FARE, VehicleType } from '@/types';
 import { getCoordDistance } from '@/utils/locationUtils';
 import { TAB_BAR_CONTENT_HEIGHT, TAB_BAR_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
+
+export { MAP_TYPES, type AppMapType };
 
 const windowDimensions =
   typeof Dimensions?.get === 'function'
@@ -81,8 +89,6 @@ export const SAVE_LABEL_WIDTHS: Record<string, number> = {
   Other: SAVE_LABEL_AVAILABLE_WIDTH * 0.18,
 };
 
-export const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
-export type AppMapType = typeof MAP_TYPES[number];
 export type MapPickerTarget = 'pickup' | 'dropoff' | 'savedLocation';
 
 export const DRIVER_OFFSETS = [
