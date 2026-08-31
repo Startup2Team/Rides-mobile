@@ -1596,10 +1596,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         // expo-location reports speed in metres/second; the backend field is
         // speed_kmh, so convert (m/s → km/h) before sending.
         const speedMps = loc.coords.speed;
+        const heading = loc.coords.heading;
         await updateCustomerLocation(trackedRideId, {
           lat: loc.coords.latitude,
           lng: loc.coords.longitude,
-          heading: loc.coords.heading ?? undefined,
+          // -1 = unknown course on iOS/Android; sending it 400s the whole
+          // update backend-side, so only send a real 0-360 bearing.
+          heading: heading != null && heading >= 0 ? heading : undefined,
           speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
         });
       } catch (error) {

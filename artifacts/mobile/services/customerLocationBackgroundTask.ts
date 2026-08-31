@@ -81,10 +81,15 @@ TaskManager.defineTask(CUSTOMER_LOCATION_BACKGROUND_TASK, async ({ data, error }
     // expo-location reports speed in metres/second; the backend field is
     // speed_kmh (see services/customerLocation.ts).
     const speedMps = latest.coords.speed;
+    const heading = latest.coords.heading;
     await updateCustomerLocation(rideId, {
       lat: latest.coords.latitude,
       lng: latest.coords.longitude,
-      heading: latest.coords.heading ?? undefined,
+      // expo-location reports heading as -1 (a number, not null) when the
+      // course is unknown (stationary / no GPS heading). The backend rejects
+      // anything < 0 with a 400 that discards the whole update (incl. the
+      // valid lat/lng), so only send heading when it's a real 0-360 bearing.
+      heading: heading != null && heading >= 0 ? heading : undefined,
       speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
     });
   } catch (error) {
