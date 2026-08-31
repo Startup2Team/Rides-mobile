@@ -38,6 +38,8 @@ const mockIsTerminalCustomerLocationError = jest.fn((_error: unknown) => false);
 const mockStartCustomerLocationBackgroundUpdates = jest.fn(async (..._args: unknown[]) => false);
 const mockStopCustomerLocationBackgroundUpdates = jest.fn(async () => undefined);
 const mockGetTrackedCustomerLocationBackgroundRideId = jest.fn(async (): Promise<string | null> => null);
+const mockSendNegotiationMessage = jest.fn(async (..._args: unknown[]) => undefined);
+const mockSendDriverNegotiationMessage = jest.fn(async (..._args: unknown[]) => undefined);
 
 jest.mock('@/utils/driverProfileImage', () => ({
   buildDriverWithUploadedPhoto: jest.fn(async driver => driver),
@@ -69,6 +71,7 @@ jest.mock('@/services/rides', () => ({
 jest.mock('@/services/negotiation', () => ({
   proposeFare: jest.fn(async () => undefined),
   acceptFare: jest.fn(async () => undefined),
+  sendNegotiationMessage: (...args: unknown[]) => mockSendNegotiationMessage(...args),
 }));
 jest.mock('@/services/driverRides', () => ({
   getActiveDriverRide: () => mockGetActiveDriverRide(),
@@ -84,6 +87,7 @@ jest.mock('@/services/driverNegotiation', () => ({
   proposeFare: jest.fn(async () => undefined),
   acceptFare: jest.fn(async () => undefined),
   lockManualFare: jest.fn(async () => undefined),
+  sendNegotiationMessage: (...args: unknown[]) => mockSendDriverNegotiationMessage(...args),
 }));
 // The customer live-location publish effect fires as soon as a ride is
 // CONFIRMED — stub it so tests never make a real backend call.
@@ -218,6 +222,10 @@ describe('RideProvider lifecycle orchestration', () => {
     mockStopCustomerLocationBackgroundUpdates.mockClear();
     mockGetTrackedCustomerLocationBackgroundRideId.mockReset();
     mockGetTrackedCustomerLocationBackgroundRideId.mockResolvedValue(null);
+    mockSendNegotiationMessage.mockReset();
+    mockSendNegotiationMessage.mockResolvedValue(undefined);
+    mockSendDriverNegotiationMessage.mockReset();
+    mockSendDriverNegotiationMessage.mockResolvedValue(undefined);
     const originalConsoleError = console.error;
     jest.spyOn(console, 'error').mockImplementation((...args) => {
       if (String(args[0]).includes('react-test-renderer is deprecated')) return;
@@ -351,6 +359,73 @@ describe('RideProvider lifecycle orchestration', () => {
     }));
   });
 
+  // NEG-1/NEG-2/NEG-3 (customer side): sendNegotiationMessage tags the
+  // optimistic bubble 'pending', flips it to 'failed' (never a fake
+  // 'delivered') on backend rejection, and a retry with the same id replaces
+  // it in place instead of appending a duplicate.
+  test('sendNegotiationMessage marks the bubble failed on rejection and a same-id retry replaces it, not duplicates it', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+    await createAndMatchRide(result);
+
+    mockSendNegotiationMessage.mockRejectedValueOnce(new Error('network down'));
+
+    await act(async () => {
+      // sendNegotiationMessage re-throws on backend failure — the failure
+      // itself (bubble tagged 'failed') is asserted via ride state below.
+      await result.current.sendNegotiationMessage('can you come to the gate?').catch(() => undefined);
+    });
+
+    expect(result.current.currentRide?.negotiation).toHaveLength(1);
+    expect(result.current.currentRide?.negotiation[0]).toEqual(expect.objectContaining({
+      sender: 'customer',
+      type: 'text',
+      text: 'can you come to the gate?',
+      deliveryStatus: 'failed',
+    }));
+    const messageId = result.current.currentRide?.negotiation[0].id;
+
+    mockSendNegotiationMessage.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      await result.current.sendNegotiationMessage('can you come to the gate?', messageId);
+    });
+
+    // Still exactly one bubble — the retry replaced it, it did not duplicate it.
+    expect(result.current.currentRide?.negotiation).toHaveLength(1);
+    expect(result.current.currentRide?.negotiation[0]).toEqual(expect.objectContaining({
+      id: messageId,
+      deliveryStatus: 'sent',
+    }));
+  });
+
+  // NEG-1: an inbound negotiation_text from the counterparty appends once;
+  // the sender's own echo of a message it already appended optimistically
+  // must stay suppressed (appendNegotiationEvent's viewer-echo filter).
+  test('negotiation_text appends the driver reply once and suppresses the customer\'s own echo', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+    await createAndMatchRide(result);
+
+    await act(async () => {
+      await result.current.sendNegotiationMessage('are you close?');
+    });
+    expect(result.current.currentRide?.negotiation).toHaveLength(1);
+
+    // The backend echoes the customer's own message back over the socket —
+    // must NOT be appended a second time.
+    await emitCustomer('negotiation_text', { actor_role: 'CUSTOMER', body: 'are you close?' });
+    expect(result.current.currentRide?.negotiation).toHaveLength(1);
+
+    // The driver's real reply arrives and appends normally, with no
+    // deliveryStatus (it's already confirmed delivered — it came from the
+    // server, not from an optimistic local send).
+    await emitCustomer('negotiation_text', { actor_role: 'DRIVER', body: 'almost there' });
+    expect(result.current.currentRide?.negotiation).toHaveLength(2);
+    const driverReply = result.current.currentRide?.negotiation.at(-1);
+    expect(driverReply).toEqual(expect.objectContaining({ sender: 'driver', type: 'text', text: 'almost there' }));
+    expect(driverReply?.deliveryStatus).toBeUndefined();
+  });
+
   test('cancels a ride, clears matching work, and does not persist it to history', async () => {
     const { result } = renderRideProvider();
 
@@ -466,6 +541,84 @@ describe('RideProvider lifecycle orchestration', () => {
     act(() => result.current.declineRideRequest());
     expect(mockShadowWireDeclineRideCommand).toHaveBeenCalledTimes(1);
     expect(result.current.pendingRequest).toBeNull();
+  });
+
+  // Review finding #1: the driver side was previously send-only-from-customer
+  // — sendDriverNegotiationMessage / addDriverTextMessage were dead code.
+  // Confirms the driver's own context method now appends + delivers, and the
+  // customer's real reply arrives as a plain (non-pending) negotiation_text.
+  test('driver sendDriverNegotiationMessage appends and delivers, customer reply arrives via negotiation_text', async () => {
+    mockAuthDriverProfile = {
+      id: 'driver-1',
+      isOnline: true,
+      isVerified: true,
+      verificationStatus: 'approved',
+      vehicleType: 'moto',
+      plateNumber: 'RAD 001 A',
+      licenseNumber: 'LIC001',
+      vehicles: [{
+        id: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        status: 'approved',
+        plateNumber: 'RAD 001 A',
+        licenseNumber: 'LIC001',
+        submittedAt: '2026-06-08T09:00:00.000Z',
+      }],
+      activeVehicle: { vehicleId: 'driver-vehicle:moto:rad-001-a' },
+    };
+    mockDriverEntitlement = {
+      entitlement: {
+        ...EMPTY_DRIVER_ENTITLEMENT,
+        vehicleId: 'driver-vehicle:moto:rad-001-a',
+        vehicleType: 'moto',
+        remainingRideCredits: 3,
+        vehicleEntitlements: [{
+          vehicleId: 'driver-vehicle:moto:rad-001-a',
+          vehicleType: 'moto',
+          activePackageId: null,
+          remainingRideCredits: 3,
+          remainingBonusRides: 0,
+          activations: [],
+          creditTransactions: [],
+          purchaseHistory: [],
+          updatedAt: '2026-06-08T09:00:00.000Z',
+          authority: 'local_prototype',
+        }],
+      },
+    };
+
+    const { result } = renderRideProvider();
+
+    await act(async () => {
+      result.current.simulateIncomingRideRequest();
+    });
+    act(() => result.current.acceptRideRequest());
+    await waitFor(() => expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'negotiating',
+    })));
+
+    await act(async () => {
+      await result.current.sendDriverNegotiationMessage('on my way to the pin');
+    });
+    expect(result.current.currentRide?.negotiation).toHaveLength(1);
+    expect(result.current.currentRide?.negotiation[0]).toEqual(expect.objectContaining({
+      sender: 'driver',
+      type: 'text',
+      text: 'on my way to the pin',
+      deliveryStatus: 'sent',
+    }));
+
+    await waitFor(() => expect(mockCapturedDriverHandlers).not.toBeNull());
+    await act(async () => {
+      mockCapturedDriverHandlers.onEvent({
+        type: 'negotiation_text',
+        payload: { actor_role: 'CUSTOMER', body: 'ok, waiting outside' },
+      });
+    });
+    expect(result.current.currentRide?.negotiation).toHaveLength(2);
+    const customerReply = result.current.currentRide?.negotiation.at(-1);
+    expect(customerReply).toEqual(expect.objectContaining({ sender: 'customer', type: 'text', text: 'ok, waiting outside' }));
+    expect(customerReply?.deliveryStatus).toBeUndefined();
   });
 
   test('shadow wiring failure does not block driver accept or decline', async () => {
