@@ -335,11 +335,8 @@ export default function DriverNavigateScreen() {
                 ...IN_PROGRESS_CANCEL_REASONS.map(reason => ({
                   text: reason,
                   style: reason === 'Safety concern' ? 'destructive' as const : 'default' as const,
-                  onPress: async () => {
-                    // cancelRide already surfaces its own Alert and leaves the
-                    // trip untouched on a backend rejection — only leave once
-                    // it actually confirmed.
-                    if (!(await cancelRide())) return;
+                  onPress: () => {
+                    cancelRide();
                     showToast(`Ride cancelled: ${reason}`, 'info');
                     navigateToDriverHomeAfterCompletion(router);
                   },
@@ -371,11 +368,8 @@ export default function DriverNavigateScreen() {
         ...WAITING_CANCEL_REASONS.map(reason => ({
           text: reason,
           style: reason === 'Safety concern' ? 'destructive' as const : 'default' as const,
-          onPress: async () => {
-            // cancelRide already surfaces its own Alert and leaves the ride
-            // untouched on a backend rejection — only leave once it actually
-            // confirmed.
-            if (!(await cancelRide())) return;
+          onPress: () => {
+            cancelRide();
             showToast(`Ride cancelled: ${reason}`, 'info');
             navigateToDriverHomeAfterCompletion(router);
           },

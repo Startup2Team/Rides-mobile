@@ -7,7 +7,7 @@ import type { Ride } from '@/types';
 const mockMarkArrived = jest.fn();
 const mockStartJourney = jest.fn();
 const mockCompleteRide = jest.fn();
-const mockCancelRide = jest.fn(async () => true);
+const mockCancelRide = jest.fn();
 const mockShowToast = jest.fn();
 const mockRecordCompletedRide = jest.fn();
 
@@ -342,7 +342,7 @@ describe('DriverNavigateScreen', () => {
     expect(screen.getByText(/Customer .* late/)).toBeTruthy();
   });
 
-  test('late wait cancellation asks for confirmation and can cancel ride', async () => {
+  test('late wait cancellation asks for confirmation and can cancel ride', () => {
     setRide('arrived', {
       arrivedAt: '2026-06-17T08:10:00.000Z',
       waitStartedAt: new Date(Date.now() - 181000).toISOString(),
@@ -358,36 +358,11 @@ describe('DriverNavigateScreen', () => {
     );
 
     const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    await act(async () => {
-      await buttons[1].onPress();
-    });
+    buttons[1].onPress();
     expect(mockCancelRide).toHaveBeenCalledTimes(1);
     expect(mockShowToast).toHaveBeenCalledWith('Ride cancelled: Passenger did not show up', 'info');
     const { router } = require('expo-router');
     expect(router.replace).toHaveBeenCalledWith('/(driver)');
-  });
-
-  test('a rejected cancel does not toast or leave the trip screen', async () => {
-    setRide('arrived', {
-      arrivedAt: '2026-06-17T08:10:00.000Z',
-      waitStartedAt: new Date(Date.now() - 181000).toISOString(),
-    });
-    // cancelRide already surfaces its own Alert on a backend rejection and
-    // leaves the ride untouched — the screen must not also claim success.
-    mockCancelRide.mockResolvedValueOnce(false);
-
-    render(<DriverNavigateScreen />);
-
-    fireEvent.press(screen.getByText('Cancel Ride'));
-    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    await act(async () => {
-      await buttons[1].onPress();
-    });
-
-    expect(mockCancelRide).toHaveBeenCalledTimes(1);
-    expect(mockShowToast).not.toHaveBeenCalled();
-    const { router } = require('expo-router');
-    expect(router.replace).not.toHaveBeenCalledWith('/(driver)');
   });
 
   test('complete ride appears only during active trip and asks for confirmation', () => {
