@@ -2,6 +2,7 @@ import {
   acceptLatestCustomerOffer,
   acceptLatestDriverOffer,
   addCustomerCounterOffer,
+  addCustomerTextMessage,
   addDriverOffer,
   respondToCustomerCounterOffer,
 } from '../rideNegotiation';
@@ -77,5 +78,28 @@ describe('ride negotiation transitions', () => {
       status: 'confirmed',
       agreedFare: 1100,
     }));
+  });
+
+  // NEG-1: customer text messaging during negotiation (was unwired in the UI).
+  test('appends a customer text message while negotiating', () => {
+    const ride = createRide();
+
+    const updated = addCustomerTextMessage(ride, '  can you come to the gate?  ');
+
+    expect(updated?.negotiation).toHaveLength(ride.negotiation.length + 1);
+    const last = updated?.negotiation[updated.negotiation.length - 1];
+    expect(last).toEqual(
+      expect.objectContaining({ sender: 'customer', type: 'text', text: 'can you come to the gate?' }),
+    );
+  });
+
+  test('does not append an empty/whitespace-only text message', () => {
+    const ride = createRide();
+    expect(addCustomerTextMessage(ride, '   ')).toBe(ride);
+  });
+
+  test('does not append a text message when the ride is not negotiating', () => {
+    const ride = createRide({ status: 'confirmed' });
+    expect(addCustomerTextMessage(ride, 'hi')).toBe(ride);
   });
 });

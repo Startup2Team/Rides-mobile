@@ -40,6 +40,12 @@ export interface RideContextType {
   acceptDriverOffer: () => void;
   acceptCustomerOffer: () => void;
   declineDriverOffer: () => void;
+  // Free-text negotiation messages (as opposed to a fare offer). Awaited so
+  // the input dock can surface a failed-to-send state; reject on backend
+  // failure, resolve once the message call succeeds (or is a no-op with no
+  // backend ride yet).
+  sendNegotiationMessage: (text: string) => Promise<void>;
+  sendDriverNegotiationMessage: (text: string) => Promise<void>;
   completeRide: (source?: 'customer' | 'driver', driverIdentity?: {
     driverId?: string;
     driverName?: string;

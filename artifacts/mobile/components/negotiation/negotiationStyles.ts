@@ -231,6 +231,18 @@ export const styles = StyleSheet.create({
     fontFamily: typography.label.fontFamily,
   },
   sendBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  messageInput: {
+    flex: 1,
+    minHeight: 48,
+    maxHeight: 96,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    ...typography.body,
+    fontFamily: typography.body.fontFamily,
+  },
+  messageRowSpacing: { marginTop: 8 },
   mainActions: {
     flexDirection: 'row',
     gap: 9,

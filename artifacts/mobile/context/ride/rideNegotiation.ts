@@ -17,6 +17,34 @@ function createOfferMessage(
   };
 }
 
+function createTextMessage(sender: 'customer' | 'driver', text: string): NegotiationMessage {
+  return {
+    id: generateRideId(),
+    sender,
+    type: 'text',
+    text,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+// Optimistically show the local user's own free-text negotiation message.
+// Mirrors addCustomerCounterOffer/addDriverOffer: only while NEGOTIATING (the
+// backend rejects the message call otherwise), the real thread stays in sync
+// via the WS `negotiation_text` event / history replay on resume.
+export function addCustomerTextMessage(ride: Ride | null, text: string): Ride | null {
+  if (!ride || ride.status !== 'negotiating') return ride;
+  const trimmed = text.trim();
+  if (!trimmed) return ride;
+  return { ...ride, negotiation: [...ride.negotiation, createTextMessage('customer', trimmed)] };
+}
+
+export function addDriverTextMessage(ride: Ride | null, text: string): Ride | null {
+  if (!ride || ride.status !== 'negotiating') return ride;
+  const trimmed = text.trim();
+  if (!trimmed) return ride;
+  return { ...ride, negotiation: [...ride.negotiation, createTextMessage('driver', trimmed)] };
+}
+
 export function addCustomerCounterOffer(ride: Ride | null, amount: number): Ride | null {
   if (!ride) return null;
   const customerMessages = ride.negotiation.filter(

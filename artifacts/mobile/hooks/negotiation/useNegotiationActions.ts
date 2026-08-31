@@ -2,26 +2,39 @@ import { useCallback } from 'react';
 import { Alert, Linking } from 'react-native';
 import type { Ride } from '@/types';
 import { validateFareAmount } from '@/context/ride/rideConstants';
+import { MAX_NEGOTIATION_MESSAGE_LENGTH } from '@/components/negotiation/negotiationUtils';
 
 export function useNegotiationActions({
   canCounter,
+  canSendMessage,
   counterOffer,
   currentRide,
   declineDriverOffer,
+  messageText,
   offerText,
+  sendNegotiationMessage,
   setCounterLoading,
   setFareError,
+  setMessageError,
+  setMessageSending,
+  setMessageText,
   setOfferText,
   setPendingOfferAmount,
   setShowDriverTyping,
 }: {
   canCounter: boolean;
+  canSendMessage: boolean;
   counterOffer: (amount: number) => void;
   currentRide: Ride | null;
   declineDriverOffer: () => void;
+  messageText: string;
   offerText: string;
+  sendNegotiationMessage: (text: string) => Promise<void>;
   setCounterLoading: (loading: boolean) => void;
   setFareError: (message: string | null) => void;
+  setMessageError: (message: string | null) => void;
+  setMessageSending: (sending: boolean) => void;
+  setMessageText: (text: string) => void;
   setOfferText: (text: string) => void;
   setPendingOfferAmount: (amount: number | null) => void;
   setShowDriverTyping: (show: boolean) => void;
@@ -56,6 +69,30 @@ export function useNegotiationActions({
     sendCounter(parseInt(offerText.replace(/\D/g, ''), 10));
   }, [offerText, sendCounter]);
 
+  const handleSendMessage = useCallback(() => {
+    const trimmed = messageText.trim().slice(0, MAX_NEGOTIATION_MESSAGE_LENGTH);
+    if (!trimmed || !canSendMessage) return;
+    setMessageError(null);
+    setMessageText('');
+    setMessageSending(true);
+    void sendNegotiationMessage(trimmed)
+      .catch(() => {
+        // The optimistic bubble already shows locally; restore the draft so
+        // one tap on Send retries without retyping. Real state (did the
+        // driver actually receive it) is settled by history replay on resume.
+        setMessageText(trimmed);
+        setMessageError('Message failed to send. Tap send to retry.');
+      })
+      .finally(() => setMessageSending(false));
+  }, [
+    canSendMessage,
+    messageText,
+    sendNegotiationMessage,
+    setMessageError,
+    setMessageSending,
+    setMessageText,
+  ]);
+
   const handleCall = useCallback(() => {
     const phone = currentRide?.driver?.phone;
     if (!phone) return;
@@ -78,5 +115,5 @@ export function useNegotiationActions({
     );
   }, [declineDriverOffer]);
 
-  return { handleCall, handleDecline, handleSendCounter };
+  return { handleCall, handleDecline, handleSendCounter, handleSendMessage };
 }

@@ -2,6 +2,8 @@ export const MAX_OFFERS = 3;
 export const WARNING = '#FF9500';
 export const INPUT_DOCK_HEIGHT = 64;
 export const DRIVER_TYPING_DELAY_MS = 450;
+// Mirrors the backend's negotiation/message contract (1-500 chars).
+export const MAX_NEGOTIATION_MESSAGE_LENGTH = 500;
 
 export type NegotiationStatusTone = 'neutral' | 'active' | 'waiting' | 'limit';
 

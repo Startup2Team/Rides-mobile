@@ -31,7 +31,9 @@ import {
   acceptLatestDriverOffer,
   acceptRideWithFare,
   addCustomerCounterOffer,
+  addCustomerTextMessage,
   addDriverOffer,
+  addDriverTextMessage,
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
 import { markRideArrived, startRideJourney } from './rideTracking';
@@ -70,10 +72,16 @@ import {
 import { getActiveDriverRide } from '@/services/driverRides';
 import { readBackendError } from '@/utils/backendErrorMessage';
 import { estimateFare } from '@/services/fare';
-import { proposeFare as proposeBackendFare, acceptFare as acceptBackendFare, getNegotiationHistory } from '@/services/negotiation';
+import {
+  proposeFare as proposeBackendFare,
+  acceptFare as acceptBackendFare,
+  getNegotiationHistory,
+  sendNegotiationMessage as sendCustomerNegotiationMessage,
+} from '@/services/negotiation';
 import {
   declineFare as driverDeclineFare,
   getNegotiationHistory as getDriverNegotiationHistory,
+  sendNegotiationMessage as sendDriverNegotiationMessageApi,
 } from '@/services/driverNegotiation';
 import {
   acceptRide as driverAcceptRide,
@@ -1038,6 +1046,37 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     cancelRide();
   }, [cancelRide]);
 
+  // Customer sends a free-text negotiation message (as opposed to a fare
+  // offer). Optimistically shown like counterOffer; the driver's real reply
+  // arrives over the WebSocket (negotiation_text) — no simulated reply. The
+  // backend call is awaited (unlike the fire-and-forget offer actions) so the
+  // input dock can surface a "failed to send, try again" state instead of
+  // silently pretending the message reached the driver.
+  const sendNegotiationMessage = useCallback(async (text: string) => {
+    setCurrentRide(prev => addCustomerTextMessage(prev, text));
+    const backendRideId = backendRideIdRef.current;
+    if (!backendRideId) return;
+    try {
+      await sendCustomerNegotiationMessage(backendRideId, text.trim());
+    } catch (error) {
+      reportOperationalFailure('ride.backend.negotiation_message', error, { rideId: backendRideId });
+      throw error;
+    }
+  }, []);
+
+  // Driver-side twin of sendNegotiationMessage above.
+  const sendDriverNegotiationMessage = useCallback(async (text: string) => {
+    setCurrentRide(prev => addDriverTextMessage(prev, text));
+    const backendRideId = backendRideIdRef.current;
+    if (!backendRideId) return;
+    try {
+      await sendDriverNegotiationMessageApi(backendRideId, text.trim());
+    } catch (error) {
+      reportOperationalFailure('ride.driver.negotiation_message', error, { rideId: backendRideId });
+      throw error;
+    }
+  }, []);
+
   const markArrived = useCallback(() => {
     timers.clearInterval(driverIntervalRef.current);
     driverIntervalRef.current = null;
@@ -1797,6 +1836,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     acceptDriverOffer,
     acceptCustomerOffer,
     declineDriverOffer,
+    sendNegotiationMessage,
+    sendDriverNegotiationMessage,
     completeRide,
     markArrived,
     startJourney,
@@ -1834,6 +1875,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     rideHistory,
     riderAcceptWithFare,
     sendDriverOffer,
+    sendDriverNegotiationMessage,
+    sendNegotiationMessage,
     simulateIncomingRideRequest,
     startJourney,
   ]);
