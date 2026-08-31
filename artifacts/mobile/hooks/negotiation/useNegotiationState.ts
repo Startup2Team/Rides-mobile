@@ -16,18 +16,8 @@ export function useNegotiationState(currentRide: Ride | null) {
   const [showDriverTyping, setShowDriverTyping] = useState(false);
   const [actionPanelHeight, setActionPanelHeight] = useState(0);
   const [fareError, setFareError] = useState<string | null>(null);
-  const [messageText, setMessageText] = useState('');
-  const [messageSending, setMessageSending] = useState(false);
-  const [messageError, setMessageError] = useState<string | null>(null);
-  // The id of the in-flight/failed outgoing text message, so a retry reuses
-  // the same optimistic bubble instead of appending a duplicate. Cleared once
-  // the message is confirmed delivered.
-  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
 
   const negotiation = currentRide?.negotiation ?? [];
-  // Free-text chat has no offer-count limit on the backend — only the ride
-  // status gates it, so it stays usable even after the fare-offer cap is hit.
-  const canSendMessage = currentRide?.status === 'negotiating';
   const customerOffers = negotiation.filter(message => message.sender === 'customer' && message.type === 'offer');
   const driverOffers = negotiation.filter(message => message.sender === 'driver' && message.type === 'offer');
   const lastDriverOffer = [...driverOffers].pop();
@@ -135,31 +125,22 @@ export function useNegotiationState(currentRide: Ride | null) {
     actionPanelOffset,
     canAccept,
     canCounter,
-    canSendMessage,
     chatStatus,
     counterLoading,
     customerLimitReached,
     fareError,
     lastDriverOffer,
-    messageError,
-    messageSending,
-    messageText,
     messagesUsed,
     negotiation,
     offerPlaceholder,
     offerText,
     offersRemaining,
-    pendingMessageId,
     pendingOfferMessage,
     scrollRef,
     setActionPanelHeight,
     setCounterLoading,
     setFareError,
-    setMessageError,
-    setMessageSending,
-    setMessageText,
     setOfferText,
-    setPendingMessageId,
     setPendingOfferAmount,
     setShowAcceptModal,
     setShowDriverTyping,

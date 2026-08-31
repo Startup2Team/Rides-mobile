@@ -2,7 +2,7 @@ import { AppText } from '@/components/AppText';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { ActivityIndicator, Platform, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { AppButton } from '@/components/AppButton';
@@ -10,12 +10,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { NegotiationStatusCard } from '@/components/negotiation/NegotiationStatusCard';
 import { NegotiationTimeline } from '@/components/negotiation/NegotiationTimeline';
-import {
-  INPUT_DOCK_HEIGHT,
-  MAX_NEGOTIATION_MESSAGE_LENGTH,
-  MAX_OFFERS,
-  WARNING,
-} from '@/components/negotiation/negotiationUtils';
+import { INPUT_DOCK_HEIGHT, MAX_OFFERS, WARNING } from '@/components/negotiation/negotiationUtils';
 import { formatFare } from '@/components/negotiation/negotiationUtils';
 import { styles } from '@/components/negotiation/negotiationStyles';
 import { useRide } from '@/context/RideContext';
@@ -29,33 +24,24 @@ import { spacing } from '@/constants/spacing';
 export default function DriverNegotiationScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, sendDriverOffer, acceptCustomerOffer, cancelRide, riderAcceptWithFare, sendDriverNegotiationMessage } = useRide();
+  const { currentRide, sendDriverOffer, acceptCustomerOffer, cancelRide, riderAcceptWithFare } = useRide();
 
   const state = useDriverNegotiationState(currentRide);
   const actions = useDriverNegotiationActions({
-    canSendMessage: state.canSendMessage,
     canSendOffer: state.canSendOffer,
     sendDriverOffer,
     cancelRide,
     currentRide,
-    messageSending: state.messageSending,
-    messageText: state.messageText,
     offerText: state.offerText,
-    pendingMessageId: state.pendingMessageId,
-    sendDriverNegotiationMessage,
     setFareError: state.setFareError,
-    setMessageError: state.setMessageError,
-    setMessageSending: state.setMessageSending,
-    setMessageText: state.setMessageText,
     setOfferText: state.setOfferText,
-    setPendingMessageId: state.setPendingMessageId,
   });
 
   if (!currentRide) return null;
 
   const footerBottomInset = insets.bottom + (Platform.OS === 'web' ? 24 : 6);
   const scrollBottomInset =
-    state.actionPanelOffset + ((state.canSendOffer || state.canSendMessage) ? INPUT_DOCK_HEIGHT : 0) + 12;
+    state.actionPanelOffset + (state.canSendOffer ? INPUT_DOCK_HEIGHT : 0) + 12;
 
   const customerInitial = (currentRide.customerName ?? 'C').charAt(0).toUpperCase();
   const destinationIsGeneric = currentRide.destination.locationType === 'generic';
@@ -166,7 +152,6 @@ export default function DriverNegotiationScreen() {
         <NegotiationTimeline
           bottomInset={scrollBottomInset}
           negotiation={state.negotiation}
-          onRetryMessage={actions.handleRetryMessage}
           pendingOfferMessage={null}
           scrollRef={state.scrollRef}
           showDriverTyping={state.showCustomerTyping}
@@ -176,115 +161,53 @@ export default function DriverNegotiationScreen() {
 
       {/* Input dock + action panel */}
       <View style={styles.bottomChrome}>
-        {(state.canSendOffer || state.canSendMessage) && (
+        {state.canSendOffer && (
           <KeyboardStickyView
             offset={{ closed: 0, opened: state.actionPanelOffset }}
             style={[styles.inputDock, { backgroundColor: colors.background }]}
           >
-            {state.canSendOffer && (
-              <>
-                <View style={styles.inputRow}>
-                  <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
-                    <AppText style={[styles.currencyText, { color: colors.foreground }]}>RWF</AppText>
-                  </View>
-                  <TextInput
-                    style={[
-                      styles.offerInput,
-                      !state.offerText && styles.offerInputPlaceholder,
-                      {
-                        color: colors.foreground,
-                        borderColor: state.fareError ? colors.destructive : colors.border,
-                        backgroundColor: colors.card,
-                      },
-                    ]}
-                    value={state.offerText}
-                    onChangeText={text => {
-                      state.setOfferText(text.replace(/\D/g, ''));
-                      if (state.fareError) state.setFareError(null);
-                    }}
-                    placeholder={state.offerPlaceholder}
-                    placeholderTextColor={colors.mutedForeground}
-                    keyboardType="number-pad"
-                    accessibilityLabel="Your fare offer in RWF"
-                  />
-                  <TouchableOpacity
-                    style={[styles.sendBtn, { backgroundColor: state.offerText ? colors.primary : colors.muted }]}
-                    onPress={actions.handleSendOffer}
-                    disabled={!state.offerText}
-                    accessibilityLabel="Send offer"
-                    accessibilityRole="button"
-                  >
-                    <Feather name="send" size={icons.semantic.row} color={state.offerText ? colors.primaryForeground : colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
-                {state.fareError ? (
-                  <AppText
-                    style={[styles.fareErrorText, { color: colors.destructive }]}
-                    accessibilityRole="alert"
-                  >
-                    {state.fareError}
-                  </AppText>
-                ) : null}
-              </>
-            )}
-
-            {state.canSendMessage && (
-              <>
-                <View style={[styles.inputRow, state.canSendOffer && styles.messageRowSpacing]}>
-                  <TextInput
-                    style={[
-                      styles.messageInput,
-                      {
-                        color: colors.foreground,
-                        borderColor: state.messageError ? colors.destructive : colors.border,
-                        backgroundColor: colors.card,
-                      },
-                    ]}
-                    value={state.messageText}
-                    onChangeText={text => {
-                      state.setMessageText(text.slice(0, MAX_NEGOTIATION_MESSAGE_LENGTH));
-                      if (state.messageError) state.setMessageError(null);
-                    }}
-                    // TODO(i18n)
-                    placeholder="Message the customer"
-                    placeholderTextColor={colors.mutedForeground}
-                    multiline
-                    maxLength={MAX_NEGOTIATION_MESSAGE_LENGTH}
-                    editable={!state.messageSending}
-                    // TODO(i18n)
-                    accessibilityLabel="Message to customer"
-                    // TODO(i18n)
-                    accessibilityHint="Type a message to send to the customer during negotiation"
-                  />
-                  <TouchableOpacity
-                    style={[styles.sendBtn, { backgroundColor: state.messageText.trim() ? colors.primary : colors.muted }]}
-                    onPress={actions.handleSendMessage}
-                    disabled={!state.messageText.trim() || state.messageSending}
-                    // TODO(i18n)
-                    accessibilityLabel="Send message"
-                    accessibilityRole="button"
-                  >
-                    {state.messageSending ? (
-                      <ActivityIndicator size="small" color={colors.primaryForeground} />
-                    ) : (
-                      <Feather
-                        name="message-circle"
-                        size={icons.semantic.row}
-                        color={state.messageText.trim() ? colors.primaryForeground : colors.mutedForeground}
-                      />
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {state.messageError ? (
-                  <AppText
-                    style={[styles.fareErrorText, { color: colors.destructive }]}
-                    accessibilityRole="alert"
-                  >
-                    {state.messageError}
-                  </AppText>
-                ) : null}
-              </>
-            )}
+            <View style={styles.inputRow}>
+              <View style={[styles.currencyBadge, { backgroundColor: colors.muted }]}>
+                <AppText style={[styles.currencyText, { color: colors.foreground }]}>RWF</AppText>
+              </View>
+              <TextInput
+                style={[
+                  styles.offerInput,
+                  !state.offerText && styles.offerInputPlaceholder,
+                  {
+                    color: colors.foreground,
+                    borderColor: state.fareError ? colors.destructive : colors.border,
+                    backgroundColor: colors.card,
+                  },
+                ]}
+                value={state.offerText}
+                onChangeText={text => {
+                  state.setOfferText(text.replace(/\D/g, ''));
+                  if (state.fareError) state.setFareError(null);
+                }}
+                placeholder={state.offerPlaceholder}
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="number-pad"
+                accessibilityLabel="Your fare offer in RWF"
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, { backgroundColor: state.offerText ? colors.primary : colors.muted }]}
+                onPress={actions.handleSendOffer}
+                disabled={!state.offerText}
+                accessibilityLabel="Send offer"
+                accessibilityRole="button"
+              >
+                <Feather name="send" size={icons.semantic.row} color={state.offerText ? colors.primaryForeground : colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            {state.fareError ? (
+              <AppText
+                style={[styles.fareErrorText, { color: colors.destructive }]}
+                accessibilityRole="alert"
+              >
+                {state.fareError}
+              </AppText>
+            ) : null}
           </KeyboardStickyView>
         )}
 

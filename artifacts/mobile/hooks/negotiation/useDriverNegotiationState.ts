@@ -10,13 +10,6 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
   const [actionPanelHeight, setActionPanelHeight] = useState(0);
   const [showCustomerTyping, setShowCustomerTyping] = useState(false);
   const [fareError, setFareError] = useState<string | null>(null);
-  const [messageText, setMessageText] = useState('');
-  const [messageSending, setMessageSending] = useState(false);
-  const [messageError, setMessageError] = useState<string | null>(null);
-  // The id of the in-flight/failed outgoing text message, so a retry reuses
-  // the same optimistic bubble instead of appending a duplicate. Cleared once
-  // the message is confirmed delivered. Mirrors useNegotiationState (customer).
-  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
 
   const negotiation = currentRide?.negotiation ?? [];
   const driverOffers = negotiation.filter(m => m.sender === 'driver' && m.type === 'offer');
@@ -26,10 +19,6 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
   const lastMessage = negotiation[negotiation.length - 1];
   const driverLimitReached = driverOffers.length >= MAX_OFFERS;
   const canSendOffer = !driverLimitReached;
-  // Free-text chat has no offer-count limit on the backend — only the ride
-  // status gates it, so it stays usable even after the fare-offer cap is hit.
-  // Mirrors useNegotiationState (customer).
-  const canSendMessage = currentRide?.status === 'negotiating';
   // Symmetric to the customer gate: the driver may only accept the customer's
   // LATEST offer. After the driver sends a counter, their own offer is the
   // latest message, so Accept is gated off until the customer responds.
@@ -108,30 +97,21 @@ export function useDriverNegotiationState(currentRide: Ride | null) {
   return {
     actionPanelOffset,
     canAccept,
-    canSendMessage,
     canSendOffer,
     chatStatus,
     driverLimitReached,
     fareError,
     lastCustomerOffer,
     lastDriverOffer,
-    messageError,
-    messageSending,
-    messageText,
     messagesUsed,
     negotiation,
     offerPlaceholder,
     offerText,
     offersRemaining,
-    pendingMessageId,
     scrollRef,
     setActionPanelHeight,
     setFareError,
-    setMessageError,
-    setMessageSending,
-    setMessageText,
     setOfferText,
-    setPendingMessageId,
     setShowAcceptModal,
     showAcceptModal,
     showCustomerTyping,

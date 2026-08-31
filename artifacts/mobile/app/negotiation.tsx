@@ -14,27 +14,17 @@ import { useNegotiationState } from '@/hooks/negotiation/useNegotiationState';
 export default function NegotiationScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { currentRide, counterOffer, acceptDriverOffer, declineDriverOffer, sendNegotiationMessage } =
-    useRide();
+  const { currentRide, counterOffer, acceptDriverOffer, declineDriverOffer } = useRide();
   const state = useNegotiationState(currentRide);
   const actions = useNegotiationActions({
     canCounter: state.canCounter,
-    canSendMessage: state.canSendMessage,
     counterOffer,
     currentRide,
     declineDriverOffer,
-    messageSending: state.messageSending,
-    messageText: state.messageText,
     offerText: state.offerText,
-    pendingMessageId: state.pendingMessageId,
-    sendNegotiationMessage,
     setCounterLoading: state.setCounterLoading,
     setFareError: state.setFareError,
-    setMessageError: state.setMessageError,
-    setMessageSending: state.setMessageSending,
-    setMessageText: state.setMessageText,
     setOfferText: state.setOfferText,
-    setPendingMessageId: state.setPendingMessageId,
     setPendingOfferAmount: state.setPendingOfferAmount,
     setShowDriverTyping: state.setShowDriverTyping,
   });
@@ -62,7 +52,6 @@ export default function NegotiationScreen() {
         <NegotiationTimeline
           bottomInset={scrollBottomInset}
           negotiation={state.negotiation}
-          onRetryMessage={actions.handleRetryMessage}
           pendingOfferMessage={state.pendingOfferMessage}
           scrollRef={state.scrollRef}
           showDriverTyping={state.showDriverTyping}
@@ -74,7 +63,6 @@ export default function NegotiationScreen() {
         actionPanelOffset={state.actionPanelOffset}
         canAccept={state.canAccept}
         canCounter={state.canCounter}
-        canSendMessage={state.canSendMessage}
         counterLoading={state.counterLoading}
         customerLimitReached={state.customerLimitReached}
         fareError={state.fareError}
@@ -82,18 +70,12 @@ export default function NegotiationScreen() {
         handleCall={actions.handleCall}
         handleDecline={actions.handleDecline}
         handleSendCounter={actions.handleSendCounter}
-        handleSendMessage={actions.handleSendMessage}
         lastDriverOffer={state.lastDriverOffer}
-        messageError={state.messageError}
-        messageSending={state.messageSending}
-        messageText={state.messageText}
         offerPlaceholder={state.offerPlaceholder}
         offerText={state.offerText}
         ride={currentRide}
         setActionPanelHeight={state.setActionPanelHeight}
         setFareError={state.setFareError}
-        setMessageError={state.setMessageError}
-        setMessageText={state.setMessageText}
         setOfferText={state.setOfferText}
         setShowAcceptModal={state.setShowAcceptModal}
         showAcceptModal={state.showAcceptModal}
