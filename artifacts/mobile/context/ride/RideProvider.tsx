@@ -765,6 +765,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const dist = estimate?.distanceKm ?? localDist;
     const fare = estimate?.totalFareRwf ?? localFare;
     const duration = estimate?.durationMinutes ?? Math.round(localDist * 3 + 5);
+    // Real OSRM route, when the backend produced one for this corridor — draws
+    // the actual road path immediately instead of waiting on a client Mapbox
+    // fetch, and backs the ETA shown on the ride screen.
+    const routeCoordinates = estimate?.routeCoordinates ?? undefined;
+    const routeDurationMinutes = estimate?.routeDurationSeconds != null
+      ? Math.round(estimate.routeDurationSeconds / 60)
+      : undefined;
 
       const ride: Ride = {
       id: generateRideId(),
@@ -781,6 +788,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       suggestedFare: fare,
       negotiation: [],
       createdAt: new Date().toISOString(),
+      ...(routeCoordinates ? { routeCoordinates } : {}),
+      ...(routeDurationMinutes != null ? { routeDurationMinutes } : {}),
     };
 
     const displayDestText = destText.trim() || destination.address?.trim() || '';
@@ -868,6 +877,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
                 // parallel) — the searching screen counts down against it.
                 ...(res.giveUpSeconds != null ? { searchBudgetSeconds: res.giveUpSeconds } : {}),
                 ...(res.searchDeadlineAt ? { searchDeadlineAt: res.searchDeadlineAt } : {}),
+                // Definitive OSRM route from ride creation — overrides the
+                // fare-estimate's route (same corridor, authoritative source).
+                ...(res.routeCoordinates ? { routeCoordinates: res.routeCoordinates } : {}),
+                ...(res.routeDistanceKm != null ? { routeDistanceKm: res.routeDistanceKm } : {}),
+                ...(res.routeDurationMinutes != null ? { routeDurationMinutes: res.routeDurationMinutes } : {}),
               }
             : prev,
         );

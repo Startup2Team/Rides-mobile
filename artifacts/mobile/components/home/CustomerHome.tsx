@@ -116,6 +116,7 @@ export default function CustomerHome() {
     distance: dist,
     estimatedFare,
     estimatedFareLoading,
+    fareRoute,
     handleBook,
     pickup,
     selectedVehicle,
@@ -295,6 +296,7 @@ export default function CustomerHome() {
     bottomInset: insets.bottom,
     routeRecenterRequest,
     vehicleType: selectedVehicle,
+    backendRoute: hasPreciseRouteLocations ? fareRoute : null,
   });
 
   const shouldShowYouAreHere =

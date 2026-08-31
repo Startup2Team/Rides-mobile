@@ -1,4 +1,15 @@
+import polyline from '@mapbox/polyline';
 import { Coords } from '@/types';
+
+/**
+ * Decode a backend-supplied encoded polyline (OSRM route_geometry, precision 5)
+ * into map coordinates. Mirrors services/mapbox.ts's decode of Mapbox Directions
+ * geometry, which uses precision 6 — the two are NOT interchangeable.
+ */
+export function decodeRoutePolyline(encoded: string): Coords[] {
+  const decoded: [number, number][] = polyline.decode(encoded, 5);
+  return decoded.map(([latitude, longitude]) => ({ latitude, longitude }));
+}
 
 /** Haversine distance in km between two coordinates */
 export function haversineKm(a: Coords, b: Coords): number {

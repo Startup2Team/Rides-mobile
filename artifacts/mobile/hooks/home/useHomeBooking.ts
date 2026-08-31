@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { calcFare } from '@/context/ride/rideFare';
 import { estimateFare } from '@/services/fare';
+import type { RouteResult } from '@/services/mapbox';
 import type { RideLocation, VehicleType } from '@/types';
 import {
   arePickupAndDropoffSame,
@@ -157,6 +158,22 @@ export function useHomeBooking({
   }, [distance, fareEnabled, fareQuery.data, fareQuery.isLoading, selectedVehicle]);
   const estimatedFareLoading = fareEnabled && fareQuery.isLoading;
 
+  // Real OSRM route for the current pickup/destination/vehicle, when the
+  // backend produced one — null while loading, on error, or when the backend
+  // fell back to the straight-line estimate. Same RouteResult shape the
+  // client-side Mapbox fetch returns, so callers can prefer it as a drop-in.
+  const fareRoute: RouteResult | null = useMemo(() => {
+    const data = fareQuery.data;
+    if (!data || data.routeDurationSeconds == null || !data.routeCoordinates || data.routeCoordinates.length < 2) {
+      return null;
+    }
+    return {
+      coordinates: data.routeCoordinates,
+      distanceMeters: data.distanceKm * 1000,
+      durationSeconds: data.routeDurationSeconds,
+    };
+  }, [fareQuery.data]);
+
   return {
     bookLoading,
     destText,
@@ -164,6 +181,7 @@ export function useHomeBooking({
     distance,
     estimatedFare,
     estimatedFareLoading,
+    fareRoute,
     handleBook,
     pickup,
     selectedVehicle,
