@@ -180,6 +180,15 @@ export const styles = StyleSheet.create({
   bubbleTime: {
     ...typography.tiny,
   },
+  // Delivery status of the viewer's own outgoing message — never applied to
+  // anything that came from the server (already confirmed delivered).
+  bubblePending: { opacity: 0.65 },
+  deliveryIndicator: { marginLeft: 2 },
+  retryHint: {
+    ...typography.tiny,
+    marginTop: 2,
+    textAlign: 'right',
+  },
   systemBubble: {
     maxWidth: '88%',
     borderRadius: 12,

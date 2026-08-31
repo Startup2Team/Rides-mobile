@@ -17,3 +17,11 @@ export function formatMessageTime(timestamp: string) {
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+// A client-only id for an outgoing free-text negotiation message, tracked
+// across a send → failure → retry cycle so the retry can reuse it (see
+// rideNegotiation.ts addCustomerTextMessage/addDriverTextMessage) instead of
+// appending a second, duplicate bubble.
+export function generateNegotiationMessageId() {
+  return `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}

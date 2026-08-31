@@ -19,6 +19,10 @@ export function useNegotiationState(currentRide: Ride | null) {
   const [messageText, setMessageText] = useState('');
   const [messageSending, setMessageSending] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
+  // The id of the in-flight/failed outgoing text message, so a retry reuses
+  // the same optimistic bubble instead of appending a duplicate. Cleared once
+  // the message is confirmed delivered.
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
 
   const negotiation = currentRide?.negotiation ?? [];
   // Free-text chat has no offer-count limit on the backend — only the ride
@@ -145,6 +149,7 @@ export function useNegotiationState(currentRide: Ride | null) {
     offerPlaceholder,
     offerText,
     offersRemaining,
+    pendingMessageId,
     pendingOfferMessage,
     scrollRef,
     setActionPanelHeight,
@@ -154,6 +159,7 @@ export function useNegotiationState(currentRide: Ride | null) {
     setMessageSending,
     setMessageText,
     setOfferText,
+    setPendingMessageId,
     setPendingOfferAmount,
     setShowAcceptModal,
     setShowDriverTyping,

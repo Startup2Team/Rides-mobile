@@ -340,6 +340,12 @@ export interface NegotiationMessage {
   text?: string;
   timestamp: string;
   isFinal?: boolean;
+  // Local delivery state for the viewer's OWN optimistic messages only.
+  // Undefined for every message that came from the server (socket echo,
+  // history replay) — those are already confirmed delivered, so there is
+  // nothing to render. 'pending' while the backend call is in flight,
+  // 'failed' once it rejects (never silently upgraded to a fake success).
+  deliveryStatus?: 'pending' | 'sent' | 'failed';
 }
 
 export interface MockDriver {

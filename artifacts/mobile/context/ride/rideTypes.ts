@@ -43,9 +43,11 @@ export interface RideContextType {
   // Free-text negotiation messages (as opposed to a fare offer). Awaited so
   // the input dock can surface a failed-to-send state; reject on backend
   // failure, resolve once the message call succeeds (or is a no-op with no
-  // backend ride yet).
-  sendNegotiationMessage: (text: string) => Promise<void>;
-  sendDriverNegotiationMessage: (text: string) => Promise<void>;
+  // backend ride yet). `messageId` lets a retry reuse the same optimistic
+  // bubble instead of appending a duplicate — omit it on a first send.
+  // Resolves with the id the message was (or will be) tracked under.
+  sendNegotiationMessage: (text: string, messageId?: string) => Promise<string>;
+  sendDriverNegotiationMessage: (text: string, messageId?: string) => Promise<string>;
   completeRide: (source?: 'customer' | 'driver', driverIdentity?: {
     driverId?: string;
     driverName?: string;

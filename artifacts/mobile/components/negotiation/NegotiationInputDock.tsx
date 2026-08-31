@@ -143,18 +143,22 @@ export function NegotiationInputDock({
                       setMessageText(text.slice(0, MAX_NEGOTIATION_MESSAGE_LENGTH));
                       if (messageError) setMessageError(null);
                     }}
+                    // TODO(i18n)
                     placeholder="Message the driver"
                     placeholderTextColor={colors.mutedForeground}
                     multiline
                     maxLength={MAX_NEGOTIATION_MESSAGE_LENGTH}
                     editable={!messageSending}
+                    // TODO(i18n)
                     accessibilityLabel="Message to driver"
+                    // TODO(i18n)
                     accessibilityHint="Type a message to send to your driver during negotiation"
                   />
                   <TouchableOpacity
                     style={[styles.sendBtn, { backgroundColor: messageText.trim() ? colors.primary : colors.muted }]}
                     onPress={handleSendMessage}
                     disabled={!messageText.trim() || messageSending}
+                    // TODO(i18n)
                     accessibilityLabel="Send message"
                     accessibilityRole="button"
                   >

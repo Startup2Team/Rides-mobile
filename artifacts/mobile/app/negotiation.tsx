@@ -23,8 +23,10 @@ export default function NegotiationScreen() {
     counterOffer,
     currentRide,
     declineDriverOffer,
+    messageSending: state.messageSending,
     messageText: state.messageText,
     offerText: state.offerText,
+    pendingMessageId: state.pendingMessageId,
     sendNegotiationMessage,
     setCounterLoading: state.setCounterLoading,
     setFareError: state.setFareError,
@@ -32,6 +34,7 @@ export default function NegotiationScreen() {
     setMessageSending: state.setMessageSending,
     setMessageText: state.setMessageText,
     setOfferText: state.setOfferText,
+    setPendingMessageId: state.setPendingMessageId,
     setPendingOfferAmount: state.setPendingOfferAmount,
     setShowDriverTyping: state.setShowDriverTyping,
   });
@@ -59,6 +62,7 @@ export default function NegotiationScreen() {
         <NegotiationTimeline
           bottomInset={scrollBottomInset}
           negotiation={state.negotiation}
+          onRetryMessage={actions.handleRetryMessage}
           pendingOfferMessage={state.pendingOfferMessage}
           scrollRef={state.scrollRef}
           showDriverTyping={state.showDriverTyping}

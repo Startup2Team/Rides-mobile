@@ -34,6 +34,7 @@ import {
   addCustomerTextMessage,
   addDriverOffer,
   addDriverTextMessage,
+  setNegotiationMessageDeliveryStatus,
 } from './rideNegotiation';
 import { appendRideHistory, loadRideHistory } from './ridePersistence';
 import { markRideArrived, startRideJourney } from './rideTracking';
@@ -1047,31 +1048,49 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   }, [cancelRide]);
 
   // Customer sends a free-text negotiation message (as opposed to a fare
-  // offer). Optimistically shown like counterOffer; the driver's real reply
-  // arrives over the WebSocket (negotiation_text) — no simulated reply. The
-  // backend call is awaited (unlike the fire-and-forget offer actions) so the
-  // input dock can surface a "failed to send, try again" state instead of
-  // silently pretending the message reached the driver.
-  const sendNegotiationMessage = useCallback(async (text: string) => {
-    setCurrentRide(prev => addCustomerTextMessage(prev, text));
+  // offer). Optimistically shown like counterOffer, tagged 'pending' until
+  // the backend call settles; the driver's real reply arrives over the
+  // WebSocket (negotiation_text) — no simulated reply. The backend call is
+  // awaited (unlike the fire-and-forget offer actions) so the input dock can
+  // surface a "failed to send, try again" state instead of silently
+  // pretending the message reached the driver — the bubble itself is tagged
+  // 'failed' too, it never renders as if delivered.
+  const sendNegotiationMessage = useCallback(async (text: string, messageId?: string) => {
+    const id = messageId ?? generateRideId();
+    setCurrentRide(prev => addCustomerTextMessage(prev, text, id));
     const backendRideId = backendRideIdRef.current;
-    if (!backendRideId) return;
+    if (!backendRideId) {
+      // No backend ride to send to (shouldn't happen once negotiating, but
+      // don't leave the bubble stuck showing 'pending' forever).
+      setCurrentRide(prev => setNegotiationMessageDeliveryStatus(prev, id, 'sent'));
+      return id;
+    }
     try {
       await sendCustomerNegotiationMessage(backendRideId, text.trim());
+      setCurrentRide(prev => setNegotiationMessageDeliveryStatus(prev, id, 'sent'));
+      return id;
     } catch (error) {
+      setCurrentRide(prev => setNegotiationMessageDeliveryStatus(prev, id, 'failed'));
       reportOperationalFailure('ride.backend.negotiation_message', error, { rideId: backendRideId });
       throw error;
     }
   }, []);
 
   // Driver-side twin of sendNegotiationMessage above.
-  const sendDriverNegotiationMessage = useCallback(async (text: string) => {
-    setCurrentRide(prev => addDriverTextMessage(prev, text));
+  const sendDriverNegotiationMessage = useCallback(async (text: string, messageId?: string) => {
+    const id = messageId ?? generateRideId();
+    setCurrentRide(prev => addDriverTextMessage(prev, text, id));
     const backendRideId = backendRideIdRef.current;
-    if (!backendRideId) return;
+    if (!backendRideId) {
+      setCurrentRide(prev => setNegotiationMessageDeliveryStatus(prev, id, 'sent'));
+      return id;
+    }
     try {
       await sendDriverNegotiationMessageApi(backendRideId, text.trim());
+      setCurrentRide(prev => setNegotiationMessageDeliveryStatus(prev, id, 'sent'));
+      return id;
     } catch (error) {
+      setCurrentRide(prev => setNegotiationMessageDeliveryStatus(prev, id, 'failed'));
       reportOperationalFailure('ride.driver.negotiation_message', error, { rideId: backendRideId });
       throw error;
     }
