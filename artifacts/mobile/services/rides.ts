@@ -1,7 +1,8 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
 import { BackendError } from '@/data/remote/contracts/backendErrors';
 import { toBackendTransportType, fromBackendTransportType } from '@/constants/vehicles';
-import type { VehicleType } from '@/types';
+import { decodeRoutePolyline } from '@/utils/mapUtils';
+import type { Coords, VehicleType } from '@/types';
 
 // Real backend ride endpoints under /api/v1/customer/rides.
 // The ride status machine on the backend:
@@ -133,9 +134,20 @@ export interface CreateRideResult {
    */
   giveUpSeconds: number | null;
   searchDeadlineAt: string | null;
+  /**
+   * Real road route from OSRM (staging/prod, when enabled), computed once at
+   * ride creation for the pickup→destination leg. Present ONLY when the
+   * backend produced an actual OSRM route — absent otherwise, in which case
+   * callers keep using the client-side Mapbox route fetch as before.
+   */
+  routeDistanceKm: number | null;
+  routeDurationMinutes: number | null;
+  routeDurationSeconds: number | null;
+  routeCoordinates: Coords[] | null;
 }
 
-// POST /customer/rides → { ride_id, status, give_up_seconds?, search_deadline_at? }.
+// POST /customer/rides → { ride_id, status, give_up_seconds?, search_deadline_at?,
+// route_distance_km?, route_duration_minutes?, route_duration_seconds?, route_geometry? }.
 // initial_fare is the customer's opening offer for the fare negotiation (optional).
 export async function createRide(input: CreateRideInput): Promise<CreateRideResult> {
   const client = getAppBackendClient();
@@ -152,7 +164,16 @@ export async function createRide(input: CreateRideInput): Promise<CreateRideResu
   if (input.distanceKm !== undefined) body.distance_km = input.distanceKm;
 
   const response = await client.post<
-    Envelope<{ ride_id: string; status: string; give_up_seconds?: number; search_deadline_at?: string }>
+    Envelope<{
+      ride_id: string;
+      status: string;
+      give_up_seconds?: number;
+      search_deadline_at?: string;
+      route_distance_km?: number;
+      route_duration_minutes?: number;
+      route_duration_seconds?: number;
+      route_geometry?: string;
+    }>
   >('/v1/customer/rides', { body });
   const data = response.data.data;
   return {
@@ -163,6 +184,16 @@ export async function createRide(input: CreateRideInput): Promise<CreateRideResu
         ? data.give_up_seconds
         : null,
     searchDeadlineAt: typeof data.search_deadline_at === 'string' && data.search_deadline_at ? data.search_deadline_at : null,
+    routeDistanceKm: typeof data.route_distance_km === 'number' && Number.isFinite(data.route_distance_km)
+      ? data.route_distance_km
+      : null,
+    routeDurationMinutes: typeof data.route_duration_minutes === 'number' && Number.isFinite(data.route_duration_minutes)
+      ? data.route_duration_minutes
+      : null,
+    routeDurationSeconds: typeof data.route_duration_seconds === 'number' && Number.isFinite(data.route_duration_seconds)
+      ? data.route_duration_seconds
+      : null,
+    routeCoordinates: data.route_geometry ? decodeRoutePolyline(data.route_geometry) : null,
   };
 }
 
