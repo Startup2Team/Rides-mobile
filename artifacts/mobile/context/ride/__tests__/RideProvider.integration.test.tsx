@@ -9,9 +9,11 @@ import { RideProvider, useRide } from '../RideProvider';
 import {
   CANCELLED_RIDE_CLEAR_DELAY_MS,
   JOURNEY_TRACKING_INTERVAL_MS,
+  RIDE_RECONCILE_INTERVAL_MS,
 } from '../rideConstants';
 import { loadRideHistory } from '../ridePersistence';
 import { EMPTY_DRIVER_ENTITLEMENT } from '@/domain/driverRidePackages';
+import { triggerRideReconcile } from '@/state/rideReconcileTrigger';
 import type { RideLocation } from '@/types';
 
 let mockAuthDriverProfile: any = null;
@@ -1016,5 +1018,121 @@ describe('RideProvider lifecycle orchestration', () => {
     act(() => result.current.cancelRide());
     expect(result.current.currentRide?.status).toBe('cancelled');
     expect(result.current.currentRide?.searchOutcome).toBeUndefined();
+  });
+
+  // ── Active-ride reconciliation (Phase 0 read-idle backstop) ────────────────
+  // The tracking sockets' read-idle watchdog forces a reconnect when a
+  // connection goes silently dead (services/socketReadIdleWatchdog.ts), but
+  // whatever the socket missed while it sat dead still needs to reach the
+  // app — that's reconcileActiveRide's job. These tests exercise it directly
+  // through its own triggers (the periodic backstop interval, and an inbound
+  // reconcile-worthy push) rather than through a live socket death, which the
+  // socket-service test suites already cover.
+
+  test('backstop reconcile converges a stale local status forward to match the server', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+    await createAndMatchRide(result);
+    await emitCustomer('negotiation_message', { actor_role: 'DRIVER', amount: 3000 });
+    await act(async () => {
+      result.current.acceptDriverOffer();
+    });
+    expect(result.current.currentRide).toEqual(expect.objectContaining({
+      status: 'confirmed',
+      backendRideId: 'backend-ride-1',
+    }));
+
+    // The tracking socket has gone silently dead (the scenario the read-idle
+    // watchdog exists to catch) and the driver_en_route WS event never
+    // arrived locally — but the backend has already moved the ride on.
+    mockGetActiveRide.mockResolvedValue(activeSnapshot({ id: 'backend-ride-1', status: 'DRIVER_EN_ROUTE' }));
+
+    act(() => {
+      jest.advanceTimersByTime(RIDE_RECONCILE_INTERVAL_MS);
+    });
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('arriving'));
+  });
+
+  test('backstop reconcile never rolls a locally-advanced status backward', async () => {
+    mockAuthDriverProfile = driverProfileFixture();
+    mockGetActiveDriverRide.mockResolvedValue(activeSnapshot({ status: 'DRIVER_ARRIVED', driverArrivedAt: '2026-08-12T08:00:00Z' }));
+
+    const { result } = renderRideProvider();
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('arrived'));
+
+    // A stale/racy read reports a status BEHIND local — e.g. a read that
+    // landed before the driver's own optimistic mark-arrived was durable.
+    // Reconcile must never regress a legitimately-newer local state; see
+    // RECONCILE_STATUS_ORDER's comment in RideProvider.tsx.
+    mockGetActiveDriverRide.mockResolvedValue(activeSnapshot({ status: 'CONFIRMED' }));
+
+    act(() => {
+      jest.advanceTimersByTime(RIDE_RECONCILE_INTERVAL_MS);
+    });
+    await flushPromises();
+    expect(result.current.currentRide?.status).toBe('arrived');
+  });
+
+  test('backstop reconcile dismisses the ride locally when the server no longer has it live', async () => {
+    mockAuthDriverProfile = driverProfileFixture();
+    mockGetActiveDriverRide.mockResolvedValue(activeSnapshot({ status: 'IN_PROGRESS' }));
+
+    const { result } = renderRideProvider();
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('in_progress'));
+
+    // The ride ended on the backend (completed/cancelled) while the socket
+    // sat dead and never delivered the lifecycle event — GET /rides/active
+    // (or its driver equivalent) no longer has it live at all.
+    mockGetActiveDriverRide.mockResolvedValue(null);
+
+    act(() => {
+      jest.advanceTimersByTime(RIDE_RECONCILE_INTERVAL_MS);
+    });
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('cancelled'));
+
+    act(() => {
+      jest.advanceTimersByTime(CANCELLED_RIDE_CLEAR_DELAY_MS);
+    });
+    expect(result.current.currentRide).toBeNull();
+    expect(result.current.driverLocation).toBeNull();
+    expect(result.current.customerLocation).toBeNull();
+  });
+
+  test('an inbound reconcile-worthy push triggers the same convergence as the backstop interval', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    const { result } = renderRideProvider();
+    await createAndMatchRide(result);
+    await emitCustomer('negotiation_message', { actor_role: 'DRIVER', amount: 3000 });
+    await act(async () => {
+      result.current.acceptDriverOffer();
+    });
+    expect(result.current.currentRide?.status).toBe('confirmed');
+
+    mockGetActiveRide.mockResolvedValue(activeSnapshot({ id: 'backend-ride-1', status: 'DRIVER_EN_ROUTE' }));
+
+    // Simulates services/usePushNotifications.ts calling triggerRideReconcile()
+    // on a RECONCILE-worthy push (e.g. driver_en_route) — RideProvider
+    // registers its handler once on mount (state/rideReconcileTrigger.ts).
+    act(() => {
+      triggerRideReconcile();
+    });
+    await waitFor(() => expect(result.current.currentRide?.status).toBe('arriving'));
+  });
+
+  test('reconcile is a no-op while no ride is loaded locally', async () => {
+    mockAuthUser = { id: 'customer-1', mode: 'customer' };
+    renderRideProvider();
+    await flushPromises();
+    mockGetActiveRide.mockClear();
+
+    act(() => {
+      jest.advanceTimersByTime(RIDE_RECONCILE_INTERVAL_MS);
+    });
+    await flushPromises();
+
+    // No backstop interval is even running until a ride with a backendRideId
+    // is loaded — reconcileActiveRide's own early-return is a second layer
+    // of defense on top of that.
+    expect(mockGetActiveRide).not.toHaveBeenCalled();
   });
 });
