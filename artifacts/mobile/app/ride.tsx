@@ -346,7 +346,7 @@ export default function RideScreen() {
   // Mapbox fetch — it's server-authoritative and already on hand, no extra
   // network round-trip needed. Falls back exactly as before when absent.
   const realRouteEtaText = currentRide.routeDurationMinutes != null
-    ? `${currentRide.routeDurationMinutes} min`
+    ? formatDuration(currentRide.routeDurationMinutes * 60) // hour-rollover, consistent with the Mapbox fallback below
     : null;
   const displayEta = liveEtaText
     ?? realRouteEtaText
