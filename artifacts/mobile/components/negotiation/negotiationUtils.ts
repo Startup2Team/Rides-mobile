@@ -2,8 +2,6 @@ export const MAX_OFFERS = 3;
 export const WARNING = '#FF9500';
 export const INPUT_DOCK_HEIGHT = 64;
 export const DRIVER_TYPING_DELAY_MS = 450;
-// Mirrors the backend's negotiation/message contract (1-500 chars).
-export const MAX_NEGOTIATION_MESSAGE_LENGTH = 500;
 
 export type NegotiationStatusTone = 'neutral' | 'active' | 'waiting' | 'limit';
 
@@ -16,12 +14,4 @@ export function formatMessageTime(timestamp: string) {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// A client-only id for an outgoing free-text negotiation message, tracked
-// across a send → failure → retry cycle so the retry can reuse it (see
-// rideNegotiation.ts addCustomerTextMessage/addDriverTextMessage) instead of
-// appending a second, duplicate bubble.
-export function generateNegotiationMessageId() {
-  return `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }

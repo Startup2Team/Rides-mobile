@@ -16,7 +16,6 @@ export const CUSTOMER_TRACKING_EVENT_TYPES = [
   'driver_location',
   'negotiation_declined',
   'negotiation_message',
-  'negotiation_text',
 ] as const;
 
 export type CustomerTrackingEventType = (typeof CUSTOMER_TRACKING_EVENT_TYPES)[number];
