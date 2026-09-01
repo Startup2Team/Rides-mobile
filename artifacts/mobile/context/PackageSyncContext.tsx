@@ -9,6 +9,7 @@ import {
   packageOfferSourceRepository,
   type PackageOfferSourceRepository,
 } from '@/services/packageSyncRepositories';
+import { openDriverSocket, type DriverSocketEvent } from '@/services/driverTrackingSocket';
 
 interface PackageSyncContextValue {
   catalog: DriverRidePackageCatalogEntry[];
@@ -120,6 +121,21 @@ export function PackageSyncProvider({
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // WhatsApp-style WebSocket event push listener for instant real-time package updates
+  useEffect(() => {
+    const socket = openDriverSocket({
+      onEvent: (event: DriverSocketEvent) => {
+        if (event.type === 'PACKAGE_CATALOG_UPDATED') {
+          console.log('[REALTIME:WS] ⚡ WhatsApp-style package catalog event received! Re-syncing package state instantly...');
+          void refresh();
+        }
+      },
+    });
+    return () => {
+      socket.close();
+    };
   }, [refresh]);
 
   useEffect(() => {

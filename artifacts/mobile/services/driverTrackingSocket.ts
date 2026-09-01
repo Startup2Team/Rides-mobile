@@ -23,6 +23,7 @@ export const DRIVER_SOCKET_EVENT_TYPES = [
   'negotiation_message',
   'negotiation_declined',
   'negotiation_text',
+  'PACKAGE_CATALOG_UPDATED',
 ] as const;
 
 export type DriverSocketEventType = (typeof DRIVER_SOCKET_EVENT_TYPES)[number];
