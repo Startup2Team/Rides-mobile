@@ -66,6 +66,7 @@ import { useVehicles } from '@/domains/vehicle';
 import { getLicenseComplianceStatus } from '@/domain/vehicleCompliance';
 import { useUnreadNotificationCountQuery } from '@/query/hooks/useNotificationsQuery';
 import { useDriverRideHistoryQuery } from '@/query/hooks/useRideHistoryQuery';
+import { fetchActiveAdverts, resolveBackendImageUrl, type ActiveAdvert } from '@/services/adverts';
 import { NotificationsIcon } from "@/components/NotificationsIcon";
 import { fonts } from "@/constants/fonts";
 import {
@@ -98,39 +99,8 @@ function visibleDriverRegion(location: typeof KIGALI_CENTER) {
   };
 }
 
-const DASHBOARD_ADS: Array<{
-  id: string;
-  accessibilityLabel: string;
-  image: ImageSourcePropType;
-  url: string;
-}> = [
-  {
-    id: "airtel",
-    accessibilityLabel: "Open Airtel advertisement",
-    image: require("../../assets/ads/dashboard/airtel.jpg"),
-    url: "https://www.airtel.co.rw/",
-  },
-  {
-    id: "jibu",
-    accessibilityLabel: "Open Jibu advertisement",
-    image: require("../../assets/ads/dashboard/jibu.jpg"),
-    url: "https://jibuco.com/",
-  },
-  {
-    id: "bralirwa",
-    accessibilityLabel: "Open Bralirwa advertisement",
-    image: require("../../assets/ads/bralirwa.png"),
-    url: "http://www.bralirwa.com/",
-  },
-];
-const LOOPED_DASHBOARD_ADS = [
-  DASHBOARD_ADS[DASHBOARD_ADS.length - 1],
-  ...DASHBOARD_ADS,
-  DASHBOARD_ADS[0],
-];
 const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
   require("../../assets/images/verified-badge.png"),
-  ...DASHBOARD_ADS.map((ad) => ad.image),
 ];
 
 function prefetchImageSource(source: ImageSourcePropType) {
@@ -209,6 +179,51 @@ export default function DriverDashboard() {
   const mapRef = useRef<MapView | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const { vehicles } = useVehicles();
+  const [activeAdverts, setActiveAdverts] = useState<ActiveAdvert[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      const loadAdverts = async () => {
+        const ads = await fetchActiveAdverts();
+        if (mounted) {
+          setActiveAdverts(ads);
+        }
+      };
+
+      void loadAdverts();
+
+      // Live background polling every 5 seconds for instant real-time updates
+      const interval = setInterval(() => {
+        void loadAdverts();
+      }, 5000);
+
+      return () => {
+        mounted = false;
+        clearInterval(interval);
+      };
+    }, []),
+  );
+
+  const dynamicDashboardAds = React.useMemo(() => {
+    return activeAdverts
+      .filter((ad) => !!ad.image_url)
+      .map((ad) => ({
+        id: ad.id,
+        accessibilityLabel: ad.headline,
+        imageUrl: resolveBackendImageUrl(ad.image_url) ?? "",
+        url: ad.cta_link || "https://rides.rw",
+      }));
+  }, [activeAdverts]);
+
+  const dynamicLoopedDashboardAds = React.useMemo(() => {
+    if (dynamicDashboardAds.length === 0) return [];
+    return [
+      dynamicDashboardAds[dynamicDashboardAds.length - 1],
+      ...dynamicDashboardAds,
+      dynamicDashboardAds[0],
+    ];
+  }, [dynamicDashboardAds]);
 
   // Demand heatmap around the driver — only fetched when the layer is toggled on.
   const { data: heatmap } = useDemandHeatmapQuery({
@@ -232,12 +247,12 @@ export default function DriverDashboard() {
   }, [adCarouselWidth]);
 
   const resetAdCarouselToEnd = useCallback(() => {
-    autoAdIndexRef.current = DASHBOARD_ADS.length;
+    autoAdIndexRef.current = dynamicDashboardAds.length;
     adCarouselRef.current?.scrollTo({
-      x: DASHBOARD_ADS.length * adCarouselWidth,
+      x: dynamicDashboardAds.length * adCarouselWidth,
       animated: false,
     });
-  }, [adCarouselWidth]);
+  }, [adCarouselWidth, dynamicDashboardAds.length]);
 
   const positionAdCarouselAtStart = useCallback(() => {
     if (adCarouselWidth <= 0 || adCarouselPositionedRef.current) return;
@@ -398,7 +413,7 @@ export default function DriverDashboard() {
   }, [positionAdCarouselAtStart]);
 
   useEffect(() => {
-    if (adCarouselWidth <= 0 || DASHBOARD_ADS.length <= 1) return;
+    if (adCarouselWidth <= 0 || dynamicDashboardAds.length <= 1) return;
 
     const interval = setInterval(() => {
       const nextIndex = autoAdIndexRef.current + 1;
@@ -408,7 +423,7 @@ export default function DriverDashboard() {
         animated: true,
       });
 
-      if (nextIndex === DASHBOARD_ADS.length + 1) {
+      if (nextIndex === dynamicDashboardAds.length + 1) {
         scheduleAdLoopReset();
       }
     }, 5000);
@@ -417,7 +432,7 @@ export default function DriverDashboard() {
       clearInterval(interval);
       clearAdLoopReset();
     };
-  }, [adCarouselWidth, clearAdLoopReset, scheduleAdLoopReset]);
+  }, [adCarouselWidth, clearAdLoopReset, scheduleAdLoopReset, dynamicDashboardAds.length]);
 
   // Recenter on location
   useEffect(() => {
@@ -698,7 +713,7 @@ export default function DriverDashboard() {
       return;
     }
 
-    if (pageIndex >= DASHBOARD_ADS.length + 1) {
+    if (pageIndex >= dynamicDashboardAds.length + 1) {
       resetAdCarouselToStart();
       return;
     }
@@ -1319,45 +1334,47 @@ export default function DriverDashboard() {
           )}
         </View>
 
-        <View style={styles.adCard} onLayout={onAdCarouselLayout}>
-          <View style={[styles.adCardClip, { backgroundColor: cardFill }]}>
-            <ScrollView
-              ref={adCarouselRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              style={styles.adCarousel}
-              onMomentumScrollEnd={handleAdCarouselMomentumEnd}
-            >
-              {LOOPED_DASHBOARD_ADS.map((ad, index) => (
-                <TouchableOpacity
-                  key={`${ad.id}-${index}`}
-                  style={[
-                    styles.adSlide,
-                    { width: Math.max(adCarouselWidth, 1) },
-                  ]}
-                  onPress={() => openAdWebsite(ad.url)}
-                  activeOpacity={0.9}
-                  accessibilityRole="link"
-                  accessibilityLabel={ad.accessibilityLabel}
-                  testID={
-                    index === 0
-                      ? "dashboard-ad-loop-last"
-                      : index === DASHBOARD_ADS.length + 1
-                        ? "dashboard-ad-loop-first"
-                        : `dashboard-ad-${ad.id}`
-                  }
-                >
-                  <Image
-                    source={ad.image}
-                    style={styles.adImage}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+        {dynamicDashboardAds.length > 0 && (
+          <View style={styles.adCard} onLayout={onAdCarouselLayout}>
+            <View style={[styles.adCardClip, { backgroundColor: cardFill }]}>
+              <ScrollView
+                ref={adCarouselRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                style={styles.adCarousel}
+                onMomentumScrollEnd={handleAdCarouselMomentumEnd}
+              >
+                {dynamicLoopedDashboardAds.map((ad, index) => (
+                  <TouchableOpacity
+                    key={`${ad.id}-${index}`}
+                    style={[
+                      styles.adSlide,
+                      { width: Math.max(adCarouselWidth, 1) },
+                    ]}
+                    onPress={() => openAdWebsite(ad.url)}
+                    activeOpacity={0.9}
+                    accessibilityRole="link"
+                    accessibilityLabel={ad.accessibilityLabel}
+                    testID={
+                      index === 0
+                        ? "dashboard-ad-loop-last"
+                        : index === dynamicDashboardAds.length + 1
+                          ? "dashboard-ad-loop-first"
+                          : `dashboard-ad-${ad.id}`
+                    }
+                  >
+                    <Image
+                      source={{ uri: ad.imageUrl }}
+                      style={styles.adImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        )}
       </View>
 
       {/* ── Map controls ── */}
