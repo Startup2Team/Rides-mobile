@@ -230,6 +230,7 @@ export function getActivePackages(
   now = new Date(),
 ) {
   const currentTime = now.getTime();
+  const targetVehicle = vehicleType ?? 'moto';
   return catalog.filter(entry => {
     const effectiveFrom = new Date(entry.effectiveFrom).getTime();
     const effectiveUntil = entry.effectiveUntil ? new Date(entry.effectiveUntil).getTime() : null;
@@ -237,7 +238,7 @@ export function getActivePackages(
       && !Number.isNaN(effectiveFrom)
       && effectiveFrom <= currentTime
       && (effectiveUntil === null || (!Number.isNaN(effectiveUntil) && currentTime <= effectiveUntil))
-      && (!vehicleType || entry.vehicleType === vehicleType);
+      && entry.vehicleType === targetVehicle;
   });
 }
 

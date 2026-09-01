@@ -34,6 +34,12 @@ export function toBackendTransportType(vehicle: string): BackendTransportType {
 }
 
 export function fromBackendTransportType(code: string): VehicleType | null {
+  const upper = (code || '').toUpperCase();
+  if (upper.includes('MOTO')) return 'moto';
+  if (upper.includes('CAB') || upper.includes('TAXI')) return 'cab';
+  if (upper.includes('HILUX') || upper.includes('PICKUP')) return 'hilux';
+  if (upper.includes('FUSO') || upper.includes('HEAVY')) return 'fuso';
+  if (upper.includes('TUK') || upper.includes('RIFANI')) return 'rifani';
   return BACKEND_CODE_TO_VEHICLE[code as BackendTransportType] ?? null;
 }
 
