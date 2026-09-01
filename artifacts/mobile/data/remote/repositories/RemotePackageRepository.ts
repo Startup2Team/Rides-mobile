@@ -417,7 +417,9 @@ export class RemotePackageRepository implements PackageRepository {
     return this.shadow('getCatalog', async () => {
       const client = resolveClient('getCatalog', this.client);
       const response = await client.get<PackageCatalogResponseDto>('/v1/packages/catalog');
-      return dtoListToDomainPackageCatalogEntries(response.data?.data?.items ?? []);
+      const rawData = response.data?.data;
+      const items = Array.isArray(rawData) ? rawData : (rawData as any)?.items ?? [];
+      return dtoListToDomainPackageCatalogEntries(items);
     });
   }
 

@@ -47,21 +47,34 @@ function mapArray<TInput, TOutput>(items: TInput[] | null | undefined, mapper: (
   return (items ?? []).map(mapper);
 }
 
-export function dtoToDomainPackageCatalogEntry(dto: PackageCatalogItemDto): DriverRidePackageCatalogEntry {
+export function dtoToDomainPackageCatalogEntry(dto: any): DriverRidePackageCatalogEntry {
+  const rawVType = String(dto?.vehicleType || dto?.vehicle_type_code || 'moto').toLowerCase();
+  const vehicleType: VehicleType =
+    rawVType.includes('cab') ? 'cab' :
+    rawVType.includes('hilux') ? 'hilux' :
+    rawVType.includes('fuso') ? 'fuso' :
+    rawVType.includes('rifani') ? 'rifani' : 'moto';
+
+  const rawStatus = dto?.status
+    ? dto.status
+    : dto?.is_active === false
+      ? 'draft'
+      : 'active';
+
   return {
-    packageId: dto.packageId,
-    packageVersion: dto.packageVersion,
-    packageName: dto.packageName,
-    vehicleType: dto.vehicleType,
-    priceRwf: dto.priceRwf,
-    isFreeTrial: dto.isFreeTrial ?? dto.freeTrial ?? undefined,
-    ridesGranted: dto.ridesGranted,
-    bonusRidesGranted: dto.bonusRidesGranted,
-    status: dto.status,
-    createdAt: dto.createdAt,
-    effectiveFrom: dto.effectiveFrom,
-    effectiveUntil: dto.effectiveUntil,
-    compareAtPriceRwf: dto.compareAtPriceRwf ?? undefined,
+    packageId: dto?.packageId || dto?.id || '',
+    packageVersion: dto?.packageVersion || 'v1',
+    packageName: dto?.packageName || dto?.name || 'Package',
+    vehicleType,
+    priceRwf: dto?.priceRwf ?? dto?.price_rwf ?? dto?.normal_price_rwf ?? 0,
+    isFreeTrial: dto?.isFreeTrial ?? dto?.freeTrial ?? false,
+    ridesGranted: dto?.ridesGranted ?? dto?.ride_count ?? dto?.included_rides ?? 0,
+    bonusRidesGranted: dto?.bonusRidesGranted ?? dto?.bonus_rides ?? 0,
+    status: rawStatus,
+    createdAt: dto?.createdAt || dto?.created_at || new Date().toISOString(),
+    effectiveFrom: dto?.effectiveFrom || dto?.created_at || new Date().toISOString(),
+    effectiveUntil: dto?.effectiveUntil || null,
+    compareAtPriceRwf: dto?.compareAtPriceRwf ?? undefined,
   };
 }
 
