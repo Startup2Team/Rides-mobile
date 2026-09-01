@@ -184,23 +184,14 @@ export default function DriverDashboard() {
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-      const loadAdverts = async () => {
+      void (async () => {
         const ads = await fetchActiveAdverts();
         if (mounted) {
           setActiveAdverts(ads);
         }
-      };
-
-      void loadAdverts();
-
-      // Live background polling every 5 seconds for instant real-time updates
-      const interval = setInterval(() => {
-        void loadAdverts();
-      }, 5000);
-
+      })();
       return () => {
         mounted = false;
-        clearInterval(interval);
       };
     }, []),
   );

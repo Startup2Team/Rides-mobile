@@ -74,10 +74,6 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
 
   useEffect(() => {
     void refresh();
-    const interval = setInterval(() => {
-      void refresh();
-    }, 2500);
-    return () => clearInterval(interval);
   }, [refresh]);
 
   // Index the freshest in-flight claim per package so an offer with a pending

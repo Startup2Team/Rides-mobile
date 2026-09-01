@@ -72,19 +72,22 @@ export function PackageSyncProvider({
     };
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { isUserInitiated?: boolean }) => {
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
+    const isUserInitiated = options?.isUserInitiated === true;
     const operation = (async () => {
-      if (mountedRef.current) setIsRefreshing(true);
+      if (mountedRef.current && isUserInitiated) setIsRefreshing(true);
       const startTime = Date.now();
       const result = await offerSourceRepository.refreshOfferSource()
         .then(value => ({ status: 'fulfilled' as const, value }))
         .catch(reason => ({ status: 'rejected' as const, reason }));
 
-      const elapsedTime = Date.now() - startTime;
-      const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
-      if (elapsedTime < minDuration) {
-        await new Promise(resolve => setTimeout(resolve, minDuration - elapsedTime));
+      if (isUserInitiated) {
+        const elapsedTime = Date.now() - startTime;
+        const minDuration = process.env.NODE_ENV === 'test' ? 0 : 800;
+        if (elapsedTime < minDuration) {
+          await new Promise(resolve => setTimeout(resolve, minDuration - elapsedTime));
+        }
       }
 
       if (!mountedRef.current) return;
@@ -109,7 +112,7 @@ export function PackageSyncProvider({
       }
     })().finally(() => {
       refreshPromiseRef.current = null;
-      if (mountedRef.current) setIsRefreshing(false);
+      if (mountedRef.current && isUserInitiated) setIsRefreshing(false);
     });
     refreshPromiseRef.current = operation;
     return operation;
@@ -117,12 +120,6 @@ export function PackageSyncProvider({
 
   useEffect(() => {
     void refresh();
-    const syncInterval = setInterval(() => {
-      if (mountedRef.current && appStateRef.current === 'active') {
-        void refresh();
-      }
-    }, 3000);
-    return () => clearInterval(syncInterval);
   }, [refresh]);
 
   useEffect(() => {
