@@ -11,6 +11,27 @@ export function decodeRoutePolyline(encoded: string): Coords[] {
   return decoded.map(([latitude, longitude]) => ({ latitude, longitude }));
 }
 
+/**
+ * Stable React `key` for a LIVE (continuously moving) map marker — a driver's
+ * own GPS fix, or a counterpart's `driver_location`/`customer_location` WS
+ * push. `@rnmapbox/maps` `MarkerView` is supposed to reposition reactively
+ * when its `coordinate` prop changes (it calls the native
+ * `updateViewAnnotation`), but in practice the repositioned view annotation
+ * can go stale on-device until something else forces the map to recompute
+ * annotation layout (matches `AppMap.mapbox.tsx`'s own note that annotations
+ * "can end up positioned incorrectly until the next camera move recomputes
+ * them"). Keying the marker on its (rounded) coordinate forces React to
+ * unmount + remount it — a fresh `addViewAnnotation` — on every real
+ * position change, which sidesteps that staleness regardless of its exact
+ * native cause. Round to `precisionDecimals` (default 5 ≈ 1.1 m) so GPS
+ * jitter while stationary doesn't remount every tick — only genuine movement
+ * does. Cheap no-op on `react-native-maps` (Google `Marker` already
+ * repositions correctly), so safe to key everywhere a marker moves live.
+ */
+export function markerPositionKey(coords: Coords, precisionDecimals = 5): string {
+  return `${coords.latitude.toFixed(precisionDecimals)},${coords.longitude.toFixed(precisionDecimals)}`;
+}
+
 /** Haversine distance in km between two coordinates */
 export function haversineKm(a: Coords, b: Coords): number {
   const R = 6371;
