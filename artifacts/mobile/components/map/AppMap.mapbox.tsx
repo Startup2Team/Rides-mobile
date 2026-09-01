@@ -1,5 +1,5 @@
 import Mapbox from '@rnmapbox/maps';
-import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { StyleSheet, useColorScheme } from 'react-native';
 import type { Coords } from '@/types';
 import { boundsFromCoordinates, regionToZoomLevel } from './geo';
@@ -46,6 +46,17 @@ export const AppMapMapbox = forwardRef<AppMapHandle, AppMapProps>(function AppMa
   // Deferring children until the first onDidFinishLoadingMap fixes that; once
   // true it stays true (a later mapType style-switch shouldn't re-hide them).
   const [isStyleLoaded, setIsStyleLoaded] = useState(false);
+
+  // Safety net: onDidFinishLoadingMap is occasionally flaky on @rnmapbox/maps
+  // (can miss on some devices or a style reload). Without this, isStyleLoaded
+  // could stay false forever and markers/route/location dot would NEVER render
+  // — worse than the original glitch. Force it true after a short delay so the
+  // map always ends up interactive even if the native event doesn't arrive.
+  useEffect(() => {
+    if (isStyleLoaded) return;
+    const t = setTimeout(() => setIsStyleLoaded(true), 2500);
+    return () => clearTimeout(t);
+  }, [isStyleLoaded]);
 
   const defaultCameraSettings = useMemo(
     () => ({
