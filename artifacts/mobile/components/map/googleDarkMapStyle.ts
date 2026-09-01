@@ -1,8 +1,11 @@
 /**
- * Google Maps JSON style (night/navy theme) used for `mapType === 'standard'`
- * on the react-native-maps (Google) implementation. This format is
+ * Google Maps JSON style (night/navy theme) applied for `mapType ===
+ * 'standard'` ONLY in dark mode, on the react-native-maps (Google)
+ * implementation — see `googleCustomMapStyle` in AppMap.google.tsx. In light
+ * mode "standard" uses Google's own default light style (no custom style
+ * object) so the map reads clean/light, not this navy theme. This format is
  * Google-specific — it has no Mapbox equivalent, which is why it lives here
- * rather than on AppMap's public props. See AppMap.google.tsx.
+ * rather than on AppMap's public props.
  *
  * Consolidated from four screens that each carried a near-identical copy
  * (app/ride.tsx, app/driver-navigate.tsx, app/(driver)/index.tsx,

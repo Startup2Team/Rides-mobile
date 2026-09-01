@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native';
 import { AppButton } from '@/components/AppButton';
 import { AppText } from '@/components/AppText';
-import type { AppMapHandle, AppMapRegion } from '@/components/map';
+import type { AppMapHandle } from '@/components/map';
 import { MapPickerOverlay } from '@/components/home/MapPickerOverlay';
 import { useMapPicker } from '@/context/MapPickerContext';
 import type { MapPickerBookingTarget } from '@/context/MapPickerContext';
@@ -138,7 +138,13 @@ export default function MapPickerScreen() {
     }
   }, []);
 
-  const syncCoordsFromCenter = useCallback(async (regionFallback?: AppMapRegion) => {
+  // Resolves the coordinate under the fixed center pin RIGHT NOW — queries the
+  // map's true screen-center coordinate rather than trusting `mapCoords`
+  // state, which can be stale if `onRegionChangeComplete` hasn't landed yet
+  // (e.g. the user taps Confirm mid-gesture, or the native event is still in
+  // flight). Falls back to the last known coordinate so this always resolves
+  // to *something* — never leaves the user unable to place a pin.
+  const resolveCenterCoordinate = useCallback(async (): Promise<{ latitude: number; longitude: number }> => {
     const map = mapRef.current;
     if (map && mapSize.width > 0 && mapSize.height > 0) {
       try {
@@ -146,22 +152,21 @@ export default function MapPickerScreen() {
           x: mapSize.width / 2,
           y: mapSize.height / 2,
         });
-        setMapCoords({ latitude: coord.latitude, longitude: coord.longitude, address: mapAddress, locationType: 'precise' });
-        return;
+        if (Number.isFinite(coord.latitude) && Number.isFinite(coord.longitude)) {
+          return { latitude: coord.latitude, longitude: coord.longitude };
+        }
       } catch {
-        // fall through to the region center
+        // Native measurement can reject mid-layout — fall through to the
+        // last known center below instead of throwing.
       }
     }
+    return { latitude: mapCoords.latitude, longitude: mapCoords.longitude };
+  }, [mapCoords.latitude, mapCoords.longitude, mapSize.height, mapSize.width]);
 
-    if (regionFallback) {
-      setMapCoords({
-        latitude: regionFallback.latitude,
-        longitude: regionFallback.longitude,
-        address: mapAddress,
-        locationType: 'precise',
-      });
-    }
-  }, [mapAddress, mapSize.height, mapSize.width]);
+  const syncCoordsFromCenter = useCallback(async () => {
+    const center = await resolveCenterCoordinate();
+    setMapCoords(prev => ({ ...prev, latitude: center.latitude, longitude: center.longitude }));
+  }, [resolveCenterCoordinate]);
 
   useEffect(() => {
     if (mapSize.width === 0 || mapSize.height === 0) return;
@@ -201,7 +206,12 @@ export default function MapPickerScreen() {
     if (!routeConfig) return;
     if (hasConfirmedRef.current) return;
     hasConfirmedRef.current = true;
-    const location = buildLocation(mapCoords, mapAddress || 'Selected location');
+    setHasConfirmed(true);
+
+    // Always resolve fresh — never trust `mapCoords` alone, it can be a tick
+    // behind the pin the user is actually looking at (see resolveCenterCoordinate).
+    const center = await resolveCenterCoordinate();
+    const location = buildLocation(center, mapAddress || 'Selected location');
 
     if (routeConfig.mode === 'booking') {
       if (routeConfig.target === 'pickup') {
@@ -232,12 +242,11 @@ export default function MapPickerScreen() {
       setResult(result);
     }
 
-    setHasConfirmed(true);
     router.back();
   }, [
     mapAddress,
-    mapCoords,
     params.savedPlaceId,
+    resolveCenterCoordinate,
     routeConfig,
     setResult,
     setBookingSelection,

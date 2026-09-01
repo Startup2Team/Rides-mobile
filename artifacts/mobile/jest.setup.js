@@ -88,6 +88,51 @@ jest.mock('@/context/ToastContext', () => ({
   }),
 }));
 
+// react-native-reanimated ships ESM-only entry points our transformIgnorePatterns
+// doesn't cover, so any suite that transitively imports a component using it
+// (e.g. map markers, HomeTopHeader) would fail to parse. Default mock keeps
+// animated values synchronous/inert so suites that don't care about motion
+// don't need their own copy of this. Suites that DO want to assert on the
+// animation itself (see HomeTopHeader.test.tsx, useMarkerAppear.test.ts)
+// declare their own more specific `jest.mock('react-native-reanimated', ...)`,
+// which takes precedence over this one for that file.
+jest.mock('react-native-reanimated', () => {
+  const { View, Text, Image, ScrollView } = require('react-native');
+  const identity = value => value;
+  const withImmediate = (toValue, _config, callback) => {
+    callback?.(true);
+    return toValue;
+  };
+
+  return {
+    __esModule: true,
+    default: { View, Text, Image, ScrollView },
+    Easing: {
+      out: identity,
+      in: identity,
+      inOut: identity,
+      linear: identity,
+      ease: identity,
+      quad: identity,
+      cubic: identity,
+    },
+    useReducedMotion: () => false,
+    useSharedValue: initial => ({ value: initial }),
+    useAnimatedStyle: factory => factory(),
+    useDerivedValue: factory => ({ value: factory() }),
+    useAnimatedRef: () => ({ current: null }),
+    withTiming: withImmediate,
+    withSpring: withImmediate,
+    withDelay: (_delay, animation) => animation,
+    withSequence: (...animations) => animations[animations.length - 1],
+    runOnJS: fn => fn,
+    runOnUI: fn => fn,
+    cancelAnimation: () => {},
+    interpolate: value => value,
+    Extrapolate: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
+  };
+});
+
 jest.mock('expo-blur', () => {
   const React = require('react');
   const { View } = require('react-native');

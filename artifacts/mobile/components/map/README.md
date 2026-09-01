@@ -54,12 +54,15 @@ sidesteps the unauthorized-key problem entirely.
 
 ## Provider-specific gaps (visual, not functional)
 
-- **`mapType: 'standard'` dark theme**: the app's custom navy Google JSON
-  style (`components/map/googleDarkMapStyle.ts`) has no Mapbox equivalent —
-  Mapbox uses vector-tile style specs, not Google's `stylers` format. The
-  Mapbox implementation uses the built-in `StyleURL.Dark` as a stand-in.
-  Matching the exact navy palette needs a custom style authored in Mapbox
-  Studio (design task — flag to senior-uiux, not an engineering blocker).
+- **`mapType: 'standard'` theming**: light by default on both providers
+  (Mapbox `StyleURL.Street`; Google's own default light style — no custom
+  style object). Real dark-mode parity only kicks in when the device is in
+  dark mode (Mapbox `StyleURL.Dark`; Google's custom navy JSON,
+  `components/map/googleDarkMapStyle.ts`). The two dark styles aren't a pixel
+  match — Mapbox uses vector-tile style specs, not Google's `stylers`
+  format — matching the exact navy palette needs a custom style authored in
+  Mapbox Studio (design task — flag to senior-uiux, not an engineering
+  blocker).
 - **Marker z-order**: Google's `Marker` respects an explicit `zIndex` prop.
   Mapbox's `MarkerView` has no z-index prop; stacking follows JSX render
   order instead. Screens already render markers in a sensible order (pins,
