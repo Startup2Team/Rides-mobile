@@ -117,6 +117,12 @@ export function PackageSyncProvider({
 
   useEffect(() => {
     void refresh();
+    const syncInterval = setInterval(() => {
+      if (mountedRef.current && appStateRef.current === 'active') {
+        void refresh();
+      }
+    }, 3000);
+    return () => clearInterval(syncInterval);
   }, [refresh]);
 
   useEffect(() => {

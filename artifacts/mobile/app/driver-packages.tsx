@@ -72,6 +72,14 @@ export function DriverPackagesScreen({ showBack = true }: { showBack?: boolean }
   const cardFill = isDark ? '#1C1C1E' : '#FFFFFF';
   const { claims } = useManualPaymentClaimsQuery({ driverId: user?.id });
 
+  useEffect(() => {
+    void refresh();
+    const interval = setInterval(() => {
+      void refresh();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
   // Index the freshest in-flight claim per package so an offer with a pending
   // payment renders as "under review" instead of a fresh, buyable offer. Keyed
   // on packageId (the meaningful join for a driver's single active vehicle);

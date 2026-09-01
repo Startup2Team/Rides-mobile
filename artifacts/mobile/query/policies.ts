@@ -89,30 +89,40 @@ export const queryPolicies = {
     gcTime: 30 * minute,
   }),
   packages: policy({
-    staleTime: 10 * minute,
-    gcTime: 45 * minute,
+    staleTime: 0,
+    gcTime: 30 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   }),
   packageCatalog: policy({
-    staleTime: 10 * minute,
-    gcTime: 45 * minute,
+    staleTime: 0,
+    gcTime: 30 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   }),
   packageCampaigns: policy({
-    staleTime: 10 * minute,
-    gcTime: 45 * minute,
+    staleTime: 0,
+    gcTime: 30 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   }),
   packageEntitlements: policy({
-    // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
     refetchOnWindowFocus: 'always',
-    staleTime: 2 * minute,
+    refetchOnMount: 'always',
+    staleTime: 0,
     gcTime: 20 * minute,
   }),
   packagePurchases: policy({
-    staleTime: 2 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
     gcTime: 20 * minute,
   }),
   packageOffers: policy({
-    staleTime: 1 * minute,
+    staleTime: 0,
     gcTime: 10 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   }),
   notifications: policy({
     // Waiting-on-an-admin data: refresh on every return to the app, fresh or not.
