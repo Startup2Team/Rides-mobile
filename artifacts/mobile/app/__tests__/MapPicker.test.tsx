@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import MapPickerScreen from '../map-picker';
 
@@ -45,21 +45,39 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+// Simulates AppMap's imperative handle. Defaults to rejecting — the same as
+// a real map that hasn't finished measuring yet — so existing tests exercise
+// the state-fallback path in resolveCenterCoordinate exactly as before.
+// Individual tests override this to simulate a fresh, resolvable center.
+const mockCoordinateForPoint = jest.fn<
+  Promise<{ latitude: number; longitude: number }>,
+  [{ x: number; y: number }]
+>(() => Promise.reject(new Error('not measured yet')));
+
 jest.mock('@/components/home/MapPickerOverlay', () => {
   const React = require('react');
   const { Text, TouchableOpacity, View } = require('react-native');
   return {
-    MapPickerOverlay: ({ target, onConfirm, onClose, savedLocationHint, savedLocationConfirmTitle }: any) => (
-      <View>
-        {savedLocationHint ? <Text>{savedLocationHint}</Text> : null}
-        <TouchableOpacity onPress={onConfirm}>
-          <Text>{savedLocationConfirmTitle || (target === 'pickup' ? 'Confirm Pickup Location' : target === 'dropoff' ? 'Confirm Drop Off Location' : 'Confirm Saved Location')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onClose}>
-          <Text>Back</Text>
-        </TouchableOpacity>
-      </View>
-    ),
+    MapPickerOverlay: ({ target, mapRef, onLayout, onConfirm, onClose, savedLocationHint, savedLocationConfirmTitle }: any) => {
+      React.useEffect(() => {
+        mapRef.current = { coordinateForPoint: (point: { x: number; y: number }) => mockCoordinateForPoint(point) };
+        onLayout(390, 780);
+        // Run once on mount only — `onLayout`/`mapRef` are recreated on every
+        // parent render, and re-firing `onLayout` each time would loop state updates.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+      return (
+        <View>
+          {savedLocationHint ? <Text>{savedLocationHint}</Text> : null}
+          <TouchableOpacity onPress={onConfirm}>
+            <Text>{savedLocationConfirmTitle || (target === 'pickup' ? 'Confirm Pickup Location' : target === 'dropoff' ? 'Confirm Drop Off Location' : 'Confirm Saved Location')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose}>
+            <Text>Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    },
   };
 });
 
@@ -111,7 +129,7 @@ describe('MapPickerScreen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  test('confirming a booking pickup updates RideContext and closes', () => {
+  test('confirming a booking pickup updates RideContext and closes', async () => {
     mockParams = {
       target: 'pickup',
       mode: 'booking',
@@ -124,6 +142,11 @@ describe('MapPickerScreen', () => {
 
     fireEvent.press(screen.getByText('Confirm Pickup Location'));
 
+    // Confirm now resolves the center coordinate (async — see
+    // resolveCenterCoordinate in map-picker.tsx) before committing, so the
+    // effects land a tick after the press.
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
     expect(mockSetPickup).toHaveBeenCalledWith(expect.objectContaining({
       latitude: -1.95,
       longitude: 30.07,
@@ -134,10 +157,9 @@ describe('MapPickerScreen', () => {
       flow: 'booking',
       target: 'pickup',
     }));
-    expect(mockBack).toHaveBeenCalled();
   });
 
-  test('confirming a booking dropoff updates RideContext and closes', () => {
+  test('confirming a booking dropoff updates RideContext and closes', async () => {
     mockParams = {
       target: 'dropoff',
       mode: 'booking',
@@ -150,6 +172,8 @@ describe('MapPickerScreen', () => {
 
     fireEvent.press(screen.getByText('Confirm Drop Off Location'));
 
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
     expect(mockSetDestText).toHaveBeenCalledWith('Map Dropoff');
     expect(mockSetDestination).toHaveBeenCalledWith(expect.objectContaining({
       latitude: -1.96,
@@ -161,10 +185,9 @@ describe('MapPickerScreen', () => {
       flow: 'booking',
       target: 'dropoff',
     }));
-    expect(mockBack).toHaveBeenCalled();
   });
 
-  test('confirming a saved-place add returns a draft selection', () => {
+  test('confirming a saved-place add returns a draft selection', async () => {
     mockParams = {
       target: 'saved-place',
       mode: 'saved-place-add',
@@ -179,6 +202,8 @@ describe('MapPickerScreen', () => {
 
     fireEvent.press(screen.getByText('Confirm Home Location'));
 
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
     expect(mockSetResult).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
       mode: 'saved-place-add',
@@ -189,10 +214,9 @@ describe('MapPickerScreen', () => {
       createdAt: expect.any(Number),
       target: 'saved-place',
     }));
-    expect(mockBack).toHaveBeenCalled();
   });
 
-  test('confirming a saved-place edit returns the matching draft selection', () => {
+  test('confirming a saved-place edit returns the matching draft selection', async () => {
     mockParams = {
       target: 'saved-place',
       mode: 'saved-place-edit',
@@ -208,6 +232,8 @@ describe('MapPickerScreen', () => {
 
     fireEvent.press(screen.getByText('Confirm Work Location'));
 
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
     expect(mockSetResult).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-2',
       mode: 'saved-place-edit',
@@ -218,7 +244,6 @@ describe('MapPickerScreen', () => {
       createdAt: expect.any(Number),
       target: 'saved-place',
     }));
-    expect(mockBack).toHaveBeenCalled();
   });
 
   test('cancel closes the map picker without writing a result', () => {
@@ -238,7 +263,57 @@ describe('MapPickerScreen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  test('double confirm only writes one saved-place result', () => {
+  test('confirm resolves the coordinate under the pin fresh, not stale React state', async () => {
+    mockParams = {
+      target: 'pickup',
+      mode: 'booking',
+      initialLatitude: '-1.95',
+      initialLongitude: '30.07',
+      initialAddress: 'Map Pickup',
+    };
+    // First call is the screen's own background resync on mount — resolves
+    // to the same coordinate the screen already has (a no-op). Second call
+    // is the one `confirmSelection` makes directly, at press time, and
+    // reports a coordinate the map has since moved to. Confirm must use the
+    // second (fresh) value, not whatever `mapCoords` state last settled on.
+    mockCoordinateForPoint
+      .mockResolvedValueOnce({ latitude: -1.95, longitude: 30.07 })
+      .mockResolvedValueOnce({ latitude: -1.999, longitude: 30.111 });
+
+    render(<MapPickerScreen />);
+    fireEvent.press(screen.getByText('Confirm Pickup Location'));
+
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
+    expect(mockSetPickup).toHaveBeenCalledWith(expect.objectContaining({
+      latitude: -1.999,
+      longitude: 30.111,
+    }));
+  });
+
+  test('confirm still resolves a coordinate when the native measurement rejects — never leaves the user stuck', async () => {
+    mockParams = {
+      target: 'pickup',
+      mode: 'booking',
+      initialLatitude: '-1.95',
+      initialLongitude: '30.07',
+      initialAddress: 'Map Pickup',
+    };
+    mockCoordinateForPoint.mockRejectedValueOnce(new Error('native measurement failed'));
+
+    render(<MapPickerScreen />);
+    fireEvent.press(screen.getByText('Confirm Pickup Location'));
+
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
+    // Falls back to the last known coordinate rather than hanging or dropping the confirm.
+    expect(mockSetPickup).toHaveBeenCalledWith(expect.objectContaining({
+      latitude: -1.95,
+      longitude: 30.07,
+    }));
+  });
+
+  test('double confirm only writes one saved-place result', async () => {
     mockParams = {
       target: 'saved-place',
       mode: 'saved-place-add',
@@ -254,6 +329,8 @@ describe('MapPickerScreen', () => {
     const confirmButton = screen.getByText('Confirm Home Location');
     fireEvent.press(confirmButton);
     fireEvent.press(confirmButton);
+
+    await waitFor(() => expect(mockBack).toHaveBeenCalled());
 
     expect(mockSetResult).toHaveBeenCalledTimes(1);
     expect(mockBack).toHaveBeenCalledTimes(1);

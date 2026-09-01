@@ -1,7 +1,9 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import Reanimated from 'react-native-reanimated';
 import { ProfileAvatarCircle } from '@/components/ProfileAvatarCircle';
 import { useColors } from '@/hooks/useColors';
+import { useMarkerAppear } from '@/hooks/map/useMarkerAppear';
 import { sizes } from '@/constants/sizes';
 
 const AVATAR_SIZE = sizes.avatar.sm;
@@ -23,10 +25,11 @@ interface CustomerLocationMarkerProps {
  */
 export function CustomerLocationMarker({ initial, imageUri, stale }: CustomerLocationMarkerProps) {
   const colors = useColors();
+  const appearStyle = useMarkerAppear();
   const ringColor = stale ? colors.mutedForeground : colors.successHex;
 
   return (
-    <View style={styles.wrap} collapsable={false}>
+    <Reanimated.View style={[styles.wrap, appearStyle]} collapsable={false}>
       <ProfileAvatarCircle
         size={AVATAR_SIZE}
         initial={initial}
@@ -44,7 +47,7 @@ export function CustomerLocationMarker({ initial, imageUri, stale }: CustomerLoc
           { backgroundColor: ringColor, borderColor: colors.background },
         ]}
       />
-    </View>
+    </Reanimated.View>
   );
 }
 

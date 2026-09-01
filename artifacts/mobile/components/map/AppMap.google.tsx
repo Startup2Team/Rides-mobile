@@ -1,11 +1,22 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, useColorScheme } from 'react-native';
 import MapView, { PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import { GOOGLE_DARK_MAP_STYLE } from './googleDarkMapStyle';
 import type { AppMapHandle, AppMapProps, AppMapType } from './types';
 
 function googleMapType(mapType: AppMapType): 'standard' | 'satellite' | 'hybrid' {
   return mapType;
+}
+
+/** Exported for unit tests — pure so it doesn't need a rendered MapView. */
+export function googleCustomMapStyle(
+  mapType: AppMapType,
+  colorScheme: 'light' | 'dark' | null | undefined,
+) {
+  // Google's built-in "standard" style is already clean and light — only
+  // override it with the navy custom style for real dark mode, never as the
+  // default.
+  return mapType === 'standard' && colorScheme === 'dark' ? GOOGLE_DARK_MAP_STYLE : undefined;
 }
 
 /**
@@ -19,6 +30,7 @@ export const AppMapGoogle = forwardRef<AppMapHandle, AppMapProps>(function AppMa
   ref,
 ) {
   const mapRef = useRef<MapView>(null);
+  const colorScheme = useColorScheme();
 
   useImperativeHandle(ref, () => ({
     fitToCoordinates: (coordinates, options) => {
@@ -44,7 +56,7 @@ export const AppMapGoogle = forwardRef<AppMapHandle, AppMapProps>(function AppMa
       provider={PROVIDER_DEFAULT}
       initialRegion={initialRegion}
       mapType={googleMapType(mapType)}
-      customMapStyle={mapType === 'standard' ? GOOGLE_DARK_MAP_STYLE : undefined}
+      customMapStyle={googleCustomMapStyle(mapType, colorScheme)}
       showsUserLocation={false}
       showsMyLocationButton={false}
       onMapReady={onMapReady}

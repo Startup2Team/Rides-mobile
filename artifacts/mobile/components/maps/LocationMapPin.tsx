@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, useColorScheme } from 'react-native';
+import Reanimated from 'react-native-reanimated';
 import { useColors } from '@/hooks/useColors';
+import { useMarkerAppear } from '@/hooks/map/useMarkerAppear';
 
 export type LocationMapPinVariant = 'pickup' | 'destination';
 export type LocationMapPinMapType = 'standard' | 'satellite' | 'hybrid';
@@ -41,6 +43,7 @@ export function LocationMapPin({
 }: LocationMapPinProps) {
   const colors = useColors();
   const scheme = useColorScheme();
+  const appearStyle = useMarkerAppear();
   const color = variant === 'pickup' ? colors.primaryHex : colors.successHex;
   const isLightStandard = scheme !== 'dark' && mapType === 'standard';
   const stemColor = isLightStandard ? '#6B7280' : '#FFFFFF';
@@ -54,7 +57,10 @@ export function LocationMapPin({
   const pinHeight = headSize + stemHeight;
 
   return (
-    <View style={[styles.root, { width: size, height: pinHeight }]} collapsable={false}>
+    <Reanimated.View
+      style={[styles.root, { width: size, height: pinHeight }, appearStyle]}
+      collapsable={false}
+    >
       <View
         style={[
           styles.head,
@@ -84,7 +90,7 @@ export function LocationMapPin({
           },
         ]}
       />
-    </View>
+    </Reanimated.View>
   );
 }
 

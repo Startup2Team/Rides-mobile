@@ -1,6 +1,6 @@
 import Mapbox from '@rnmapbox/maps';
-import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { StyleSheet, useColorScheme } from 'react-native';
 import type { Coords } from '@/types';
 import { boundsFromCoordinates, regionToZoomLevel } from './geo';
 import type { AppMapHandle, AppMapProps, AppMapType } from './types';
@@ -14,7 +14,8 @@ if (MAPBOX_TOKEN) {
 
 const DEFAULT_ANIMATION_MS = 500;
 
-function styleUrlForMapType(mapType: AppMapType): string {
+/** Exported for unit tests — pure so it doesn't need a rendered MapView. */
+export function styleUrlForMapType(mapType: AppMapType, colorScheme: 'light' | 'dark' | null | undefined): string {
   switch (mapType) {
     case 'satellite':
       return Mapbox.StyleURL.Satellite;
@@ -22,10 +23,9 @@ function styleUrlForMapType(mapType: AppMapType): string {
       return Mapbox.StyleURL.SatelliteStreet;
     case 'standard':
     default:
-      // Closest built-in stand-in for the app's custom navy Google style —
-      // porting that exact palette needs a Mapbox Studio custom style
-      // (design task, out of scope for this migration).
-      return Mapbox.StyleURL.Dark;
+      // Clean light streets style by default — real dark-mode parity (not a
+      // dark stand-in used everywhere) only when the device is in dark mode.
+      return colorScheme === 'dark' ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Street;
   }
 }
 
@@ -39,6 +39,24 @@ export const AppMapMapbox = forwardRef<AppMapHandle, AppMapProps>(function AppMa
 ) {
   const mapViewRef = useRef<Mapbox.MapView>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const colorScheme = useColorScheme();
+  // Annotations (MarkerView/ShapeSource children) added before the style has
+  // finished loading can end up positioned incorrectly until the next camera
+  // move recomputes them — the "marker only appears after a scroll/tap" bug.
+  // Deferring children until the first onDidFinishLoadingMap fixes that; once
+  // true it stays true (a later mapType style-switch shouldn't re-hide them).
+  const [isStyleLoaded, setIsStyleLoaded] = useState(false);
+
+  // Safety net: onDidFinishLoadingMap is occasionally flaky on @rnmapbox/maps
+  // (can miss on some devices or a style reload). Without this, isStyleLoaded
+  // could stay false forever and markers/route/location dot would NEVER render
+  // — worse than the original glitch. Force it true after a short delay so the
+  // map always ends up interactive even if the native event doesn't arrive.
+  useEffect(() => {
+    if (isStyleLoaded) return;
+    const t = setTimeout(() => setIsStyleLoaded(true), 2500);
+    return () => clearTimeout(t);
+  }, [isStyleLoaded]);
 
   const defaultCameraSettings = useMemo(
     () => ({
@@ -81,12 +99,15 @@ export const AppMapMapbox = forwardRef<AppMapHandle, AppMapProps>(function AppMa
     <Mapbox.MapView
       ref={mapViewRef}
       style={style ?? StyleSheet.absoluteFill}
-      styleURL={styleUrlForMapType(mapType)}
+      styleURL={styleUrlForMapType(mapType, colorScheme)}
       scaleBarEnabled={false}
       attributionPosition={{ bottom: 4, left: 4 }}
       logoPosition={{ bottom: 4, right: 4 }}
       onLayout={onLayout}
-      onDidFinishLoadingMap={onMapReady}
+      onDidFinishLoadingMap={() => {
+        setIsStyleLoaded(true);
+        onMapReady?.();
+      }}
       onRegionWillChange={feature => {
         if (feature.properties.isUserInteraction) onPanDrag?.();
       }}
@@ -106,7 +127,7 @@ export const AppMapMapbox = forwardRef<AppMapHandle, AppMapProps>(function AppMa
       }}
     >
       <Mapbox.Camera ref={cameraRef} defaultSettings={defaultCameraSettings} />
-      {children}
+      {isStyleLoaded ? children : null}
     </Mapbox.MapView>
   );
 });
