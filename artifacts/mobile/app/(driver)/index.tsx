@@ -23,6 +23,7 @@ import {
   View,
 } from 'react-native';
 import { AppMap, AppCircle, AppMarker, MAP_TYPES, type AppMapHandle, type AppMapType } from '@/components/map';
+import { markerPositionKey } from '@/utils/mapUtils';
 import { useDemandHeatmapQuery } from '@/query/hooks/useDemandHeatmapQuery';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -290,11 +291,13 @@ export default function DriverDashboard() {
   // Location
   useEffect(() => {
     let mounted = true;
+    let sub: Location.LocationSubscription | null = null;
+    let webWatchId: number | null = null;
     const setCoords = (coords: { latitude: number; longitude: number }) => {
       if (!mounted) return;
       setDriverLocation(coords);
     };
-    const resolveNativeLocation = async () => {
+    const startNativeWatch = async () => {
       const permission = await Location.getForegroundPermissionsAsync();
       const finalPermission = permission.granted
         ? permission
@@ -302,44 +305,40 @@ export default function DriverDashboard() {
       if (!finalPermission.granted) return;
       // Seed from the OS's cached fix first — it returns in milliseconds, so
       // the map lands on the driver instead of sitting on the Kigali default
-      // for the ~10s a cold high-accuracy fix takes. The precise fix below
-      // then refines it.
+      // for the ~10s a cold high-accuracy fix takes.
       try {
         const cached = await Location.getLastKnownPositionAsync({
           maxAge: LAST_KNOWN_LOCATION_MAX_AGE_MS,
         });
         if (cached) {
-          setCoords({
-            latitude: cached.coords.latitude,
-            longitude: cached.coords.longitude,
-          });
+          setCoords({ latitude: cached.coords.latitude, longitude: cached.coords.longitude });
         }
       } catch {
-        // No cached fix — fall through to the live one.
+        // No cached fix — the watch below provides the first live one.
       }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setCoords({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
+      if (!mounted) return;
+      // CONTINUOUS watch (not a one-shot getCurrentPositionAsync): the driver's
+      // own marker must follow them as they move on the home map, exactly like
+      // the customer/nav screens. Was one-shot before → marker sat static until
+      // an app reload.
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 4000, distanceInterval: 5 },
+        loc => setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude }),
+      );
     };
     if (Platform.OS === "web") {
-      navigator.geolocation?.getCurrentPosition(
-        (p) =>
-          setCoords({
-            latitude: p.coords.latitude,
-            longitude: p.coords.longitude,
-          }),
+      webWatchId = navigator.geolocation?.watchPosition(
+        (p) => setCoords({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
         () => {},
         { enableHighAccuracy: true },
-      );
+      ) ?? null;
     } else {
-      resolveNativeLocation().catch(() => {});
+      startNativeWatch().catch(() => {});
     }
     return () => {
       mounted = false;
+      sub?.remove();
+      if (webWatchId != null) navigator.geolocation?.clearWatch(webWatchId);
     };
   }, []);
 
@@ -931,7 +930,7 @@ export default function DriverDashboard() {
               />
             );
           })}
-        <AppMarker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
+        <AppMarker key={markerPositionKey(driverLocation)} coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
             <VehicleMapMarker
               type={activeVehicleType}

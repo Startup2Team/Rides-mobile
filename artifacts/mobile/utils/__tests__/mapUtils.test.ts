@@ -1,4 +1,4 @@
-import { decodeRoutePolyline, homeRoutePolyline } from '@/utils/mapUtils';
+import { decodeRoutePolyline, homeRoutePolyline, markerPositionKey } from '@/utils/mapUtils';
 
 const pickup = { latitude: -1.95, longitude: 30.05 };
 const destination = { latitude: -1.96, longitude: 30.08 };
@@ -33,5 +33,24 @@ describe('homeRoutePolyline', () => {
       geometry[1],
       destination,
     ]);
+  });
+});
+
+describe('markerPositionKey', () => {
+  it('changes when the coordinate genuinely moves', () => {
+    const a = markerPositionKey({ latitude: -1.95, longitude: 30.05 });
+    const b = markerPositionKey({ latitude: -1.9501, longitude: 30.0501 });
+    expect(a).not.toEqual(b);
+  });
+
+  it('is stable (does not remount) across sub-precision GPS jitter', () => {
+    const a = markerPositionKey({ latitude: -1.950001, longitude: 30.050001 });
+    const b = markerPositionKey({ latitude: -1.9500012, longitude: 30.0500009 });
+    expect(a).toEqual(b);
+  });
+
+  it('is deterministic for the same coordinate', () => {
+    const coord = { latitude: -1.95123, longitude: 30.05123 };
+    expect(markerPositionKey(coord)).toEqual(markerPositionKey({ ...coord }));
   });
 });

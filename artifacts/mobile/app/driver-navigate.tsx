@@ -23,7 +23,7 @@ import { useRoute } from '@/hooks/useRoute';
 import { useDeviceLocation } from '@/hooks/useDeviceLocation';
 import { useScreenTimerManager } from '@/hooks/useScreenTimerManager';
 import { getEntitlementVehicleForProfile } from '@/domain/driverRidePackages';
-import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, markerPositionKey, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { KIGALI_CENTER, VehicleType } from '@/types';
@@ -427,7 +427,12 @@ export default function DriverNavigateScreen() {
         initialRegion={{ ...driverPos, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
         mapType={mapType}
       >
-        <AppMarker coordinate={driverPos} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges>
+        <AppMarker
+          key={`driver-${markerPositionKey(driverPos)}`}
+          coordinate={driverPos}
+          anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges
+        >
           <VehicleMapMarker type={currentRide.vehicleType} rotationDeg={vehicleRotationDeg} />
         </AppMarker>
         {phase !== 'inprogress' && (
@@ -449,6 +454,7 @@ export default function DriverNavigateScreen() {
             marker that silently freezes instead of disappearing. */}
         {customerLocation && (
           <AppMarker
+            key={`customer-${markerPositionKey(customerLocation)}`}
             coordinate={customerLocation}
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}

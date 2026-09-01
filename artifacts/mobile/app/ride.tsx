@@ -26,7 +26,7 @@ import {
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, markerPositionKey, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { Coords, KIGALI_CENTER, VehicleType } from '@/types';
@@ -381,7 +381,12 @@ export default function RideScreen() {
         mapType={mapType}
       >
         {mapDriverLocation && (
-          <AppMarker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <AppMarker
+            key={`driver-${markerPositionKey(mapDriverLocation)}`}
+            coordinate={mapDriverLocation}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+          >
             <VehicleMapMarker
               type={currentRide.vehicleType}
               rotationDeg={vehicleRotationDeg}
