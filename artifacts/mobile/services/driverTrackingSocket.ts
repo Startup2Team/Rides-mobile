@@ -24,6 +24,8 @@ export const DRIVER_SOCKET_EVENT_TYPES = [
   'negotiation_declined',
   'negotiation_text',
   'PACKAGE_CATALOG_UPDATED',
+  'DRIVER_CREDITS_UPDATED',
+  'DRIVER_ACCOUNT_APPROVED',
 ] as const;
 
 export type DriverSocketEventType = (typeof DRIVER_SOCKET_EVENT_TYPES)[number];

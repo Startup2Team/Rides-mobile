@@ -123,12 +123,13 @@ export function PackageSyncProvider({
     void refresh();
   }, [refresh]);
 
-  // WhatsApp-style WebSocket event push listener for instant real-time package updates
+  // WhatsApp-style WebSocket event push listener for instant real-time package & credit updates
   useEffect(() => {
     const socket = openDriverSocket({
       onEvent: (event: DriverSocketEvent) => {
-        if (event.type === 'PACKAGE_CATALOG_UPDATED') {
-          console.log('[REALTIME:WS] ⚡ WhatsApp-style package catalog event received! Re-syncing package state instantly...');
+        if (event.type === 'PACKAGE_CATALOG_UPDATED' || event.type === 'DRIVER_CREDITS_UPDATED') {
+          console.log(`[REALTIME:WS] ⚡ WhatsApp-style event '${event.type}' received! Re-syncing package & credit state instantly...`);
+          queryClient.invalidateQueries({ queryKey: packageKeys.all });
           void refresh();
         }
       },
@@ -136,7 +137,7 @@ export function PackageSyncProvider({
     return () => {
       socket.close();
     };
-  }, [refresh]);
+  }, [queryClient, refresh]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
