@@ -343,9 +343,13 @@ export default function DriverDashboard() {
   }, []);
 
   // Report location to the backend while online so the matching engine can find
-  // this driver. Fires immediately + every 10s (backend rate-limits to ~20/min).
+  // this driver AND the customer sees the driver move during a ride. Fires
+  // immediately + every 10s (backend rate-limits to ~20/min). Runs on web too:
+  // getCurrentPositionAsync works on web (the customer publish loop in
+  // RideProvider relies on it), and web-gating this was why the driver marker
+  // sat frozen on the customer's side while the customer's own marker moved.
   useEffect(() => {
-    if (!isOnline || Platform.OS === 'web') return;
+    if (!isOnline) return;
     let cancelled = false;
     const report = async () => {
       try {

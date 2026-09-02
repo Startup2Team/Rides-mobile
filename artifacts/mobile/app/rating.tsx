@@ -112,14 +112,25 @@ export default function RatingScreen() {
   const cardBackground = colorScheme === 'dark' ? 'rgba(44,44,46,0.94)' : 'rgba(255,255,255,0.94)';
   const cardBorder = colorScheme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)';
 
+  // The completed ride is cleared from `currentRide` ~2s after completion
+  // (CANCELLED_RIDE_CLEAR_DELAY_MS in RideProvider), but this screen outlives
+  // that clear. Since the flow navigates here without params, a naive read of
+  // `currentRide` blanks the driver's photo/name mid-rating once it's nulled.
+  // Resolve currentRide → params.rideId in history → the just-completed ride
+  // (rideHistory[0]), and pin the last non-null result so a later clear (or a
+  // different ride completing) can never wipe who we're rating.
+  const lastRatedRideRef = useRef<typeof currentRide>(null);
   const ratedRide = useMemo(() => {
+    let resolved: typeof currentRide = null;
     if (currentRide && (!params.rideId || currentRide.id === params.rideId)) {
-      return currentRide;
+      resolved = currentRide;
+    } else if (params.rideId) {
+      resolved = rideHistory.find(ride => ride.id === params.rideId) ?? currentRide ?? rideHistory[0] ?? null;
+    } else {
+      resolved = currentRide ?? rideHistory[0] ?? null;
     }
-    if (params.rideId) {
-      return rideHistory.find(ride => ride.id === params.rideId) ?? currentRide;
-    }
-    return currentRide;
+    if (resolved) lastRatedRideRef.current = resolved;
+    return resolved ?? lastRatedRideRef.current;
   }, [currentRide, params.rideId, rideHistory]);
 
   const driverPhotoUri = useMemo(() => {
