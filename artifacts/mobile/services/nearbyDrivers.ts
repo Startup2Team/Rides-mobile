@@ -21,10 +21,6 @@ interface NearbyDriverDto {
   eta_minutes: number;
 }
 
-interface NearbyDriversEnvelope {
-  data: { drivers: NearbyDriverDto[] | null };
-}
-
 export async function getNearbyDrivers(
   latitude: number,
   longitude: number,
@@ -34,8 +30,10 @@ export async function getNearbyDrivers(
   const body: Record<string, unknown> = { lat: latitude, lng: longitude };
   if (vehicle) body.transport_type = toBackendTransportType(vehicle);
 
-  const response = await client.post<NearbyDriversEnvelope>('/v1/customer/location', { body });
-  const drivers = response.data.data.drivers ?? [];
+  const response = await client.post<{ drivers: NearbyDriverDto[] | null }>('/v1/customer/location', { body });
+  const rawData = response.data as unknown as { drivers?: NearbyDriverDto[] | null; data?: { drivers?: NearbyDriverDto[] | null } };
+  const drivers = rawData?.drivers ?? rawData?.data?.drivers ?? [];
+
   return drivers.map(d => ({
     vehicleType: fromBackendTransportType(d.transport_type),
     distanceM: d.distance_m,
