@@ -359,10 +359,12 @@ export default function DriverDashboard() {
     let cancelled = false;
     const report = async () => {
       try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        if (cancelled) return;
-        // expo-location reports speed in metres/second; the backend field is
-        // speed_kmh, so convert (m/s → km/h) before sending.
+        let loc = await Location.getLastKnownPositionAsync();
+        if (!loc) {
+          loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        }
+        if (cancelled || !loc) return;
+
         const speedMps = loc.coords.speed;
         await updateDriverLocation({
           lat: loc.coords.latitude,
@@ -370,8 +372,8 @@ export default function DriverDashboard() {
           heading: loc.coords.heading ?? undefined,
           speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
         });
-      } catch {
-        // ignore — retry on the next tick
+      } catch (e) {
+        console.warn('[DriverLocation] Location reporting tick error:', e);
       }
     };
     void report();
