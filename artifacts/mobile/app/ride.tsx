@@ -5,8 +5,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppMap, AppMarker, MAP_TYPES, type AppMapHandle, type AppMapType } from '@/components/map';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useToast } from '@/context/ToastContext';
 import { useRide } from '@/context/RideContext';
@@ -26,14 +26,12 @@ import {
 } from '@/components/maps/LocationMapPin';
 import { RoutePolyline } from '@/components/maps/RoutePolyline';
 import { resolveDriverProfileImage } from '@/utils/driverProfileImage';
-import { formatDistance, formatDuration, routePolylineThroughPinTips } from '@/utils/mapUtils';
+import { formatDistance, formatDuration, markerPositionKey, routePolylineThroughPinTips } from '@/utils/mapUtils';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import { FLOATING_PANEL_TOP_RADIUS } from '@/constants/surfaces';
 import { Coords, KIGALI_CENTER, VehicleType } from '@/types';
 import { useActiveRideReadModel } from '@/domains/ride/dualRead/rideDualReadAdapter';
 
-const MAP_TYPES = ['standard', 'satellite', 'hybrid'] as const;
-type AppMapType = (typeof MAP_TYPES)[number];
 const MAP_EDGE_PADDING = { top: 120, right: 56, bottom: 320, left: 40 };
 
 const VEHICLE_MARKER_DEFAULT_HEADING: Record<VehicleType, number> = {
@@ -81,7 +79,7 @@ export default function RideScreen() {
   const { currentRide, driverLocation, cancelRide } = useRide();
   const activeRideReadModel = useActiveRideReadModel();
   const { showToast } = useToast();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<AppMapHandle>(null);
   const fittedMapStateRef = useRef<string | null>(null);
   const previousRideStatusRef = useRef<string | null>(null);
   /** Last driver position while arriving — shown on the arrived map (state so markers re-render). */
@@ -169,11 +167,21 @@ export default function RideScreen() {
     },
     [activeDriverLocation, currentRide, isInProgress, rideRoute],
   );
+  // Real OSRM route from ride creation (currentRide.routeCoordinates) wins over
+  // the client-side Mapbox fetch when the backend produced one for this ride —
+  // same road-following shape, no extra network round-trip, and it survives a
+  // Mapbox outage. Falls back to Mapbox exactly as before when absent.
   const fullRideRouteThroughPins = useMemo(
     () => {
-      if (!rideRoute || !currentRide || rideRoute.coordinates.length < 2) return null;
+      if (!currentRide) return null;
+      const coordinates = currentRide.routeCoordinates && currentRide.routeCoordinates.length >= 2
+        ? currentRide.routeCoordinates
+        : rideRoute && rideRoute.coordinates.length >= 2
+          ? rideRoute.coordinates
+          : null;
+      if (!coordinates) return null;
       return routePolylineThroughPinTips(
-        rideRoute.coordinates,
+        coordinates,
         currentRide.pickup,
         currentRide.destination,
       );
@@ -187,13 +195,13 @@ export default function RideScreen() {
 
   const activeVehicleType = currentRide?.vehicleType ?? 'moto';
   const vehicleRotationDeg = useMemo(() => {
-    const routeForHeading = isArrived && rideRoute && rideRoute.coordinates.length >= 2
-      ? rideRoute.coordinates
+    const routeForHeading = isArrived && fullRideRouteThroughPins && fullRideRouteThroughPins.length >= 2
+      ? fullRideRouteThroughPins
       : activeRemainingRoute;
     if (!routeForHeading || routeForHeading.length < 2) return 0;
     const bearing = getBearingDegrees(routeForHeading[0], routeForHeading[1]);
     return bearing - VEHICLE_MARKER_DEFAULT_HEADING[activeVehicleType];
-  }, [activeRemainingRoute, activeVehicleType, isArrived, rideRoute]);
+  }, [activeRemainingRoute, activeVehicleType, fullRideRouteThroughPins, isArrived]);
 
   const driverPhotoUri = useMemo(
     () => resolveDriverProfileImage(currentRide?.driver),
@@ -225,12 +233,12 @@ export default function RideScreen() {
     }
 
     if (status === 'arrived') {
-      const routeReady = Boolean(rideRoute && rideRoute.coordinates.length > 1);
+      const routeReady = Boolean(fullRideRouteThroughPins && fullRideRouteThroughPins.length > 1);
       const fitKey = routeReady ? 'arrived-route' : 'arrived-pickup-dest';
       if (fittedMapStateRef.current === fitKey) return;
 
       const coordinates = routeReady
-        ? rideRoute!.coordinates
+        ? fullRideRouteThroughPins!
         : [currentRide.pickup, currentRide.destination];
 
       mapRef.current.fitToCoordinates(coordinates, {
@@ -252,8 +260,8 @@ export default function RideScreen() {
       }
 
       const coordinates =
-        rideRoute && rideRoute.coordinates.length > 1
-          ? rideRoute.coordinates
+        fullRideRouteThroughPins && fullRideRouteThroughPins.length > 1
+          ? fullRideRouteThroughPins
           : [currentRide.pickup, currentRide.destination];
       mapRef.current.fitToCoordinates(coordinates, {
         edgePadding: mapFitEdgePadding,
@@ -261,7 +269,7 @@ export default function RideScreen() {
       });
       fittedMapStateRef.current = 'in_progress';
     }
-  }, [activeDriverLocation, currentRide, mapFitEdgePadding, rideRoute]);
+  }, [activeDriverLocation, currentRide, fullRideRouteThroughPins, mapFitEdgePadding]);
 
   const showMapControls = isConfirmed || isArriving || isArrived || isInProgress;
 
@@ -286,8 +294,8 @@ export default function RideScreen() {
 
     if (currentRide.status === 'arrived') {
       const coordinates =
-        rideRoute && rideRoute.coordinates.length > 1
-          ? rideRoute.coordinates
+        fullRideRouteThroughPins && fullRideRouteThroughPins.length > 1
+          ? fullRideRouteThroughPins
           : [currentRide.pickup, currentRide.destination];
       mapRef.current.fitToCoordinates(coordinates, {
         edgePadding: mapFitEdgePadding,
@@ -312,9 +320,9 @@ export default function RideScreen() {
     arrivedDriverCoords,
     currentRide,
     driverLocation,
+    fullRideRouteThroughPins,
     isArrived,
     mapFitEdgePadding,
-    rideRoute,
   ]);
 
   if (!currentRide) return null;
@@ -328,11 +336,21 @@ export default function RideScreen() {
   const liveEtaMinutes = currentRide.driver?.eta ?? null;
   const distanceText = liveDistanceKm != null
     ? formatDistance(liveDistanceKm * 1000)
-    : rideRoute
-      ? formatDistance(rideRoute.distanceMeters)
-      : formatDistance(currentRide.distance * 1000);
+    : currentRide.routeDistanceKm != null
+      ? formatDistance(currentRide.routeDistanceKm * 1000)
+      : rideRoute
+        ? formatDistance(rideRoute.distanceMeters)
+        : formatDistance(currentRide.distance * 1000);
   const liveEtaText = liveEtaMinutes != null ? `${liveEtaMinutes} min` : null;
-  const displayEta = liveEtaText ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`);
+  // Real OSRM route duration (captured at ride creation) beats the client-side
+  // Mapbox fetch — it's server-authoritative and already on hand, no extra
+  // network round-trip needed. Falls back exactly as before when absent.
+  const realRouteEtaText = currentRide.routeDurationMinutes != null
+    ? formatDuration(currentRide.routeDurationMinutes * 60) // hour-rollover, consistent with the Mapbox fallback below
+    : null;
+  const displayEta = liveEtaText
+    ?? realRouteEtaText
+    ?? (rideRoute ? formatDuration(rideRoute.durationSeconds) : `${currentRide.duration} min`);
   // When the driver has arrived / is waiting, there is no meaningful countdown —
   // the header shows the arrived status, not a stale ETA.
   const headerEtaText = isArrived ? null : displayEta;
@@ -356,41 +374,44 @@ export default function RideScreen() {
   return (
     <View style={styles.container}>
       {/* Map */}
-      <MapView
+      <AppMap
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
         initialRegion={mapInitialRegion}
         mapType={mapType}
-        customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
       >
         {mapDriverLocation && (
-          <Marker coordinate={mapDriverLocation} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <AppMarker
+            key={`driver-${markerPositionKey(mapDriverLocation)}`}
+            coordinate={mapDriverLocation}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+          >
             <VehicleMapMarker
               type={currentRide.vehicleType}
               rotationDeg={vehicleRotationDeg}
             />
-          </Marker>
+          </AppMarker>
         )}
         {!isInProgress && pickupPinCoordinate && (
-          <Marker
+          <AppMarker
             coordinate={pickupPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
             centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="pickup" mapType={mapType} />
-          </Marker>
+          </AppMarker>
         )}
         {(isArrived || isInProgress) && destinationPinCoordinate && (
-          <Marker
+          <AppMarker
             coordinate={destinationPinCoordinate}
             anchor={LOCATION_MAP_PIN_ANCHOR}
             centerOffset={getLocationMapPinCenterOffset()}
             tracksViewChanges={false}
           >
             <LocationMapPin variant="destination" mapType={mapType} />
-          </Marker>
+          </AppMarker>
         )}
         {isArriving && remainingDriverToPickupRoute ? (
           <RoutePolyline coordinates={remainingDriverToPickupRoute} color={colors.destructiveHex} width={4} />
@@ -401,7 +422,7 @@ export default function RideScreen() {
         {isArrived && fullRideRouteThroughPins ? (
           <RoutePolyline coordinates={fullRideRouteThroughPins} color={colors.destructiveHex} width={4} />
         ) : null}
-      </MapView>
+      </AppMap>
 
       {showMapControls && (
         <>
@@ -490,13 +511,6 @@ export default function RideScreen() {
     </View>
   );
 }
-
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-];
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

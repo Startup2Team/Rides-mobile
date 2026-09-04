@@ -1,10 +1,9 @@
 import React, { memo, type RefObject } from 'react';
 import { StyleSheet, View, type ColorValue } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
+import { AppMap, AppMarker, type AppMapHandle, type AppMapRegion, type AppMapType } from '@/components/map';
 import type { Coords, VehicleType } from '@/types';
 import { DriverMarkers } from './DriverMarkers';
-import { darkMapStyle, styles } from './homeStyles';
-import type { AppMapType } from './homeUtils';
+import { styles } from './homeStyles';
 import { RoutePreview } from './RoutePreview';
 import { AppText } from '@/components/AppText';
 
@@ -25,8 +24,8 @@ function HomeMapComponent({
   userLocation,
   primaryColor,
 }: {
-  mapRef: RefObject<MapView | null>;
-  initialRegion: Region;
+  mapRef: RefObject<AppMapHandle | null>;
+  initialRegion: AppMapRegion;
   mapType: AppMapType;
   onMapReady: () => void;
   routeCoordinates: Coords[];
@@ -42,18 +41,12 @@ function HomeMapComponent({
   primaryColor: ColorValue;
 }) {
   return (
-    <MapView
+    <AppMap
       ref={mapRef}
       style={StyleSheet.absoluteFill}
-      provider={PROVIDER_DEFAULT}
       initialRegion={initialRegion}
       onMapReady={onMapReady}
-      showsUserLocation={false}
-      showsMyLocationButton={false}
-      followsUserLocation={false}
-      userLocationAnnotationTitle=""
       mapType={mapType}
-      customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
     >
       <RoutePreview
         coordinates={routeCoordinates}
@@ -66,16 +59,16 @@ function HomeMapComponent({
       />
       <DriverMarkers drivers={drivers} vehicleType={selectedVehicle} />
       {showYouAreHere && userLocation && (
-        <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
+        <AppMarker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={2}>
           <View style={styles.youAreHereContainer}>
             <View style={[styles.youAreHereBubble, { backgroundColor: primaryColor }]}>
               <AppText variant="caption" style={styles.youAreHereText}>You're Here</AppText>
             </View>
             <View style={[styles.youAreHereTail, { borderTopColor: primaryColor }]} />
           </View>
-        </Marker>
+        </AppMarker>
       )}
-    </MapView>
+    </AppMap>
   );
 }
 

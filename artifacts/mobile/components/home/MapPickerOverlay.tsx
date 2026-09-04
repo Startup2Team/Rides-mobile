@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { type RefObject } from 'react';
 import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import MapView, { PROVIDER_DEFAULT, type Region } from 'react-native-maps';
+import { AppMap, type AppMapHandle, type AppMapRegion } from '@/components/map';
 import { AppText } from '@/components/AppText';
 import { AppButton } from '@/components/AppButton';
 import { BackButton } from '@/components/BackButton';
@@ -9,7 +9,7 @@ import { spacing } from '@/constants/spacing';
 import { FLOATING_ACTION_BOTTOM_OFFSET, TAB_SCREEN_BOTTOM_PADDING } from '@/constants/tabBar';
 import type { Coords } from '@/types';
 import type { useColors } from '@/hooks/useColors';
-import { darkMapStyle, styles } from './homeStyles';
+import { styles } from './homeStyles';
 import type { AppMapType, MapPickerTarget } from './homeUtils';
 
 export function MapPickerOverlay({
@@ -32,7 +32,7 @@ export function MapPickerOverlay({
   savedLocationHint,
 }: {
   target: MapPickerTarget | null;
-  mapRef: RefObject<MapView | null>;
+  mapRef: RefObject<AppMapHandle | null>;
   pinCoords: Coords;
   mapType: AppMapType;
   colors: ReturnType<typeof useColors>;
@@ -41,7 +41,7 @@ export function MapPickerOverlay({
   isDragging: boolean;
   onLayout: (width: number, height: number) => void;
   onDragStart: () => void;
-  onRegionChangeComplete: (region: Region) => void;
+  onRegionChangeComplete: (region: AppMapRegion) => void;
   onClose: () => void;
   onCycleMapType: () => void;
   onCenterUser: () => void;
@@ -53,15 +53,11 @@ export function MapPickerOverlay({
 
   return (
     <View style={styles.mapPickerContainer}>
-      <MapView
+      <AppMap
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
         initialRegion={{ ...pinCoords, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
         mapType={mapType}
-        customMapStyle={mapType === 'standard' ? darkMapStyle : undefined}
         onLayout={event => {
           const { width, height } = event.nativeEvent.layout;
           if (width > 0 && height > 0) onLayout(width, height);

@@ -414,6 +414,19 @@ export interface Ride {
    * window_seconds). Drives the accept/decline countdown; 15s fallback.
    */
   offerWindowSeconds?: number;
+  /**
+   * Real road route from OSRM (staging/prod, when enabled), captured once at
+   * ride creation (GET /customer/fare-estimate, then confirmed by the
+   * POST /customer/rides response). Present ONLY when the backend produced an
+   * actual OSRM route for this pickup→destination pair — undefined otherwise,
+   * in which case the ride screen keeps drawing/timing off its own Mapbox
+   * route fetch as before. Does NOT survive a force-kill/resume (GET
+   * /rides/active replays status/pickup/destination only), which is fine —
+   * it is a display enhancement, not ride state.
+   */
+  routeCoordinates?: Coords[];
+  routeDistanceKm?: number;
+  routeDurationMinutes?: number;
 }
 
 export const VEHICLE_MCI: Record<VehicleType, string> = {

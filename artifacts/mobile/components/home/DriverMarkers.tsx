@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { Marker } from 'react-native-maps';
+import { AppMarker } from '@/components/map';
 import { VehicleMapMarker } from '@/components/VehicleMapMarker';
 import type { VehicleType } from '@/types';
 
@@ -22,14 +22,14 @@ const DriverMarkerItem = memo(function DriverMarkerItem({
   );
 
   return (
-    <Marker
+    <AppMarker
       coordinate={coordinate}
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={false}
       zIndex={1}
     >
       <VehicleMapMarker type={vehicleType} />
-    </Marker>
+    </AppMarker>
   );
 });
 

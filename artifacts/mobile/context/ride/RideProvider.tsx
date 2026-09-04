@@ -43,9 +43,11 @@ import {
   CUSTOMER_LOCATION_ACTIVE_STATUSES,
   CUSTOMER_LOCATION_PUBLISH_INTERVAL_MS,
   CUSTOMER_SEARCH_TIMEOUT_MS,
+  RIDE_RECONCILE_INTERVAL_MS,
 } from './rideConstants';
 import { reportOperationalFailure } from '@/observability/monitoring';
 import { resetRideActivity, setRideActivity } from '@/state/rideActivityStore';
+import { registerRideReconcileHandler } from '@/state/rideReconcileTrigger';
 import { useOptionalDriverEntitlement } from '@/context/DriverEntitlementContext';
 import { useOptionalAuth } from '@/context/AuthContext';
 import { getEligibleOnlineSessionVehicle } from './rideSession';
@@ -58,7 +60,7 @@ import {
   shadowWireStartRideCommand,
 } from '@/domains/ride/commandPipeline';
 import { createRideCorrelationId } from '@/domains/ride/idempotency';
-import { createRide as createBackendRide, cancelRide as cancelBackendRide, getActiveRide } from '@/services/rides';
+import { createRide as createBackendRide, cancelRide as cancelBackendRide, getActiveRide, type CustomerRide } from '@/services/rides';
 import { isTerminalCustomerLocationError, updateCustomerLocation } from '@/services/customerLocation';
 import {
   getTrackedCustomerLocationBackgroundRideId,
@@ -121,6 +123,32 @@ function etaMinutesTo(from: Coords, to: Coords | null | undefined): number | nul
   if (km == null) return null;
   return Math.max(1, Math.round((km / AVG_TRIP_SPEED_KMH) * 60));
 }
+
+// Ordering of the non-terminal ride lifecycle, used only to guard
+// reconcileActiveRide's status convergence below. The backend only ever
+// moves a given ride's status FORWARD through this chain (or straight to
+// 'cancelled', handled separately as a dismissal) — it never regresses a
+// live ride. So if the server snapshot's status sits further along this
+// order than local, local is definitively stale (the socket-died-silently
+// case this branch exists to fix) and adopting it is always safe. If local
+// sits further along than the server snapshot, that's either (a) a write
+// that's genuinely in flight and about to land — self-heals on the very next
+// reconcile tick — or (b) a rejected/failed optimistic update that never
+// landed on the backend at all. Distinguishing those two without a
+// correlated write-confirmation is P2 (outbound accept/arrive/start/complete
+// retry) — deliberately out of scope here — so reconcile never rolls local
+// status backward; it only ever catches local UP to a server that has moved
+// on, never the reverse.
+const RECONCILE_STATUS_ORDER: readonly RideStatus[] = [
+  'idle',
+  'searching',
+  'driver_assigned',
+  'negotiating',
+  'confirmed',
+  'arriving',
+  'arrived',
+  'in_progress',
+];
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
@@ -595,6 +623,115 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const hydrateActiveRideRef = useRef(hydrateActiveRide);
   hydrateActiveRideRef.current = hydrateActiveRide;
 
+  // ── Active-ride reconciliation ───────────────────────────────────────────
+  // hydrateActiveRide only fills an EMPTY seat — by design it never touches a
+  // ride already loaded locally. That leaves a real gap: a WS lifecycle event
+  // missed while the tracking socket is down/silently stalled (backgrounded
+  // app, dead-but-undetected connection — see the read-idle watchdog in
+  // customerTrackingSocket.ts / driverTrackingSocket.ts) leaves a stale ride
+  // on screen — a frozen driver pointer, a step the UI never advanced past,
+  // or a cancel it never heard about — with nothing to correct it short of a
+  // force-kill + relaunch. This re-asks the backend for the truth and:
+  //   - dismisses the ride locally (same as a real ride_cancelled WS event)
+  //     when the server no longer has it live at all;
+  //   - otherwise converges local `status` FORWARD to match the server's,
+  //     when the server has moved further along than local — see
+  //     RECONCILE_STATUS_ORDER's comment for why this never moves backward.
+  // Wired to foreground resume, a light backstop interval while a ride is
+  // active, and an inbound reconcile push (state/rideReconcileTrigger.ts) —
+  // see each call site below.
+  const reconcileActiveRide = useCallback(async () => {
+    const user = authUserRef.current;
+    if (!user) return;
+    const ride = currentRideRef.current;
+    if (!ride || ride.status === 'cancelled' || ride.status === 'completed') return;
+    const backendRideId = ride.backendRideId ?? backendRideIdRef.current;
+    // Nothing for the server to confirm yet (still POSTing / purely local) —
+    // there is no server truth to reconcile against.
+    if (!backendRideId) return;
+    const viewer = user.mode === 'driver' ? 'driver' : 'customer';
+    let snapshot: CustomerRide | null;
+    try {
+      snapshot = viewer === 'driver' ? await getActiveDriverRide() : await getActiveRide();
+    } catch (error) {
+      // Ambiguous (network/server error) — only a definitive answer from the
+      // backend can move this forward; a failed check must never guess.
+      reportOperationalFailure('ride.reconcile.fetch', error, { mode: user.mode, rideId: backendRideId });
+      return;
+    }
+    // Re-check after the await: don't clobber a ride that moved on while this
+    // was in flight (a live WS event already applied, a local cancel fired,
+    // or the ride ended some other way).
+    const current = currentRideRef.current;
+    if (
+      !current ||
+      current.backendRideId !== backendRideId ||
+      current.status === 'cancelled' ||
+      current.status === 'completed'
+    ) {
+      return;
+    }
+
+    const serverRide =
+      snapshot && snapshot.id === backendRideId ? rideFromActiveRideSnapshot(snapshot, viewer) : null;
+
+    if (!serverRide) {
+      // Server no longer has this ride live (completed/cancelled/gone) —
+      // dismiss it locally exactly like a real ride_cancelled WS event would,
+      // so a missed event never leaves a zombie ride on screen.
+      const session = timers.endSession();
+      backendRideIdRef.current = null;
+      backendDrivingRef.current = false;
+      driverEnRouteFiredRef.current = null;
+      setCurrentRide(prev =>
+        prev && prev.backendRideId === backendRideId ? { ...prev, status: 'cancelled' } : prev,
+      );
+      timers.scheduleTimeout(() => {
+        setCurrentRide(prev => (prev?.status === 'cancelled' ? null : prev));
+        setDriverLocation(null);
+        setCustomerLocation(null);
+      }, CANCELLED_RIDE_CLEAR_DELAY_MS, session);
+      await reconcileCustomerLocationBackgroundTask(null, viewer);
+      return;
+    }
+
+    const localIndex = RECONCILE_STATUS_ORDER.indexOf(current.status);
+    const serverIndex = RECONCILE_STATUS_ORDER.indexOf(serverRide.status);
+    if (serverIndex <= localIndex) return; // never behind, never regress (see RECONCILE_STATUS_ORDER)
+
+    backendDrivingRef.current = true;
+    clearSearchTimers();
+    timers.clearInterval(driverIntervalRef.current);
+    driverIntervalRef.current = null;
+    // A resumed CONFIRMED ride must still auto-advance to en-route locally
+    // (mirrors hydrateActiveRide); anything the server already reports past
+    // CONFIRMED means en-route already happened server-side, so mark it
+    // fired to stop the local auto-advance effect from calling it again.
+    driverEnRouteFiredRef.current = serverRide.status === 'confirmed' ? null : backendRideId;
+    setCurrentRide(prev => {
+      if (!prev || prev.backendRideId !== backendRideId) return prev;
+      const next: Ride = { ...prev, status: serverRide.status };
+      if (serverRide.agreedFare !== undefined) next.agreedFare = serverRide.agreedFare;
+      if (serverRide.arrivedAt) {
+        next.arrivedAt = prev.arrivedAt ?? serverRide.arrivedAt;
+        next.waitStartedAt = prev.waitStartedAt ?? serverRide.waitStartedAt;
+      }
+      return next;
+    });
+    // Deliberately NOT touching driverLocation/customerLocation here: the
+    // active-ride snapshot (services/rides.ts CustomerRide) carries no live
+    // GPS field — rideFromActiveRideSnapshot seeds driver.location at the
+    // pickup point purely as a placeholder for a customer who has no fix
+    // yet. Copying that into the live driverLocation/customerLocation
+    // pointer would regress a real in-flight fix back to a static point.
+    // Once the watchdog-forced reconnect above lands, the real
+    // driver_location/customer_location WS stream resumes and repopulates it.
+  }, [clearSearchTimers, reconcileCustomerLocationBackgroundTask, timers]);
+  // Stable handle so the reconcile trigger (registered once on mount, below)
+  // always calls the latest implementation without re-registering.
+  const reconcileActiveRideRef = useRef(reconcileActiveRide);
+  reconcileActiveRideRef.current = reconcileActiveRide;
+
   const createRide = useCallback(async (
     pickup: RideLocation,
     destination: RideLocation,
@@ -628,6 +765,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const dist = estimate?.distanceKm ?? localDist;
     const fare = estimate?.totalFareRwf ?? localFare;
     const duration = estimate?.durationMinutes ?? Math.round(localDist * 3 + 5);
+    // Real OSRM route, when the backend produced one for this corridor — draws
+    // the actual road path immediately instead of waiting on a client Mapbox
+    // fetch, and backs the ETA shown on the ride screen.
+    const routeCoordinates = estimate?.routeCoordinates ?? undefined;
+    const routeDurationMinutes = estimate?.routeDurationSeconds != null
+      ? Math.round(estimate.routeDurationSeconds / 60)
+      : undefined;
 
       const ride: Ride = {
       id: generateRideId(),
@@ -644,6 +788,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       suggestedFare: fare,
       negotiation: [],
       createdAt: new Date().toISOString(),
+      ...(routeCoordinates ? { routeCoordinates } : {}),
+      ...(routeDurationMinutes != null ? { routeDurationMinutes } : {}),
     };
 
     const displayDestText = destText.trim() || destination.address?.trim() || '';
@@ -731,6 +877,11 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
                 // parallel) — the searching screen counts down against it.
                 ...(res.giveUpSeconds != null ? { searchBudgetSeconds: res.giveUpSeconds } : {}),
                 ...(res.searchDeadlineAt ? { searchDeadlineAt: res.searchDeadlineAt } : {}),
+                // Definitive OSRM route from ride creation — overrides the
+                // fare-estimate's route (same corridor, authoritative source).
+                ...(res.routeCoordinates ? { routeCoordinates: res.routeCoordinates } : {}),
+                ...(res.routeDistanceKm != null ? { routeDistanceKm: res.routeDistanceKm } : {}),
+                ...(res.routeDurationMinutes != null ? { routeDurationMinutes: res.routeDurationMinutes } : {}),
               }
             : prev,
         );
@@ -1459,10 +1610,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         // expo-location reports speed in metres/second; the backend field is
         // speed_kmh, so convert (m/s → km/h) before sending.
         const speedMps = loc.coords.speed;
+        const heading = loc.coords.heading;
         await updateCustomerLocation(trackedRideId, {
           lat: loc.coords.latitude,
           lng: loc.coords.longitude,
-          heading: loc.coords.heading ?? undefined,
+          // -1 = unknown course on iOS/Android; sending it 400s the whole
+          // update backend-side, so only send a real 0-360 bearing.
+          heading: heading != null && heading >= 0 ? heading : undefined,
           speed: speedMps != null && speedMps >= 0 ? speedMps * 3.6 : undefined,
         });
       } catch (error) {
@@ -1509,18 +1663,54 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   // Resume check: once auth is ready (and again on every mode change), and on
   // each return to the foreground. A single cheap GET that no-ops while a ride
-  // is already loaded — see hydrateActiveRide.
+  // is already loaded — see hydrateActiveRide. reconcileActiveRide is the
+  // companion check for a ride already loaded (see its own comment) — both
+  // belong on every return to the foreground. Also nudges either tracking
+  // socket to reconnect immediately if it isn't demonstrably open, instead of
+  // waiting out a backoff delay computed while the app was backgrounded.
   const authUserId = auth?.user?.id ?? null;
   const authUserMode = auth?.user?.mode ?? null;
   React.useEffect(() => {
     if (!authUserId) return;
     void hydrateActiveRide();
+    void reconcileActiveRide();
     const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state !== 'active') return;
       void hydrateActiveRide();
+      void reconcileActiveRide();
+      customerSocketRef.current?.ensureAlive?.();
+      driverSocketRef.current?.ensureAlive?.();
     });
     return () => subscription.remove();
-  }, [authUserId, authUserMode, hydrateActiveRide]);
+  }, [authUserId, authUserMode, hydrateActiveRide, reconcileActiveRide]);
+
+  // Backstop: while a non-terminal ride is loaded, periodically re-verify it
+  // against the backend too — catches a socket that's gone silently stuck
+  // (not just a backgrounded app) without waiting for the next foreground
+  // return. See RIDE_RECONCILE_INTERVAL_MS.
+  const reconcileEligible =
+    Boolean(currentRide?.backendRideId) &&
+    currentRide?.status !== 'cancelled' &&
+    currentRide?.status !== 'completed';
+  React.useEffect(() => {
+    if (!reconcileEligible) return;
+    const handle = timers.scheduleInterval(() => {
+      void reconcileActiveRide();
+    }, RIDE_RECONCILE_INTERVAL_MS);
+    return () => timers.clearInterval(handle);
+  }, [reconcileActiveRide, reconcileEligible, timers]);
+
+  // Registers the reconcile handler once so a push whose data implies the
+  // ride may have moved on (services/usePushNotifications.ts) can self-heal a
+  // missed WS event by triggering the same check — see
+  // state/rideReconcileTrigger.ts. Always calls through to the LATEST
+  // reconcileActiveRide via the ref, so this never needs to re-register.
+  React.useEffect(() => {
+    registerRideReconcileHandler(() => {
+      void reconcileActiveRideRef.current();
+    });
+    return () => registerRideReconcileHandler(null);
+  }, []);
 
   // Driver: mark en-route once a backend-backed ride is confirmed (covers both
   // negotiation paths), so it advances to DRIVER_EN_ROUTE. Fires once per ride.

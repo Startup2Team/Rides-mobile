@@ -69,6 +69,7 @@
       "./plugins/withNoExplicitModules",
       "./plugins/withFirebaseNotificationManifestFix",
       "./plugins/withGoogleMapsApiKey",
+      "@rnmapbox/maps",
       [
         "expo-router",
         {

@@ -370,7 +370,18 @@ export default function DriverVehicleDetailsScreen() {
         refreshIndicatorTop={headerMetrics.headerInset + 44}
       >
         <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
-          <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</AppText>
+          <View style={styles.sectionHeaderRow}>
+            <AppText style={[styles.sectionTitle, { color: colors.foreground }]}>Vehicle Information</AppText>
+            <AppButton
+              title="Edit"
+              onPress={() => router.push({ pathname: '/driver-edit-vehicle', params: { vehicleId: vehicle.id } })}
+              size="sm"
+              compact
+              variant="secondary"
+              icon="edit-2"
+              accessibilityLabel="Edit vehicle details"
+            />
+          </View>
           {/* Friendly type label mapped client-side from the domain vehicle code
               (VEHICLE_LABELS covers all 5 DB types: Moto / Cab / Hilux / Fuso /
               Rifani). TODO: source labels from a future GET /vehicle-types
@@ -987,6 +998,7 @@ function getDocumentExpiryWarning(label: string, expiryDate?: string) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   sectionCard: { borderRadius: 18, padding: spacing[14], gap: semanticSpacing.rowGap },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: semanticSpacing.rowGap },
   sectionTitle: { ...typography.title,  },
   sectionSubtitle: { ...typography.caption, lineHeight: 17 },
   serverDocRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing[8] },

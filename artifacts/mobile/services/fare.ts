@@ -1,6 +1,7 @@
 import { getAppBackendClient } from '@/data/remote/client/appBackendClient';
 import { toBackendTransportType } from '@/constants/vehicles';
-import type { VehicleType } from '@/types';
+import { decodeRoutePolyline } from '@/utils/mapUtils';
+import type { Coords, VehicleType } from '@/types';
 
 // Real backend: GET /api/v1/customer/fare-estimate — server-side pricing so the
 // quote can't be tampered with client-side. Maps/routing stay client-side; the
@@ -18,6 +19,14 @@ export interface FareEstimate {
   minFareRwf: number;
   cancellationFeeRwf: number;
   note: string;
+  /**
+   * Real road route from OSRM (staging/prod, when enabled). Present ONLY when
+   * the backend produced an actual OSRM route — absent otherwise, in which
+   * case callers fall back to distanceKm/durationMinutes (straight-line-based)
+   * and the client-side Mapbox route fetch as before.
+   */
+  routeDurationSeconds: number | null;
+  routeCoordinates: Coords[] | null;
 }
 
 interface FareBreakdownDto {
@@ -36,6 +45,9 @@ interface FareEstimateDto {
   min_fare_rwf: number;
   cancellation_fee_rwf: number;
   note: string;
+  // Additive OSRM fields — present only when a real route was produced.
+  route_duration_seconds?: number | null;
+  route_geometry?: string | null;
 }
 
 interface FareEstimateEnvelope {
@@ -74,5 +86,10 @@ export async function estimateFare(input: FareEstimateInput): Promise<FareEstima
     minFareRwf: d.min_fare_rwf,
     cancellationFeeRwf: d.cancellation_fee_rwf,
     note: d.note,
+    routeDurationSeconds:
+      typeof d.route_duration_seconds === 'number' && Number.isFinite(d.route_duration_seconds)
+        ? d.route_duration_seconds
+        : null,
+    routeCoordinates: d.route_geometry ? decodeRoutePolyline(d.route_geometry) : null,
   };
 }

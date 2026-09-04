@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { AppMapHandle } from '@/components/map';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppText } from '@/components/AppText';
 import { HomeTopHeader } from '@/components/HomeTopHeader';
@@ -62,7 +62,7 @@ export default function CustomerHome() {
     clearCancelledSearchDraft,
     clearRestoreBookingOnHomeFocus,
   } = useRide();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<AppMapHandle>(null);
   const hasCenteredOnUserRef = useRef(false);
   const cancelledSearchDraftRef = useRef(cancelledSearchDraft);
   cancelledSearchDraftRef.current = cancelledSearchDraft;
@@ -116,6 +116,7 @@ export default function CustomerHome() {
     distance: dist,
     estimatedFare,
     estimatedFareLoading,
+    fareRoute,
     handleBook,
     pickup,
     selectedVehicle,
@@ -295,6 +296,7 @@ export default function CustomerHome() {
     bottomInset: insets.bottom,
     routeRecenterRequest,
     vehicleType: selectedVehicle,
+    backendRoute: hasPreciseRouteLocations ? fareRoute : null,
   });
 
   const shouldShowYouAreHere =

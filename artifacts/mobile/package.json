@@ -109,6 +109,7 @@
     "@react-native-firebase/app": "26.0.0",
     "@react-native-firebase/messaging": "26.0.0",
     "@react-navigation/native": "^7.2.5",
+    "@rnmapbox/maps": "10.3.5",
     "expo": "~54.0.35",
     "expo-build-properties": "~1.0.10",
     "expo-clipboard": "^8.0.8",

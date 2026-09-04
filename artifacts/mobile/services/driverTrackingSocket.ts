@@ -1,4 +1,5 @@
 import { getAccessToken } from '@/persistence/authTokens';
+import { createReadIdleWatchdog } from '@/services/socketReadIdleWatchdog';
 
 // Driver live socket: wss://<host>/api/v1/ws/driver — pushes incoming ride
 // requests to match on, plus lifecycle/negotiation events for the active ride.
@@ -44,10 +45,31 @@ export interface DriverSocketHandlers {
 
 export interface DriverSocket {
   close: () => void;
+  /**
+   * Best-effort nudge for a returning foreground: if the socket isn't
+   * demonstrably connected (or already reconnecting), skip the remainder of
+   * any pending backoff delay and reconnect right away instead of waiting —
+   * a backoff computed while the app was backgrounded can otherwise leave the
+   * driver stalled for up to RECONNECT_MAX_MS after the user is back looking
+   * at the screen. A no-op while already open/connecting.
+   */
+  ensureAlive?: () => void;
 }
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
+
+// The backend pings every 54s and allows 60s before giving up on a pong
+// (internal/tracking/handler.go: pongWait = 60s, pingPeriod = 54s). That
+// ping/pong exchange is answered by the native WebSocket transport without
+// ever reaching this JS layer, so it can't be used directly as a liveness
+// signal here — instead this is a read-idle budget for actual inbound
+// frames, set comfortably past the server's own cadence so a healthy
+// connection (which sees ride_request/driver location/negotiation traffic
+// far more often than every 70s while online) never trips it, while a
+// connection that's gone silently dead gets force-closed and reconnected
+// well within the driver's patience.
+const READ_IDLE_TIMEOUT_MS = 70_000;
 
 function resolveWsUrl(token: string | null): string {
   const base = (process.env.EXPO_PUBLIC_WS_BASE_URL ?? '').replace(/\/+$/, '');
@@ -56,11 +78,38 @@ function resolveWsUrl(token: string | null): string {
   return token ? `${base}/ws/driver?token=${encodeURIComponent(token)}` : `${base}/ws/driver`;
 }
 
+// Best-effort: attach to the WS-level ping/pong events too, in case the
+// runtime's WebSocket implementation does surface them (unlike the DOM
+// standard, this isn't guaranteed — see READ_IDLE_TIMEOUT_MS's comment). A
+// harmless no-op everywhere else.
+function watchWireLevelPings(socket: WebSocket, onFrame: () => void): void {
+  const target = socket as unknown as { addEventListener?: (type: string, listener: () => void) => void };
+  try {
+    target.addEventListener?.('ping', onFrame);
+    target.addEventListener?.('pong', onFrame);
+  } catch {
+    // Not supported on this platform/runtime — the onmessage reset is the
+    // primary (guaranteed) signal.
+  }
+}
+
 export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
   let socket: WebSocket | null = null;
   let closedByCaller = false;
+  let connecting = false;
   let attempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Read-idle watchdog: see READ_IDLE_TIMEOUT_MS. Forcing socket.close() here
+  // triggers the existing onclose → scheduleReconnect path exactly as if the
+  // platform had noticed the death itself — no separate reconnect logic.
+  const watchdog = createReadIdleWatchdog(() => {
+    try {
+      socket?.close();
+    } catch {
+      // ignore — onclose (or its absence) is handled below either way.
+    }
+  }, READ_IDLE_TIMEOUT_MS);
 
   const scheduleReconnect = () => {
     if (closedByCaller) return;
@@ -70,9 +119,13 @@ export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
   };
 
   const connect = async () => {
-    if (closedByCaller) return;
+    if (closedByCaller || connecting) return;
+    connecting = true;
     const token = await getAccessToken().catch(() => null);
-    if (closedByCaller) return;
+    if (closedByCaller) {
+      connecting = false;
+      return;
+    }
 
     try {
       const options = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
@@ -82,12 +135,16 @@ export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
         options?: { headers?: Record<string, string> },
       ) => WebSocket;
       socket = new Ctor(resolveWsUrl(token), undefined, options);
+      watchWireLevelPings(socket, () => watchdog.reset());
 
       socket.onopen = () => {
+        connecting = false;
         attempt = 0;
+        watchdog.reset();
         handlers.onOpen?.();
       };
       socket.onmessage = event => {
+        watchdog.reset();
         try {
           const parsed = JSON.parse(String(event.data)) as { type?: string; payload?: unknown } & Record<string, unknown>;
           const { type, payload, ...rest } = parsed;
@@ -101,11 +158,14 @@ export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
       };
       socket.onerror = error => handlers.onError?.(error);
       socket.onclose = () => {
+        connecting = false;
+        watchdog.clear();
         handlers.onClose?.(closedByCaller);
         socket = null;
         if (!closedByCaller) scheduleReconnect();
       };
     } catch (error) {
+      connecting = false;
       handlers.onError?.(error);
       scheduleReconnect();
     }
@@ -116,6 +176,7 @@ export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
   return {
     close: () => {
       closedByCaller = true;
+      watchdog.clear();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       try {
         socket?.close();
@@ -123,6 +184,15 @@ export function openDriverSocket(handlers: DriverSocketHandlers): DriverSocket {
         // ignore
       }
       socket = null;
+    },
+    ensureAlive: () => {
+      if (closedByCaller || connecting) return;
+      if (socket && socket.readyState === WebSocket.OPEN) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      void connect();
     },
   };
 }

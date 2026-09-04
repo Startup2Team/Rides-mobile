@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
 import { InteractionManager, Platform } from 'react-native';
-import MapView from 'react-native-maps';
+import type { AppMapHandle } from '@/components/map';
 import { getRouteKey, useRoute } from '@/hooks/useRoute';
+import type { RouteResult } from '@/services/mapbox';
 import type { Coords, RideLocation, VehicleType } from '@/types';
 import { homeRoutePolyline, sampleRouteCoordsForFit } from '@/utils/mapUtils';
 import {
@@ -23,18 +24,27 @@ export function useRoutePreview({
   bottomInset,
   routeRecenterRequest,
   vehicleType,
+  backendRoute,
 }: {
   pickup: RideLocation;
   destination: RideLocation | null;
   showBooking: boolean;
   isMapReady: boolean;
-  mapRef: RefObject<MapView | null>;
+  mapRef: RefObject<AppMapHandle | null>;
   bookingPanelMapInset: number;
   topInset: number;
   bottomInset: number;
   routeRecenterRequest: number;
   /** Selected vehicle — lets the shared backend route cache answer first. */
   vehicleType?: VehicleType | null;
+  /**
+   * Real OSRM route for this exact pickup/destination/vehicle (from
+   * GET /customer/fare-estimate), when the backend produced one. Takes
+   * priority over the client-side Mapbox fetch for both the drawn line and
+   * the ETA/distance shown on the booking card — same road, no extra network
+   * round-trip. Pass null/undefined to keep the existing Mapbox-only behavior.
+   */
+  backendRoute?: RouteResult | null;
 }) {
   const hasPreciseRouteLocations =
     showBooking &&
@@ -51,7 +61,7 @@ export function useRoutePreview({
       : null,
     [destination?.latitude, destination?.longitude],
   );
-  const { route, routeKey, loading: routeLoading } = useRoute(
+  const { route, routeKey, loading: mapboxRouteLoading } = useRoute(
     hasPreciseRouteLocations ? pickupCoords : null,
     hasPreciseRouteLocations ? destinationCoords : null,
     { vehicleType },
@@ -73,10 +83,15 @@ export function useRoutePreview({
       : EMPTY_COORDINATES,
     [destinationCoords, pickupCoords],
   );
-  const visibleRouteCoords =
+  // Real OSRM route wins over the Mapbox-fetched one when the backend
+  // produced one for this exact corridor — same road-following shape, no
+  // extra network round-trip, and it survives a Mapbox outage.
+  const hasBackendRoute = hasPreciseRouteLocations && Boolean(backendRoute && backendRoute.coordinates.length > 1);
+  const mapboxRouteCoords =
     loadedRoute?.key === routeRequestKey && loadedRoute.coordinates.length > 1
       ? loadedRoute.coordinates
       : EMPTY_COORDINATES;
+  const visibleRouteCoords = hasBackendRoute ? backendRoute!.coordinates : mapboxRouteCoords;
   const routeCenterCoords = visibleRouteCoords.length > 1 ? visibleRouteCoords : routePreviewCoords;
   const routeFitCoords = useMemo(() => {
     if (routeCenterCoords.length < 2) return EMPTY_COORDINATES;
@@ -144,8 +159,8 @@ export function useRoutePreview({
   }, [centerRouteInVisibleMap, destinationCoords, routeFitCoords, routeRecenterRequest, showBooking]);
 
   return {
-    route,
-    routeLoading,
+    route: hasBackendRoute ? backendRoute! : route,
+    routeLoading: hasBackendRoute ? false : mapboxRouteLoading,
     routeFitCoords,
     routeLineCoords,
     shouldShowBookingRoute,

@@ -22,7 +22,8 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { AppMap, AppCircle, AppMarker, MAP_TYPES, type AppMapHandle, type AppMapType } from '@/components/map';
+import { markerPositionKey } from '@/utils/mapUtils';
 import { useDemandHeatmapQuery } from '@/query/hooks/useDemandHeatmapQuery';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -75,8 +76,6 @@ import {
   formatTripDistance,
   formatTripDuration,
 } from "@/domain/driverRequestCard";
-const MAP_TYPES = ["standard", "satellite", "hybrid"] as const;
-type AppMapType = (typeof MAP_TYPES)[number];
 // A cached fix older than this is too stale to seed the map with.
 const LAST_KNOWN_LOCATION_MAX_AGE_MS = 120_000;
 const CTA_AVATAR_SIZE = 34;
@@ -176,7 +175,7 @@ export default function DriverDashboard() {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const onlineScale = useRef(new Animated.Value(1)).current;
   const switchModeAvatarSlide = useRef(new Animated.Value(0)).current;
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<AppMapHandle | null>(null);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const { vehicles } = useVehicles();
   const [activeAdverts, setActiveAdverts] = useState<ActiveAdvert[]>([]);
@@ -298,11 +297,13 @@ export default function DriverDashboard() {
   // Location
   useEffect(() => {
     let mounted = true;
+    let sub: Location.LocationSubscription | null = null;
+    let webWatchId: number | null = null;
     const setCoords = (coords: { latitude: number; longitude: number }) => {
       if (!mounted) return;
       setDriverLocation(coords);
     };
-    const resolveNativeLocation = async () => {
+    const startNativeWatch = async () => {
       const permission = await Location.getForegroundPermissionsAsync();
       const finalPermission = permission.granted
         ? permission
@@ -310,51 +311,51 @@ export default function DriverDashboard() {
       if (!finalPermission.granted) return;
       // Seed from the OS's cached fix first — it returns in milliseconds, so
       // the map lands on the driver instead of sitting on the Kigali default
-      // for the ~10s a cold high-accuracy fix takes. The precise fix below
-      // then refines it.
+      // for the ~10s a cold high-accuracy fix takes.
       try {
         const cached = await Location.getLastKnownPositionAsync({
           maxAge: LAST_KNOWN_LOCATION_MAX_AGE_MS,
         });
         if (cached) {
-          setCoords({
-            latitude: cached.coords.latitude,
-            longitude: cached.coords.longitude,
-          });
+          setCoords({ latitude: cached.coords.latitude, longitude: cached.coords.longitude });
         }
       } catch {
-        // No cached fix — fall through to the live one.
+        // No cached fix — the watch below provides the first live one.
       }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setCoords({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
+      if (!mounted) return;
+      // CONTINUOUS watch (not a one-shot getCurrentPositionAsync): the driver's
+      // own marker must follow them as they move on the home map, exactly like
+      // the customer/nav screens. Was one-shot before → marker sat static until
+      // an app reload.
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 4000, distanceInterval: 5 },
+        loc => setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude }),
+      );
     };
     if (Platform.OS === "web") {
-      navigator.geolocation?.getCurrentPosition(
-        (p) =>
-          setCoords({
-            latitude: p.coords.latitude,
-            longitude: p.coords.longitude,
-          }),
+      webWatchId = navigator.geolocation?.watchPosition(
+        (p) => setCoords({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
         () => {},
         { enableHighAccuracy: true },
-      );
+      ) ?? null;
     } else {
-      resolveNativeLocation().catch(() => {});
+      startNativeWatch().catch(() => {});
     }
     return () => {
       mounted = false;
+      sub?.remove();
+      if (webWatchId != null) navigator.geolocation?.clearWatch(webWatchId);
     };
   }, []);
 
   // Report location to the backend while online so the matching engine can find
-  // this driver. Fires immediately + every 10s (backend rate-limits to ~20/min).
+  // this driver AND the customer sees the driver move during a ride. Fires
+  // immediately + every 10s (backend rate-limits to ~20/min). Runs on web too:
+  // getCurrentPositionAsync works on web (the customer publish loop in
+  // RideProvider relies on it), and web-gating this was why the driver marker
+  // sat frozen on the customer's side while the customer's own marker moved.
   useEffect(() => {
-    if (!isOnline || Platform.OS === 'web') return;
+    if (!isOnline) return;
     let cancelled = false;
     const report = async () => {
       try {
@@ -917,15 +918,11 @@ export default function DriverDashboard() {
   return (
     <View style={[styles.root, { backgroundColor: dashboardPageBackground }]}>
       {/* ── Full-screen map ── */}
-      <MapView
+      <AppMap
         ref={mapRef}
         style={[StyleSheet.absoluteFill, { top: dashboardCardHeight }]}
-        provider={PROVIDER_DEFAULT}
         mapType={mapType}
         initialRegion={visibleDriverRegion(driverLocation)}
-        customMapStyle={mapType === "standard" ? darkMapStyle : undefined}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
       >
         {showHeatmap &&
           heatmap?.cells.map(cell => {
@@ -933,7 +930,7 @@ export default function DriverDashboard() {
             const intensity = maxDemand > 0 ? cell.count / maxDemand : 0;
             const fillOpacity = 0.18 + intensity * 0.42;
             return (
-              <Circle
+              <AppCircle
                 key={`demand-${cell.latitude}-${cell.longitude}`}
                 center={{ latitude: cell.latitude, longitude: cell.longitude }}
                 radius={140}
@@ -943,16 +940,16 @@ export default function DriverDashboard() {
               />
             );
           })}
-        <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
+        <AppMarker key={markerPositionKey(driverLocation)} coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.driverMarker}>
             <VehicleMapMarker
               type={activeVehicleType}
               style={styles.driverVehicleMarker}
             />
           </View>
-        </Marker>
+        </AppMarker>
         {request && (
-          <Marker coordinate={request.pickup}>
+          <AppMarker coordinate={request.pickup}>
             <View
               style={[styles.pickupPin, { backgroundColor: colors.primary }]}
             >
@@ -962,9 +959,9 @@ export default function DriverDashboard() {
                 color={colors.primaryForeground}
               />
             </View>
-          </Marker>
+          </AppMarker>
         )}
-      </MapView>
+      </AppMap>
 
       {/* Top dashboard overlay */}
       <View
@@ -1850,20 +1847,6 @@ export default function DriverDashboard() {
     </View>
   );
 }
-
-const darkMapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#1d2c4d" }] },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [{ color: "#304a7d" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#0e1626" }],
-  },
-];
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
