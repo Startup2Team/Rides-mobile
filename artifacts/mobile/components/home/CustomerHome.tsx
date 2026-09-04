@@ -308,7 +308,6 @@ export default function CustomerHome() {
     { id: string; latitude: number; longitude: number }[]
   >([]);
   useEffect(() => {
-    if (locationStatus !== 'available') return;
     let active = true;
     const fetchNearby = () => {
       getNearbyDrivers(userLocation.latitude, userLocation.longitude, selectedVehicle)
@@ -334,7 +333,7 @@ export default function CustomerHome() {
       active = false;
       clearInterval(intervalId);
     };
-  }, [userLocation.latitude, userLocation.longitude, selectedVehicle, locationStatus]);
+  }, [userLocation.latitude, userLocation.longitude, selectedVehicle]);
   const visibleDrivers = nearbyDrivers;
 
   const homeInitialRegion = useMemo(() => {

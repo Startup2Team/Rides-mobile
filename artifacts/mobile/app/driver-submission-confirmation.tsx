@@ -229,14 +229,6 @@ export default function DriverSubmissionConfirmation() {
             size="lg"
           />
         )}
-        {!isApproved && !isRejected && (
-          <AppButton
-            title="Re-submit Application"
-            onPress={() => router.push('/driver-onboarding')}
-            fullWidth
-            size="lg"
-          />
-        )}
         <AppButton
           title="Return to Home"
           onPress={() => navigateToCustomerHomeAfterCompletion(router)}
