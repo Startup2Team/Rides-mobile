@@ -1,9 +1,17 @@
-import Mapbox from '@rnmapbox/maps';
 import React, { useMemo } from 'react';
 import { Circle } from 'react-native-maps';
 import { MAP_PROVIDER } from '@/constants/mapProvider';
 import { circlePolygon } from './geo';
 import type { AppCircleProps } from './types';
+
+let Mapbox: typeof import('@rnmapbox/maps').default | null = null;
+if (MAP_PROVIDER === 'mapbox') {
+  try {
+    Mapbox = require('@rnmapbox/maps').default;
+  } catch (e) {
+    console.warn('[AppCircle] Mapbox native module unavailable');
+  }
+}
 
 let shapeSourceCounter = 0;
 
@@ -18,7 +26,7 @@ export function AppCircle({
 }: AppCircleProps) {
   const sourceId = useMemo(() => `app-circle-${(shapeSourceCounter += 1)}`, []);
 
-  if (MAP_PROVIDER === 'google') {
+  if (MAP_PROVIDER === 'google' || !Mapbox) {
     return (
       <Circle
         center={center}
@@ -30,22 +38,23 @@ export function AppCircle({
     );
   }
 
-  const shape: GeoJSON.Feature<GeoJSON.Polygon> = {
+  const polygon = circlePolygon(center, radius);
+  const geojson: GeoJSON.Feature<GeoJSON.Polygon> = {
     type: 'Feature',
     properties: {},
     geometry: {
       type: 'Polygon',
-      coordinates: [circlePolygon(center, radius)],
+      coordinates: [polygon],
     },
   };
 
   return (
-    <Mapbox.ShapeSource id={sourceId} shape={shape}>
+    <Mapbox.ShapeSource id={sourceId} shape={geojson}>
       <Mapbox.FillLayer
         id={`${sourceId}-fill`}
         style={{
           fillColor,
-          fillOutlineColor: strokeWidth > 0 ? strokeColor : fillColor,
+          fillOutlineColor: strokeColor === 'transparent' ? undefined : strokeColor,
         }}
       />
     </Mapbox.ShapeSource>

@@ -1,9 +1,17 @@
-import Mapbox from '@rnmapbox/maps';
 import React, { useMemo } from 'react';
 import { Polyline } from 'react-native-maps';
 import { MAP_PROVIDER } from '@/constants/mapProvider';
 import { APPLE_SYSTEM_RED_HEX } from '@/constants/systemColors';
 import type { AppPolylineProps } from './types';
+
+let Mapbox: typeof import('@rnmapbox/maps').default | null = null;
+if (MAP_PROVIDER === 'mapbox') {
+  try {
+    Mapbox = require('@rnmapbox/maps').default;
+  } catch (e) {
+    console.warn('[AppPolyline] Mapbox native module unavailable');
+  }
+}
 
 let shapeSourceCounter = 0;
 
@@ -22,7 +30,7 @@ export function AppPolyline({
 
   if (coordinates.length < 2) return null;
 
-  if (MAP_PROVIDER === 'google') {
+  if (MAP_PROVIDER === 'google' || !Mapbox) {
     return (
       <Polyline
         coordinates={coordinates}
@@ -34,23 +42,23 @@ export function AppPolyline({
     );
   }
 
-  const shape: GeoJSON.Feature<GeoJSON.LineString> = {
+  const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
     type: 'Feature',
     properties: {},
     geometry: {
       type: 'LineString',
-      coordinates: coordinates.map(c => [c.longitude, c.latitude]),
+      coordinates: coordinates.map((c) => [c.longitude, c.latitude]),
     },
   };
 
   return (
-    <Mapbox.ShapeSource id={sourceId} shape={shape}>
+    <Mapbox.ShapeSource id={sourceId} shape={geojson}>
       <Mapbox.LineLayer
-        id={`${sourceId}-line`}
+        id={`${sourceId}-layer`}
         style={{
           lineColor: color,
           lineWidth: width,
-          lineCap,
+          lineCap: lineCap === 'square' ? 'square' : lineCap === 'round' ? 'round' : 'butt',
           lineJoin,
         }}
       />

@@ -1,8 +1,16 @@
-import Mapbox from '@rnmapbox/maps';
 import React from 'react';
 import { Marker } from 'react-native-maps';
 import { MAP_PROVIDER } from '@/constants/mapProvider';
 import type { AppMarkerProps } from './types';
+
+let Mapbox: typeof import('@rnmapbox/maps').default | null = null;
+if (MAP_PROVIDER === 'mapbox') {
+  try {
+    Mapbox = require('@rnmapbox/maps').default;
+  } catch (e) {
+    console.warn('[AppMarker] Mapbox native module unavailable');
+  }
+}
 
 /**
  * A marker anchored to a map coordinate, rendering arbitrary React children
@@ -21,7 +29,7 @@ export function AppMarker({
   tracksViewChanges,
   children,
 }: AppMarkerProps) {
-  if (MAP_PROVIDER === 'google') {
+  if (MAP_PROVIDER === 'google' || !Mapbox) {
     return (
       <Marker
         identifier={identifier}
@@ -41,11 +49,12 @@ export function AppMarker({
 
   return (
     <Mapbox.MarkerView
+      id={identifier}
       coordinate={[coordinate.longitude, coordinate.latitude]}
-      anchor={anchor}
-      accessibilityLabel={accessibilityLabel}
+      anchor={anchor ? { x: anchor.x, y: anchor.y } : undefined}
+      allowOverlap
     >
-      {children as React.ReactElement}
+      <>{children}</>
     </Mapbox.MarkerView>
   );
 }
