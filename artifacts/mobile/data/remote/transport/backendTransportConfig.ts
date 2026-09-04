@@ -11,7 +11,7 @@ function getEnvValue(env: BackendTransportEnvironment, key: keyof BackendTranspo
 export function readBackendTransportEnvironment(): BackendTransportEnvironment {
   return {
     backendEnv: process.env.EXPO_PUBLIC_BACKEND_ENV,
-    backendBaseUrl: process.env.EXPO_PUBLIC_BACKEND_BASE_URL,
+    backendBaseUrl: process.env.EXPO_PUBLIC_BACKEND_BASE_URL ?? process.env.EXPO_PUBLIC_API_BASE_URL,
     nodeEnv: process.env.NODE_ENV,
     savedLocationsRepositoryMode: process.env.EXPO_PUBLIC_SAVED_LOCATIONS_REPOSITORY_MODE,
     savedLocationsShadowWritesEnabled: process.env.EXPO_PUBLIC_SAVED_LOCATIONS_SHADOW_WRITES_ENABLED,
@@ -21,7 +21,12 @@ export function readBackendTransportEnvironment(): BackendTransportEnvironment {
 }
 
 export function isLocalhostUrl(url: URL) {
-  return LOCAL_HOSTS.has(url.hostname);
+  return (
+    LOCAL_HOSTS.has(url.hostname) ||
+    url.hostname.startsWith('192.168.') ||
+    url.hostname.startsWith('10.') ||
+    url.hostname.startsWith('172.')
+  );
 }
 
 export function validateBackendBaseUrl(rawUrl: string, environment: 'STAGING' | 'PRODUCTION'): { ok: true; url: string } | { ok: false; reason: string } {
@@ -51,9 +56,38 @@ export function resolveBackendTransportConfig(
 ): ResolvedBackendTransportConfig {
   const rawEnvironment = getEnvValue(env, 'backendEnv')?.toUpperCase() || 'LOCAL';
 
-  if (rawEnvironment === 'LOCAL' || rawEnvironment === 'DISABLED') {
+  if (rawEnvironment === 'DISABLED') {
     return {
       environment: rawEnvironment,
+      enabled: false,
+      baseUrl: null,
+      timeoutMs: DEFAULT_BACKEND_REQUEST_TIMEOUT_MS,
+      reason: 'backend-disabled',
+    };
+  }
+
+  const rawUrl = getEnvValue(env, 'backendBaseUrl') ?? process.env.EXPO_PUBLIC_API_BASE_URL;
+
+  if (rawEnvironment === 'LOCAL') {
+    if (rawUrl) {
+      let parsed: URL | null = null;
+      try {
+        parsed = new URL(rawUrl);
+      } catch {
+        // Fallback for relative or malformed URLs
+      }
+      if (parsed) {
+        parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+        return {
+          environment: 'LOCAL',
+          enabled: true,
+          baseUrl: parsed.toString().replace(/\/$/, ''),
+          timeoutMs: DEFAULT_BACKEND_REQUEST_TIMEOUT_MS,
+        };
+      }
+    }
+    return {
+      environment: 'LOCAL',
       enabled: false,
       baseUrl: null,
       timeoutMs: DEFAULT_BACKEND_REQUEST_TIMEOUT_MS,
@@ -71,8 +105,7 @@ export function resolveBackendTransportConfig(
     };
   }
 
-  const baseUrl = getEnvValue(env, 'backendBaseUrl');
-  if (!baseUrl) {
+  if (!rawUrl) {
     return {
       environment: rawEnvironment,
       enabled: false,
@@ -82,7 +115,7 @@ export function resolveBackendTransportConfig(
     };
   }
 
-  const validated = validateBackendBaseUrl(baseUrl, rawEnvironment);
+  const validated = validateBackendBaseUrl(rawUrl, rawEnvironment);
   if (!validated.ok) {
     return {
       environment: rawEnvironment,
