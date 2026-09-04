@@ -1,8 +1,18 @@
 import React, { forwardRef } from 'react';
 import { MAP_PROVIDER } from '@/constants/mapProvider';
 import { AppMapGoogle } from './AppMap.google';
-import { AppMapMapbox } from './AppMap.mapbox';
 import type { AppMapHandle, AppMapProps } from './types';
+
+let AppMapMapboxComponent: React.ComponentType<any> | null = null;
+if (MAP_PROVIDER === 'mapbox') {
+  try {
+    // Only import Mapbox when MAP_PROVIDER === 'mapbox' so static module evaluation
+    // does not throw in Expo Go or non-Mapbox builds.
+    AppMapMapboxComponent = require('./AppMap.mapbox').AppMapMapbox;
+  } catch (e) {
+    console.warn('[AppMap] Mapbox native module unavailable, falling back to Google Maps.');
+  }
+}
 
 /**
  * The ONE map component every screen should render — never import
@@ -13,7 +23,9 @@ import type { AppMapHandle, AppMapProps } from './types';
  * See components/map/README.md for the full switch-back procedure.
  */
 export const AppMap = forwardRef<AppMapHandle, AppMapProps>(function AppMap(props, ref) {
-  return MAP_PROVIDER === 'google'
-    ? <AppMapGoogle ref={ref} {...props} />
-    : <AppMapMapbox ref={ref} {...props} />;
+  if (MAP_PROVIDER === 'mapbox' && AppMapMapboxComponent) {
+    const MapboxComp = AppMapMapboxComponent;
+    return <MapboxComp ref={ref} {...props} />;
+  }
+  return <AppMapGoogle ref={ref} {...props} />;
 });

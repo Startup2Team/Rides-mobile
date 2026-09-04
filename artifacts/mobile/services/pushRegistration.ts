@@ -20,23 +20,27 @@ export function configurePushNotifications(): void {
   if (configured) return;
   configured = true;
 
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
-
-  if (Platform.OS === 'android') {
-    void Notifications.setNotificationChannelAsync('default', {
-      name: 'Rides',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#0A84FF',
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
     });
+
+    if (Platform.OS === 'android') {
+      void Notifications.setNotificationChannelAsync('default', {
+        name: 'Rides',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#0A84FF',
+      }).catch(() => {});
+    }
+  } catch {
+    // Expo Go mode (SDK 53+ remote notifications unavailable in Expo Go)
   }
 }
 

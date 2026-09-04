@@ -1,3 +1,5 @@
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+
 /**
  * Selects which native map SDK the app renders with.
  *
@@ -14,6 +16,14 @@
 export type MapProvider = 'mapbox' | 'google';
 
 function readMapProvider(): MapProvider {
+  // Expo Go (StoreClient) does not include custom C++ Mapbox native binaries.
+  // Fall back to Google Maps (react-native-maps) when running inside Expo Go sandbox.
+  const isExpoGo =
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+    (Constants as any).appOwnership === 'expo';
+  if (isExpoGo) {
+    return 'google';
+  }
   const raw = process.env.EXPO_PUBLIC_MAP_PROVIDER;
   return raw === 'google' ? 'google' : 'mapbox';
 }
