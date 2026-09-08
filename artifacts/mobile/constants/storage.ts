@@ -19,6 +19,10 @@ export const STORAGE_KEYS = {
   packageCampaignCache: '@rides_package_campaign_cache',
   packageOfferSourceCache: '@rides_package_offer_source_cache',
   lockedPackageOffers: '@rides_locked_package_offers',
+  // In-flight automatic MoMo package purchases (POST /driver/packages/purchase,
+  // still PENDING), keyed by vehicle+package so the payment screen can resume
+  // polling after a force-kill instead of losing track of a real MoMo charge.
+  pendingAutomaticPackagePurchases: '@rides_pending_automatic_package_purchases',
   roleSync: '@rides_role_sync',
   // The ride the background location TaskManager task is currently streaming
   // for. Read by a task callback that can run headless (no React tree
@@ -47,6 +51,7 @@ export const STORAGE_CLASSIFICATION = {
     STORAGE_KEYS.packagePaymentClaims,
     STORAGE_KEYS.savedLocations,
     STORAGE_KEYS.lockedPackageOffers,
+    STORAGE_KEYS.pendingAutomaticPackagePurchases,
   ],
   internal: [
     STORAGE_KEYS.referralEvents,
