@@ -1,7 +1,7 @@
 import { typography } from '@/constants/typography';
 import { AppText } from '@/components/AppText';
-import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View, useColorScheme } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, ActivityIndicator, StyleSheet, View, useColorScheme } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -49,11 +49,48 @@ import {
 import { ManualPackagePaymentInstructions } from '@/components/package-payments/ManualPackagePaymentInstructions';
 import { ManualPaymentClaimStatusCard } from '@/components/package-payments/ManualPaymentClaimStatusCard';
 import { PackagePaymentUnavailable } from '@/components/package-payments/PackagePaymentUnavailable';
-import { normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { formatRwandaPhoneInput, normalizeRwandaPhoneNumber } from '@/utils/rwandaValidation';
+import { generateIdempotencyKey } from '@/utils/idempotencyKey';
 import { reportOperationalWarning } from '@/observability/monitoring';
+import {
+  usePackagePurchaseStatusQuery,
+  usePurchasePackageMutation,
+} from '@/query/hooks/usePackagePurchaseQueries';
+import type { RemotePackagePurchase } from '@/services/driverPackages';
+import {
+  clearPendingAutomaticPackagePurchase,
+  loadPendingAutomaticPackagePurchase,
+  savePendingAutomaticPackagePurchase,
+} from '@/persistence/pendingAutomaticPackagePurchasePersistence';
 
 function formatRwf(amount: number) {
   return `${amount.toLocaleString('en-RW')} RWF`;
+}
+
+// Builds the receipt shown after a REAL automatic MoMo purchase settles PAID.
+// Only ever called once the backend has confirmed the charge (see
+// AutomaticMomoPayment) — never on a locally-assumed success.
+function toAutomaticPurchaseReceipt(
+  purchase: RemotePackagePurchase,
+  offer: DriverPackageOfferSnapshot,
+): PackageActivation {
+  return {
+    id: purchase.id,
+    packageId: offer.packageId,
+    packageVersion: offer.packageVersion,
+    packageName: purchase.packageName || offer.packageName,
+    campaignId: offer.campaignId ?? null,
+    campaignName: offer.campaignName ?? null,
+    campaignType: offer.campaignType ?? null,
+    vehicleId: offer.vehicleId,
+    vehicleType: offer.vehicleType,
+    activatedAt: purchase.paidAt ?? new Date().toISOString(),
+    pricePaidRwf: purchase.pricePaidRwf,
+    ridesGranted: purchase.ridesGranted,
+    bonusRidesGranted: purchase.bonusRidesGranted,
+    creditsGranted: purchase.ridesGranted + purchase.bonusRidesGranted,
+    authority: 'backend',
+  };
 }
 
 // A manual claim is still "live" (needs the driver's attention / blocks starting
@@ -81,16 +118,17 @@ export default function DriverPackagePaymentScreen() {
   const selectedProvider: MobileMoneyPackageProvider =
     driverProfile?.momoProvider === 'airtel' ? 'airtel' : 'mtn';
   const [receipt, setReceipt] = useState<PackageActivation | null>(null);
+  const [automaticReceipt, setAutomaticReceipt] = useState<PackageActivation | null>(null);
+  const [useManualFallback, setUseManualFallback] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  // Manual (proof-based) claim flow is the only real paid path today (there is no
-  // live automatic MoMo collection yet), so a paid package always routes through
-  // the manual claim: dial USSD → pay → submit proof → admin approves → rides.
-  // The backend config endpoint always returns 'manual'; if it is unreachable we
-  // still default to 'manual' rather than a fake auto-success. 'disabled' only
-  // ever comes explicitly from the backend.
+  // The backend config endpoint tells us which paid path is live right now:
+  // 'automatic' → real MoMo RequestToPay (PIN prompt, see AutomaticMomoPayment
+  // below); 'manual' → dial USSD → pay → submit proof → admin approves → rides;
+  // 'disabled' → payments are off. If the config call fails we default to
+  // 'manual' rather than a fake auto-success.
   const { configuration } = usePackagePaymentConfigQuery();
   const mode = configuration?.mode ?? 'manual';
   const manualConfig = configuration?.manual;
@@ -293,8 +331,8 @@ export default function DriverPackagePaymentScreen() {
       ]}
       scrollIndicatorInsets={{ top: headerMetrics.indicatorTop }}
     >
-      {receipt ? (
-        <ReceiptCard activation={receipt} colors={colors} />
+      {receipt || automaticReceipt ? (
+        <ReceiptCard activation={receipt ?? automaticReceipt!} colors={colors} />
       ) : mode === 'disabled' ? (
         <PackagePaymentUnavailable
           offer={ridePackage}
@@ -311,6 +349,15 @@ export default function DriverPackagePaymentScreen() {
             onDone={() => navigateToDriverHomeAfterCompletion(router)}
           />
         </View>
+      ) : !isFree && mode === 'automatic' && !useManualFallback ? (
+        <AutomaticMomoPayment
+          offer={ridePackage}
+          colors={colors}
+          defaultPhone={driverProfile?.momoCode ?? ''}
+          defaultProvider={selectedProvider}
+          onSuccess={purchase => setAutomaticReceipt(toAutomaticPurchaseReceipt(purchase, ridePackage))}
+          onUseManualInstead={() => setUseManualFallback(true)}
+        />
       ) : !isFree ? (
         <View style={styles.manualShell}>
           <ManualPackagePaymentInstructions
@@ -365,37 +412,7 @@ export default function DriverPackagePaymentScreen() {
         </View>
       ) : (
         <View style={styles.paymentContent}>
-          <View style={styles.summaryPanel}>
-            <View style={styles.summaryHeader}>
-              <View style={[styles.summaryIcon, { backgroundColor: colors.primary }]}>
-                <Feather name="navigation" size={icons.semantic.row} color="#fff" />
-              </View>
-              <View style={styles.summaryTitleBlock}>
-                <AppText style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</AppText>
-                <AppText style={[styles.packageName, { color: colors.foreground }]}>{ridePackage.packageName}</AppText>
-                {ridePackage.campaignName ? (
-                  <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
-                    <Feather name="tag" size={11} color={colors.primary} />
-                    <AppText style={[styles.campaignBadgeText, { color: colors.primary }]}>{ridePackage.campaignName}</AppText>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.summaryRow}>
-              <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Rides</AppText>
-              <AppText style={[styles.summaryValue, { color: colors.foreground }]}>{ridePackage.ridesGranted}</AppText>
-            </View>
-            <View style={styles.summaryRow}>
-              <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus Rides</AppText>
-              <AppText style={[styles.summaryValue, { color: colors.primary }]}>+{ridePackage.bonusRidesGranted}</AppText>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.summaryRow}>
-              <AppText style={[styles.totalLabel, { color: colors.foreground }]}>Total due</AppText>
-              <AppText style={[styles.price, { color: colors.primary }]}>{isFree ? 'FREE NOW' : formatRwf(ridePackage.priceRwf)}</AppText>
-            </View>
-          </View>
+          <PackageSummaryCard offer={ridePackage} colors={colors} priceLabel="FREE NOW" />
 
           <Notice icon="gift" text="No payment is required for this launch package now." colors={colors} tone="success" />
 
@@ -409,6 +426,321 @@ export default function DriverPackagePaymentScreen() {
         </View>
       )}
     </GlassScrollView>
+  </View>;
+}
+
+function PackageSummaryCard({ offer, colors, priceLabel }: {
+  offer: DriverPackageOfferSnapshot; colors: ReturnType<typeof useColors>; priceLabel: string;
+}) {
+  return <View style={styles.summaryPanel}>
+    <View style={styles.summaryHeader}>
+      <View style={[styles.summaryIcon, { backgroundColor: colors.primary }]}>
+        <Feather name="navigation" size={icons.semantic.row} color="#fff" />
+      </View>
+      <View style={styles.summaryTitleBlock}>
+        <AppText style={[styles.summaryEyebrow, { color: colors.primary }]}>SELECTED PACKAGE</AppText>
+        <AppText style={[styles.packageName, { color: colors.foreground }]}>{offer.packageName}</AppText>
+        {offer.campaignName ? (
+          <View style={[styles.campaignBadge, { backgroundColor: colors.primaryHex + '12' }]}>
+            <Feather name="tag" size={11} color={colors.primary} />
+            <AppText style={[styles.campaignBadgeText, { color: colors.primary }]}>{offer.campaignName}</AppText>
+          </View>
+        ) : null}
+      </View>
+    </View>
+    <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+    <View style={styles.summaryRow}>
+      <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Rides</AppText>
+      <AppText style={[styles.summaryValue, { color: colors.foreground }]}>{offer.ridesGranted}</AppText>
+    </View>
+    <View style={styles.summaryRow}>
+      <AppText style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Bonus Rides</AppText>
+      <AppText style={[styles.summaryValue, { color: colors.primary }]}>+{offer.bonusRidesGranted}</AppText>
+    </View>
+    <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+    <View style={styles.summaryRow}>
+      <AppText style={[styles.totalLabel, { color: colors.foreground }]}>Total due</AppText>
+      <AppText style={[styles.price, { color: colors.primary }]}>{priceLabel}</AppText>
+    </View>
+  </View>;
+}
+
+type AutomaticPaymentStage = 'idle' | 'submitting' | 'pending' | 'unreachable' | 'failed';
+
+// Real automatic MoMo package payment: POST /driver/packages/purchase opens a
+// PENDING MoMo RequestToPay (the backend pushes a PIN prompt to momoPhone),
+// then this polls GET /driver/packages/purchases/{id} until it settles. Never
+// shows the success receipt until the BACKEND reports PAID — no fake success.
+//
+// Force-kill / resume: an in-flight purchase id is persisted (keyed by
+// vehicle+package, see pendingAutomaticPackagePurchasePersistence) as soon as
+// the backend opens it, and reloaded on mount, so re-opening this screen after
+// a crash/kill resumes polling the SAME purchase instead of risking a second
+// MoMo charge for the same package. The persisted record is cleared once the
+// purchase reaches a terminal status or the driver abandons it (retry/manual).
+function AutomaticMomoPayment({
+  offer,
+  colors,
+  defaultPhone,
+  defaultProvider,
+  onSuccess,
+  onUseManualInstead,
+}: {
+  offer: DriverPackageOfferSnapshot;
+  colors: ReturnType<typeof useColors>;
+  defaultPhone: string;
+  defaultProvider: MobileMoneyPackageProvider;
+  onSuccess: (purchase: RemotePackagePurchase) => void;
+  onUseManualInstead: () => void;
+}) {
+  const purchaseMutation = usePurchasePackageMutation();
+  const idempotencyKeyRef = useRef(generateIdempotencyKey('package-purchase'));
+
+  const [phone, setPhone] = useState(() => formatRwandaPhoneInput(defaultPhone));
+  const [purchaseId, setPurchaseId] = useState<string | null>(null);
+  const [stage, setStage] = useState<AutomaticPaymentStage>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resumed, setResumed] = useState(false);
+  const pendingSinceRef = useRef<number | null>(null);
+
+  const statusQuery = usePackagePurchaseStatusQuery(purchaseId, { enabled: stage === 'pending' });
+
+  const clearPersisted = useCallback(
+    () => { void clearPendingAutomaticPackagePurchase(offer.vehicleId, offer.packageId); },
+    [offer.vehicleId, offer.packageId],
+  );
+
+  const handleSettledSuccess = useCallback((purchase: RemotePackagePurchase) => {
+    pendingSinceRef.current = null;
+    clearPersisted();
+    // Backend-authoritative entitlement invalidation happens inside
+    // usePackagePurchaseStatusQuery itself as soon as it observes PAID.
+    AccessibilityInfo.announceForAccessibility('Payment approved. Rides added to your account.');
+    onSuccess(purchase);
+  }, [clearPersisted, onSuccess]);
+
+  // Resume an in-flight purchase for THIS package after a cold start / app
+  // switch, instead of showing the form again (which could open a second MoMo
+  // charge for the same package).
+  useEffect(() => {
+    let active = true;
+    void loadPendingAutomaticPackagePurchase(offer.vehicleId, offer.packageId).then(pending => {
+      if (!active || !pending) return;
+      setPurchaseId(pending.purchaseId);
+      setResumed(true);
+      setStage('pending');
+    });
+    return () => { active = false; };
+    // Intentionally only resumes once, for the offer this screen mounted with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bound polling to ~90s per pending attempt — the server keeps settling the
+  // charge regardless; "Check status" below resumes the same poll on demand.
+  useEffect(() => {
+    if (stage !== 'pending') {
+      pendingSinceRef.current = null;
+      return;
+    }
+    if (pendingSinceRef.current == null) pendingSinceRef.current = Date.now();
+    const remaining = 90_000 - (Date.now() - pendingSinceRef.current);
+    const timer = setTimeout(() => {
+      setStage(current => (current === 'pending' ? 'unreachable' : current));
+    }, Math.max(0, remaining));
+    return () => clearTimeout(timer);
+  }, [stage, purchaseId]);
+
+  useEffect(() => {
+    if (stage !== 'pending') return;
+    const purchase = statusQuery.data;
+    if (!purchase) return;
+    if (purchase.status === 'PAID') {
+      handleSettledSuccess(purchase);
+    } else if (purchase.status === 'FAILED') {
+      pendingSinceRef.current = null;
+      clearPersisted();
+      AccessibilityInfo.announceForAccessibility('The MoMo payment was not approved.');
+      setStage('failed');
+      setErrorMessage('The MoMo payment was declined, cancelled, or timed out on your phone.');
+    }
+  }, [stage, statusQuery.data, clearPersisted, handleSettledSuccess]);
+
+  // A poll that keeps failing (offline, backend hiccup) is treated the same as
+  // a slow PIN approval — we don't know the true status, so we stop guessing
+  // and let the driver check again or fall back, never assume success.
+  useEffect(() => {
+    if (stage === 'pending' && statusQuery.isError && statusQuery.failureCount >= 3) {
+      setStage('unreachable');
+    }
+  }, [stage, statusQuery.isError, statusQuery.failureCount]);
+
+  const startPurchase = async () => {
+    setErrorMessage(null);
+    const normalizedPhone = normalizeRwandaPhoneNumber(phone);
+    if (!normalizedPhone) {
+      setErrorMessage('Enter the MoMo number to charge (+250 7xxxxxxxx).');
+      return;
+    }
+    setStage('submitting');
+    try {
+      const purchase = await purchaseMutation.mutateAsync({
+        packageId: offer.packageId,
+        idempotencyKey: idempotencyKeyRef.current,
+        momoPhone: normalizedPhone,
+        momoProvider: defaultProvider,
+      });
+      setPurchaseId(purchase.id);
+      if (purchase.status === 'PAID') {
+        handleSettledSuccess(purchase);
+        return;
+      }
+      if (purchase.status === 'FAILED') {
+        setStage('failed');
+        setErrorMessage('The MoMo payment could not be started. Please try again.');
+        return;
+      }
+      await savePendingAutomaticPackagePurchase({
+        purchaseId: purchase.id,
+        vehicleId: offer.vehicleId,
+        packageId: offer.packageId,
+        createdAt: new Date().toISOString(),
+      });
+      AccessibilityInfo.announceForAccessibility('Check your phone to enter your MoMo PIN.');
+      setStage('pending');
+    } catch (err) {
+      setStage('idle');
+      setErrorMessage(err instanceof Error ? err.message : 'Could not start the MoMo payment. Please try again.');
+    }
+  };
+
+  const handleRetry = () => {
+    idempotencyKeyRef.current = generateIdempotencyKey('package-purchase');
+    setPurchaseId(null);
+    setResumed(false);
+    setErrorMessage(null);
+    clearPersisted();
+    setStage('idle');
+  };
+
+  const handleCheckStatus = async () => {
+    const result = await statusQuery.refetch();
+    const purchase = result.data;
+    if (purchase?.status === 'PAID') {
+      handleSettledSuccess(purchase);
+      return;
+    }
+    if (purchase?.status === 'FAILED') {
+      pendingSinceRef.current = null;
+      clearPersisted();
+      setStage('failed');
+      setErrorMessage('The MoMo payment was declined, cancelled, or timed out on your phone.');
+      return;
+    }
+    setStage('pending');
+  };
+
+  const handleUseManualInstead = () => {
+    clearPersisted();
+    onUseManualInstead();
+  };
+
+  return <View style={styles.paymentContent}>
+    <PackageSummaryCard offer={offer} colors={colors} priceLabel={formatRwf(offer.priceRwf)} />
+
+    {stage === 'idle' || stage === 'submitting' ? (
+      <>
+        <AppInput
+          label="MoMo number to charge"
+          accessibilityLabel="MoMo number to charge"
+          placeholder="+250 7xxxxxxxx"
+          value={phone}
+          onChangeText={text => setPhone(formatRwandaPhoneInput(text))}
+          keyboardType="phone-pad"
+          leftIcon="smartphone"
+          editable={stage !== 'submitting'}
+        />
+        <AppText style={[styles.helperText, { color: colors.mutedForeground }]}>
+          We&apos;ll send a MoMo request to this number — approve it with your PIN to finish the purchase.
+        </AppText>
+        {errorMessage ? (
+          <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
+            <Feather name="alert-triangle" size={15} color={colors.destructive} />
+            <AppText style={[styles.errorText, { color: colors.destructive }]}>{errorMessage}</AppText>
+          </View>
+        ) : null}
+        <AppButton
+          title="Pay with MoMo"
+          accessibilityLabel="Pay with MoMo"
+          onPress={() => void startPurchase()}
+          loading={stage === 'submitting'}
+          fullWidth
+          size="lg"
+        />
+      </>
+    ) : stage === 'pending' ? (
+      <View
+        style={[styles.notice, { backgroundColor: colors.warningHex + '0D', borderColor: colors.warningHex + '28' }]}
+        accessibilityLiveRegion="polite"
+        accessibilityRole="alert"
+      >
+        <ActivityIndicator color={colors.warning} accessibilityLabel="Waiting for MoMo PIN approval" />
+        <AppText style={[styles.noticeText, { color: colors.mutedForeground }]}>
+          {resumed
+            ? 'Still checking your MoMo payment — approve it on your phone if you haven’t yet.'
+            : 'Check your phone — enter your MoMo PIN to approve the payment.'}
+        </AppText>
+      </View>
+    ) : stage === 'unreachable' ? (
+      <>
+        <Notice
+          colors={colors}
+          icon="clock"
+          tone="waiting"
+          text="This is taking longer than usual. You can check again, or pay manually instead."
+        />
+        <View style={styles.actions}>
+          <AppButton
+            title="Check status"
+            accessibilityLabel="Check status"
+            onPress={() => void handleCheckStatus()}
+            loading={statusQuery.isFetching}
+            variant="secondary"
+            style={styles.actionButton}
+          />
+          <AppButton
+            title="Pay manually instead"
+            accessibilityLabel="Pay manually instead"
+            onPress={handleUseManualInstead}
+            variant="secondary"
+            style={styles.actionButton}
+          />
+        </View>
+      </>
+    ) : (
+      <>
+        <View style={[styles.inlineError, { borderColor: colors.destructiveHex + '30' }]}>
+          <Feather name="alert-triangle" size={15} color={colors.destructive} />
+          <AppText style={[styles.errorText, { color: colors.destructive }]}>
+            {errorMessage ?? 'The MoMo payment did not go through.'}
+          </AppText>
+        </View>
+        <View style={styles.actions}>
+          <AppButton
+            title="Retry"
+            accessibilityLabel="Retry payment"
+            onPress={handleRetry}
+            style={styles.actionButton}
+          />
+          <AppButton
+            title="Pay manually instead"
+            accessibilityLabel="Pay manually instead"
+            onPress={handleUseManualInstead}
+            variant="secondary"
+            style={styles.actionButton}
+          />
+        </View>
+      </>
+    )}
   </View>;
 }
 

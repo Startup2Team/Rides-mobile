@@ -10,6 +10,10 @@ export const packageKeys = {
   offerSource: () => ['packages', 'offer-source'] as const,
   entitlements: (driverId: string) => ['packages', 'entitlements', driverId] as const,
   purchases: (driverId: string) => ['packages', 'purchases', driverId] as const,
+  // Automatic MoMo purchase status poll (GET /driver/packages/purchases/{id}),
+  // distinct from `purchases` (the local entitlement's purchase history).
+  purchaseStatus: ((purchaseId: string) => ['packages', 'purchase-status', purchaseId] as const) as
+    (purchaseId: string) => readonly ['packages', 'purchase-status', string],
   offers: ((driverId: string, vehicleType?: string | null) => (
     vehicleType == null
       ? ['packages', 'offers', driverId] as const

@@ -79,26 +79,97 @@ export interface PurchasePackageInput {
   momoProvider?: 'mtn' | 'airtel';
 }
 
+// Wire status values from internal/packages/purchase.go's Purchase.Status —
+// uppercase, set by the purchase repository (never invented client-side).
+export type RemotePackagePurchaseStatus = 'PENDING' | 'PAID' | 'FAILED';
+
+// Domain shape of internal/packages/purchase.go's Purchase struct, returned by
+// both POST /driver/packages/purchase and GET /driver/packages/purchases/{id}.
+// This is the REAL backend purchase (automatic MoMo RequestToPay path) — do not
+// confuse with the client-only entitlement simulation in domain/driverRidePackages
+// or the manual proof-based claim in domains/package-payments.
+export interface RemotePackagePurchase {
+  id: string;
+  status: RemotePackagePurchaseStatus;
+  packageId: string;
+  packageName: string;
+  packageVersion: number;
+  campaignCode: string | null;
+  pricePaidRwf: number;
+  ridesGranted: number;
+  bonusRidesGranted: number;
+  vehicleTypeCode: string;
+  paymentProvider: string | null;
+  paymentRef: string;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+interface PurchaseDto {
+  id: string;
+  status: string;
+  package_id: string;
+  package_name: string;
+  package_version: number;
+  campaign_code?: string | null;
+  price_paid_rwf: number;
+  rides_granted: number;
+  bonus_rides_granted: number;
+  vehicle_type_code: string;
+  payment_provider?: string | null;
+  payment_ref: string;
+  created_at: string;
+  paid_at?: string | null;
+}
+
+function toRemotePackagePurchaseStatus(value: string): RemotePackagePurchaseStatus {
+  return value === 'PAID' || value === 'FAILED' ? value : 'PENDING';
+}
+
+function toRemotePackagePurchase(dto: PurchaseDto): RemotePackagePurchase {
+  return {
+    id: dto.id,
+    status: toRemotePackagePurchaseStatus(dto.status),
+    packageId: dto.package_id,
+    packageName: dto.package_name,
+    packageVersion: dto.package_version,
+    campaignCode: dto.campaign_code ?? null,
+    pricePaidRwf: dto.price_paid_rwf,
+    ridesGranted: dto.rides_granted,
+    bonusRidesGranted: dto.bonus_rides_granted,
+    vehicleTypeCode: dto.vehicle_type_code,
+    paymentProvider: dto.payment_provider ?? null,
+    paymentRef: dto.payment_ref,
+    createdAt: dto.created_at,
+    paidAt: dto.paid_at ?? null,
+  };
+}
+
 // POST /driver/packages/purchase — MoMo path pushes a PIN prompt to momo_phone.
-export async function purchasePackage(input: PurchasePackageInput): Promise<{ purchaseId: string; status: string }> {
+// Idempotent on idempotency_key: a retried request with the same key returns the
+// existing purchase instead of opening a second MoMo charge.
+export async function purchasePackage(input: PurchasePackageInput): Promise<RemotePackagePurchase> {
   const body: Record<string, unknown> = {
     package_id: input.packageId,
     idempotency_key: input.idempotencyKey,
   };
   if (input.momoPhone) body.momo_phone = input.momoPhone;
   if (input.momoProvider) body.momo_provider = input.momoProvider;
-  const response = await getAppBackendClient().post<Envelope<{ id: string; status: string }>>(
+  const response = await getAppBackendClient().post<Envelope<PurchaseDto>>(
     '/v1/driver/packages/purchase',
     { body },
   );
-  return { purchaseId: response.data.data.id, status: response.data.data.status };
+  return toRemotePackagePurchase(response.data.data);
 }
 
-export async function getPurchaseStatus(purchaseId: string): Promise<Record<string, unknown>> {
-  const response = await getAppBackendClient().get<Envelope<Record<string, unknown>>>(
-    `/v1/driver/packages/purchases/${purchaseId}`,
+// GET /driver/packages/purchases/{id} — status poll. The backend settles a
+// PENDING purchase on read (queries the MoMo gateway), so a poll can resolve
+// PAID/FAILED within seconds of the driver approving/declining the PIN prompt.
+export async function getPurchaseStatus(purchaseId: string): Promise<RemotePackagePurchase> {
+  const response = await getAppBackendClient().get<Envelope<PurchaseDto>>(
+    `/v1/driver/packages/purchases/${encodeURIComponent(purchaseId)}`,
   );
-  return response.data.data ?? {};
+  return toRemotePackagePurchase(response.data.data);
 }
 
 export interface ManualPaymentInfo {
