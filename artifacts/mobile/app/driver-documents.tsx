@@ -293,6 +293,14 @@ function DocumentCard({ cardFill, children, colors, onReplace, record, status }:
           <AppText style={[styles.statusText, { color: statusColor }]}>{statusLabel}</AppText>
         </View>
       </View>
+      {record.reviewNotes ? (
+        <View style={[styles.rejectionNoteBox, { backgroundColor: colors.destructiveHex + '12', borderColor: colors.destructiveHex + '28' }]}>
+          <Feather name="alert-triangle" size={15} color={colors.destructive} />
+          <AppText style={[styles.rejectionNoteText, { color: colors.destructive }]}>
+            Reviewer Note: {record.reviewNotes}
+          </AppText>
+        </View>
+      ) : null}
       <View style={styles.previewRow}>
         {record.faces.slice(0, DOCUMENTS_REQUIRING_BACK.includes(record.key) ? 2 : 1).map((uri, index) => uri ? <Image key={uri} source={{ uri }} style={styles.preview} /> : (
           <View key={index} style={[styles.preview, styles.emptyPreview, { backgroundColor: colors.muted }]}>
@@ -446,6 +454,8 @@ const styles = StyleSheet.create({
   cardMeta: { ...typography.tiny,  },
   statusChip: { paddingHorizontal: semanticSpacing.inlineGap, paddingVertical: 5, borderRadius: radius.pill },
   statusText: { ...typography.tiny,  },
+  rejectionNoteBox: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1, marginVertical: 4 },
+  rejectionNoteText: { flex: 1, ...typography.caption, fontWeight: '600' },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: semanticSpacing.inlineGap },
   preview: { width: 42, height: 42, borderRadius: 10 },
   emptyPreview: { alignItems: 'center', justifyContent: 'center' },

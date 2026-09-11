@@ -22,6 +22,7 @@ export interface DriverDocumentRecord {
    * read back from the API yet.
    */
   editable?: boolean;
+  reviewNotes?: string;
 }
 
 export type DriverDocuments = Record<DocumentKey, DriverDocumentRecord>;
@@ -137,6 +138,7 @@ export function mergeServerDriverDocuments(
       // one thing, and the front is the face that always exists.
       const reviewStatus = toReviewStatus(front?.reviewStatus ?? back?.reviewStatus) ?? record.reviewStatus;
       const editable = front?.editable ?? back?.editable ?? record.editable;
+      const reviewNotes = front?.reviewNotes ?? back?.reviewNotes ?? record.reviewNotes;
       const updatedAt = front?.createdAt ?? back?.createdAt ?? record.updatedAt;
 
       if (
@@ -144,12 +146,13 @@ export function mergeServerDriverDocuments(
         && faces[1] === record.faces[1]
         && reviewStatus === record.reviewStatus
         && editable === record.editable
+        && reviewNotes === record.reviewNotes
         && updatedAt === record.updatedAt
       ) {
         return [key, record];
       }
       changed = true;
-      return [key, { ...record, faces, reviewStatus, editable, updatedAt }];
+      return [key, { ...record, faces, reviewStatus, editable, reviewNotes, updatedAt }];
     }),
   ) as DriverDocuments;
 

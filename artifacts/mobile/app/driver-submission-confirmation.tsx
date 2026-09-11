@@ -213,7 +213,7 @@ export default function DriverSubmissionConfirmation() {
             colors={colors}
             rejectionReason={driverProfile?.rejectionReason}
             rejectionSummary={rejectionSummary}
-            onPress={() => router.push('/driver-onboarding')}
+            onPress={() => router.push('/driver-documents')}
           />
         )}
 
@@ -224,7 +224,13 @@ export default function DriverSubmissionConfirmation() {
         {(isApproved || isRejected || Boolean(rejectionSummary) || Boolean(driverProfile?.rejectionReason)) && (
           <AppButton
             title={isApproved ? 'Continue to driver mode' : 'Update Application'}
-            onPress={() => router.push('/driver-onboarding')}
+            onPress={async () => {
+              if (isApproved) {
+                await handlePrimaryAction();
+              } else {
+                router.push('/driver-documents');
+              }
+            }}
             fullWidth
             size="lg"
           />

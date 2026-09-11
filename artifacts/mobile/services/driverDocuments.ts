@@ -42,6 +42,8 @@ export interface DriverDocument {
   editable?: boolean;
   /** SHA-256 of the stored bytes, when the server records one. */
   sha256?: string;
+  /** Admin reviewer notes / comments attached to document rejection. */
+  reviewNotes?: string;
 }
 
 // Backend shape: GET /v1/driver/documents → { data: { documents: [ ... ] } }
@@ -52,6 +54,7 @@ interface DriverDocumentDto {
   file_url: string;
   uploaded_at: string;
   review_status?: string;
+  review_notes?: string | null;
   editable?: boolean;
   sha256?: string | null;
 }
@@ -75,6 +78,7 @@ function toDriverDocument(dto: DriverDocumentDto): DriverDocument {
     fileUrl: dto.file_url,
     createdAt: dto.uploaded_at,
     reviewStatus,
+    reviewNotes: dto.review_notes ?? undefined,
     // Trust the server's own computation when present. Only fall back to a
     // guess when the field is absent (older server), and be permissive there
     // rather than disabling an action the API would have allowed.
