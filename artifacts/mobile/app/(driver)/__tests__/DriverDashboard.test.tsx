@@ -16,6 +16,7 @@ import { saveStoredDriverRatings } from '@/persistence/driverRatingPersistence';
 import { saveSecureStorage } from '@/persistence/secureStorage';
 import type { DriverRating } from '@/domain/driverWallet';
 import type { DriverProfile, DriverVehicleProfile, Ride, User, VehicleType } from '@/types';
+import { fetchActiveAdverts, type ActiveAdvert } from '@/services/adverts';
 import DriverDashboard from '../index';
 
 let mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -179,7 +180,17 @@ jest.mock('react-native', () => {
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
-  useFocusEffect: () => undefined,
+  // Was a no-op (`() => undefined`) — that silently skipped BOTH
+  // useFocusEffect bodies in the dashboard (backend daily-earnings refresh
+  // and the adverts fetch below), so this suite never actually exercised
+  // either. Matches the effect-invoking mock already used everywhere else
+  // useFocusEffect is mocked in this codebase (e.g.
+  // components/__tests__/HomeTopHeader.test.tsx) — runs on mount, honors the
+  // returned cleanup on unmount, same as the real thing for test purposes.
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(effect, [effect]);
+  },
 }));
 
 jest.mock('@/hooks/useScreenTimerManager', () => ({
@@ -242,6 +253,37 @@ jest.mock('@/components/VehicleMapMarker', () => ({
     return mockReact.createElement('Text', null, compact ? 'Compact vehicle marker' : 'Vehicle marker');
   },
 }));
+
+// Driver dashboard advert banner (FIX: was blank in every build — the feed
+// never rendered because 1) the mobile client hand-rolled a URL missing
+// "/v1" against the staging env var (always 404) and 2) even a 0-row feed
+// left the carousel empty with no bundled fallback). Defaults to an empty
+// feed so every test in this file exercises the bundled-fallback path
+// (`FALLBACK_DASHBOARD_ADS` in ../index) unless a test overrides it —
+// matches what actually happens today (adverts table has 0 rows on staging
+// and prod).
+jest.mock('@/services/adverts', () => ({
+  fetchActiveAdverts: jest.fn().mockResolvedValue([]),
+  // Real implementation is pure string-building against the app's backend
+  // client config, which isn't under test here — a simple deterministic
+  // passthrough is enough to assert the carousel wires image_url through.
+  resolveBackendImageUrl: (url: string | null | undefined) => (url ? `https://cdn.test/${url}` : null),
+}));
+
+const mockedFetchActiveAdverts = fetchActiveAdverts as jest.MockedFunction<typeof fetchActiveAdverts>;
+
+function activeAdvert(overrides: Partial<ActiveAdvert> = {}): ActiveAdvert {
+  return {
+    id: 'advert-1',
+    partner_id: 'partner-1',
+    image_url: '/uploads/objects/adverts/promo.jpg',
+    headline: 'Open Promo advertisement',
+    cta_label: 'Learn more',
+    cta_link: 'https://partner.example.com',
+    priority: 1,
+    ...overrides,
+  };
+}
 
 const user: User = {
   id: 'driver-1',
@@ -379,6 +421,10 @@ function makeVehicleEntitlement(vehicle: DriverVehicleProfile, rides: number, bo
 describe('DriverDashboard online state', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    // clearAllMocks() clears call history, not the resolved value — reset the
+    // baseline explicitly so a `mockResolvedValueOnce`/`mockRejectedValueOnce`
+    // set by one test can never leak into the next.
+    mockedFetchActiveAdverts.mockResolvedValue([]);
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-06-08T12:00:00.000Z'));
     mockScreenTimers.clearAll();
@@ -771,7 +817,10 @@ describe('DriverDashboard online state', () => {
     );
   });
 
-  test('shows inline no-credit warning and tappable advertiser carousel on the dashboard', async () => {
+  test('shows inline no-credit warning, and an empty adverts feed renders the bundled fallback carousel', async () => {
+    // Default mock resolves []. Matches reality on staging/prod today (0 rows
+    // in the adverts table): the banner must never be blank, so it falls
+    // back to the bundled ads instead of rendering nothing.
     await seedDriverState({ withCredits: false });
 
     render(<DashboardProviders />);
@@ -780,18 +829,55 @@ describe('DriverDashboard online state', () => {
     expect(screen.getByText('Choose a package to start receiving ride requests.')).toBeTruthy();
     expect(screen.getByText('View Packages')).toBeTruthy();
     expect(screen.queryByText(/credits/i)).toBeNull();
-    expect(screen.getByTestId('dashboard-ad-airtel')).toBeTruthy();
-    expect(screen.getByTestId('dashboard-ad-jibu')).toBeTruthy();
-    expect(screen.getByTestId('dashboard-ad-bralirwa')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-fallback-airtel')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-fallback-jibu')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-fallback-bralirwa')).toBeTruthy();
 
     fireEvent.press(screen.getByText('View Packages'));
     expect(router.push).toHaveBeenCalledWith('/(driver)/packages');
 
-    fireEvent.press(screen.getByTestId('dashboard-ad-airtel'));
-    expect(Linking.openURL).toHaveBeenCalledWith('https://www.airtel.co.rw/');
+    fireEvent.press(screen.getByTestId('dashboard-ad-fallback-airtel'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://rides.rw');
 
-    fireEvent.press(screen.getByTestId('dashboard-ad-bralirwa'));
-    expect(Linking.openURL).toHaveBeenCalledWith('http://www.bralirwa.com/');
+    fireEvent.press(screen.getByTestId('dashboard-ad-fallback-bralirwa'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://rides.rw');
+  });
+
+  test('a non-empty adverts feed renders the real adverts instead of the bundled fallback', async () => {
+    mockedFetchActiveAdverts.mockResolvedValueOnce([
+      activeAdvert({ id: 'advert-1', headline: 'Open Promo advertisement', image_url: '/uploads/objects/adverts/promo.jpg', cta_link: 'https://partner.example.com' }),
+      activeAdvert({ id: 'advert-2', headline: 'Open Second advertisement', image_url: '/uploads/objects/adverts/second.jpg', cta_link: '' }),
+    ]);
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+    await waitFor(() => expect(screen.getByTestId('dashboard-ad-advert-1')).toBeTruthy());
+
+    expect(screen.getByTestId('dashboard-ad-advert-2')).toBeTruthy();
+    // The bundled fallback is gone — real adverts take over the moment the
+    // feed returns any.
+    expect(screen.queryByTestId('dashboard-ad-fallback-airtel')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('dashboard-ad-advert-1'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://partner.example.com');
+
+    // No cta_link on the second advert falls back to the Rides site, same as
+    // a bundled ad — not a broken/blank tap target.
+    fireEvent.press(screen.getByTestId('dashboard-ad-advert-2'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://rides.rw');
+  });
+
+  test('a rejected/404 adverts fetch still renders the bundled fallback and never throws into the dashboard', async () => {
+    mockedFetchActiveAdverts.mockRejectedValueOnce(new Error('404'));
+    await seedDriverState();
+
+    render(<DashboardProviders />);
+
+    // The dashboard itself rendered (nothing thrown up to React) and the
+    // banner fell back to the bundled ads rather than staying blank.
+    await waitFor(() => expect(screen.getByTestId('dashboard-ad-fallback-airtel')).toBeTruthy());
+    expect(screen.getByTestId('dashboard-ad-fallback-jibu')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-ad-fallback-bralirwa')).toBeTruthy();
   });
 
   test('requires sliding the profile avatar far enough to switch to customer mode', async () => {
