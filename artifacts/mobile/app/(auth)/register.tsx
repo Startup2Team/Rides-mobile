@@ -25,6 +25,7 @@ import { typography } from '@/constants/typography';
 import { useColors } from '@/hooks/useColors';
 import { replaceAuthBoundary } from '@/navigation/navigationPolicy';
 import { requestOtp } from '@/services/authSession';
+import { readBackendError } from '@/utils/backendErrorMessage';
 
 const COUNTRIES = [
   { name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼', example: '7XX XXX XXX', minLength: 9, maxLength: 9 },
@@ -95,12 +96,35 @@ export default function RegisterScreen() {
     setSubmitting(true);
     try {
       // Real backend: sends the OTP before we move to the verification screen.
-      await requestOtp({ phoneNumber, fullName });
+      // Gender rides along in this same call now (backend accepts it inline) —
+      // it used to be a separate best-effort PUT fired after verify, which
+      // raced navigation and, on an existing account, overwrote that
+      // account's stored gender.
+      await requestOtp({ phoneNumber, fullName, gender: form.gender || undefined });
       router.push({
         pathname: '/(auth)/otp',
-        params: { phone: phoneNumber, name: fullName, mode: 'register', gender: form.gender },
+        // gender also rides along here — purely so Resend on the next screen
+        // can re-submit it if the backend's OTP stash has already expired by
+        // the time the user taps Resend. Nothing on the OTP screen itself
+        // reads it after a successful verify.
+        params: { phone: phoneNumber, name: fullName, mode: 'register', gender: form.gender || undefined },
       });
-    } catch {
+    } catch (err) {
+      // The backend refuses a duplicate number outright (409) rather than
+      // sending an OTP to a number that already has an account — route the
+      // user to Login instead of leaving them stuck retrying registration.
+      // Uses replaceAuthBoundary (not router.push) like every other
+      // auth-boundary transition on these screens: it's observable via
+      // observeNavigation, and it swaps Register out of the stack instead of
+      // leaving a dead registration screen sitting under Login.
+      const { code, message } = readBackendError(err);
+      if (code === 'PHONE_ALREADY_REGISTERED') {
+        replaceAuthBoundary(router, {
+          pathname: '/(auth)/login',
+          params: { phone: phoneNumber, notice: message ?? 'This number already has an account. Sign in instead.' },
+        });
+        return;
+      }
       setErrors({ phone: "Couldn't send the code. Check the number and try again." });
     } finally {
       setSubmitting(false);

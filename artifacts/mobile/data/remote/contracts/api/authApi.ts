@@ -8,6 +8,7 @@ export interface RequestOtpRequestDto {
   phone_number: string;
   full_name?: string;
   email?: string;
+  gender?: 'male' | 'female' | 'other';
   device_id: string;
   platform: 'ios' | 'android';
 }

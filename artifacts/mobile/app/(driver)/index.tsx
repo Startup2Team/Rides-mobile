@@ -98,6 +98,44 @@ function visibleDriverRegion(location: typeof KIGALI_CENTER) {
   };
 }
 
+// Shared shape for every carousel slide. Bundled fallback ads use a
+// require() module ref (a number at runtime); backend-driven ones use a
+// { uri } object — both are valid ImageSourcePropType, so one field/one list
+// drives looping, accessibility labels and the CTA link identically
+// regardless of where the slide came from.
+interface DashboardAdSlide {
+  id: string;
+  accessibilityLabel: string;
+  source: ImageSourcePropType;
+  url: string;
+}
+
+// Shown whenever the backend feed has nothing to offer — empty adverts
+// table, a failed/404 fetch, or offline all land here — so the banner is
+// never blank. Real adverts take over automatically the moment
+// GET /v1/adverts/active returns rows (see dynamicDashboardAds below); this
+// is not a permanent placement.
+const FALLBACK_DASHBOARD_ADS: DashboardAdSlide[] = [
+  {
+    id: "fallback-airtel",
+    accessibilityLabel: "Open Airtel advertisement",
+    source: require("../../assets/ads/dashboard/airtel.jpg"),
+    url: "https://rides.rw",
+  },
+  {
+    id: "fallback-jibu",
+    accessibilityLabel: "Open Jibu advertisement",
+    source: require("../../assets/ads/dashboard/jibu.jpg"),
+    url: "https://rides.rw",
+  },
+  {
+    id: "fallback-bralirwa",
+    accessibilityLabel: "Open Bralirwa advertisement",
+    source: require("../../assets/ads/bralirwa.png"),
+    url: "https://rides.rw",
+  },
+];
+
 const DRIVER_DASHBOARD_IMAGE_SOURCES: ImageSourcePropType[] = [
   require("../../assets/images/verified-badge.png"),
 ];
@@ -195,15 +233,23 @@ export default function DriverDashboard() {
     }, []),
   );
 
-  const dynamicDashboardAds = React.useMemo(() => {
-    return activeAdverts
+  // "dynamic" for historical reasons (every downstream consumer — looping,
+  // auto-advance, index-wrap arithmetic — already reads this one list) but it
+  // now also carries the bundled fallback: real adverts win whenever the feed
+  // has any, otherwise this falls back to FALLBACK_DASHBOARD_ADS so the
+  // carousel below is never empty. Keeping this the single list feeding
+  // everything, instead of a parallel DASHBOARD_ADS path, is what keeps
+  // looping/accessibility/CTA behavior identical for both sources.
+  const dynamicDashboardAds = React.useMemo<DashboardAdSlide[]>(() => {
+    const backendAds = activeAdverts
       .filter((ad) => !!ad.image_url)
       .map((ad) => ({
         id: ad.id,
         accessibilityLabel: ad.headline,
-        imageUrl: resolveBackendImageUrl(ad.image_url) ?? "",
+        source: { uri: resolveBackendImageUrl(ad.image_url) ?? "" },
         url: ad.cta_link || "https://rides.rw",
       }));
+    return backendAds.length > 0 ? backendAds : FALLBACK_DASHBOARD_ADS;
   }, [activeAdverts]);
 
   const dynamicLoopedDashboardAds = React.useMemo(() => {
@@ -1355,7 +1401,7 @@ export default function DriverDashboard() {
                     }
                   >
                     <Image
-                      source={{ uri: ad.imageUrl }}
+                      source={ad.source}
                       style={styles.adImage}
                       resizeMode="cover"
                     />
