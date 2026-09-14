@@ -32,6 +32,10 @@ export interface AuthOtpRequestInput {
   // Optional profile fields the register step can send (backend accepts them).
   fullName?: string;
   email?: string;
+  // Sent inline at register time now — no more fire-and-forget PUT after
+  // verify, which used to race navigation and could overwrite an existing
+  // account's gender when the number already belonged to someone else.
+  gender?: 'male' | 'female' | 'other';
 }
 
 export interface AuthOtpRequestResult {
@@ -126,6 +130,7 @@ export function domainToRequestOtpDto(input: AuthOtpRequestInput, device: Device
     phone_number: input.phoneNumber,
     full_name: input.fullName,
     email: input.email,
+    gender: input.gender,
     device_id: device.device_id,
     platform: device.platform,
   };

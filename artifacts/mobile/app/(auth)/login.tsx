@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Keyboard,
@@ -45,13 +45,39 @@ function getCountryFlag(code: string) {
     .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)));
 }
 
+// Register redirects here (with the number prefilled) when it hits a 409
+// PHONE_ALREADY_REGISTERED — the number arrives already dialed, e.g.
+// "+250788111000" (register.tsx builds it as `${dialCode}${digits}`). Split
+// it back into { country, digits } so the field renders exactly as if the
+// user had typed it themselves. A cold entry (no param, or a prefix we don't
+// recognize) falls back to the default country and an empty field — unchanged
+// from before this redirect existed.
+// NOTE: COUNTRIES.find() takes the first array-order prefix match, not the
+// longest one. Harmless today (register.tsx only ever sends +250 or +256,
+// and no dial code here is itself a prefix of another), but if the list
+// grows to include dial codes that share a prefix (e.g. +1 vs +1xxx NANP
+// codes), this needs a longest-prefix-first sort/match — not done here,
+// out of scope for this fix.
+function splitPrefillPhone(value: string | undefined): { country: (typeof COUNTRIES)[number]; digits: string } {
+  const matched = value ? COUNTRIES.find(c => value.startsWith(c.dialCode)) : undefined;
+  if (!matched || !value) return { country: COUNTRIES[0], digits: '' };
+  return { country: matched, digits: value.slice(matched.dialCode.length).slice(0, matched.maxLength) };
+}
+
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { login } = useAuth();
-  const [phone, setPhone] = useState('');
+  const { phone: prefillPhone, notice: prefillNotice } = useLocalSearchParams<{ phone?: string; notice?: string }>();
+  const [phone, setPhone] = useState(() => splitPrefillPhone(prefillPhone).digits);
   const [error, setError] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
+  // Guidance, not a failure — "this number already has an account, sign in
+  // instead" is Register handing the user off, not something Login itself
+  // rejected. Kept separate from `error` so it never red-borders the input
+  // or reads in the destructive color; a real login failure below still
+  // clears it (mutually exclusive with `error`).
+  const [notice, setNotice] = useState(prefillNotice ?? '');
+  const [selectedCountry, setSelectedCountry] = useState(() => splitPrefillPhone(prefillPhone).country);
   const [showCountrySheet, setShowCountrySheet] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -59,9 +85,11 @@ export default function LoginScreen() {
     if (submitting) return;
     if (phone.replace(/\D/g, '').length < selectedCountry.minLength) {
       setError('Enter a valid phone number');
+      setNotice('');
       return;
     }
     setError('');
+    setNotice('');
     setSubmitting(true);
     const phoneNumber = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
     try {
@@ -94,6 +122,7 @@ export default function LoginScreen() {
       // cancellations) is indistinguishable from a typo'd number otherwise, so
       // the user retypes a correct number forever and never learns why.
       const { code, message } = readBackendError(err);
+      setNotice('');
       if (code === 'ACCOUNT_SUSPENDED') {
         setError(message ?? 'Your account has been suspended. Please contact support.');
       } else if (message && code !== 'NOT_FOUND') {
@@ -132,6 +161,19 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <AppText variant="h2" style={[styles.title, { color: colors.foreground }]}>Welcome back</AppText>
           </View>
+
+          {notice ? (
+            <View style={[styles.noticeBanner, { backgroundColor: colors.primaryHex + '14' }]}>
+              <Feather name="info" size={15} color={colors.primary} />
+              <AppText
+                variant="bodySmall"
+                style={[styles.noticeText, { color: colors.foreground }]}
+                accessibilityRole="text"
+              >
+                {notice}
+              </AppText>
+            </View>
+          ) : null}
 
           <View style={styles.form}>
             <View style={styles.phoneField}>
@@ -173,6 +215,7 @@ export default function LoginScreen() {
                     onChangeText={t => {
                       setPhone(t.replace(/\D/g, '').slice(0, selectedCountry.maxLength));
                       setError('');
+                      setNotice('');
                     }}
                     keyboardType="phone-pad"
                     maxLength={selectedCountry.maxLength}
@@ -248,6 +291,7 @@ export default function LoginScreen() {
                     setSelectedCountry(country);
                     setPhone(value => value.replace(/\D/g, '').slice(0, country.maxLength));
                     setError('');
+                    setNotice('');
                     setShowCountrySheet(false);
                   }}
                   activeOpacity={0.85}
@@ -286,6 +330,18 @@ const styles = StyleSheet.create({
   },
   title: {},
   subtitle: {},
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  noticeText: {
+    flex: 1,
+    lineHeight: 18,
+  },
   form: { gap: 18 },
   phoneField: {
     gap: 6,

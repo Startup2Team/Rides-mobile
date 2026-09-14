@@ -17,8 +17,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { navigateToCustomerHomeAfterCompletion, navigateToDriverHomeAfterCompletion } from '@/navigation/navigationPolicy';
 import { requestOtp, verifyOtp } from '@/services/authSession';
-import { updateProfile } from '@/services/profile';
-import { reportOperationalFailure } from '@/observability/monitoring';
 import type { User } from '@/types';
 
 // Client-side throttle before a fresh OTP can be requested again. The backend
@@ -28,6 +26,13 @@ const RESEND_COOLDOWN_SECONDS = 30;
 export default function OTPScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  // gender rides along ONLY to cover Resend: resend is a full re-submission
+  // of the register payload (POST /auth/register again), so it must carry
+  // whatever the user picked on the register screen — otherwise a resend
+  // (e.g. after the backend's OTP stash expires) silently re-registers the
+  // number with gender dropped, and there is no rider-facing screen where
+  // that could be fixed afterward. It is NOT read anywhere else on this
+  // screen — the post-verify PUT this used to feed was removed on purpose.
   const { phone, name, email, mode, length, gender } = useLocalSearchParams<{
     phone: string; name: string; email: string; mode: string; length?: string; gender?: string;
   }>();
@@ -62,7 +67,11 @@ export default function OTPScreen() {
       // Actually re-request the OTP from the backend (POST /auth/register) —
       // this is what generates a fresh code, sends the SMS (when configured),
       // and shows up in the server logs. The old button only reset local state.
-      await requestOtp({ phoneNumber: phone, fullName: name });
+      await requestOtp({
+        phoneNumber: phone,
+        fullName: name,
+        gender: gender === 'male' || gender === 'female' || gender === 'other' ? gender : undefined,
+      });
       setCode(Array(otpLength).fill(''));
       setExpiryTimer(OTP_VALIDITY_SECONDS);
       setResendIn(RESEND_COOLDOWN_SECONDS);
@@ -100,16 +109,6 @@ export default function OTPScreen() {
       // Real backend: exchanges the OTP for a session; tokens are persisted
       // inside verifyOtp() so subsequent requests are authenticated.
       const session = await verifyOtp({ phoneNumber: phone ?? '', otp: entered });
-
-      // Best-effort rider gender capture (FEAT-onboarding-fields): optional,
-      // never blocks registration. Tokens are already persisted by verifyOtp
-      // above, so this call is authenticated; a failure here must not stop
-      // the user from landing on their home screen.
-      if (gender === 'male' || gender === 'female' || gender === 'other') {
-        void updateProfile({ gender }).catch(error => {
-          reportOperationalFailure('auth.register.gender', error);
-        });
-      }
 
       const sessionUser = session.user;
       const user: User = {

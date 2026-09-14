@@ -1,13 +1,17 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import OTPScreen from '../otp';
-import { verifyOtp } from '@/services/authSession';
-import { updateProfile } from '@/services/profile';
-import { reportOperationalFailure } from '@/observability/monitoring';
+import { requestOtp, verifyOtp } from '@/services/authSession';
 
-// FEAT-onboarding-fields: after a successful OTP verify, the register flow's
-// optional gender selection is sent best-effort via PUT /customer/profile.
-// This must never block login/navigation, even when it fails.
+// FEAT-onboarding-fields / gender-at-register: gender used to be sent here,
+// after a successful verify, as a fire-and-forget PUT /customer/profile —
+// that raced navigation and could overwrite an EXISTING account's stored
+// gender if the phone number already belonged to someone else. Gender now
+// rides along in the register-time POST /auth/register payload instead (see
+// register.test.tsx), so this screen no longer knows about gender at all:
+// no gender param, no post-verify profile call. These tests cover what's
+// left — verifying a code, and the resend path, which still calls
+// requestOtp and must keep working.
 
 const mockLogin = jest.fn(async () => 'customer');
 const mockPush = jest.fn();
@@ -79,17 +83,8 @@ jest.mock('@/services/authSession', () => ({
   verifyOtp: jest.fn(),
 }));
 
-jest.mock('@/services/profile', () => ({
-  updateProfile: jest.fn(),
-}));
-
-jest.mock('@/observability/monitoring', () => ({
-  reportOperationalFailure: jest.fn(),
-}));
-
+const mockedRequestOtp = requestOtp as jest.MockedFunction<typeof requestOtp>;
 const mockedVerifyOtp = verifyOtp as jest.MockedFunction<typeof verifyOtp>;
-const mockedUpdateProfile = updateProfile as jest.MockedFunction<typeof updateProfile>;
-const mockedReport = reportOperationalFailure as jest.MockedFunction<typeof reportOperationalFailure>;
 
 function typeCode(code: string) {
   code.split('').forEach((digit, i) => {
@@ -97,46 +92,51 @@ function typeCode(code: string) {
   });
 }
 
-describe('OTP screen — best-effort rider gender capture', () => {
+describe('OTP screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockParams = { phone: '+250788111000', name: 'Alice', mode: 'register' };
     mockLogin.mockResolvedValue('customer');
     mockedVerifyOtp.mockResolvedValue({
       user: { id: 'user-1', name: 'Alice', phone: '+250788111000', mode: 'customer', isDriver: false, createdAt: '2026-01-01T00:00:00.000Z' },
     } as never);
   });
 
-  test('sends the selected gender after a successful verify, without blocking login', async () => {
-    mockParams = { phone: '+250788111000', name: 'Alice', mode: 'register', gender: 'female' };
-    mockedUpdateProfile.mockResolvedValue(undefined);
-
+  test('verifying a full code logs the user in and never touches gender/profile', async () => {
     render(<OTPScreen />);
     typeCode('123456');
 
     await waitFor(() => expect(mockLogin).toHaveBeenCalled());
-    expect(mockedUpdateProfile).toHaveBeenCalledWith({ gender: 'female' });
+    // No gender param is read from the route anymore, and nothing here calls
+    // a profile-update endpoint — this screen's job ends at verifyOtp+login.
+    expect(mockedVerifyOtp).toHaveBeenCalledWith({ phoneNumber: '+250788111000', otp: '123456' });
   });
 
-  test('never sends a request when gender was skipped', async () => {
-    mockParams = { phone: '+250788111000', name: 'Alice', mode: 'register', gender: '' };
+  test('resend, once its cooldown elapses, re-requests the OTP for the same number', async () => {
+    // Resend only ever fires for a number that does NOT yet have an account
+    // (that's how the user got to this screen in the first place), so it can
+    // never hit the register endpoint's 409 — no duplicate-phone handling
+    // belongs on this path.
+    jest.useFakeTimers();
+    try {
+      mockedRequestOtp.mockResolvedValue({ requestId: '', maskedPhoneNumber: '+250••••00', expiresAt: new Date().toISOString() });
 
-    render(<OTPScreen />);
-    typeCode('123456');
+      render(<OTPScreen />);
+      expect(screen.getByLabelText('Resend verification code').props.accessibilityState.disabled).toBe(true);
 
-    await waitFor(() => expect(mockLogin).toHaveBeenCalled());
-    expect(mockedUpdateProfile).not.toHaveBeenCalled();
-  });
+      await act(async () => {
+        jest.advanceTimersByTime(30_000);
+      });
+      expect(screen.getByLabelText('Resend verification code').props.accessibilityState.disabled).toBe(false);
 
-  test('a failed gender update is reported but does not stop the user from landing on home', async () => {
-    mockParams = { phone: '+250788111000', name: 'Alice', mode: 'register', gender: 'male' };
-    mockedUpdateProfile.mockRejectedValue(new Error('network down'));
+      fireEvent.press(screen.getByLabelText('Resend verification code'));
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-    render(<OTPScreen />);
-    typeCode('123456');
-
-    await waitFor(() => expect(mockLogin).toHaveBeenCalled());
-    await waitFor(() => expect(mockedReport).toHaveBeenCalledWith('auth.register.gender', expect.any(Error)));
-    // Login/navigation still proceeded despite the gender PUT failing.
-    expect(mockLogin).toHaveBeenCalledTimes(1);
+      expect(mockedRequestOtp).toHaveBeenCalledWith({ phoneNumber: '+250788111000', fullName: 'Alice' });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
