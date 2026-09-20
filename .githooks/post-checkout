@@ -1,0 +1,5 @@
+#!/bin/sh
+# Git passes a third argument of 1 for a branch checkout, 0 for a file checkout.
+# Only a branch change can move the dependency graph.
+[ "$3" = "1" ] || exit 0
+node artifacts/mobile/scripts/sync-ios-pods.js --reason "branch checkout" || true
