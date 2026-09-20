@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fires after `git pull` and `git merge`.
+node artifacts/mobile/scripts/sync-ios-pods.js --reason "merge" || true

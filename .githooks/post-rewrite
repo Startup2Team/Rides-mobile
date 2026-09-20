@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fires after `git rebase` and `git commit --amend`; only a rebase can move deps.
+[ "$1" = "rebase" ] || exit 0
+node artifacts/mobile/scripts/sync-ios-pods.js --reason "rebase" || true

@@ -29,7 +29,10 @@
     "release:export:android": "expo export --platform android --output-dir dist/release-validation --clear",
     "release:prebuild:android": "expo prebuild --platform android --no-install --clean",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "pods": "node scripts/sync-ios-pods.js --force",
+    "pods:check": "node scripts/sync-ios-pods.js --check",
+    "pods:seed": "node scripts/sync-ios-pods.js --seed"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
