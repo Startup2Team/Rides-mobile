@@ -128,6 +128,7 @@ function heldBooking(expiresInMs = 5 * 60 * 1000): IntercityBooking {
     cancelledAt: null,
     createdAt: new Date().toISOString(),
     trip: null,
+    totalRwf: null,
   };
 }
 

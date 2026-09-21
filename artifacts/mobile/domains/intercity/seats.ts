@@ -84,7 +84,19 @@ export function totalPriceRwf(seats: number, pricePerSeatRwf: number): number {
   return Math.max(0, Math.trunc(seats)) * Math.max(0, Math.trunc(pricePerSeatRwf));
 }
 
-export function bookingTotalRwf(booking: Pick<IntercityBooking, 'seats' | 'pricePerSeatRwf'>): number {
+/**
+ * The booking's total in RWF.
+ *
+ * Prefers the server's own `totalRwf`: money has ONE source of truth, and it is
+ * not the client. Falls back to seats x price only when the server did not send
+ * it, so an older payload still renders rather than showing nothing.
+ */
+export function bookingTotalRwf(
+  booking: Pick<IntercityBooking, 'seats' | 'pricePerSeatRwf'> & { totalRwf?: number | null },
+): number {
+  if (typeof booking.totalRwf === 'number' && Number.isFinite(booking.totalRwf)) {
+    return Math.max(0, Math.trunc(booking.totalRwf));
+  }
   return totalPriceRwf(booking.seats, booking.pricePerSeatRwf);
 }
 
