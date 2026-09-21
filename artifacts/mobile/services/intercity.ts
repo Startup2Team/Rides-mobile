@@ -83,6 +83,8 @@ export interface IntercityBooking {
    * and typing it as always-present was a lie the type system could not catch.
    */
   createdAt: string | null;
+  /** The server-computed total. Money has one source of truth, and it is the server. */
+  totalRwf: number | null;
   /** Embedded trip when the API returns it (booking detail + list). */
   trip: IntercityTrip | null;
 }
@@ -314,6 +316,11 @@ export function mapBooking(dto: BookingDto): IntercityBooking {
     boardedAt: dto.boarded_at ?? null,
     cancelledAt: dto.cancelled_at ?? null,
     createdAt: dto.created_at ?? null,
+    // The server's own total. The client used to recompute seats x price and
+    // ignore this, which is a second source of truth for money: identical today,
+    // but the day pricing gains a fee or a rounding rule the app would quietly
+    // show a different number from the one the driver collects.
+    totalRwf: dto.total_rwf ?? null,
     trip: dto.trip ? mapTrip(dto.trip) : null,
   };
 }
