@@ -18,6 +18,7 @@ export type IntercityFailureKind =
   | 'booking-limit'
   | 'no-credits'
   | 'vehicle-not-eligible'
+  | 'vehicle-not-active'
   | 'not-allowed'
   | 'not-found'
   | 'offline'
@@ -45,6 +46,8 @@ const COPY: Record<IntercityFailureKind, string> = {
   'booking-limit': 'You can hold seats on two trips at a time. Cancel one to book another.',
   'no-credits': 'You need ride credits before you can publish a trip.',
   'vehicle-not-eligible': INTERCITY_VEHICLE_REQUIREMENT,
+  'vehicle-not-active':
+    'That vehicle is switched off. Activate it in My vehicles, or pick another one.',
   'not-allowed': 'You are not allowed to do that.',
   'not-found': 'This trip is no longer available.',
   offline: 'You are offline. Connect to the internet and try again.',
@@ -68,6 +71,10 @@ const CODE_KINDS: Record<string, IntercityFailureKind> = {
   // 422: the request is fine, the vehicle is the wrong one. Retrying changes
   // nothing — registering or activating a bigger vehicle does.
   VEHICLE_NOT_INTERCITY_ELIGIBLE: 'vehicle-not-eligible',
+  // 422: the vehicle is the driver's and big enough, but switched off. The
+  // picker deliberately still SHOWS inactive vehicles — hiding a vehicle someone
+  // owns reads as a bug — so the fix has to be explained rather than hidden.
+  VEHICLE_NOT_ACTIVE: 'vehicle-not-active',
   TRIP_NOT_FOUND: 'not-found',
   BOOKING_NOT_FOUND: 'not-found',
 };
