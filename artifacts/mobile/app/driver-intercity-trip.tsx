@@ -26,7 +26,9 @@ import {
   useBoardPassengerMutation,
   useIntercityManifestQuery,
   useIntercityTripLifecycleMutation,
+  useIntercityTripQuery,
   useMarkNoShowMutation,
+  type IntercityManifest,
   type IntercityManifestPassenger,
   type IntercityTrip,
 } from '@/domains/intercity';
@@ -53,6 +55,11 @@ export default function DriverIntercityTripScreen() {
   const isOffline = useIsOffline();
 
   const manifestQuery = useIntercityManifestQuery(tripId);
+  // The manifest carries seat counters and passengers only — NOT the trip. The
+  // route names, price and boarding point come from the trip endpoint, and the
+  // screen degrades to the manifest alone when that second read fails rather
+  // than refusing to show the driver who is waiting for them.
+  const tripQuery = useIntercityTripQuery(tripId);
   const { refetch } = manifestQuery;
   const boardMutation = useBoardPassengerMutation();
   const noShowMutation = useMarkNoShowMutation();
@@ -65,11 +72,12 @@ export default function DriverIntercityTripScreen() {
   useFocusEffect(
     useCallback(() => {
       void refetch();
-    }, [refetch]),
+      void tripQuery.refetch();
+    }, [refetch, tripQuery.refetch]),
   );
 
   const manifest = manifestQuery.data ?? null;
-  const trip = manifest?.trip ?? null;
+  const trip = tripQuery.data ?? null;
   const passengers = useMemo(() => manifest?.passengers ?? [], [manifest?.passengers]);
 
   const runLifecycle = (action: 'start' | 'complete' | 'cancel', reason?: string) => {
@@ -115,7 +123,7 @@ export default function DriverIntercityTripScreen() {
     );
   }
 
-  if (manifestQuery.isError || !manifest || !trip) {
+  if (manifestQuery.isError || !manifest) {
     return (
       <Shell headerMetrics={headerMetrics} isDark={isDark} title="Trip">
         {isOffline ? (
@@ -141,17 +149,18 @@ export default function DriverIntercityTripScreen() {
     );
   }
 
-  const canStart = trip.status === 'OPEN' || trip.status === 'BOARDING';
-  const canComplete = trip.status === 'IN_TRANSIT';
-  const canCancel = trip.status === 'OPEN' || trip.status === 'BOARDING';
-  const expectedCash = totalPriceRwf(manifest.seatsSold, trip.pricePerSeatRwf);
+  // Lifecycle gates read the MANIFEST's status: it is the driver-owned read of
+  // this trip, and it is the payload that is guaranteed to be present here.
+  const canStart = manifest.status === 'OPEN' || manifest.status === 'BOARDING';
+  const canComplete = manifest.status === 'IN_TRANSIT';
+  const canCancel = manifest.status === 'OPEN' || manifest.status === 'BOARDING';
 
   return (
     <Shell
       headerMetrics={headerMetrics}
       isDark={isDark}
-      title={`${trip.originName} → ${trip.destinationName}`}
-      subtitle={`${formatDepartureDate(trip.departAt)} · ${formatDepartureTime(trip.departAt)}`}
+      title={trip ? `${trip.originName} → ${trip.destinationName}` : 'Trip manifest'}
+      subtitle={`${formatDepartureDate(manifest.departAt)} · ${formatDepartureTime(manifest.departAt)}`}
     >
       <FlatList
         data={passengers}
@@ -165,7 +174,7 @@ export default function DriverIntercityTripScreen() {
         onRefresh={() => void refetch()}
         ListHeaderComponent={
           <View>
-            <TripSummary trip={trip} seatsSold={manifest.seatsSold} expectedCash={expectedCash} />
+            <TripSummary manifest={manifest} trip={trip} />
 
             {actionError ? (
               <View
@@ -285,38 +294,41 @@ export default function DriverIntercityTripScreen() {
   );
 }
 
-function TripSummary({
-  expectedCash,
-  seatsSold,
-  trip,
-}: {
-  expectedCash: number;
-  seatsSold: number;
-  trip: IntercityTrip;
-}) {
+/**
+ * Seats and status come from the MANIFEST (the driver's own read of the trip);
+ * price and boarding point come from the trip, which may not have loaded. The
+ * cash line is omitted rather than guessed at zero — a wrong number at the
+ * staging point is worse than no number.
+ */
+function TripSummary({ manifest, trip }: { manifest: IntercityManifest; trip: IntercityTrip | null }) {
   const colors = useColors();
+  const expectedCash = trip ? totalPriceRwf(manifest.seatsSold, trip.pricePerSeatRwf) : null;
   return (
     <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.summaryTop}>
         <View style={styles.summaryCopy}>
           <AppText style={[styles.summaryStatus, { color: colors.mutedForeground }]}>
-            {tripStatusLabel(trip.status)}
+            {tripStatusLabel(manifest.status)}
           </AppText>
           <AppText style={[styles.summarySeats, { color: colors.foreground }]}>
-            {seatsSold} of {trip.totalSeats} seats sold
+            {manifest.seatsSold} of {manifest.totalSeats} seats sold
           </AppText>
-          <AppText style={[styles.summaryMeta, { color: colors.mutedForeground }]}>
-            {formatRwf(expectedCash)} to collect in cash · {formatRwf(trip.pricePerSeatRwf)} per seat
+          {expectedCash !== null && trip ? (
+            <AppText style={[styles.summaryMeta, { color: colors.mutedForeground }]}>
+              {formatRwf(expectedCash)} to collect in cash · {formatRwf(trip.pricePerSeatRwf)} per seat
+            </AppText>
+          ) : null}
+        </View>
+        <SeatsRemaining remaining={manifest.remainingSeats} />
+      </View>
+      {trip ? (
+        <View style={styles.summaryRow}>
+          <Feather name="map-pin" size={icons.size.xs} color={colors.mutedForeground} />
+          <AppText style={[styles.summaryMeta, { color: colors.mutedForeground, flex: 1 }]}>
+            {trip.stagingAddress}
           </AppText>
         </View>
-        <SeatsRemaining remaining={trip.remainingSeats} />
-      </View>
-      <View style={styles.summaryRow}>
-        <Feather name="map-pin" size={icons.size.xs} color={colors.mutedForeground} />
-        <AppText style={[styles.summaryMeta, { color: colors.mutedForeground, flex: 1 }]}>
-          {trip.stagingAddress}
-        </AppText>
-      </View>
+      ) : null}
     </View>
   );
 }

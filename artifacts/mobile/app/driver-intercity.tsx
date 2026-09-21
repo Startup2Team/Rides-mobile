@@ -25,8 +25,9 @@ import {
   tripStatusLabel,
   useDriverIntercityTripsQuery,
   useIntercityCorridorsQuery,
-  useIntercityDriverVehiclesQuery,
+  useIntercityEligibility,
   usePublishIntercityTripMutation,
+  INTERCITY_VEHICLE_REQUIREMENT,
   type IntercityFailure,
   type IntercityTrip,
 } from '@/domains/intercity';
@@ -57,12 +58,16 @@ export default function DriverIntercityScreen() {
 
   const dayOptions = useMemo(() => buildDayOptions(), []);
   const corridorsQuery = useIntercityCorridorsQuery();
-  const vehiclesQuery = useIntercityDriverVehiclesQuery();
+  // Only vehicles the SERVER says may run a corridor are offered: publishing
+  // with a moto is refused with 422 VEHICLE_NOT_INTERCITY_ELIGIBLE, so it must
+  // never be selectable here.
+  const { eligibility, eligibleVehicles, isLoading: vehiclesLoading, refetch: refetchVehicles } =
+    useIntercityEligibility();
   const tripsQuery = useDriverIntercityTripsQuery();
   const publishMutation = usePublishIntercityTripMutation();
 
   const corridors = useMemo(() => corridorsQuery.data ?? [], [corridorsQuery.data]);
-  const vehicles = useMemo(() => vehiclesQuery.data ?? [], [vehiclesQuery.data]);
+  const vehicles = eligibleVehicles;
   const trips = useMemo(() => tripsQuery.data ?? [], [tripsQuery.data]);
 
   const [corridorCode, setCorridorCode] = useState<string | null>(null);
@@ -149,8 +154,12 @@ export default function DriverIntercityScreen() {
     );
   };
 
-  const blocker = !corridorsQuery.isLoading && corridors.length === 0
-    ? (
+  // Every reason the form cannot be shown, in the order the driver can act on
+  // them. None of them is an empty list: a screen that renders nothing reads as
+  // "no trips" when the real answer is "not with this vehicle".
+  const renderBlocker = (): React.ReactNode => {
+    if (!corridorsQuery.isLoading && corridors.length === 0) {
+      return (
         <IntercityStateCard
           icon="map"
           title="No routes available"
@@ -163,18 +172,53 @@ export default function DriverIntercityScreen() {
           actionLabel="Try again"
           onAction={() => void corridorsQuery.refetch()}
         />
-      )
-    : !vehiclesQuery.isLoading && vehicles.length === 0
-      ? (
-          <IntercityStateCard
-            icon="truck"
-            title="Add a vehicle first"
-            detail="Intercity trips are published against a registered, approved vehicle."
-            actionLabel="My vehicles"
-            onAction={() => router.push('/driver-vehicles')}
-          />
-        )
-      : null;
+      );
+    }
+    if (eligibility === 'ineligible') {
+      // Reached only when the entry point could not be hidden — a deep link, or
+      // the driver switched to a moto after the menu rendered.
+      return (
+        <IntercityStateCard
+          icon="truck"
+          title="This vehicle cannot run intercity"
+          detail={`${INTERCITY_VEHICLE_REQUIREMENT} Register or switch to a bigger vehicle to publish a departure.`}
+          actionLabel="My vehicles"
+          onAction={() => router.push('/driver-vehicles')}
+        />
+      );
+    }
+    if (vehiclesLoading) return null;
+    if (eligibility === 'no-vehicle') {
+      return (
+        <IntercityStateCard
+          icon="truck"
+          title="Add a vehicle first"
+          detail="Intercity trips are published against a registered, approved vehicle."
+          actionLabel="My vehicles"
+          onAction={() => router.push('/driver-vehicles')}
+        />
+      );
+    }
+    if (eligibility === 'unknown') {
+      return (
+        <IntercityStateCard
+          icon={isOffline ? 'wifi-off' : 'alert-triangle'}
+          title={isOffline ? 'You are offline' : 'Could not load your vehicles'}
+          detail={
+            isOffline
+              ? 'Connect to the internet so we can check which vehicle you would publish with.'
+              : 'We could not check which vehicle you would publish with. Try again.'
+          }
+          tone={isOffline ? 'warning' : 'error'}
+          actionLabel="Try again"
+          onAction={() => void refetchVehicles()}
+        />
+      );
+    }
+    return null;
+  };
+
+  const blocker = renderBlocker();
 
   return (
     <View style={[styles.root, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>

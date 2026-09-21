@@ -1,5 +1,6 @@
 import { BackendError } from '@/data/remote/contracts/backendErrors';
 import { readBackendError } from '@/utils/backendErrorMessage';
+import { INTERCITY_VEHICLE_REQUIREMENT } from './eligibility';
 
 // Intercity failure taxonomy.
 //
@@ -16,6 +17,7 @@ export type IntercityFailureKind =
   | 'already-booked'
   | 'booking-limit'
   | 'no-credits'
+  | 'vehicle-not-eligible'
   | 'not-allowed'
   | 'not-found'
   | 'offline'
@@ -42,6 +44,7 @@ const COPY: Record<IntercityFailureKind, string> = {
   'already-booked': 'You already have a booking on this trip.',
   'booking-limit': 'You can hold seats on two trips at a time. Cancel one to book another.',
   'no-credits': 'You need ride credits before you can publish a trip.',
+  'vehicle-not-eligible': INTERCITY_VEHICLE_REQUIREMENT,
   'not-allowed': 'You are not allowed to do that.',
   'not-found': 'This trip is no longer available.',
   offline: 'You are offline. Connect to the internet and try again.',
@@ -62,6 +65,9 @@ const CODE_KINDS: Record<string, IntercityFailureKind> = {
   DUPLICATE_BOOKING: 'already-booked',
   BOOKING_LIMIT_REACHED: 'booking-limit',
   NO_CREDITS: 'no-credits',
+  // 422: the request is fine, the vehicle is the wrong one. Retrying changes
+  // nothing — registering or activating a bigger vehicle does.
+  VEHICLE_NOT_INTERCITY_ELIGIBLE: 'vehicle-not-eligible',
   TRIP_NOT_FOUND: 'not-found',
   BOOKING_NOT_FOUND: 'not-found',
 };

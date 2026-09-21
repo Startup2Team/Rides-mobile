@@ -98,6 +98,8 @@ function trip(overrides: Partial<IntercityTrip> = {}): IntercityTrip {
     departAt: '2026-09-22T04:30:00.000Z',
     totalSeats: 18,
     remainingSeats: 5,
+    // The SERVER's cap, verbatim — the stepper ceiling is not re-derived.
+    maxSeatsPerBooking: 4,
     pricePerSeatRwf: 4500,
     status: 'OPEN',
     driverName: null,

@@ -12,3 +12,4 @@ export type {
 export type { BackendDriverVehicle } from '@/services/driverVehicles';
 export type { DayOption, HoldState, HoldStatus } from './seats';
 export type { IntercityFailure, IntercityFailureKind } from './errors';
+export type { IntercityVehicleEligibility } from './eligibility';

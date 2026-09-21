@@ -10,6 +10,14 @@ export const INTERCITY_CURRENCY = 'RWF';
 /** §3: a single account can never take more than half a vehicle, capped at 4. */
 export const MAX_SEATS_PER_BOOKING = 4;
 
+/**
+ * A trip as the seat rules need it. `maxSeatsPerBooking` is the SERVER's cap
+ * (`max_seats_per_booking`); it is optional here only so the pure helpers stay
+ * callable with a bare {totalSeats, remainingSeats} pair.
+ */
+type SeatSubject = Pick<IntercityTrip, 'totalSeats' | 'remainingSeats'> &
+  Partial<Pick<IntercityTrip, 'maxSeatsPerBooking'>>;
+
 /** §4: a hold lives five minutes, then the sweeper releases the seats. */
 export const HOLD_WINDOW_MS = 5 * 60 * 1000;
 
@@ -27,9 +35,26 @@ export function maxSeatsPerBooking(totalSeats: number): number {
   return Math.min(MAX_SEATS_PER_BOOKING, Math.max(1, half));
 }
 
+/**
+ * The cap the stepper must obey: the SERVER's `max_seats_per_booking` whenever
+ * the trip carries one, and the mirrored local rule only as a fallback. The
+ * server sends this number precisely so the UI cannot offer a seat count it
+ * will then refuse with SEAT_CAP_EXCEEDED.
+ */
+export function seatCapForTrip(trip: SeatSubject): number {
+  const serverCap = trip.maxSeatsPerBooking;
+  // Taken verbatim, not re-clamped to MAX_SEATS_PER_BOOKING: the server owns
+  // this rule, and a client ceiling would silently under-offer the day the
+  // server raises it.
+  if (typeof serverCap === 'number' && Number.isFinite(serverCap) && serverCap > 0) {
+    return Math.trunc(serverCap);
+  }
+  return maxSeatsPerBooking(trip.totalSeats);
+}
+
 /** Seats actually selectable right now: bounded by the per-account cap AND availability. */
-export function selectableSeats(trip: Pick<IntercityTrip, 'totalSeats' | 'remainingSeats'>): number {
-  return Math.max(0, Math.min(maxSeatsPerBooking(trip.totalSeats), Math.trunc(trip.remainingSeats)));
+export function selectableSeats(trip: SeatSubject): number {
+  return Math.max(0, Math.min(seatCapForTrip(trip), Math.trunc(trip.remainingSeats)));
 }
 
 export function isSoldOut(trip: Pick<IntercityTrip, 'remainingSeats'>): boolean {
@@ -47,7 +72,7 @@ export function isBookable(trip: Pick<IntercityTrip, 'status' | 'remainingSeats'
   return trip.status === 'OPEN' && !isSoldOut(trip);
 }
 
-export function clampSeatSelection(requested: number, trip: Pick<IntercityTrip, 'totalSeats' | 'remainingSeats'>): number {
+export function clampSeatSelection(requested: number, trip: SeatSubject): number {
   const ceiling = selectableSeats(trip);
   if (ceiling <= 0) return 0;
   if (!Number.isFinite(requested)) return 1;

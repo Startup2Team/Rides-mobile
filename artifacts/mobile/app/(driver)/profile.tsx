@@ -49,6 +49,10 @@ import { useDriverRideHistoryQuery } from "@/query/hooks/useRideHistoryQuery";
 import { useDriverRatingsQuery } from "@/query/hooks/useDriverRatingsQuery";
 import { useDriverStatsQuery } from "@/query/hooks/useDriverStatsQuery";
 import { usePressGuard } from "@/hooks/usePressGuard";
+import {
+  showsIntercityEntryPoint,
+  useIntercityEligibility,
+} from "@/domains/intercity";
 
 export default function DriverProfileScreen() {
   const colors = useColors();
@@ -72,6 +76,12 @@ export default function DriverProfileScreen() {
     }),
     [vehicles],
   );
+  // A moto or tuk-tuk can never publish an intercity trip (the server refuses
+  // with 422 VEHICLE_NOT_INTERCITY_ELIGIBLE), so the door is not shown at all.
+  // Only a KNOWN-ineligible fleet hides it: while the vehicle list is
+  // unresolved the entry point stays, and the intercity screen explains itself.
+  const { eligibility: intercityEligibility } = useIntercityEligibility();
+  const showsIntercity = showsIntercityEntryPoint(intercityEligibility);
   const { profileImage, handleImagePick, handleDeletePhoto } =
     useProfilePhotoActions();
   const completedRides = rideHistory.filter(
@@ -332,26 +342,28 @@ export default function DriverProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <SectionTitle title="Intercity" />
-          <View
-            style={[
-              styles.groupedSection,
-              styles.cardShadow,
-              { backgroundColor: cardFill },
-            ]}
-          >
-            <MenuItem
-              colors={colors}
-              iconFamily="feather"
-              icon="map"
-              label="Intercity trips"
-              detail="Publish a scheduled departure and board passengers"
-              last
-              onPress={() => router.push("/driver-intercity")}
-            />
+        {showsIntercity ? (
+          <View style={styles.section}>
+            <SectionTitle title="Intercity" />
+            <View
+              style={[
+                styles.groupedSection,
+                styles.cardShadow,
+                { backgroundColor: cardFill },
+              ]}
+            >
+              <MenuItem
+                colors={colors}
+                iconFamily="feather"
+                icon="map"
+                label="Intercity trips"
+                detail="Publish a scheduled departure and board passengers"
+                last
+                onPress={() => router.push("/driver-intercity")}
+              />
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <View style={styles.section}>
           <SectionTitle title="Account" />

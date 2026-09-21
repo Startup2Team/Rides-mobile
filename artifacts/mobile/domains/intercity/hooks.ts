@@ -8,6 +8,7 @@ export {
   useIntercityBookingsQuery,
   useIntercityCorridorsQuery,
   useIntercityDriverVehiclesQuery,
+  useIntercityEligibility,
   useIntercityManifestQuery,
   useIntercityTripLifecycleMutation,
   useIntercityTripQuery,

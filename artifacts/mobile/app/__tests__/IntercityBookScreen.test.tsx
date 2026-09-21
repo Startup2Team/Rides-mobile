@@ -105,6 +105,8 @@ function trip(overrides: Partial<IntercityTrip> = {}): IntercityTrip {
     departAt: '2026-09-22T04:30:00.000Z',
     totalSeats: 18,
     remainingSeats: 5,
+    // The SERVER's cap, verbatim — the stepper ceiling is not re-derived.
+    maxSeatsPerBooking: 4,
     pricePerSeatRwf: 4500,
     status: 'OPEN',
     driverName: null,
@@ -203,10 +205,25 @@ describe('IntercityBookScreen', () => {
     expect(screen.queryByLabelText(/^Hold .* for five minutes$/i)).toBeNull();
   });
 
-  test('a 4-seat cab caps the stepper at half the vehicle', () => {
-    mockTripResult = { ...mockTripResult, data: trip({ totalSeats: 4, remainingSeats: 4 }) };
+  test('a 4-seat cab caps the stepper at the seat cap the server sent', () => {
+    mockTripResult = {
+      ...mockTripResult,
+      data: trip({ totalSeats: 4, remainingSeats: 4, maxSeatsPerBooking: 2 }),
+    };
     render(<IntercityBookScreen />);
     const stepper = screen.getByLabelText('Seats');
     expect(stepper.props.accessibilityValue).toMatchObject({ max: 2 });
+  });
+
+  // Regression: the stepper used to re-derive the cap locally and ignore
+  // `max_seats_per_booking`, so it could offer a seat count the server refuses
+  // with SEAT_CAP_EXCEEDED.
+  test('the server seat cap wins over the locally derived one', () => {
+    mockTripResult = {
+      ...mockTripResult,
+      data: trip({ totalSeats: 18, remainingSeats: 18, maxSeatsPerBooking: 3 }),
+    };
+    render(<IntercityBookScreen />);
+    expect(screen.getByLabelText('Seats').props.accessibilityValue).toMatchObject({ max: 3 });
   });
 });
