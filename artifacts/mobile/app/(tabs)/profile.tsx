@@ -380,6 +380,25 @@ export default function ProfileScreen() {
             variant="h3"
             style={[styles.sectionTitle, { color: colors.foreground }]}
           >
+            Travel
+          </AppText>
+          <View style={[styles.menuSection, { backgroundColor: cardFill }]}>
+            <MenuItem
+              icon="map"
+              label="Intercity trips"
+              detail="Book a seat between cities, pay cash on board"
+              onPress={() => router.push("/intercity")}
+              showSeparator={false}
+              separatorColor={separatorColor}
+            />
+          </View>
+        </View>
+
+        <View style={styles.sectionGroup}>
+          <AppText
+            variant="h3"
+            style={[styles.sectionTitle, { color: colors.foreground }]}
+          >
             Account
           </AppText>
           <View style={[styles.menuSection, { backgroundColor: cardFill }]}>

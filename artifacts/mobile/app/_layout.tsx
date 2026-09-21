@@ -99,6 +99,12 @@ function RootLayoutNav() {
       <Stack.Screen name="searching" />
       <Stack.Screen name="negotiation" />
       <Stack.Screen name="ride" options={{ animation: 'none' }} />
+      <Stack.Screen name="intercity" />
+      <Stack.Screen name="intercity-results" />
+      <Stack.Screen name="intercity-book" />
+      <Stack.Screen name="intercity-ticket" />
+      <Stack.Screen name="driver-intercity" />
+      <Stack.Screen name="driver-intercity-trip" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="driver-onboarding" />
       <Stack.Screen name="driver-submission-confirmation" />

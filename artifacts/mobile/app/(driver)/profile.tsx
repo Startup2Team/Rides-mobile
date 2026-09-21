@@ -333,6 +333,27 @@ export default function DriverProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <SectionTitle title="Intercity" />
+          <View
+            style={[
+              styles.groupedSection,
+              styles.cardShadow,
+              { backgroundColor: cardFill },
+            ]}
+          >
+            <MenuItem
+              colors={colors}
+              iconFamily="feather"
+              icon="map"
+              label="Intercity trips"
+              detail="Publish a scheduled departure and board passengers"
+              last
+              onPress={() => router.push("/driver-intercity")}
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <SectionTitle title="Account" />
           <View
             style={[
