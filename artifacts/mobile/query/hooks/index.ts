@@ -13,6 +13,23 @@ export {
   useAdminUnitsQuery,
   useLandmarksQuery,
 } from './useLocationCatalogQueries';
+export {
+  useBoardPassengerMutation,
+  useCancelIntercityBookingMutation,
+  useConfirmBookingMutation,
+  useDriverIntercityTripsQuery,
+  useHoldSeatsMutation,
+  useIntercityBookingQuery,
+  useIntercityBookingsQuery,
+  useIntercityCorridorsQuery,
+  useIntercityDriverVehiclesQuery,
+  useIntercityManifestQuery,
+  useIntercityTripLifecycleMutation,
+  useIntercityTripQuery,
+  useIntercityTripSearchQuery,
+  useMarkNoShowMutation,
+  usePublishIntercityTripMutation,
+} from './useIntercityQueries';
 export { useLocationSuggestionsQuery } from './useLocationSuggestionsQuery';
 export {
   useDeleteRecentLocationMutation,

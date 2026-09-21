@@ -88,6 +88,46 @@ export const queryPolicies = {
     staleTime: 5 * minute,
     gcTime: 30 * minute,
   }),
+  intercityCorridors: policy({
+    // The corridor lookup table changes when Rides opens a new route — a
+    // deploy-scale event. Cache it for the day so the search screen opens
+    // instantly, and keep it in gc for a week so it still opens offline.
+    staleTime: 24 * 60 * minute,
+    gcTime: 7 * 24 * 60 * minute,
+    refetchOnMount: false,
+  }),
+  intercityTrips: policy({
+    // Remaining seats IS the product. Browsing customers are deliberately not
+    // streamed (INTERCITY_DESIGN §8) — a short staleTime plus refetch on focus
+    // keeps the number honest, and the hold call is the authority that answers
+    // 409 when it isn't.
+    staleTime: 15 * 1000,
+    gcTime: 5 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  }),
+  intercityTrip: policy({
+    // The booking screen is where seats are about to be spent — never stale.
+    staleTime: 0,
+    gcTime: 5 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  }),
+  intercityBookings: policy({
+    // The ticket is server truth: on resume, cold start or after a force-kill
+    // the app replays it rather than trusting anything it remembered.
+    staleTime: 0,
+    gcTime: 30 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  }),
+  intercityManifest: policy({
+    // The driver is standing at the staging point watching people arrive.
+    staleTime: 10 * 1000,
+    gcTime: 15 * minute,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+  }),
   packages: policy({
     staleTime: 0,
     gcTime: 30 * minute,
