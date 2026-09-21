@@ -53,6 +53,13 @@ export interface IntercityTrip {
   totalSeats: number;
   /** total - booked - held. The headline number; never the sellable clamp. */
   remainingSeats: number;
+  /**
+   * The server's own per-account seat cap (`max_seats_per_booking`). The UI
+   * uses it as the stepper ceiling so it can never offer a seat count the
+   * server will refuse with SEAT_CAP_EXCEEDED. Null only when the payload
+   * omits it, in which case the client mirrors the rule locally.
+   */
+  maxSeatsPerBooking: number | null;
   pricePerSeatRwf: number;
   status: IntercityTripStatus;
   /** Only ever populated for a confirmed passenger or the assigned driver. */
@@ -71,7 +78,11 @@ export interface IntercityBooking {
   holdExpiresAt: string | null;
   boardedAt: string | null;
   cancelledAt: string | null;
-  createdAt: string;
+  /**
+   * Null whenever the API omits it — BookingView does NOT carry a created_at,
+   * and typing it as always-present was a lie the type system could not catch.
+   */
+  createdAt: string | null;
   /** Embedded trip when the API returns it (booking detail + list). */
   trip: IntercityTrip | null;
 }
@@ -88,9 +99,29 @@ export interface IntercityManifestPassenger {
   noShowAt: string | null;
 }
 
+/**
+ * The driver's manifest. It is NOT a trip: the backend returns seat counters
+ * and passengers for one trip id, and nothing else. Anything the screen needs
+ * about the route itself (origin, destination, price, staging address) comes
+ * from the trip endpoint, not from here.
+ */
 export interface IntercityManifest {
-  trip: IntercityTrip;
+  tripId: string;
+  status: IntercityTripStatus;
+  /** ISO-8601 departure instant — present on the manifest itself. */
+  departAt: string;
+  totalSeats: number;
+  bookedSeats: number;
+  heldSeats: number;
+  /** total - booked - held, clamped to [0, total]. */
+  remainingSeats: number;
+  /** Seats actually sold (= booked). The cash-on-board base. */
   seatsSold: number;
+  /**
+   * The §9 PII tier decided by the SERVER: full numbers only from
+   * `depart_at - 30min`. The client never unmasks and never infers.
+   */
+  phonesVisible: boolean;
   passengers: IntercityManifestPassenger[];
 }
 
@@ -104,29 +135,34 @@ interface CorridorDto {
   destination_name: string;
 }
 
+// The DTOs below mirror intercity.TripView / BookingView / Manifest in
+// internal/intercity/service.go FIELD FOR FIELD. They shipped once with
+// invented names (`remaining_seats`, `vehicle_label`, `plate_number`,
+// `driver_name`) that the server has never sent, which is silent: the object
+// arrives, the fields read `undefined`, and the screen renders a lie. Every
+// name here is pinned by a test against the real envelope.
 export interface TripDto {
   id: string;
   corridor: string;
   origin_name: string;
   destination_name: string;
   operator_name?: string | null;
-  operator_display_name?: string | null;
-  vehicle_label?: string | null;
-  vehicle_type_code?: string | null;
-  plate_number?: string | null;
+  vehicle_type?: string | null;
+  vehicle_plate?: string | null;
   staging_address: string;
   staging_lat?: number | null;
   staging_lng?: number | null;
   depart_at: string;
   total_seats: number;
-  booked_seats?: number | null;
-  held_seats?: number | null;
-  remaining_seats?: number | null;
+  /** Server-computed total - booked - held. The ONLY seat truth on the wire. */
+  seats_available?: number | null;
+  max_seats_per_booking?: number | null;
   price_per_seat_rwf: number;
   status: string;
-  driver_name?: string | null;
+  driver_first_name?: string | null;
   driver_phone?: string | null;
   cancel_reason?: string | null;
+  completed_at?: string | null;
 }
 
 interface BookingDto {
@@ -135,10 +171,11 @@ interface BookingDto {
   seats: number;
   status: string;
   price_per_seat_rwf: number;
+  total_rwf?: number | null;
   hold_expires_at?: string | null;
   boarded_at?: string | null;
   cancelled_at?: string | null;
-  created_at: string;
+  created_at?: string | null;
   trip?: TripDto | null;
 }
 
@@ -146,7 +183,6 @@ interface ManifestPassengerDto {
   booking_id: string;
   first_name?: string | null;
   phone?: string | null;
-  phone_masked?: boolean | null;
   seats: number;
   status: string;
   boarded_at?: string | null;
@@ -154,9 +190,32 @@ interface ManifestPassengerDto {
 }
 
 interface ManifestDto {
-  trip: TripDto;
-  seats_sold?: number | null;
+  trip_id: string;
+  status: string;
+  depart_at: string;
+  total_seats: number;
+  booked_seats?: number | null;
+  held_seats?: number | null;
+  phones_visible?: boolean | null;
   passengers?: ManifestPassengerDto[] | null;
+}
+
+/* The collection endpoints key their arrays — none returns a bare array. */
+
+interface CorridorListDto {
+  corridors?: CorridorDto[] | null;
+}
+
+interface TripListDto {
+  trips?: TripDto[] | null;
+  limit?: number;
+  offset?: number;
+}
+
+interface BookingListDto {
+  bookings?: BookingDto[] | null;
+  limit?: number;
+  offset?: number;
 }
 
 const TRIP_STATUSES: readonly IntercityTripStatus[] = [
@@ -194,21 +253,28 @@ function integerOrZero(value: number | null | undefined): number {
 }
 
 /**
- * Remaining seats = total - booked - held, clamped to [0, total].
+ * Remaining seats, clamped to [0, total].
  *
- * Prefers the server's own `remaining_seats` when present (it is computed by
- * the same conditional UPDATE that guards the oversell, §4) and otherwise
- * derives it. `sellable_seats` is deliberately not consulted: it encodes the
- * operator's credit balance and is enforced server-side only.
+ * The wire field is `seats_available` — the server's own total - booked - held,
+ * computed by the same conditional UPDATE that guards the oversell (§4). There
+ * is no client-side derivation to fall back on: TripView carries no booked/held
+ * counters. When the field is missing the answer is ZERO, not `total_seats`:
+ * advertising a sold-out 18-seat Coaster as having 18 free seats sends 18
+ * passengers to a full bus, whereas showing zero only under-sells a payload
+ * that is already broken. `sellable_seats` is deliberately not consulted: it
+ * encodes the operator's credit balance and is enforced server-side only.
  */
 export function deriveRemainingSeats(dto: TripDto): number {
   const total = integerOrZero(dto.total_seats);
-  const explicit = dto.remaining_seats;
-  const remaining =
-    typeof explicit === 'number' && Number.isFinite(explicit)
-      ? Math.trunc(explicit)
-      : total - integerOrZero(dto.booked_seats) - integerOrZero(dto.held_seats);
-  return Math.max(0, Math.min(total, remaining));
+  return Math.max(0, Math.min(total, integerOrZero(dto.seats_available)));
+}
+
+/** The server's per-account seat cap, or null when the payload omits it. */
+function deriveMaxSeatsPerBooking(dto: TripDto): number | null {
+  const cap = dto.max_seats_per_booking;
+  if (typeof cap !== 'number' || !Number.isFinite(cap)) return null;
+  const truncated = Math.trunc(cap);
+  return truncated > 0 ? truncated : null;
 }
 
 export function mapTrip(dto: TripDto): IntercityTrip {
@@ -217,9 +283,9 @@ export function mapTrip(dto: TripDto): IntercityTrip {
     corridor: dto.corridor,
     originName: dto.origin_name,
     destinationName: dto.destination_name,
-    operatorName: dto.operator_display_name ?? dto.operator_name ?? null,
-    vehicleLabel: dto.vehicle_label ?? dto.vehicle_type_code ?? null,
-    plateNumber: dto.plate_number ?? null,
+    operatorName: dto.operator_name?.trim() ? dto.operator_name : null,
+    vehicleLabel: dto.vehicle_type?.trim() ? dto.vehicle_type : null,
+    plateNumber: dto.vehicle_plate?.trim() ? dto.vehicle_plate : null,
     stagingAddress: dto.staging_address,
     stagingPoint:
       typeof dto.staging_lat === 'number' && typeof dto.staging_lng === 'number'
@@ -228,9 +294,10 @@ export function mapTrip(dto: TripDto): IntercityTrip {
     departAt: dto.depart_at,
     totalSeats: integerOrZero(dto.total_seats),
     remainingSeats: deriveRemainingSeats(dto),
+    maxSeatsPerBooking: deriveMaxSeatsPerBooking(dto),
     pricePerSeatRwf: integerOrZero(dto.price_per_seat_rwf),
     status: toTripStatus(dto.status),
-    driverName: dto.driver_name ?? null,
+    driverName: dto.driver_first_name?.trim() ? dto.driver_first_name : null,
     driverPhone: dto.driver_phone ?? null,
     cancelReason: dto.cancel_reason ?? null,
   };
@@ -246,20 +313,21 @@ export function mapBooking(dto: BookingDto): IntercityBooking {
     holdExpiresAt: dto.hold_expires_at ?? null,
     boardedAt: dto.boarded_at ?? null,
     cancelledAt: dto.cancelled_at ?? null,
-    createdAt: dto.created_at,
+    createdAt: dto.created_at ?? null,
     trip: dto.trip ? mapTrip(dto.trip) : null,
   };
 }
 
-function mapPassenger(dto: ManifestPassengerDto): IntercityManifestPassenger {
+function mapPassenger(dto: ManifestPassengerDto, phonesVisible: boolean): IntercityManifestPassenger {
   const phone = dto.phone?.trim() ? dto.phone.trim() : null;
   return {
     bookingId: dto.booking_id,
     firstName: dto.first_name?.trim() || 'Passenger',
     phone,
-    // The server masks per the §9 tier. Treat an unflagged number containing a
-    // mask glyph as masked so the UI never labels it as callable.
-    phoneMasked: dto.phone_masked ?? (phone ? /[•*]/.test(phone) : false),
+    // `phones_visible` is the SERVER's §9 tier decision for the whole manifest.
+    // A number that still carries a mask glyph is treated as masked even when
+    // the tier says full, so the UI never labels an unusable number callable.
+    phoneMasked: phone ? !phonesVisible || /[•*]/.test(phone) : false,
     seats: integerOrZero(dto.seats),
     status: toBookingStatus(dto.status),
     boardedAt: dto.boarded_at ?? null,
@@ -268,14 +336,23 @@ function mapPassenger(dto: ManifestPassengerDto): IntercityManifestPassenger {
 }
 
 function mapManifest(dto: ManifestDto): IntercityManifest {
-  const passengers = (dto.passengers ?? []).map(mapPassenger);
-  const seatsSold =
-    typeof dto.seats_sold === 'number' && Number.isFinite(dto.seats_sold)
-      ? Math.trunc(dto.seats_sold)
-      : passengers
-          .filter(passenger => passenger.status !== 'CANCELLED' && passenger.status !== 'EXPIRED')
-          .reduce((total, passenger) => total + passenger.seats, 0);
-  return { trip: mapTrip(dto.trip), seatsSold, passengers };
+  const phonesVisible = dto.phones_visible === true;
+  const totalSeats = integerOrZero(dto.total_seats);
+  const bookedSeats = integerOrZero(dto.booked_seats);
+  const heldSeats = integerOrZero(dto.held_seats);
+  return {
+    tripId: dto.trip_id,
+    status: toTripStatus(dto.status),
+    departAt: dto.depart_at,
+    totalSeats,
+    bookedSeats,
+    heldSeats,
+    remainingSeats: Math.max(0, Math.min(totalSeats, totalSeats - bookedSeats - heldSeats)),
+    // Sold = booked. A held seat is not money: the sweeper can release it.
+    seatsSold: bookedSeats,
+    phonesVisible,
+    passengers: (dto.passengers ?? []).map(passenger => mapPassenger(passenger, phonesVisible)),
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -283,10 +360,10 @@ function mapManifest(dto: ManifestDto): IntercityManifest {
 /* ------------------------------------------------------------------ */
 
 export async function listCorridors(): Promise<IntercityCorridor[]> {
-  const response = await getAppBackendClient().get<Envelope<CorridorDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<CorridorListDto | null>>(
     '/v1/customer/intercity/corridors',
   );
-  return (response.data.data ?? []).map(dto => ({
+  return (response.data.data?.corridors ?? []).map(dto => ({
     code: dto.code,
     originName: dto.origin_name,
     destinationName: dto.destination_name,
@@ -301,11 +378,11 @@ export interface SearchIntercityTripsInput {
 }
 
 export async function searchTrips(input: SearchIntercityTripsInput): Promise<IntercityTrip[]> {
-  const response = await getAppBackendClient().get<Envelope<TripDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<TripListDto | null>>(
     '/v1/customer/intercity/trips',
     { query: { corridor: input.corridor, date: input.date, seats: input.seats } },
   );
-  return (response.data.data ?? []).map(mapTrip);
+  return (response.data.data?.trips ?? []).map(mapTrip);
 }
 
 export async function getTrip(tripId: string): Promise<IntercityTrip> {
@@ -344,10 +421,10 @@ export async function confirmBooking(bookingId: string): Promise<IntercityBookin
 }
 
 export async function listBookings(): Promise<IntercityBooking[]> {
-  const response = await getAppBackendClient().get<Envelope<BookingDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<BookingListDto | null>>(
     '/v1/customer/intercity/bookings',
   );
-  return (response.data.data ?? []).map(mapBooking);
+  return (response.data.data?.bookings ?? []).map(mapBooking);
 }
 
 export async function getBooking(bookingId: string): Promise<IntercityBooking> {
@@ -394,10 +471,10 @@ export async function publishTrip(input: PublishIntercityTripInput): Promise<Int
 }
 
 export async function listDriverTrips(): Promise<IntercityTrip[]> {
-  const response = await getAppBackendClient().get<Envelope<TripDto[] | null>>(
+  const response = await getAppBackendClient().get<Envelope<TripListDto | null>>(
     '/v1/driver/intercity/trips',
   );
-  return (response.data.data ?? []).map(mapTrip);
+  return (response.data.data?.trips ?? []).map(mapTrip);
 }
 
 export async function getManifest(tripId: string): Promise<IntercityManifest> {

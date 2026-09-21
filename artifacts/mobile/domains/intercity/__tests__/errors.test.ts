@@ -15,6 +15,27 @@ function conflict(code?: string, message?: string) {
 }
 
 describe('intercity failure classification', () => {
+  // 422 from POST /driver/intercity/trips: the request is fine, the vehicle is
+  // the wrong one. Retrying it can never succeed and refreshing tells the
+  // driver nothing — the copy has to name the actual requirement.
+  test('a vehicle too small for intercity is explained, not retried', () => {
+    const failure = classifyIntercityError(
+      new BackendError('backend_unavailable', 'Backend unavailable', {
+        status: 422,
+        cause: {
+          error: {
+            code: 'VEHICLE_NOT_INTERCITY_ELIGIBLE',
+            message: 'intercity trips need a vehicle seating at least 4 passengers',
+          },
+        },
+      }),
+    );
+    expect(failure.kind).toBe('vehicle-not-eligible');
+    expect(failure.retryable).toBe(false);
+    expect(failure.shouldRefresh).toBe(false);
+    expect(failure.message).toMatch(/at least 4/i);
+  });
+
   test('409 SEATS_UNAVAILABLE is a recoverable outcome, not a crash', () => {
     const failure = classifyIntercityError(conflict('SEATS_UNAVAILABLE', 'conflict'));
     expect(failure.kind).toBe('seats-unavailable');

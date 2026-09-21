@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { listBackendVehicles, type BackendDriverVehicle } from '@/services/driverVehicles';
 import {
@@ -23,6 +24,10 @@ import {
   type IntercityTrip,
   type PublishIntercityTripInput,
 } from '@/services/intercity';
+import {
+  eligibleIntercityVehicles,
+  intercityVehicleEligibility,
+} from '@/domains/intercity/eligibility';
 import { intercityKeys } from '../keys';
 import { queryPolicies } from '../policies';
 import { usePolicyQuery } from './shared';
@@ -163,6 +168,28 @@ export function useIntercityDriverVehiclesQuery(options: { enabled?: boolean } =
     enabled: options.enabled ?? true,
     queryFn: () => listBackendVehicles(),
   });
+}
+
+/**
+ * Whether this driver may publish an intercity trip at all.
+ *
+ * Reads the same `/driver/vehicles` cache the publish form uses, so gating the
+ * entry point costs no extra request. It returns `unknown` while the list is
+ * unresolved (cold start / offline), and callers keep the door OPEN in that
+ * case — the intercity screen has its own designed state for every outcome.
+ */
+export function useIntercityEligibility(options: { enabled?: boolean } = {}) {
+  const vehiclesQuery = useIntercityDriverVehiclesQuery(options);
+  const vehicles = vehiclesQuery.data;
+  // Memoised: `eligibleVehicles` feeds a selection effect, and a fresh array
+  // every render would re-run it on every render.
+  const eligibleVehicles = useMemo(() => eligibleIntercityVehicles(vehicles), [vehicles]);
+  return {
+    eligibility: intercityVehicleEligibility(vehicles),
+    eligibleVehicles,
+    isLoading: vehiclesQuery.isLoading,
+    refetch: vehiclesQuery.refetch,
+  };
 }
 
 export function usePublishIntercityTripMutation() {

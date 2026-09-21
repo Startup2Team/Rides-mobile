@@ -12,6 +12,7 @@ import {
   isBookable,
   isSoldOut,
   maxSeatsPerBooking,
+  seatCapForTrip,
   selectableSeats,
   toKigaliDateKey,
   totalPriceRwf,
@@ -41,6 +42,24 @@ describe('intercity seat rules', () => {
     expect(selectableSeats({ totalSeats: 18, remainingSeats: 2 })).toBe(2);
     expect(selectableSeats({ totalSeats: 18, remainingSeats: 12 })).toBe(4);
     expect(selectableSeats({ totalSeats: 18, remainingSeats: 0 })).toBe(0);
+  });
+
+  // The server sends `max_seats_per_booking` precisely so the stepper cannot
+  // offer a number it will then refuse with SEAT_CAP_EXCEEDED.
+  test('the server seat cap wins over the mirrored local rule', () => {
+    expect(seatCapForTrip({ totalSeats: 18, remainingSeats: 18, maxSeatsPerBooking: 2 })).toBe(2);
+    expect(selectableSeats({ totalSeats: 18, remainingSeats: 18, maxSeatsPerBooking: 2 })).toBe(2);
+    expect(clampSeatSelection(4, { totalSeats: 18, remainingSeats: 18, maxSeatsPerBooking: 2 })).toBe(2);
+  });
+
+  test('a server cap above the local rule is honoured, not re-clamped to 4', () => {
+    expect(selectableSeats({ totalSeats: 18, remainingSeats: 18, maxSeatsPerBooking: 6 })).toBe(6);
+  });
+
+  test('a missing or nonsense server cap falls back to the mirrored rule', () => {
+    expect(seatCapForTrip({ totalSeats: 18, remainingSeats: 18 })).toBe(4);
+    expect(seatCapForTrip({ totalSeats: 4, remainingSeats: 4, maxSeatsPerBooking: null })).toBe(2);
+    expect(seatCapForTrip({ totalSeats: 4, remainingSeats: 4, maxSeatsPerBooking: 0 })).toBe(2);
   });
 
   test('clamping a selection follows availability down and never below one', () => {

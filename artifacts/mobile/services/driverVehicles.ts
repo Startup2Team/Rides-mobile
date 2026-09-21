@@ -27,6 +27,14 @@ export interface BackendDriverVehicle {
   passengerSeats: number | null;
   loadCapacityKg: number | null;
   approvalStatus: BackendVehicleApprovalStatus | null;
+  /**
+   * Server-derived (`intercity_eligible`): this vehicle seats at least the
+   * intercity floor of 4 — a cab, Hilux, Hiace or bus. A moto or tuk-tuk is
+   * false. The app gates the Intercity entry point on it so a driver never
+   * reaches a screen whose publish call can only be refused with
+   * 422 VEHICLE_NOT_INTERCITY_ELIGIBLE.
+   */
+  intercityEligible: boolean;
 }
 
 interface VehicleDto {
@@ -40,6 +48,7 @@ interface VehicleDto {
   passenger_seats?: number | null;
   load_capacity_kg?: number | null;
   approval_status?: string | null;
+  intercity_eligible?: boolean | null;
 }
 
 interface Envelope<T> {
@@ -63,6 +72,9 @@ function toDomain(dto: VehicleDto): BackendDriverVehicle {
     passengerSeats: dto.passenger_seats ?? null,
     loadCapacityKg: dto.load_capacity_kg ?? null,
     approvalStatus: toApprovalStatus(dto.approval_status),
+    // Absent means "this payload cannot tell us" — treated as NOT eligible so
+    // the door stays shut rather than opening onto a guaranteed refusal.
+    intercityEligible: dto.intercity_eligible === true,
   };
 }
 
